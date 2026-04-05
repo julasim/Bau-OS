@@ -29,8 +29,9 @@ async function main() {
   const confirm = await ask("Fortfahren? (j/n): ");
   if (confirm.toLowerCase() !== "j") { console.log("Abgebrochen."); rl.close(); return; }
 
+  // Kein "## Name:" → isMainWorkspaceConfigured() gibt false zurück → Wizard startet
   fs.writeFileSync(path.join(agentPath, "IDENTITY.md"),
-    `# Identity\n\n## Name: Main Agent\n## Emoji: 🤖\n## Vibe: Hilfsbereit, präzise, zuverlässig.\n## Kontext: Allgemeiner KI-Assistent für Büro und Unternehmen.\n`, "utf-8");
+    `# Identity\n\nNoch nicht eingerichtet.\n`, "utf-8");
 
   fs.writeFileSync(path.join(agentPath, "SOUL.md"),
     `# Main Agent – Soul\n\n## Identität\nDu bist der Main Agent — ein KI-Assistent für Büro und Unternehmen.\nHilfsbereit, präzise, zuverlässig — immer auf den Punkt.\n\n## Ton & Stil\n- Immer auf Deutsch\n- Kurz und direkt\n- Unsicherheit: nachfragen statt raten\n`, "utf-8");

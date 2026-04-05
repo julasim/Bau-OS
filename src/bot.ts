@@ -5,6 +5,7 @@ import { downloadFile, transcribeAudio, getTempPath } from "./transcribe.js";
 import { processMessage, processBtw, processSetup, setReplyContext } from "./llm.js";
 import { enqueue } from "./queue.js";
 import { isSetupActive, activateSetup } from "./setup.js";
+import { fmt } from "./format.js";
 import { handleNotiz, handleNotizen, handleLesen, handleBearbeiten, handleLoeschen } from "./commands/notiz.js";
 import { handleAufgabe, handleAufgaben, handleErledigt } from "./commands/aufgaben.js";
 import { handleTermin, handleTermine, handleTerminLoeschen } from "./commands/termine.js";
@@ -79,7 +80,7 @@ export function createBot(token: string): Bot {
         try {
           const antwort = await processSetup(raw);
           clearInterval(typing);
-          await ctx.reply(antwort);
+          await ctx.reply(fmt(antwort), { parse_mode: "HTML" });
         } catch (err) {
           clearInterval(typing);
           console.error("Setup Fehler:", err);
@@ -96,7 +97,7 @@ export function createBot(token: string): Bot {
         try {
           const antwort = await processBtw(btwMatch[1].trim());
           clearInterval(typing);
-          await ctx.reply(antwort);
+          await ctx.reply(fmt(antwort), { parse_mode: "HTML" });
         } catch {
           clearInterval(typing);
           await ctx.reply("Fehler bei /btw – ist Ollama gestartet?");
@@ -111,10 +112,10 @@ export function createBot(token: string): Bot {
       await ctx.replyWithChatAction("typing");
 
       try {
-        setReplyContext((msg) => ctx.reply(msg).then(() => {}));
+        setReplyContext((msg) => ctx.reply(fmt(msg), { parse_mode: "HTML" }).then(() => {}));
         const antwort = await processMessage(text);
         clearInterval(typing);
-        await ctx.reply(antwort);
+        await ctx.reply(fmt(antwort), { parse_mode: "HTML" });
       } catch (err: unknown) {
         clearInterval(typing);
         console.error("LLM Fehler:", err);
@@ -151,10 +152,10 @@ export function createBot(token: string): Bot {
           return;
         }
 
-        setReplyContext((msg) => ctx.reply(msg).then(() => {}));
+        setReplyContext((msg) => ctx.reply(fmt(msg), { parse_mode: "HTML" }).then(() => {}));
         const antwort = await processMessage(text);
         clearInterval(typing);
-        await ctx.reply(`🎤 "${text}"\n\n${antwort}`);
+        await ctx.reply(`🎤 <i>${text}</i>\n\n${fmt(antwort)}`, { parse_mode: "HTML" });
       } catch (err) {
         clearInterval(typing);
         console.error("Fehler bei Transkription:", err);
