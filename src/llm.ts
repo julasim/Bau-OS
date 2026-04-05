@@ -493,5 +493,23 @@ export async function compactNow(agentName: string): Promise<string> {
   return `✅ Log komprimiert.\n\nZusammenfassung:\n${summary}`;
 }
 
+// btw-Modus: geht ans LLM aber wird NICHT ins Tages-Log geschrieben
+export async function processBtw(userMessage: string): Promise<string> {
+  const workspaceContext = loadAgentWorkspace("BauOS", "full");
+  const systemPrompt = workspaceContext ? `${BASE_PROMPT}\n\n${workspaceContext}` : BASE_PROMPT;
+
+  const response = await client.chat.completions.create({
+    model: MODEL,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userMessage },
+    ],
+    tools: TOOLS,
+    tool_choice: "auto",
+  });
+
+  return response.choices[0].message.content ?? "Erledigt.";
+}
+
 // Alle Telegram-Nachrichten laufen durch den BauOS Main-Agent
 export const processMessage = (msg: string) => processAgent("BauOS", msg);

@@ -2,7 +2,7 @@ import { Bot } from "grammy";
 import fs from "fs";
 import { saveNote } from "./obsidian.js";
 import { downloadFile, transcribeAudio, getTempPath } from "./transcribe.js";
-import { processMessage, setReplyContext } from "./llm.js";
+import { processMessage, processBtw, setReplyContext } from "./llm.js";
 import { enqueue } from "./queue.js";
 import { handleNotiz, handleNotizen, handleLesen, handleBearbeiten, handleLoeschen } from "./commands/notiz.js";
 import { handleAufgabe, handleAufgaben, handleErledigt } from "./commands/aufgaben.js";
@@ -62,8 +62,25 @@ export function createBot(token: string): Bot {
   // ─── Textnachrichten → LLM ────────────────────────────────────────────────
   bot.on("message:text", (ctx) => {
     enqueue(ctx.chat.id, async () => {
-      const text = ctx.message.text;
+      const raw = ctx.message.text;
 
+      // /btw Direktive: geht ans LLM, wird nicht ins Log geschrieben
+      const btwMatch = raw.match(/^\/btw\s+(.+)/is);
+      if (btwMatch) {
+        const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), 4000);
+        await ctx.replyWithChatAction("typing");
+        try {
+          const antwort = await processBtw(btwMatch[1].trim());
+          clearInterval(typing);
+          await ctx.reply(antwort);
+        } catch {
+          clearInterval(typing);
+          await ctx.reply("Fehler bei /btw – ist Ollama gestartet?");
+        }
+        return;
+      }
+
+      const text = raw;
       const typing = setInterval(() => {
         ctx.replyWithChatAction("typing").catch(() => {});
       }, 4000);
