@@ -11,6 +11,14 @@ import {
   shouldCompact, getLogForCompaction, writeCompactedLog,
 } from "./obsidian.js";
 
+// ─── Reply-Kontext für async Spawns ─────────────────────────────────────────
+// Wird von bot.ts gesetzt bevor processMessage() aufgerufen wird
+let _replyFn: ((text: string) => Promise<void>) | null = null;
+
+export function setReplyContext(fn: (text: string) => Promise<void>): void {
+  _replyFn = fn;
+}
+
 // ─── Client ──────────────────────────────────────────────────────────────────
 const client = new OpenAI({
   baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1",
@@ -211,8 +219,23 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "agent_spawnen_async",
+      description: "Startet einen Sub-Agenten non-blocking im Hintergrund. Sofortige Rückkehr – Ergebnis wird als separate Nachricht gepostet wenn fertig. Verwenden für längere Aufgaben (Protokoll, Recherche) die den User nicht warten lassen sollen.",
+      parameters: {
+        type: "object",
+        properties: {
+          agent: { type: "string", description: "Name des Sub-Agenten" },
+          aufgabe: { type: "string", description: "Aufgabenbeschreibung für den Sub-Agenten" },
+        },
+        required: ["agent", "aufgabe"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "agent_spawnen",
-      description: "Startet einen spezialisierten Sub-Agenten für eine Aufgabe. Verwenden wenn spezialisiertes Wissen nötig ist (z.B. Protokoll, Recherche) oder mehrere Aufgaben parallel erledigt werden sollen.",
+      description: "Startet einen Sub-Agenten und wartet auf das Ergebnis (blocking). Für kurze Aufgaben. Für längere Aufgaben agent_spawnen_async verwenden.",
       parameters: {
         type: "object",
         properties: {
@@ -314,6 +337,23 @@ async function executeTool(name: string, args: Record<string, string | number>):
           : "Heute war noch kein Agent aktiv.";
       }
       // Multi-Agent Tools
+      case "agent_spawnen_async": {
+        const agentName = String(args.agent);
+        const aufgabe = String(args.aufgabe);
+        const reply = _replyFn;
+
+        // Sofort zurückgeben, Sub-Agent läuft im Hintergrund
+        setImmediate(async () => {
+          try {
+            const result = await processAgent(agentName, aufgabe, "minimal");
+            if (reply) await reply(`⚡ ${agentName}:\n\n${result}`);
+          } catch (err) {
+            if (reply) await reply(`⚠️ ${agentName} Fehler: ${err}`);
+          }
+        });
+
+        return `${agentName}-Agent gestartet ⚡ – Ergebnis kommt gleich.`;
+      }
       case "agent_spawnen": {
         // Sub-Agents laufen im "minimal"-Modus: nur IDENTITY + SOUL, keine History
         const result = await processAgent(String(args.agent), String(args.aufgabe), "minimal");

@@ -2,7 +2,7 @@ import { Bot } from "grammy";
 import fs from "fs";
 import { saveNote } from "./obsidian.js";
 import { downloadFile, transcribeAudio, getTempPath } from "./transcribe.js";
-import { processMessage } from "./llm.js";
+import { processMessage, setReplyContext } from "./llm.js";
 import { enqueue } from "./queue.js";
 import { handleNotiz, handleNotizen, handleLesen, handleBearbeiten, handleLoeschen } from "./commands/notiz.js";
 import { handleAufgabe, handleAufgaben, handleErledigt } from "./commands/aufgaben.js";
@@ -69,6 +69,7 @@ export function createBot(token: string): Bot {
       await ctx.replyWithChatAction("typing");
 
       try {
+        setReplyContext((msg) => ctx.reply(msg).then(() => {}));
         const antwort = await processMessage(text);
         clearInterval(typing);
         await ctx.reply(antwort);
@@ -108,6 +109,7 @@ export function createBot(token: string): Bot {
           return;
         }
 
+        setReplyContext((msg) => ctx.reply(msg).then(() => {}));
         const antwort = await processMessage(text);
         clearInterval(typing);
         await ctx.reply(`🎤 "${text}"\n\n${antwort}`);
