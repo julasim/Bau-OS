@@ -272,6 +272,8 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
 ];
 
 // ─── Tool Executor ────────────────────────────────────────────────────────────
+let _currentDepth = 0; // wird von processAgent gesetzt
+
 async function executeTool(name: string, args: Record<string, string | number>): Promise<string> {
   try {
     switch (name) {
@@ -341,11 +343,11 @@ async function executeTool(name: string, args: Record<string, string | number>):
         const agentName = String(args.agent);
         const aufgabe = String(args.aufgabe);
         const reply = _replyFn;
+        const spawnDepth = _currentDepth + 1;
 
-        // Sofort zurückgeben, Sub-Agent läuft im Hintergrund
         setImmediate(async () => {
           try {
-            const result = await processAgent(agentName, aufgabe, "minimal");
+            const result = await processAgent(agentName, aufgabe, "minimal", spawnDepth);
             if (reply) await reply(`⚡ ${agentName}:\n\n${result}`);
           } catch (err) {
             if (reply) await reply(`⚠️ ${agentName} Fehler: ${err}`);
@@ -355,8 +357,7 @@ async function executeTool(name: string, args: Record<string, string | number>):
         return `${agentName}-Agent gestartet ⚡ – Ergebnis kommt gleich.`;
       }
       case "agent_spawnen": {
-        // Sub-Agents laufen im "minimal"-Modus: nur IDENTITY + SOUL, keine History
-        const result = await processAgent(String(args.agent), String(args.aufgabe), "minimal");
+        const result = await processAgent(String(args.agent), String(args.aufgabe), "minimal", _currentDepth + 1);
         return `[${args.agent}]: ${result}`;
       }
       case "agent_erstellen": {
@@ -377,7 +378,10 @@ async function executeTool(name: string, args: Record<string, string | number>):
 }
 
 // ─── Agent Runtime ────────────────────────────────────────────────────────────
-export async function processAgent(agentName: string, userMessage: string, mode: "full" | "minimal" = "full"): Promise<string> {
+export async function processAgent(agentName: string, userMessage: string, mode: "full" | "minimal" = "full", depth = 0): Promise<string> {
+  if (depth > 2) return `[${agentName}] Maximale Spawn-Tiefe erreicht (depth=${depth}).`;
+  _currentDepth = depth;
+
   // Workspace laden — full: alle Dateien, minimal: nur IDENTITY + SOUL
   const workspaceContext = loadAgentWorkspace(agentName, mode);
   const systemPrompt = workspaceContext
