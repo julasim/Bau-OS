@@ -58,12 +58,19 @@ export function createBot(token: string): Bot {
   // ─── Textnachrichten → LLM ────────────────────────────────────────────────
   bot.on("message:text", async (ctx) => {
     const text = ctx.message.text;
-    await ctx.reply("⏳");
+
+    // Typing-Indikator alle 4 Sekunden wiederholen (Telegram löscht ihn nach 5s)
+    const typing = setInterval(() => {
+      ctx.replyWithChatAction("typing").catch(() => {});
+    }, 4000);
+    await ctx.replyWithChatAction("typing");
 
     try {
       const antwort = await processMessage(text);
+      clearInterval(typing);
       await ctx.reply(antwort);
     } catch (err: unknown) {
+      clearInterval(typing);
       console.error("LLM Fehler:", err);
       // Fallback: direkt als Notiz speichern wenn LLM nicht erreichbar
       try {
@@ -78,7 +85,11 @@ export function createBot(token: string): Bot {
 
   // ─── Sprachnachrichten → Whisper ───────────────────────────────────────────
   bot.on("message:voice", async (ctx) => {
-    await ctx.reply("Transkribiere...");
+    // Typing-Indikator während Transkription + LLM
+    const typing = setInterval(() => {
+      ctx.replyWithChatAction("typing").catch(() => {});
+    }, 4000);
+    await ctx.replyWithChatAction("typing");
 
     const file = await ctx.getFile();
     const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
@@ -89,14 +100,17 @@ export function createBot(token: string): Bot {
       const text = await transcribeAudio(tempPath);
 
       if (!text) {
+        clearInterval(typing);
         await ctx.reply("Transkription leer – bitte nochmal versuchen.");
         return;
       }
 
       // Transkription durch LLM verarbeiten (wie normale Textnachricht)
       const antwort = await processMessage(text);
+      clearInterval(typing);
       await ctx.reply(`🎤 "${text}"\n\n${antwort}`);
     } catch (err) {
+      clearInterval(typing);
       console.error("Fehler bei Transkription:", err);
       await ctx.reply("Fehler bei der Transkription.");
     } finally {
