@@ -372,5 +372,25 @@ async function runCompaction(agentName: string): Promise<void> {
   if (summary) writeCompactedLog(agentName, summary);
 }
 
+// Manueller Compaction-Trigger (für /kompakt Befehl)
+export async function compactNow(agentName: string): Promise<string> {
+  const toSummarize = getLogForCompaction(agentName);
+  if (!toSummarize) return "Tageslog ist noch klein – kein Komprimieren nötig.";
+
+  const response = await client.chat.completions.create({
+    model: MODEL,
+    messages: [{
+      role: "user",
+      content: `Fasse diese Gesprächseinträge in maximal 5 Stichpunkten zusammen.\nNur wichtige Fakten, Entscheidungen und offene Punkte. Auf Deutsch:\n\n${toSummarize}`,
+    }],
+  });
+
+  const summary = response.choices[0].message.content ?? "";
+  if (!summary) return "Zusammenfassung fehlgeschlagen.";
+
+  writeCompactedLog(agentName, summary);
+  return `✅ Log komprimiert.\n\nZusammenfassung:\n${summary}`;
+}
+
 // Alle Telegram-Nachrichten laufen durch den BauOS Main-Agent
 export const processMessage = (msg: string) => processAgent("BauOS", msg);

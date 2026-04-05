@@ -130,6 +130,13 @@ export async function handleKontext(ctx: Context): Promise<void> {
   await ctx.reply(out);
 }
 
+export async function handleKompakt(ctx: Context): Promise<void> {
+  const { compactNow } = await import("../llm.js");
+  await ctx.replyWithChatAction("typing");
+  const result = await compactNow("BauOS");
+  await ctx.reply(result);
+}
+
 export async function handleSprache(ctx: Context, args: string): Promise<void> {
   const lang = args?.trim().toLowerCase();
 
