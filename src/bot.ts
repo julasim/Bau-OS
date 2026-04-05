@@ -5,7 +5,7 @@ import { downloadFile, transcribeAudio, getTempPath } from "./transcribe.js";
 import { processMessage, processBtw, processSetup, setReplyContext } from "./llm.js";
 import { enqueue } from "./queue.js";
 import { isSetupActive, activateSetup } from "./setup.js";
-import { fmt } from "./format.js";
+import { fmt, stripMarkdown } from "./format.js";
 import { handleNotiz, handleNotizen, handleLesen, handleBearbeiten, handleLoeschen } from "./commands/notiz.js";
 import { handleAufgabe, handleAufgaben, handleErledigt } from "./commands/aufgaben.js";
 import { handleTermin, handleTermine, handleTerminLoeschen } from "./commands/termine.js";
@@ -13,6 +13,15 @@ import { handleProjekt, handleProjekte, handleProjektInfo } from "./commands/pro
 import { handleDateiLesen, handleDateiErstellen, handleDateiLoeschen, handleOrdnerListe, handleExportieren } from "./commands/dateien.js";
 import { handleSuchen } from "./commands/suchen.js";
 import { handleHilfe, handleStatus, handleSprache, handleKontext, handleKompakt, handleNeu, handleCommands, handleWhoami, handleAgents, handleExportSession, handleModel, handleFast } from "./commands/system.js";
+
+// Sendet mit HTML-Formatting, fällt bei Telegram-Fehler auf Plaintext zurück
+async function safeReply(ctx: { reply: (text: string, opts?: object) => Promise<unknown> }, text: string): Promise<void> {
+  try {
+    await ctx.reply(fmt(text), { parse_mode: "HTML" });
+  } catch {
+    await ctx.reply(stripMarkdown(text));
+  }
+}
 
 export function createBot(token: string): Bot {
   const bot = new Bot(token);
@@ -80,7 +89,7 @@ export function createBot(token: string): Bot {
         try {
           const antwort = await processSetup(raw);
           clearInterval(typing);
-          await ctx.reply(fmt(antwort), { parse_mode: "HTML" });
+          await safeReply(ctx, antwort);
         } catch (err) {
           clearInterval(typing);
           console.error("Setup Fehler:", err);
@@ -97,7 +106,7 @@ export function createBot(token: string): Bot {
         try {
           const antwort = await processBtw(btwMatch[1].trim());
           clearInterval(typing);
-          await ctx.reply(fmt(antwort), { parse_mode: "HTML" });
+          await safeReply(ctx, antwort);
         } catch {
           clearInterval(typing);
           await ctx.reply("Fehler bei /btw – ist Ollama gestartet?");
@@ -112,10 +121,10 @@ export function createBot(token: string): Bot {
       await ctx.replyWithChatAction("typing");
 
       try {
-        setReplyContext((msg) => ctx.reply(fmt(msg), { parse_mode: "HTML" }).then(() => {}));
+        setReplyContext((msg) => safeReply(ctx, msg).then(() => {}));
         const antwort = await processMessage(text);
         clearInterval(typing);
-        await ctx.reply(fmt(antwort), { parse_mode: "HTML" });
+        await safeReply(ctx, antwort);
       } catch (err: unknown) {
         clearInterval(typing);
         console.error("LLM Fehler:", err);
@@ -152,14 +161,22 @@ export function createBot(token: string): Bot {
           return;
         }
 
-        setReplyContext((msg) => ctx.reply(fmt(msg), { parse_mode: "HTML" }).then(() => {}));
+        setReplyContext((msg) => safeReply(ctx, msg).then(() => {}));
         const antwort = await processMessage(text);
         clearInterval(typing);
-        await ctx.reply(`🎤 <i>${text}</i>\n\n${fmt(antwort)}`, { parse_mode: "HTML" });
-      } catch (err) {
+        await safeReply(ctx, `🎤 _${text}_\n\n${antwort}`);
+      } catch (err: unknown) {
         clearInterval(typing);
-        console.error("Fehler bei Transkription:", err);
-        await ctx.reply("Fehler bei der Transkription.");
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("Fehler bei Transkription:", msg);
+
+        if (msg.includes("ENOENT") || msg.includes("not found") || msg.includes("cannot find")) {
+          await ctx.reply("⚠️ Python nicht gefunden.\n\nPYTHON_PATH in .env setzen, z.B.:\nPYTHON_PATH=C:\\Python312\\python.exe");
+        } else if (msg.includes("No module named whisper") || msg.includes("whisper")) {
+          await ctx.reply("⚠️ Whisper nicht installiert.\n\npip install openai-whisper");
+        } else {
+          await ctx.reply(`⚠️ Transkriptionsfehler:\n${msg.slice(0, 200)}`);
+        }
       } finally {
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
       }

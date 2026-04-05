@@ -21,3 +21,14 @@ export function fmt(text: string): string {
     // _kursiv_ → <i>
     .replace(/_([^_\n]+?)_/g, "<i>$1</i>");
 }
+
+/** Markdown-Markierungen für Plaintext-Fallback entfernen */
+export function stripMarkdown(text: string): string {
+  return text
+    .replace(/\*\*(.+?)\*\*/gs, "$1")
+    .replace(/\*([^*\n]+?)\*/g, "$1")
+    .replace(/__(.+?)__/gs, "$1")
+    .replace(/_([^_\n]+?)_/g, "$1")
+    .replace(/`([^`\n]+)`/g, "$1")
+    .replace(/```[\w]*\n?([\s\S]+?)```/g, "$1");
+}
