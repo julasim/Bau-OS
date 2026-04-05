@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import fs from "fs";
+import path from "path";
 import {
   saveNote, listNotes, readNote,
   saveTask, listTasks, completeTask,
@@ -9,7 +10,9 @@ import {
   loadAgentWorkspace, appendAgentConversation, loadAgentHistory,
   createAgentWorkspace, listAgents, getAgentPath, appendAgentMemory, isProtectedAgent,
   shouldCompact, getLogForCompaction, writeCompactedLog,
+  finalizeMainWorkspace,
 } from "./obsidian.js";
+import { deactivateSetup } from "./setup.js";
 
 // ─── Reply-Kontext für async Spawns ─────────────────────────────────────────
 // Wird von bot.ts gesetzt bevor processMessage() aufgerufen wird
@@ -539,3 +542,79 @@ export async function processBtw(userMessage: string): Promise<string> {
 
 // Alle Telegram-Nachrichten laufen durch den Main Agent
 export const processMessage = (msg: string) => processAgent("Main", msg);
+
+// ─── Erststart Setup ─────────────────────────────────────────────────────────
+
+function loadBootstrapPrompt(): string {
+  const bootstrapPath = path.join(
+    process.env.VAULT_PATH!,
+    "Agents", "Main", "BOOTSTRAP.md"
+  );
+  if (fs.existsSync(bootstrapPath)) {
+    return fs.readFileSync(bootstrapPath, "utf-8").trim();
+  }
+  // Fallback falls Datei fehlt
+  return "Du bist ein Einrichtungsassistent. Frage nach Name, Emoji, Charakter, Unternehmenskontext, Benutzername und Unternehmensname. Dann rufe setup_abschliessen auf.";
+}
+
+const SETUP_TOOL: OpenAI.Chat.ChatCompletionTool = {
+  type: "function",
+  function: {
+    name: "setup_abschliessen",
+    description: "Schließt die Ersteinrichtung ab und speichert alle Konfigurationen.",
+    parameters: {
+      type: "object",
+      properties: {
+        name:        { type: "string", description: "Name des Assistenten" },
+        emoji:       { type: "string", description: "Emoji des Assistenten" },
+        vibe:        { type: "string", description: "Charakter/Vibe des Assistenten" },
+        context:     { type: "string", description: "Beschreibung des Unternehmens" },
+        userName:    { type: "string", description: "Name des Benutzers" },
+        userCompany: { type: "string", description: "Name des Unternehmens" },
+      },
+      required: ["name", "emoji", "vibe", "context", "userName", "userCompany"],
+    },
+  },
+};
+
+// Gesprächshistorie für Setup (bleibt im Speicher bis Setup abgeschlossen)
+let _setupMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+
+export async function processSetup(userMessage: string): Promise<string> {
+  // Ersten Start: BOOTSTRAP.md als System-Prompt laden
+  if (_setupMessages.length === 0) {
+    _setupMessages = [{ role: "system", content: loadBootstrapPrompt() }];
+  }
+
+  _setupMessages.push({ role: "user", content: userMessage });
+
+  const response = await client.chat.completions.create({
+    model: MODEL,
+    messages: _setupMessages,
+    tools: [SETUP_TOOL],
+    tool_choice: "auto",
+  });
+
+  const reply = response.choices[0].message;
+  _setupMessages.push(reply);
+
+  // LLM hat setup_abschliessen aufgerufen
+  if (reply.tool_calls?.length) {
+    const call = reply.tool_calls[0] as { id: string; function: { name: string; arguments: string } };
+    const args = JSON.parse(call.function.arguments) as {
+      name: string; emoji: string; vibe: string;
+      context: string; userName: string; userCompany: string;
+    };
+
+    finalizeMainWorkspace(args);
+    deactivateSetup();
+    _setupMessages = []; // aufräumen
+
+    const confirmation = `✅ Eingerichtet!\n\n${args.emoji} ${args.name}\n${args.vibe}\n\nHallo ${args.userName}! Ich bin bereit — was kann ich für ${args.userCompany} tun?`;
+
+    // Tool-Result zurückgeben damit LLM nicht hängt (kein zweiter Request nötig)
+    return confirmation;
+  }
+
+  return reply.content ?? "...";
+}

@@ -306,6 +306,40 @@ export function searchVault(query: string, limitTo?: string): SearchResult[] {
 // Main Agent ist geschützt — kann nie gelöscht oder überschrieben werden
 export const PROTECTED_AGENTS = ["Main"] as const;
 
+// Gibt true zurück wenn der Setup-Wizard bereits abgeschlossen wurde.
+// Kriterium: IDENTITY.md enthält "## Name:" (vom Wizard geschrieben), nicht den Standardinhalt.
+export function isMainWorkspaceConfigured(): boolean {
+  const identityPath = path.join(vaultPath, "Agents", "Main", "IDENTITY.md");
+  if (!fs.existsSync(identityPath)) return false;
+  return fs.readFileSync(identityPath, "utf-8").includes("## Name:");
+}
+
+export interface SetupAnswers {
+  name: string;
+  emoji: string;
+  vibe: string;
+  context: string;
+  userName: string;
+  userCompany: string;
+}
+
+// Erstellt den Main-Workspace aus den Setup-Wizard-Antworten
+export function finalizeMainWorkspace(answers: SetupAnswers): void {
+  const identity = `# Identity\n\n## Name: ${answers.name}\n## Emoji: ${answers.emoji}\n## Vibe: ${answers.vibe}\n## Kontext: ${answers.context}\n`;
+
+  const soul = `# ${answers.name} – Soul\n\n## Identität\nDu bist ${answers.name}, der KI-Assistent von ${answers.userName} für ${answers.userCompany}.\n${answers.vibe}.\n\n## Aufgaben\n- Notizen, Aufgaben und Termine verwalten\n- Projektinformationen abrufen und speichern\n- Im Vault suchen und Dateien lesen\n- Fragen über laufende Projekte beantworten\n- Bei Bedarf spezialisierte Sub-Agenten starten\n\n## Ton & Stil\n- Immer auf Deutsch\n- Kurz und direkt — wir sind in Telegram, kein Fließtext\n- Wenn du etwas speicherst, kurz bestätigen\n- Wenn etwas unklar ist, nachfragen\n- Keine unnötigen Höflichkeitsfloskeln\n\n## Langzeitgedächtnis (MEMORY.md)\nNutze \`memory_speichern\` proaktiv wenn:\n- ${answers.userName} explizit sagt: "merk dir", "vergiss nicht", "speicher das", "ist wichtig"\n- Du etwas über ${answers.userName} lernst das dauerhaft relevant ist (Präferenzen, Arbeitsweise)\n- Wichtige Projektentscheidungen getroffen werden\n- ${answers.userName} eine klare Präferenz äußert\n\nNicht jede Konversation speichern — nur was dauerhaft relevant ist.\n`;
+
+  const user = `# User – ${answers.userName}\n\n## Profil\n- Benutzer von ${answers.userCompany}\n- Sprache: Deutsch\n\n## Arbeitsweise\n- Bevorzugt kurze, direkte Antworten\n- Nutzt Sprachnachrichten häufig (via Whisper transkribiert)\n\n## Hinweise\n- Wenn ${answers.userName} "morgen" sagt → Datum relativ zu heute berechnen\n- Wenn unklar ob Notiz oder Aufgabe → lieber nachfragen\n`;
+
+  const agentPath = path.join(vaultPath, "Agents", "Main");
+  ensureDir(path.join(agentPath, "MEMORY_LOGS"));
+
+  // Nur die 3 Dateien die Wizard-Antworten enthalten — der Rest existiert bereits
+  fs.writeFileSync(path.join(agentPath, "IDENTITY.md"), identity, "utf-8");
+  fs.writeFileSync(path.join(agentPath, "SOUL.md"), soul, "utf-8");
+  fs.writeFileSync(path.join(agentPath, "USER.md"), user, "utf-8");
+}
+
 export function getAgentPath(agentName: string): string {
   return path.join(vaultPath, "Agents", agentName);
 }

@@ -1,9 +1,10 @@
 import { Bot } from "grammy";
 import fs from "fs";
-import { saveNote } from "./obsidian.js";
+import { saveNote, isMainWorkspaceConfigured } from "./obsidian.js";
 import { downloadFile, transcribeAudio, getTempPath } from "./transcribe.js";
-import { processMessage, processBtw, setReplyContext } from "./llm.js";
+import { processMessage, processBtw, processSetup, setReplyContext } from "./llm.js";
 import { enqueue } from "./queue.js";
+import { isSetupActive, activateSetup } from "./setup.js";
 import { handleNotiz, handleNotizen, handleLesen, handleBearbeiten, handleLoeschen } from "./commands/notiz.js";
 import { handleAufgabe, handleAufgaben, handleErledigt } from "./commands/aufgaben.js";
 import { handleTermin, handleTermine, handleTerminLoeschen } from "./commands/termine.js";
@@ -63,6 +64,23 @@ export function createBot(token: string): Bot {
   bot.on("message:text", (ctx) => {
     enqueue(ctx.chat.id, async () => {
       const raw = ctx.message.text;
+
+      // ─── Setup-Wizard (Erster Start) ─────────────────────────────────────
+      if (!isMainWorkspaceConfigured() || isSetupActive()) {
+        if (!isSetupActive()) activateSetup();
+        const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), 4000);
+        await ctx.replyWithChatAction("typing");
+        try {
+          const antwort = await processSetup(raw);
+          clearInterval(typing);
+          await ctx.reply(antwort);
+        } catch (err) {
+          clearInterval(typing);
+          console.error("Setup Fehler:", err);
+          await ctx.reply("Fehler beim Setup – ist das LLM gestartet?");
+        }
+        return;
+      }
 
       // /btw Direktive: geht ans LLM, wird nicht ins Log geschrieben
       const btwMatch = raw.match(/^\/btw\s+(.+)/is);
