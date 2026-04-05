@@ -307,25 +307,46 @@ export function getAgentPath(agentName: string): string {
   return path.join(vaultPath, "Agents", agentName);
 }
 
-export function loadAgentWorkspace(agentName: string): string {
-  const agentPath = getAgentPath(agentName);
-  const contextFiles = ["SOUL.md", "USER.md", "AGENTS.md", "MEMORY.md"];
-  let context = "";
+// Token-Limits (wie OpenClaw: 20k/Datei, 150k gesamt)
+const MAX_FILE_CHARS = 20_000;
+const MAX_TOTAL_CHARS = 150_000;
 
-  for (const file of contextFiles) {
-    const filepath = path.join(agentPath, file);
-    if (fs.existsSync(filepath)) {
-      const content = fs.readFileSync(filepath, "utf-8").trim();
-      if (content) context += `\n\n---\n${content}`;
-    }
+function truncateFile(content: string, filename: string): string {
+  if (content.length <= MAX_FILE_CHARS) return content;
+  const removed = content.length - MAX_FILE_CHARS;
+  return content.slice(0, MAX_FILE_CHARS) + `\n\n[… ${filename} gekürzt – ${removed} Zeichen entfernt]`;
+}
+
+// mode "full"    = Main Agent: alle Dateien + Tageslog
+// mode "minimal" = Sub-Agent:  nur IDENTITY + SOUL (schneller, fokussierter)
+export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" = "full"): string {
+  const agentPath = getAgentPath(agentName);
+  let context = "";
+  let totalChars = 0;
+
+  function addFile(filepath: string, label: string): void {
+    if (!fs.existsSync(filepath)) return;
+    const raw = fs.readFileSync(filepath, "utf-8").trim();
+    if (!raw) return;
+    const content = truncateFile(raw, label);
+    const block = `\n\n---\n${content}`;
+    if (totalChars + block.length > MAX_TOTAL_CHARS) return; // Budget erschöpft
+    context += block;
+    totalChars += block.length;
   }
 
-  // Heutiges Memory-Log laden
-  const today = new Date().toISOString().slice(0, 10);
-  const memLog = path.join(agentPath, "memory", `${today}.md`);
-  if (fs.existsSync(memLog)) {
-    const content = fs.readFileSync(memLog, "utf-8").trim();
-    if (content) context += `\n\n---\n## Heutiges Log\n${content}`;
+  // IDENTITY.md immer zuerst (in beiden Modi)
+  addFile(path.join(agentPath, "IDENTITY.md"), "IDENTITY.md");
+  addFile(path.join(agentPath, "SOUL.md"), "SOUL.md");
+
+  if (mode === "full") {
+    addFile(path.join(agentPath, "USER.md"), "USER.md");
+    addFile(path.join(agentPath, "AGENTS.md"), "AGENTS.md");
+    addFile(path.join(agentPath, "MEMORY.md"), "MEMORY.md");
+
+    // Heutiges Memory-Log
+    const today = new Date().toISOString().slice(0, 10);
+    addFile(path.join(agentPath, "memory", `${today}.md`), "Tageslog");
   }
 
   return context.trim();
@@ -382,6 +403,7 @@ export function createAgentWorkspace(agentName: string, soul: string, agentsMd =
   const agentsDefault = `# ${agentName} – Sub-Agents\n\nKeine Sub-Agents konfiguriert.\n`;
 
   const files: Record<string, string> = {
+    "IDENTITY.md": `🤖 ${agentName}`,
     "SOUL.md": soul,
     "AGENTS.md": agentsMd || agentsDefault,
     "USER.md": userMd || userDefault,

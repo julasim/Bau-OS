@@ -274,7 +274,8 @@ async function executeTool(name: string, args: Record<string, string | number>):
       }
       // Multi-Agent Tools
       case "agent_spawnen": {
-        const result = await processAgent(String(args.agent), String(args.aufgabe));
+        // Sub-Agents laufen im "minimal"-Modus: nur IDENTITY + SOUL, keine History
+        const result = await processAgent(String(args.agent), String(args.aufgabe), "minimal");
         return `[${args.agent}]: ${result}`;
       }
       case "agent_erstellen": {
@@ -295,15 +296,15 @@ async function executeTool(name: string, args: Record<string, string | number>):
 }
 
 // ─── Agent Runtime ────────────────────────────────────────────────────────────
-export async function processAgent(agentName: string, userMessage: string): Promise<string> {
-  // Workspace-Dateien (SOUL.md, USER.md, AGENTS.md, MEMORY.md, Tageslog) laden
-  const workspaceContext = loadAgentWorkspace(agentName);
+export async function processAgent(agentName: string, userMessage: string, mode: "full" | "minimal" = "full"): Promise<string> {
+  // Workspace laden — full: alle Dateien, minimal: nur IDENTITY + SOUL
+  const workspaceContext = loadAgentWorkspace(agentName, mode);
   const systemPrompt = workspaceContext
     ? `${BASE_PROMPT}\n\n${workspaceContext}`
     : BASE_PROMPT;
 
-  // Agent-spezifische Gesprächshistorie (heute + gestern)
-  const history = loadAgentHistory(agentName, 10);
+  // Nur im full-Modus Gesprächshistorie laden (Sub-Agents brauchen sie nicht)
+  const history = mode === "full" ? loadAgentHistory(agentName, 10) : [];
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
