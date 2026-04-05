@@ -311,6 +311,11 @@ export function getAgentPath(agentName: string): string {
 const MAX_FILE_CHARS = 20_000;
 const MAX_TOTAL_CHARS = 150_000;
 
+// Grobe Token-Schätzung: ~4 Zeichen pro Token (Standard für europäische Sprachen)
+export function estimateTokens(text: string): number {
+  return Math.ceil(text.length / 4);
+}
+
 function truncateFile(content: string, filename: string): string {
   if (content.length <= MAX_FILE_CHARS) return content;
   const removed = content.length - MAX_FILE_CHARS;
@@ -330,7 +335,10 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
     if (!raw) return;
     const content = truncateFile(raw, label);
     const block = `\n\n---\n${content}`;
-    if (totalChars + block.length > MAX_TOTAL_CHARS) return; // Budget erschöpft
+    if (totalChars + block.length > MAX_TOTAL_CHARS) {
+      console.warn(`[context] Budget erschöpft – ${label} nicht geladen`);
+      return;
+    }
     context += block;
     totalChars += block.length;
   }
