@@ -2,6 +2,7 @@ import { Bot } from "grammy";
 import fs from "fs";
 import { saveNote } from "./obsidian.js";
 import { downloadFile, transcribeAudio, getTempPath } from "./transcribe.js";
+import { processMessage } from "./llm.js";
 import { handleNotiz, handleNotizen, handleLesen, handleBearbeiten, handleLoeschen } from "./commands/notiz.js";
 import { handleAufgabe, handleAufgaben, handleErledigt } from "./commands/aufgaben.js";
 import { handleTermin, handleTermine, handleTerminLoeschen } from "./commands/termine.js";
@@ -54,15 +55,24 @@ export function createBot(token: string): Bot {
   // ─── Suche ─────────────────────────────────────────────────────────────────
   bot.command("suchen", (ctx) => handleSuchen(ctx, ctx.match));
 
-  // ─── Textnachrichten → Inbox ───────────────────────────────────────────────
+  // ─── Textnachrichten → LLM ────────────────────────────────────────────────
   bot.on("message:text", async (ctx) => {
+    const text = ctx.message.text;
+    await ctx.reply("⏳");
+
     try {
-      const filepath = saveNote(ctx.message.text);
-      const filename = filepath.split(/[\\/]/).pop();
-      await ctx.reply(`Gespeichert: ${filename}`);
-    } catch (err) {
-      console.error("Fehler:", err);
-      await ctx.reply("Fehler beim Speichern.");
+      const antwort = await processMessage(text);
+      await ctx.reply(antwort);
+    } catch (err: unknown) {
+      console.error("LLM Fehler:", err);
+      // Fallback: direkt als Notiz speichern wenn LLM nicht erreichbar
+      try {
+        const filepath = saveNote(text);
+        const filename = filepath.split(/[\\/]/).pop();
+        await ctx.reply(`LLM nicht erreichbar – als Notiz gespeichert: ${filename}`);
+      } catch {
+        await ctx.reply("Fehler – ist Ollama gestartet? (ollama serve)");
+      }
     }
   });
 
@@ -83,9 +93,9 @@ export function createBot(token: string): Bot {
         return;
       }
 
-      const filepath = saveNote(text);
-      const filename = filepath.split(/[\\/]/).pop();
-      await ctx.reply(`Gespeichert: ${filename}\n\n"${text}"`);
+      // Transkription durch LLM verarbeiten (wie normale Textnachricht)
+      const antwort = await processMessage(text);
+      await ctx.reply(`🎤 "${text}"\n\n${antwort}`);
     } catch (err) {
       console.error("Fehler bei Transkription:", err);
       await ctx.reply("Fehler bei der Transkription.");
