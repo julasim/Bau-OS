@@ -1,5 +1,5 @@
 import type { Context } from "grammy";
-import { vaultExists, getVaultPath, inspectAgentWorkspace, estimateTokens } from "../obsidian.js";
+import { vaultExists, getVaultPath, inspectAgentWorkspace, estimateTokens, clearAgentToday } from "../obsidian.js";
 import fs from "fs";
 
 const HILFE = `
@@ -47,6 +47,7 @@ System
 /status
 /kontext
 /kompakt
+/neu
 /sprache de|en|auto
 
 Audio → automatisch transkribieren & speichern
@@ -128,6 +129,14 @@ export async function handleKontext(ctx: Context): Promise<void> {
   ].join("\n");
 
   await ctx.reply(out);
+}
+
+export async function handleNeu(ctx: Context): Promise<void> {
+  const cleared = clearAgentToday("BauOS");
+  await ctx.reply(cleared
+    ? "Gesprächskontext zurückgesetzt. Ich starte frisch."
+    : "Kein heutiger Verlauf gefunden – bin bereits frisch."
+  );
 }
 
 export async function handleKompakt(ctx: Context): Promise<void> {

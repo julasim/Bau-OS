@@ -527,6 +527,15 @@ export function writeCompactedLog(agentName: string, summary: string): void {
   );
 }
 
+// Löscht den heutigen Conversation-Log eines Agenten (für /neu)
+export function clearAgentToday(agentName: string): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  const filepath = path.join(getAgentPath(agentName), "memory", `${today}.md`);
+  if (!fs.existsSync(filepath)) return false;
+  fs.unlinkSync(filepath);
+  return true;
+}
+
 export function listAgents(): string[] {
   const agentsRoot = path.join(vaultPath, "Agents");
   if (!fs.existsSync(agentsRoot)) return [];
