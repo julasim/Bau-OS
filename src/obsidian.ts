@@ -350,9 +350,10 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
     totalChars += block.length;
   }
 
-  // IDENTITY.md immer zuerst (in beiden Modi)
+  // IDENTITY.md + SOUL.md immer (in beiden Modi)
   addFile(path.join(agentPath, "IDENTITY.md"), "IDENTITY.md");
   addFile(path.join(agentPath, "SOUL.md"), "SOUL.md");
+  addFile(path.join(agentPath, "BOOT.md"), "BOOT.md");
 
   if (mode === "full") {
     addFile(path.join(agentPath, "USER.md"),    "USER.md");
@@ -390,6 +391,10 @@ export function appendAgentConversation(agentName: string, userMsg: string, botR
   }
 
   fs.appendFileSync(filepath, `## ${time}\n**User:** ${userMsg}\n**${agentName}:** ${botReply}\n\n`, "utf-8");
+
+  // BOOTSTRAP.md nach erstem echten Gespräch löschen (OpenClaw-Standard)
+  const bootstrapPath = path.join(getAgentPath(agentName), "BOOTSTRAP.md");
+  if (fs.existsSync(bootstrapPath)) fs.unlinkSync(bootstrapPath);
 }
 
 export function loadAgentHistory(agentName: string, limit = 10): ConversationEntry[] {
@@ -432,8 +437,9 @@ export function createAgentWorkspace(agentName: string, soul: string, agentsMd =
     "USER.md":       userMd || userDefault,
     "TOOLS.md":      `# ${agentName} – Tool-Konventionen\n\nNoch keine Konventionen definiert.\n`,
     "MEMORY.md":     `# Memory – ${agentName}\n\nNoch keine dauerhaften Erkenntnisse.\n`,
+    "BOOT.md":       `# ${agentName} – Boot\n\nKein spezieller Startup-Check konfiguriert.\n`,
     "HEARTBEAT.md":  `# ${agentName} – Heartbeat\n\nKein periodischer Heartbeat konfiguriert.\n`,
-    "BOOTSTRAP.md":  `# ${agentName} – Bootstrap\n\nErster Start. Stelle dich kurz vor.\n`,
+    "BOOTSTRAP.md":  `# ${agentName} – Bootstrap\n\nErster Start. Stelle dich kurz vor und frage womit du helfen kannst.\n`,
   };
 
   for (const [filename, content] of Object.entries(files)) {
@@ -465,6 +471,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
   const candidates: { name: string; filepath: string }[] = [
     { name: "IDENTITY.md",   filepath: path.join(agentPath, "IDENTITY.md") },
     { name: "SOUL.md",       filepath: path.join(agentPath, "SOUL.md") },
+    { name: "BOOT.md",       filepath: path.join(agentPath, "BOOT.md") },
     ...(mode === "full" ? [
       { name: "USER.md",       filepath: path.join(agentPath, "USER.md") },
       { name: "AGENTS.md",     filepath: path.join(agentPath, "AGENTS.md") },
