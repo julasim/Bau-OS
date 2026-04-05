@@ -355,14 +355,14 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
     addFile(path.join(agentPath, "HEARTBEAT.md"), "HEARTBEAT.md");
 
     // BOOTSTRAP.md nur wenn memory/ noch leer (allererster Start)
-    const memDir = path.join(agentPath, "memory");
+    const memDir = path.join(agentPath, "MEMORY_LOGS");
     const isFirstRun = !fs.existsSync(memDir) ||
       fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0;
     if (isFirstRun) addFile(path.join(agentPath, "BOOTSTRAP.md"), "BOOTSTRAP.md");
 
     // Heutiges Memory-Log
     const today = new Date().toISOString().slice(0, 10);
-    addFile(path.join(agentPath, "memory", `${today}.md`), "Tageslog");
+    addFile(path.join(agentPath, "MEMORY_LOGS", `${today}.md`), "Tageslog");
   }
 
   return context.trim();
@@ -370,7 +370,7 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
 
 export function appendAgentConversation(agentName: string, userMsg: string, botReply: string): void {
   const today = new Date().toISOString().slice(0, 10);
-  const memDir = path.join(getAgentPath(agentName), "memory");
+  const memDir = path.join(getAgentPath(agentName), "MEMORY_LOGS");
   const filepath = path.join(memDir, `${today}.md`);
   ensureDir(memDir);
 
@@ -393,7 +393,7 @@ export function loadAgentHistory(agentName: string, limit = 10): ConversationEnt
 
   for (const date of [yesterday, today]) {
     const iso = date.toISOString().slice(0, 10);
-    const filepath = path.join(getAgentPath(agentName), "memory", `${iso}.md`);
+    const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${iso}.md`);
     if (!fs.existsSync(filepath)) continue;
 
     const content = fs.readFileSync(filepath, "utf-8");
@@ -413,7 +413,7 @@ export function loadAgentHistory(agentName: string, limit = 10): ConversationEnt
 
 export function createAgentWorkspace(agentName: string, soul: string, agentsMd = "", userMd = ""): string {
   const agentPath = getAgentPath(agentName);
-  ensureDir(path.join(agentPath, "memory"));
+  ensureDir(path.join(agentPath, "MEMORY_LOGS"));
 
   const userDefault = `# User\n\nJulius Sima – Architekt, Wien.\nSprache: Deutsch. Kurze, direkte Antworten bevorzugt.\n`;
   const agentsDefault = `# ${agentName} – Sub-Agents\n\nKeine Sub-Agents konfiguriert.\n`;
@@ -451,7 +451,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
   const agentPath = getAgentPath(agentName);
   const today = new Date().toISOString().slice(0, 10);
 
-  const memDir = path.join(agentPath, "memory");
+  const memDir = path.join(agentPath, "MEMORY_LOGS");
   const isFirstRun = !fs.existsSync(memDir) ||
     fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0;
 
@@ -465,7 +465,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
       { name: "MEMORY.md",     filepath: path.join(agentPath, "MEMORY.md") },
       { name: "HEARTBEAT.md",  filepath: path.join(agentPath, "HEARTBEAT.md") },
       ...(isFirstRun ? [{ name: "BOOTSTRAP.md", filepath: path.join(agentPath, "BOOTSTRAP.md") }] : []),
-      { name: "Tageslog",      filepath: path.join(agentPath, "memory", `${today}.md`) },
+      { name: "Tageslog",      filepath: path.join(agentPath, "MEMORY_LOGS", `${today}.md`) },
     ] : []),
   ];
 
@@ -505,7 +505,7 @@ const KEEP_RECENT = 5;           // Letzte N Einträge nie anfassen
 
 export function shouldCompact(agentName: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), "memory", `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${today}.md`);
   if (!fs.existsSync(filepath)) return false;
   return fs.statSync(filepath).size >= COMPACT_THRESHOLD;
 }
@@ -514,7 +514,7 @@ export function shouldCompact(agentName: string): boolean {
 // (alles außer die letzten KEEP_RECENT — die bleiben unberührt)
 export function getLogForCompaction(agentName: string): string | null {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), "memory", `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${today}.md`);
   if (!fs.existsSync(filepath)) return null;
 
   const content = fs.readFileSync(filepath, "utf-8");
@@ -527,7 +527,7 @@ export function getLogForCompaction(agentName: string): string | null {
 // Schreibt den komprimierten Log zurück — alte Einträge → Zusammenfassung
 export function writeCompactedLog(agentName: string, summary: string): void {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), "memory", `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${today}.md`);
   if (!fs.existsSync(filepath)) return;
 
   const content = fs.readFileSync(filepath, "utf-8");
@@ -561,7 +561,7 @@ export function appendAgentMemory(agentName: string, entry: string): void {
 // Löscht den heutigen Conversation-Log eines Agenten (für /neu)
 export function clearAgentToday(agentName: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), "memory", `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${today}.md`);
   if (!fs.existsSync(filepath)) return false;
   fs.unlinkSync(filepath);
   return true;
