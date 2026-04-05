@@ -502,14 +502,13 @@ export async function processBtw(userMessage: string): Promise<string> {
   const workspaceContext = loadAgentWorkspace("BauOS", "minimal");
   const systemPrompt = workspaceContext ? `${BASE_PROMPT}\n\n${workspaceContext}` : BASE_PROMPT;
 
+  // Keine Tools — direkte Antwort, kein Vault-Zugriff, kein Spawnen
   const response = await client.chat.completions.create({
     model: MODEL,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userMessage },
     ],
-    tools: TOOLS,
-    tool_choice: "auto",
   });
 
   return response.choices[0].message.content ?? "Erledigt.";
