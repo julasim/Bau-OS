@@ -7,7 +7,7 @@ import {
   createProject, listProjects, getProjectInfo,
   searchVault,
   loadAgentWorkspace, appendAgentConversation, loadAgentHistory,
-  createAgentWorkspace, listAgents, getAgentPath,
+  createAgentWorkspace, listAgents, getAgentPath, appendAgentMemory,
   shouldCompact, getLogForCompaction, writeCompactedLog,
 } from "./obsidian.js";
 
@@ -193,6 +193,21 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  // Langzeitgedächtnis
+  {
+    type: "function",
+    function: {
+      name: "memory_speichern",
+      description: "Speichert eine wichtige Information dauerhaft in der MEMORY.md des Agenten. Verwenden wenn: (1) Julius explizit sagt 'merk dir', 'vergiss nicht', 'speicher dauerhaft' o.ä., (2) eine Information für zukünftige Gespräche wichtig ist (Präferenzen, Projektdetails, Entscheidungen, Kontakte).",
+      parameters: {
+        type: "object",
+        properties: {
+          eintrag: { type: "string", description: "Die zu speichernde Information – prägnant formuliert (1-2 Sätze)" },
+        },
+        required: ["eintrag"],
+      },
+    },
+  },
   // Agent-Sessions
   {
     type: "function",
@@ -322,6 +337,11 @@ async function executeTool(name: string, args: Record<string, string | number>):
       case "projekt_info": {
         const info = getProjectInfo(String(args.name));
         return info ?? "Projekt nicht gefunden.";
+      }
+      // Langzeitgedächtnis
+      case "memory_speichern": {
+        appendAgentMemory("BauOS", String(args.eintrag));
+        return `In MEMORY.md gespeichert: ${args.eintrag}`;
       }
       // Agent-Session Tools
       case "agent_verlauf": {

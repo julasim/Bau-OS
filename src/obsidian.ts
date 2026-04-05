@@ -527,6 +527,19 @@ export function writeCompactedLog(agentName: string, summary: string): void {
   );
 }
 
+// Schreibt einen dauerhaften Eintrag in die MEMORY.md des Agenten
+export function appendAgentMemory(agentName: string, entry: string): void {
+  const filepath = path.join(getAgentPath(agentName), "MEMORY.md");
+  ensureDir(path.dirname(filepath));
+
+  if (!fs.existsSync(filepath)) {
+    fs.writeFileSync(filepath, `# Memory – ${agentName}\n\n`, "utf-8");
+  }
+
+  const date = new Date().toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
+  fs.appendFileSync(filepath, `- ${date}: ${entry}\n`, "utf-8");
+}
+
 // Löscht den heutigen Conversation-Log eines Agenten (für /neu)
 export function clearAgentToday(agentName: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
