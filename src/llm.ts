@@ -25,7 +25,8 @@ const client = new OpenAI({
   apiKey: "ollama",
 });
 
-const MODEL = process.env.OLLAMA_MODEL || "qwen2.5:7b";
+const MODEL          = process.env.OLLAMA_MODEL          || "qwen2.5:7b";
+const SUBAGENT_MODEL = process.env.OLLAMA_SUBAGENT_MODEL || MODEL; // fällt auf MODEL zurück
 
 // Basis-Prompt — wird durch den Agent-Workspace (SOUL.md etc.) ergänzt
 const BASE_PROMPT = `Heute ist: ${new Date().toLocaleDateString("de-AT", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
@@ -401,9 +402,11 @@ export async function processAgent(agentName: string, userMessage: string, mode:
   ];
 
   // Agentic Loop — max 5 Runden
+  const activeModel = mode === "minimal" ? SUBAGENT_MODEL : MODEL;
+
   for (let i = 0; i < 5; i++) {
     const response = await client.chat.completions.create({
-      model: MODEL,
+      model: activeModel,
       messages,
       tools: TOOLS,
       tool_choice: "auto",
