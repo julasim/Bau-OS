@@ -7,6 +7,7 @@ import {
   searchVault,
   loadAgentWorkspace, appendAgentConversation, loadAgentHistory,
   createAgentWorkspace, listAgents,
+  shouldCompact, getLogForCompaction, writeCompactedLog,
 } from "./obsidian.js";
 
 // ─── Client ──────────────────────────────────────────────────────────────────
@@ -330,6 +331,8 @@ export async function processAgent(agentName: string, userMessage: string, mode:
     if (!reply.tool_calls || reply.tool_calls.length === 0) {
       const antwort = reply.content ?? "Erledigt.";
       appendAgentConversation(agentName, userMessage, antwort);
+      // Compaction im Hintergrund — blockiert nicht
+      if (shouldCompact(agentName)) runCompaction(agentName).catch(console.error);
       return antwort;
     }
 
@@ -347,7 +350,26 @@ export async function processAgent(agentName: string, userMessage: string, mode:
 
   const fallback = "Ich konnte deine Anfrage nicht vollständig bearbeiten.";
   appendAgentConversation(agentName, userMessage, fallback);
+  if (shouldCompact(agentName)) runCompaction(agentName).catch(console.error);
   return fallback;
+}
+
+// ─── Compaction ──────────────────────────────────────────────────────────────
+// Läuft im Hintergrund nach dem Antworten — blockiert den User nicht
+async function runCompaction(agentName: string): Promise<void> {
+  const toSummarize = getLogForCompaction(agentName);
+  if (!toSummarize) return;
+
+  const response = await client.chat.completions.create({
+    model: MODEL,
+    messages: [{
+      role: "user",
+      content: `Fasse diese Gesprächseinträge in maximal 5 Stichpunkten zusammen.\nNur wichtige Fakten, Entscheidungen und offene Punkte. Auf Deutsch:\n\n${toSummarize}`,
+    }],
+  });
+
+  const summary = response.choices[0].message.content ?? "";
+  if (summary) writeCompactedLog(agentName, summary);
 }
 
 // Alle Telegram-Nachrichten laufen durch den BauOS Main-Agent

@@ -3,6 +3,7 @@ import fs from "fs";
 import { saveNote } from "./obsidian.js";
 import { downloadFile, transcribeAudio, getTempPath } from "./transcribe.js";
 import { processMessage } from "./llm.js";
+import { enqueue } from "./queue.js";
 import { handleNotiz, handleNotizen, handleLesen, handleBearbeiten, handleLoeschen } from "./commands/notiz.js";
 import { handleAufgabe, handleAufgaben, handleErledigt } from "./commands/aufgaben.js";
 import { handleTermin, handleTermine, handleTerminLoeschen } from "./commands/termine.js";
@@ -56,66 +57,66 @@ export function createBot(token: string): Bot {
   bot.command("suchen", (ctx) => handleSuchen(ctx, ctx.match));
 
   // ─── Textnachrichten → LLM ────────────────────────────────────────────────
-  bot.on("message:text", async (ctx) => {
-    const text = ctx.message.text;
+  bot.on("message:text", (ctx) => {
+    enqueue(ctx.chat.id, async () => {
+      const text = ctx.message.text;
 
-    // Typing-Indikator alle 4 Sekunden wiederholen (Telegram löscht ihn nach 5s)
-    const typing = setInterval(() => {
-      ctx.replyWithChatAction("typing").catch(() => {});
-    }, 4000);
-    await ctx.replyWithChatAction("typing");
+      const typing = setInterval(() => {
+        ctx.replyWithChatAction("typing").catch(() => {});
+      }, 4000);
+      await ctx.replyWithChatAction("typing");
 
-    try {
-      const antwort = await processMessage(text);
-      clearInterval(typing);
-      await ctx.reply(antwort);
-    } catch (err: unknown) {
-      clearInterval(typing);
-      console.error("LLM Fehler:", err);
-      // Fallback: direkt als Notiz speichern wenn LLM nicht erreichbar
       try {
-        const filepath = saveNote(text);
-        const filename = filepath.split(/[\\/]/).pop();
-        await ctx.reply(`LLM nicht erreichbar – als Notiz gespeichert: ${filename}`);
-      } catch {
-        await ctx.reply("Fehler – ist Ollama gestartet? (ollama serve)");
+        const antwort = await processMessage(text);
+        clearInterval(typing);
+        await ctx.reply(antwort);
+      } catch (err: unknown) {
+        clearInterval(typing);
+        console.error("LLM Fehler:", err);
+        try {
+          const filepath = saveNote(text);
+          const filename = filepath.split(/[\\/]/).pop();
+          await ctx.reply(`LLM nicht erreichbar – als Notiz gespeichert: ${filename}`);
+        } catch {
+          await ctx.reply("Fehler – ist Ollama gestartet? (ollama serve)");
+        }
       }
-    }
+    });
   });
 
   // ─── Sprachnachrichten → Whisper ───────────────────────────────────────────
-  bot.on("message:voice", async (ctx) => {
-    // Typing-Indikator während Transkription + LLM
-    const typing = setInterval(() => {
-      ctx.replyWithChatAction("typing").catch(() => {});
-    }, 4000);
-    await ctx.replyWithChatAction("typing");
+  bot.on("message:voice", (ctx) => {
+    enqueue(ctx.chat.id, async () => {
+      const typing = setInterval(() => {
+        ctx.replyWithChatAction("typing").catch(() => {});
+      }, 4000);
+      await ctx.replyWithChatAction("typing");
 
-    const file = await ctx.getFile();
-    const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
-    const tempPath = getTempPath(`voice_${Date.now()}.ogg`);
+      const file = await ctx.getFile();
+      const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
+      const tempPath = getTempPath(`voice_${Date.now()}.ogg`);
 
-    try {
-      await downloadFile(fileUrl, tempPath);
-      const text = await transcribeAudio(tempPath);
+      try {
+        await downloadFile(fileUrl, tempPath);
+        const text = await transcribeAudio(tempPath);
 
-      if (!text) {
+        if (!text) {
+          clearInterval(typing);
+          await ctx.reply("Transkription leer – bitte nochmal versuchen.");
+          return;
+        }
+
+        const antwort = await processMessage(text);
         clearInterval(typing);
-        await ctx.reply("Transkription leer – bitte nochmal versuchen.");
-        return;
+        await ctx.reply(`🎤 "${text}"\n\n${antwort}`);
+      } catch (err) {
+        clearInterval(typing);
+        console.error("Fehler bei Transkription:", err);
+        await ctx.reply("Fehler bei der Transkription.");
+      } finally {
+        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
       }
-
-      // Transkription durch LLM verarbeiten (wie normale Textnachricht)
-      const antwort = await processMessage(text);
-      clearInterval(typing);
-      await ctx.reply(`🎤 "${text}"\n\n${antwort}`);
-    } catch (err) {
-      clearInterval(typing);
-      console.error("Fehler bei Transkription:", err);
-      await ctx.reply("Fehler bei der Transkription.");
-    } finally {
-      if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-    }
+    });
   });
 
   return bot;

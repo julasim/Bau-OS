@@ -418,6 +418,55 @@ export function createAgentWorkspace(agentName: string, soul: string, agentsMd =
   return agentPath;
 }
 
+// ─── Compaction ──────────────────────────────────────────────────────────────
+// Wenn der Tages-Log zu groß wird, werden alte Einträge durch eine Zusammenfassung
+// ersetzt — die letzten 5 Einträge bleiben immer erhalten
+
+const COMPACT_THRESHOLD = 8_000; // Zeichen ab wann komprimiert wird
+const KEEP_RECENT = 5;           // Letzte N Einträge nie anfassen
+
+export function shouldCompact(agentName: string): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  const filepath = path.join(getAgentPath(agentName), "memory", `${today}.md`);
+  if (!fs.existsSync(filepath)) return false;
+  return fs.statSync(filepath).size >= COMPACT_THRESHOLD;
+}
+
+// Gibt die alten Einträge zurück die komprimiert werden sollen
+// (alles außer die letzten KEEP_RECENT — die bleiben unberührt)
+export function getLogForCompaction(agentName: string): string | null {
+  const today = new Date().toISOString().slice(0, 10);
+  const filepath = path.join(getAgentPath(agentName), "memory", `${today}.md`);
+  if (!fs.existsSync(filepath)) return null;
+
+  const content = fs.readFileSync(filepath, "utf-8");
+  const entries = content.match(/## \d{2}:\d{2}\n[\s\S]*?(?=\n## \d{2}:\d{2}|$)/g) ?? [];
+  if (entries.length <= KEEP_RECENT) return null;
+
+  return entries.slice(0, -KEEP_RECENT).join("\n");
+}
+
+// Schreibt den komprimierten Log zurück — alte Einträge → Zusammenfassung
+export function writeCompactedLog(agentName: string, summary: string): void {
+  const today = new Date().toISOString().slice(0, 10);
+  const filepath = path.join(getAgentPath(agentName), "memory", `${today}.md`);
+  if (!fs.existsSync(filepath)) return;
+
+  const content = fs.readFileSync(filepath, "utf-8");
+  const header = content.match(/^(# .+\n\n)/)?.[1] ?? "";
+  const entries = content.match(/## \d{2}:\d{2}\n[\s\S]*?(?=\n## \d{2}:\d{2}|$)/g) ?? [];
+  if (entries.length <= KEEP_RECENT) return;
+
+  const toKeep = entries.slice(-KEEP_RECENT);
+  const time = new Date().toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+
+  fs.writeFileSync(
+    filepath,
+    `${header}## Zusammenfassung (${time})\n${summary}\n\n${toKeep.join("\n")}`,
+    "utf-8"
+  );
+}
+
 export function listAgents(): string[] {
   const agentsRoot = path.join(vaultPath, "Agents");
   if (!fs.existsSync(agentsRoot)) return [];
