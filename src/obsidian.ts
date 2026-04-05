@@ -301,6 +301,168 @@ export function searchVault(query: string, limitTo?: string): SearchResult[] {
   return results.slice(0, 10);
 }
 
+// ─── Agent Workspaces ────────────────────────────────────────────────────────
+
+export function getAgentPath(agentName: string): string {
+  return path.join(vaultPath, "Agents", agentName);
+}
+
+export function loadAgentWorkspace(agentName: string): string {
+  const agentPath = getAgentPath(agentName);
+  const contextFiles = ["SOUL.md", "USER.md", "AGENTS.md", "MEMORY.md"];
+  let context = "";
+
+  for (const file of contextFiles) {
+    const filepath = path.join(agentPath, file);
+    if (fs.existsSync(filepath)) {
+      const content = fs.readFileSync(filepath, "utf-8").trim();
+      if (content) context += `\n\n---\n${content}`;
+    }
+  }
+
+  // Heutiges Memory-Log laden
+  const today = new Date().toISOString().slice(0, 10);
+  const memLog = path.join(agentPath, "memory", `${today}.md`);
+  if (fs.existsSync(memLog)) {
+    const content = fs.readFileSync(memLog, "utf-8").trim();
+    if (content) context += `\n\n---\n## Heutiges Log\n${content}`;
+  }
+
+  return context.trim();
+}
+
+export function appendAgentConversation(agentName: string, userMsg: string, botReply: string): void {
+  const today = new Date().toISOString().slice(0, 10);
+  const memDir = path.join(getAgentPath(agentName), "memory");
+  const filepath = path.join(memDir, `${today}.md`);
+  ensureDir(memDir);
+
+  const now = new Date();
+  const time = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = now.toLocaleDateString("de-AT", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+  if (!fs.existsSync(filepath)) {
+    fs.writeFileSync(filepath, `# Log – ${dateStr}\n\n`, "utf-8");
+  }
+
+  fs.appendFileSync(filepath, `## ${time}\n**User:** ${userMsg}\n**${agentName}:** ${botReply}\n\n`, "utf-8");
+}
+
+export function loadAgentHistory(agentName: string, limit = 10): ConversationEntry[] {
+  const results: ConversationEntry[] = [];
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  for (const date of [yesterday, today]) {
+    const iso = date.toISOString().slice(0, 10);
+    const filepath = path.join(getAgentPath(agentName), "memory", `${iso}.md`);
+    if (!fs.existsSync(filepath)) continue;
+
+    const content = fs.readFileSync(filepath, "utf-8");
+    const blocks = content.split(/^## \d{2}:\d{2}/m).slice(1);
+
+    for (const block of blocks) {
+      const userMatch = block.match(/\*\*User:\*\* (.+)/);
+      const botMatch = block.match(/\*\*[^*]+:\*\* ([\s\S]+?)(?=\n\n|\n##|$)/);
+      if (userMatch && botMatch) {
+        results.push({ user: userMatch[1].trim(), assistant: botMatch[1].trim() });
+      }
+    }
+  }
+
+  return results.slice(-limit);
+}
+
+export function createAgentWorkspace(agentName: string, soul: string, agentsMd = "", userMd = ""): string {
+  const agentPath = getAgentPath(agentName);
+  ensureDir(path.join(agentPath, "memory"));
+
+  const userDefault = `# User\n\nJulius Sima – Architekt, Wien.\nSprache: Deutsch. Kurze, direkte Antworten bevorzugt.\n`;
+  const agentsDefault = `# ${agentName} – Sub-Agents\n\nKeine Sub-Agents konfiguriert.\n`;
+
+  const files: Record<string, string> = {
+    "SOUL.md": soul,
+    "AGENTS.md": agentsMd || agentsDefault,
+    "USER.md": userMd || userDefault,
+    "MEMORY.md": `# Memory – ${agentName}\n\nNoch keine dauerhaften Erkenntnisse.\n`,
+  };
+
+  for (const [filename, content] of Object.entries(files)) {
+    const fp = path.join(agentPath, filename);
+    if (!fs.existsSync(fp)) fs.writeFileSync(fp, content, "utf-8");
+  }
+
+  return agentPath;
+}
+
+export function listAgents(): string[] {
+  const agentsRoot = path.join(vaultPath, "Agents");
+  if (!fs.existsSync(agentsRoot)) return [];
+  return fs.readdirSync(agentsRoot, { withFileTypes: true })
+    .filter(e => e.isDirectory())
+    .map(e => e.name);
+}
+
+// ─── Gesprächsgedächtnis (legacy – wird durch Agent-Memory ersetzt) ──────────
+
+function gespraechFilePath(date: Date = new Date()): string {
+  const iso = date.toISOString().slice(0, 10); // YYYY-MM-DD
+  return path.join(vaultPath, "Gespräche", `${iso}.md`);
+}
+
+export function appendConversation(userMsg: string, botReply: string): void {
+  const filepath = gespraechFilePath();
+  ensureDir(path.dirname(filepath));
+
+  const now = new Date();
+  const time = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+  const dateStr = now.toLocaleDateString("de-AT", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+  if (!fs.existsSync(filepath)) {
+    fs.writeFileSync(filepath, `# Gespräch ${dateStr}\n\n`, "utf-8");
+  }
+
+  const entry = `## ${time}\n**Du:** ${userMsg}\n**Bau-OS:** ${botReply}\n\n`;
+  fs.appendFileSync(filepath, entry, "utf-8");
+}
+
+export interface ConversationEntry {
+  user: string;
+  assistant: string;
+}
+
+export function loadRecentConversation(limit = 10): ConversationEntry[] {
+  const results: ConversationEntry[] = [];
+
+  // Heute + gestern laden (falls Gespräch über Mitternacht geht)
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  const files = [yesterday, today]
+    .map(d => gespraechFilePath(d))
+    .filter(f => fs.existsSync(f));
+
+  for (const filepath of files) {
+    const content = fs.readFileSync(filepath, "utf-8");
+    const blocks = content.split(/^## \d{2}:\d{2}/m).slice(1);
+
+    for (const block of blocks) {
+      const userMatch = block.match(/\*\*Du:\*\* (.+)/);
+      const botMatch = block.match(/\*\*Bau-OS:\*\* ([\s\S]+?)(?=\n\n|$)/);
+      if (userMatch && botMatch) {
+        results.push({
+          user: userMatch[1].trim(),
+          assistant: botMatch[1].trim(),
+        });
+      }
+    }
+  }
+
+  return results.slice(-limit);
+}
+
 // ─── System ──────────────────────────────────────────────────────────────────
 
 export function vaultExists(): boolean {
