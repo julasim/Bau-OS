@@ -303,8 +303,15 @@ export function searchVault(query: string, limitTo?: string): SearchResult[] {
 
 // ─── Agent Workspaces ────────────────────────────────────────────────────────
 
+// Main Agent ist geschützt — kann nie gelöscht oder überschrieben werden
+export const PROTECTED_AGENTS = ["Main"] as const;
+
 export function getAgentPath(agentName: string): string {
   return path.join(vaultPath, "Agents", agentName);
+}
+
+export function isProtectedAgent(agentName: string): boolean {
+  return (PROTECTED_AGENTS as readonly string[]).includes(agentName);
 }
 
 // Token-Limits (wie OpenClaw: 20k/Datei, 150k gesamt)

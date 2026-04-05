@@ -96,10 +96,10 @@ Python: ${pythonPath}
 }
 
 export async function handleKontext(ctx: Context): Promise<void> {
-  const files = inspectAgentWorkspace("BauOS", "full");
+  const files = inspectAgentWorkspace("Main", "full");
 
   if (!files.length) {
-    await ctx.reply("Kein Workspace gefunden (Agents/BauOS/).");
+    await ctx.reply("Kein Workspace gefunden (Agents/Main/).");
     return;
   }
 
@@ -119,7 +119,7 @@ export async function handleKontext(ctx: Context): Promise<void> {
   });
 
   const out = [
-    "📊 BauOS Kontext",
+    "📊 Main Agent Kontext",
     "─".repeat(36),
     ...lines,
     "─".repeat(36),
@@ -132,7 +132,7 @@ export async function handleKontext(ctx: Context): Promise<void> {
 }
 
 export async function handleNeu(ctx: Context): Promise<void> {
-  const cleared = clearAgentToday("BauOS");
+  const cleared = clearAgentToday("Main");
   await ctx.reply(cleared
     ? "Gesprächskontext zurückgesetzt. Ich starte frisch."
     : "Kein heutiger Verlauf gefunden – bin bereits frisch."
@@ -142,7 +142,7 @@ export async function handleNeu(ctx: Context): Promise<void> {
 export async function handleKompakt(ctx: Context): Promise<void> {
   const { compactNow } = await import("../llm.js");
   await ctx.replyWithChatAction("typing");
-  const result = await compactNow("BauOS");
+  const result = await compactNow("Main");
   await ctx.reply(result);
 }
 

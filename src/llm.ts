@@ -7,7 +7,7 @@ import {
   createProject, listProjects, getProjectInfo,
   searchVault,
   loadAgentWorkspace, appendAgentConversation, loadAgentHistory,
-  createAgentWorkspace, listAgents, getAgentPath, appendAgentMemory,
+  createAgentWorkspace, listAgents, getAgentPath, appendAgentMemory, isProtectedAgent,
   shouldCompact, getLogForCompaction, writeCompactedLog,
 } from "./obsidian.js";
 
@@ -340,7 +340,7 @@ async function executeTool(name: string, args: Record<string, string | number>):
       }
       // Langzeitgedächtnis
       case "memory_speichern": {
-        appendAgentMemory("BauOS", String(args.eintrag));
+        appendAgentMemory("Main", String(args.eintrag));
         return `In MEMORY.md gespeichert: ${args.eintrag}`;
       }
       // Agent-Session Tools
@@ -382,6 +382,9 @@ async function executeTool(name: string, args: Record<string, string | number>):
         return `[${args.agent}]: ${result}`;
       }
       case "agent_erstellen": {
+        if (isProtectedAgent(String(args.name))) {
+          return `"${args.name}" ist ein geschützter Agent und kann nicht überschrieben werden.`;
+        }
         const soul = `# ${args.name}\n\n## Rolle\n${args.beschreibung}\n\n## Regeln\n- Antworte immer auf Deutsch\n- Sei präzise und fokussiert auf deine Aufgabe\n- Halte Antworten kurz\n`;
         createAgentWorkspace(String(args.name), soul);
         return `Agent "${args.name}" erstellt mit eigenem Workspace in Agents/${args.name}/`;
@@ -519,7 +522,7 @@ export async function compactNow(agentName: string): Promise<string> {
 // btw-Modus: geht ans LLM aber wird NICHT ins Tages-Log geschrieben
 export async function processBtw(userMessage: string): Promise<string> {
   // minimal: kein AGENTS.md → LLM versucht nicht Sub-Agents zu spawnen
-  const workspaceContext = loadAgentWorkspace("BauOS", "minimal");
+  const workspaceContext = loadAgentWorkspace("Main", "minimal");
   const systemPrompt = workspaceContext ? `${BASE_PROMPT}\n\n${workspaceContext}` : BASE_PROMPT;
 
   // Keine Tools — direkte Antwort, kein Vault-Zugriff, kein Spawnen
@@ -534,5 +537,5 @@ export async function processBtw(userMessage: string): Promise<string> {
   return response.choices[0].message.content ?? "Erledigt.";
 }
 
-// Alle Telegram-Nachrichten laufen durch den BauOS Main-Agent
-export const processMessage = (msg: string) => processAgent("BauOS", msg);
+// Alle Telegram-Nachrichten laufen durch den Main Agent
+export const processMessage = (msg: string) => processAgent("Main", msg);
