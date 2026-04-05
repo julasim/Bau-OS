@@ -28,8 +28,23 @@ const client = new OpenAI({
   apiKey: "ollama",
 });
 
-const MODEL          = process.env.OLLAMA_MODEL          || "qwen2.5:7b";
-const SUBAGENT_MODEL = process.env.OLLAMA_SUBAGENT_MODEL || MODEL; // fällt auf MODEL zurück
+let MODEL          = process.env.OLLAMA_MODEL          || "qwen2.5:7b";
+const SUBAGENT_MODEL = process.env.OLLAMA_SUBAGENT_MODEL || MODEL;
+let _fastMode = false;
+
+export function getModel(): string { return MODEL; }
+export function getSubagentModel(): string { return SUBAGENT_MODEL; }
+export function isFastMode(): boolean { return _fastMode; }
+
+export function setModel(name: string): void {
+  MODEL = name;
+}
+
+export function toggleFast(): boolean {
+  _fastMode = !_fastMode;
+  MODEL = _fastMode ? SUBAGENT_MODEL : (process.env.OLLAMA_MODEL || "qwen2.5:7b");
+  return _fastMode;
+}
 
 // Basis-Prompt — wird durch den Agent-Workspace (SOUL.md etc.) ergänzt
 const BASE_PROMPT = `Heute ist: ${new Date().toLocaleDateString("de-AT", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}

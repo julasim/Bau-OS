@@ -11,7 +11,7 @@ import { handleTermin, handleTermine, handleTerminLoeschen } from "./commands/te
 import { handleProjekt, handleProjekte, handleProjektInfo } from "./commands/projekte.js";
 import { handleDateiLesen, handleDateiErstellen, handleDateiLoeschen, handleOrdnerListe, handleExportieren } from "./commands/dateien.js";
 import { handleSuchen } from "./commands/suchen.js";
-import { handleHilfe, handleStatus, handleSprache, handleKontext, handleKompakt, handleNeu } from "./commands/system.js";
+import { handleHilfe, handleStatus, handleSprache, handleKontext, handleKompakt, handleNeu, handleCommands, handleWhoami, handleAgents, handleExportSession, handleModel, handleFast } from "./commands/system.js";
 
 export function createBot(token: string): Bot {
   const bot = new Bot(token);
@@ -19,10 +19,16 @@ export function createBot(token: string): Bot {
   // ─── System ────────────────────────────────────────────────────────────────
   bot.command("start",   (ctx) => handleHilfe(ctx));
   bot.command("hilfe",   (ctx) => handleHilfe(ctx));
+  bot.command("commands", (ctx) => handleCommands(ctx));
   bot.command("status",   (ctx) => handleStatus(ctx));
   bot.command("kontext",  (ctx) => handleKontext(ctx));
   bot.command("kompakt",  (ctx) => handleKompakt(ctx));
   bot.command("neu",      (ctx) => handleNeu(ctx));
+  bot.command("whoami",   (ctx) => handleWhoami(ctx));
+  bot.command("agents",   (ctx) => handleAgents(ctx));
+  bot.command("export",   (ctx) => handleExportSession(ctx));
+  bot.command("model",    (ctx) => handleModel(ctx, ctx.match));
+  bot.command("fast",     (ctx) => handleFast(ctx));
   bot.command("sprache",  (ctx) => handleSprache(ctx, ctx.match));
 
   // ─── Notizen ───────────────────────────────────────────────────────────────
