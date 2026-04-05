@@ -498,7 +498,8 @@ export async function compactNow(agentName: string): Promise<string> {
 
 // btw-Modus: geht ans LLM aber wird NICHT ins Tages-Log geschrieben
 export async function processBtw(userMessage: string): Promise<string> {
-  const workspaceContext = loadAgentWorkspace("BauOS", "full");
+  // minimal: kein AGENTS.md → LLM versucht nicht Sub-Agents zu spawnen
+  const workspaceContext = loadAgentWorkspace("BauOS", "minimal");
   const systemPrompt = workspaceContext ? `${BASE_PROMPT}\n\n${workspaceContext}` : BASE_PROMPT;
 
   const response = await client.chat.completions.create({
