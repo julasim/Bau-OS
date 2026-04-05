@@ -348,9 +348,17 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
   addFile(path.join(agentPath, "SOUL.md"), "SOUL.md");
 
   if (mode === "full") {
-    addFile(path.join(agentPath, "USER.md"), "USER.md");
-    addFile(path.join(agentPath, "AGENTS.md"), "AGENTS.md");
-    addFile(path.join(agentPath, "MEMORY.md"), "MEMORY.md");
+    addFile(path.join(agentPath, "USER.md"),    "USER.md");
+    addFile(path.join(agentPath, "AGENTS.md"),  "AGENTS.md");
+    addFile(path.join(agentPath, "TOOLS.md"),   "TOOLS.md");
+    addFile(path.join(agentPath, "MEMORY.md"),  "MEMORY.md");
+    addFile(path.join(agentPath, "HEARTBEAT.md"), "HEARTBEAT.md");
+
+    // BOOTSTRAP.md nur wenn memory/ noch leer (allererster Start)
+    const memDir = path.join(agentPath, "memory");
+    const isFirstRun = !fs.existsSync(memDir) ||
+      fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0;
+    if (isFirstRun) addFile(path.join(agentPath, "BOOTSTRAP.md"), "BOOTSTRAP.md");
 
     // Heutiges Memory-Log
     const today = new Date().toISOString().slice(0, 10);
@@ -411,11 +419,14 @@ export function createAgentWorkspace(agentName: string, soul: string, agentsMd =
   const agentsDefault = `# ${agentName} – Sub-Agents\n\nKeine Sub-Agents konfiguriert.\n`;
 
   const files: Record<string, string> = {
-    "IDENTITY.md": `🤖 ${agentName}`,
-    "SOUL.md": soul,
-    "AGENTS.md": agentsMd || agentsDefault,
-    "USER.md": userMd || userDefault,
-    "MEMORY.md": `# Memory – ${agentName}\n\nNoch keine dauerhaften Erkenntnisse.\n`,
+    "IDENTITY.md":   `🤖 ${agentName}`,
+    "SOUL.md":       soul,
+    "AGENTS.md":     agentsMd || agentsDefault,
+    "USER.md":       userMd || userDefault,
+    "TOOLS.md":      `# ${agentName} – Tool-Konventionen\n\nNoch keine Konventionen definiert.\n`,
+    "MEMORY.md":     `# Memory – ${agentName}\n\nNoch keine dauerhaften Erkenntnisse.\n`,
+    "HEARTBEAT.md":  `# ${agentName} – Heartbeat\n\nKein periodischer Heartbeat konfiguriert.\n`,
+    "BOOTSTRAP.md":  `# ${agentName} – Bootstrap\n\nErster Start. Stelle dich kurz vor.\n`,
   };
 
   for (const [filename, content] of Object.entries(files)) {
@@ -440,14 +451,21 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
   const agentPath = getAgentPath(agentName);
   const today = new Date().toISOString().slice(0, 10);
 
+  const memDir = path.join(agentPath, "memory");
+  const isFirstRun = !fs.existsSync(memDir) ||
+    fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0;
+
   const candidates: { name: string; filepath: string }[] = [
-    { name: "IDENTITY.md", filepath: path.join(agentPath, "IDENTITY.md") },
-    { name: "SOUL.md",     filepath: path.join(agentPath, "SOUL.md") },
+    { name: "IDENTITY.md",   filepath: path.join(agentPath, "IDENTITY.md") },
+    { name: "SOUL.md",       filepath: path.join(agentPath, "SOUL.md") },
     ...(mode === "full" ? [
-      { name: "USER.md",    filepath: path.join(agentPath, "USER.md") },
-      { name: "AGENTS.md",  filepath: path.join(agentPath, "AGENTS.md") },
-      { name: "MEMORY.md",  filepath: path.join(agentPath, "MEMORY.md") },
-      { name: "Tageslog",   filepath: path.join(agentPath, "memory", `${today}.md`) },
+      { name: "USER.md",       filepath: path.join(agentPath, "USER.md") },
+      { name: "AGENTS.md",     filepath: path.join(agentPath, "AGENTS.md") },
+      { name: "TOOLS.md",      filepath: path.join(agentPath, "TOOLS.md") },
+      { name: "MEMORY.md",     filepath: path.join(agentPath, "MEMORY.md") },
+      { name: "HEARTBEAT.md",  filepath: path.join(agentPath, "HEARTBEAT.md") },
+      ...(isFirstRun ? [{ name: "BOOTSTRAP.md", filepath: path.join(agentPath, "BOOTSTRAP.md") }] : []),
+      { name: "Tageslog",      filepath: path.join(agentPath, "memory", `${today}.md`) },
     ] : []),
   ];
 
