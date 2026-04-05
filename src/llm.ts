@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import fs from "fs";
 import {
   saveNote, listNotes, readNote,
   saveTask, listTasks, completeTask,
@@ -6,7 +7,7 @@ import {
   createProject, listProjects, getProjectInfo,
   searchVault,
   loadAgentWorkspace, appendAgentConversation, loadAgentHistory,
-  createAgentWorkspace, listAgents,
+  createAgentWorkspace, listAgents, getAgentPath,
   shouldCompact, getLogForCompaction, writeCompactedLog,
 } from "./obsidian.js";
 
@@ -183,6 +184,29 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  // Agent-Sessions
+  {
+    type: "function",
+    function: {
+      name: "agent_verlauf",
+      description: "Liest den heutigen Gesprächsverlauf eines anderen Agenten. Verwenden wenn gefragt wird was ein Sub-Agent zuletzt gemacht hat.",
+      parameters: {
+        type: "object",
+        properties: {
+          agent: { type: "string", description: "Name des Agenten (z.B. 'Protokoll')" },
+        },
+        required: ["agent"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "agent_aktiv",
+      description: "Listet alle Agenten auf die heute aktiv waren (einen Tageslog haben).",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
   // Multi-Agent
   {
     type: "function",
@@ -272,6 +296,22 @@ async function executeTool(name: string, args: Record<string, string | number>):
       case "projekt_info": {
         const info = getProjectInfo(String(args.name));
         return info ?? "Projekt nicht gefunden.";
+      }
+      // Agent-Session Tools
+      case "agent_verlauf": {
+        const history = loadAgentHistory(String(args.agent), 20);
+        if (!history.length) return `Kein Verlauf für Agent "${args.agent}" heute.`;
+        return history.map(h => `User: ${h.user}\n${args.agent}: ${h.assistant}`).join("\n\n---\n\n");
+      }
+      case "agent_aktiv": {
+        const today = new Date().toISOString().slice(0, 10);
+        const active = listAgents().filter(name => {
+          const logPath = `${getAgentPath(name)}/memory/${today}.md`;
+          return fs.existsSync(logPath);
+        });
+        return active.length
+          ? `Heute aktive Agenten:\n${active.map(a => `• ${a}`).join("\n")}`
+          : "Heute war noch kein Agent aktiv.";
       }
       // Multi-Agent Tools
       case "agent_spawnen": {
