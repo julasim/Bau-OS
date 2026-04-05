@@ -346,6 +346,23 @@ export async function processAgent(agentName: string, userMessage: string, mode:
     );
 
     messages.push(...toolResults);
+
+    // Pruning: wenn messages zu groß → alte Tool-Results entfernen
+    // System-Prompt + letzte 3 Tool-Results + aktuelle User-Nachricht bleiben immer
+    const totalChars = messages.reduce((s, m) => s + JSON.stringify(m).length, 0);
+    if (totalChars > 60_000) {
+      const systemMsg = messages[0];
+      const toolMsgs = messages.filter(m => m.role === "tool");
+      const nonToolMsgs = messages.filter(m => m.role !== "tool");
+      // Nur die letzten 3 Tool-Results behalten
+      const keptTools = toolMsgs.slice(-3);
+      // Neu aufbauen: system + non-tool (ohne system) + letzte tool-results
+      messages.splice(0, messages.length,
+        systemMsg,
+        ...nonToolMsgs.slice(1),
+        ...keptTools
+      );
+    }
   }
 
   const fallback = "Ich konnte deine Anfrage nicht vollständig bearbeiten.";
