@@ -10,7 +10,7 @@ import { handleTermin, handleTermine, handleTerminLoeschen } from "./commands/te
 import { handleProjekt, handleProjekte, handleProjektInfo } from "./commands/projekte.js";
 import { handleDateiLesen, handleDateiErstellen, handleDateiLoeschen, handleOrdnerListe, handleExportieren } from "./commands/dateien.js";
 import { handleSuchen } from "./commands/suchen.js";
-import { handleHilfe, handleStatus, handleSprache } from "./commands/system.js";
+import { handleHilfe, handleStatus, handleSprache, handleKontext } from "./commands/system.js";
 
 export function createBot(token: string): Bot {
   const bot = new Bot(token);
@@ -18,8 +18,9 @@ export function createBot(token: string): Bot {
   // ─── System ────────────────────────────────────────────────────────────────
   bot.command("start",   (ctx) => handleHilfe(ctx));
   bot.command("hilfe",   (ctx) => handleHilfe(ctx));
-  bot.command("status",  (ctx) => handleStatus(ctx));
-  bot.command("sprache", (ctx) => handleSprache(ctx, ctx.match));
+  bot.command("status",   (ctx) => handleStatus(ctx));
+  bot.command("kontext",  (ctx) => handleKontext(ctx));
+  bot.command("sprache",  (ctx) => handleSprache(ctx, ctx.match));
 
   // ─── Notizen ───────────────────────────────────────────────────────────────
   bot.command("notiz",      (ctx) => handleNotiz(ctx, ctx.match));

@@ -426,6 +426,58 @@ export function createAgentWorkspace(agentName: string, soul: string, agentsMd =
   return agentPath;
 }
 
+// Gibt eine Auflistung aller Workspace-Dateien mit Größen zurück (für /kontext)
+export interface WorkspaceFileInfo {
+  name: string;
+  rawChars: number;
+  injectedChars: number; // nach Truncation
+  tokens: number;
+  truncated: boolean;
+  loaded: boolean;       // false wenn Budget erschöpft
+}
+
+export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal" = "full"): WorkspaceFileInfo[] {
+  const agentPath = getAgentPath(agentName);
+  const today = new Date().toISOString().slice(0, 10);
+
+  const candidates: { name: string; filepath: string }[] = [
+    { name: "IDENTITY.md", filepath: path.join(agentPath, "IDENTITY.md") },
+    { name: "SOUL.md",     filepath: path.join(agentPath, "SOUL.md") },
+    ...(mode === "full" ? [
+      { name: "USER.md",    filepath: path.join(agentPath, "USER.md") },
+      { name: "AGENTS.md",  filepath: path.join(agentPath, "AGENTS.md") },
+      { name: "MEMORY.md",  filepath: path.join(agentPath, "MEMORY.md") },
+      { name: "Tageslog",   filepath: path.join(agentPath, "memory", `${today}.md`) },
+    ] : []),
+  ];
+
+  const result: WorkspaceFileInfo[] = [];
+  let totalChars = 0;
+
+  for (const { name, filepath } of candidates) {
+    if (!fs.existsSync(filepath)) continue;
+    const raw = fs.readFileSync(filepath, "utf-8").trim();
+    if (!raw) continue;
+
+    const injected = raw.length > MAX_FILE_CHARS ? raw.slice(0, MAX_FILE_CHARS) : raw;
+    const block = `\n\n---\n${injected}`;
+    const loaded = totalChars + block.length <= MAX_TOTAL_CHARS;
+
+    result.push({
+      name,
+      rawChars: raw.length,
+      injectedChars: loaded ? injected.length : 0,
+      tokens: loaded ? estimateTokens(injected) : 0,
+      truncated: raw.length > MAX_FILE_CHARS,
+      loaded,
+    });
+
+    if (loaded) totalChars += block.length;
+  }
+
+  return result;
+}
+
 // ─── Compaction ──────────────────────────────────────────────────────────────
 // Wenn der Tages-Log zu groß wird, werden alte Einträge durch eine Zusammenfassung
 // ersetzt — die letzten 5 Einträge bleiben immer erhalten

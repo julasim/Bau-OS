@@ -1,5 +1,5 @@
 import type { Context } from "grammy";
-import { vaultExists, getVaultPath } from "../obsidian.js";
+import { vaultExists, getVaultPath, inspectAgentWorkspace, estimateTokens } from "../obsidian.js";
 import fs from "fs";
 
 const HILFE = `
@@ -45,6 +45,8 @@ Suche
 
 System
 /status
+/kontext
+/kompakt
 /sprache de|en|auto
 
 Audio → automatisch transkribieren & speichern
@@ -90,6 +92,42 @@ Python: ${pythonPath}
   `.trim();
 
   await ctx.reply(status);
+}
+
+export async function handleKontext(ctx: Context): Promise<void> {
+  const files = inspectAgentWorkspace("BauOS", "full");
+
+  if (!files.length) {
+    await ctx.reply("Kein Workspace gefunden (Agents/BauOS/).");
+    return;
+  }
+
+  const totalInjected = files.filter(f => f.loaded).reduce((s, f) => s + f.injectedChars, 0);
+  const totalTokens = files.filter(f => f.loaded).reduce((s, f) => s + f.tokens, 0);
+  const limitTokens = estimateTokens(150_000 + ""); // 37.500 tok
+
+  const lines = files.map(f => {
+    const size = f.rawChars >= 1000
+      ? `${(f.rawChars / 1000).toFixed(1)}k`
+      : `${f.rawChars}`;
+    const flags = [
+      !f.loaded   ? "SKIP" : "",
+      f.truncated ? "TRUNCATED" : "",
+    ].filter(Boolean).join(" ");
+    return `${f.name.padEnd(12)} ${size.padStart(5)} Z  (~${f.tokens} tok)${flags ? "  ⚠ " + flags : ""}`;
+  });
+
+  const out = [
+    "📊 BauOS Kontext",
+    "─".repeat(36),
+    ...lines,
+    "─".repeat(36),
+    `Gesamt:      ${(totalInjected / 1000).toFixed(1)}k Z  (~${totalTokens} tok)`,
+    `Limit:       150k Z  (~37.500 tok)`,
+    `Auslastung:  ${Math.round((totalInjected / 150_000) * 100)}%`,
+  ].join("\n");
+
+  await ctx.reply(out);
 }
 
 export async function handleSprache(ctx: Context, args: string): Promise<void> {
