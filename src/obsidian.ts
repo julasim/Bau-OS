@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { PROTECTED_AGENTS as _PROTECTED_AGENTS, COMPACT_THRESHOLD } from "./config.js";
 
 const vaultPath = process.env.VAULT_PATH!;
 
@@ -304,7 +305,7 @@ export function searchVault(query: string, limitTo?: string): SearchResult[] {
 // ─── Agent Workspaces ────────────────────────────────────────────────────────
 
 // Main Agent ist geschützt — kann nie gelöscht oder überschrieben werden
-export const PROTECTED_AGENTS = ["Main"] as const;
+export const PROTECTED_AGENTS = _PROTECTED_AGENTS;
 
 // Gibt true zurück wenn der Setup-Wizard bereits abgeschlossen wurde.
 // Kriterium: IDENTITY.md enthält "## Name:" (vom Wizard geschrieben), nicht den Standardinhalt.
@@ -548,7 +549,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
 // Wenn der Tages-Log zu groß wird, werden alte Einträge durch eine Zusammenfassung
 // ersetzt — die letzten 5 Einträge bleiben immer erhalten
 
-const COMPACT_THRESHOLD = 8_000; // Zeichen ab wann komprimiert wird
+// COMPACT_THRESHOLD kommt aus config.ts
 const KEEP_RECENT = 5;           // Letzte N Einträge nie anfassen
 
 export function shouldCompact(agentName: string): boolean {

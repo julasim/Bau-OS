@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
+import { OLLAMA_BASE_URL, DEFAULT_MODEL, FAST_MODEL, SUBAGENT_MODEL as SUBAGENT_MODEL_CFG, MAX_HISTORY_CHARS, getAgentModel } from "./config.js";
 import {
   saveNote, listNotes, readNote,
   saveTask, listTasks, completeTask,
@@ -24,16 +25,15 @@ export function setReplyContext(fn: (text: string) => Promise<void>): void {
 
 // ─── Client ──────────────────────────────────────────────────────────────────
 const client = new OpenAI({
-  baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1",
+  baseURL: OLLAMA_BASE_URL,
   apiKey: "ollama",
 });
 
-let MODEL          = process.env.OLLAMA_MODEL          || "qwen2.5:7b";
-const SUBAGENT_MODEL = process.env.OLLAMA_SUBAGENT_MODEL || MODEL;
+let MODEL = DEFAULT_MODEL;
 let _fastMode = false;
 
 export function getModel(): string { return MODEL; }
-export function getSubagentModel(): string { return SUBAGENT_MODEL; }
+export function getSubagentModel(): string { return SUBAGENT_MODEL_CFG; }
 export function isFastMode(): boolean { return _fastMode; }
 
 export function setModel(name: string): void {
@@ -42,7 +42,7 @@ export function setModel(name: string): void {
 
 export function toggleFast(): boolean {
   _fastMode = !_fastMode;
-  MODEL = _fastMode ? SUBAGENT_MODEL : (process.env.OLLAMA_MODEL || "qwen2.5:7b");
+  MODEL = _fastMode ? FAST_MODEL : DEFAULT_MODEL;
   return _fastMode;
 }
 
@@ -443,7 +443,8 @@ export async function processAgent(agentName: string, userMessage: string, mode:
   ];
 
   // Agentic Loop — max 5 Runden
-  const activeModel = mode === "minimal" ? SUBAGENT_MODEL : MODEL;
+  // Modell: minimal-Modus nutzt den Sub-Agent-Konfig, sonst per-Agent-Modell aus config.ts
+  const activeModel = mode === "minimal" ? SUBAGENT_MODEL_CFG : getAgentModel(agentName);
 
   for (let i = 0; i < 5; i++) {
     const response = await client.chat.completions.create({
@@ -478,7 +479,7 @@ export async function processAgent(agentName: string, userMessage: string, mode:
     // Pruning: wenn messages zu groß → alte Tool-Results entfernen
     // System-Prompt + letzte 3 Tool-Results + aktuelle User-Nachricht bleiben immer
     const totalChars = messages.reduce((s, m) => s + JSON.stringify(m).length, 0);
-    if (totalChars > 60_000) {
+    if (totalChars > MAX_HISTORY_CHARS) {
       const systemMsg = messages[0];
       const toolMsgs = messages.filter(m => m.role === "tool");
       const nonToolMsgs = messages.filter(m => m.role !== "tool");
