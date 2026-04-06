@@ -15,12 +15,19 @@ export async function downloadFile(url: string, dest: string): Promise<void> {
 }
 
 export async function transcribeAudio(audioPath: string): Promise<string> {
-  const { stdout, stderr } = await execAsync(
-    `"${PYTHON_PATH}" "${WHISPER_SCRIPT}" "${audioPath}" ${WHISPER_MODEL}`,
-    { timeout: 120_000, env: { ...process.env, PYTHONIOENCODING: "utf-8", WHISPER_LANG: process.env.WHISPER_LANG ?? "de" } }
-  );
-  if (stderr) console.error("Whisper stderr:", stderr);
-  return stdout.trim();
+  try {
+    const { stdout, stderr } = await execAsync(
+      `"${PYTHON_PATH}" "${WHISPER_SCRIPT}" "${audioPath}" ${WHISPER_MODEL}`,
+      { timeout: 120_000, env: { ...process.env, PYTHONIOENCODING: "utf-8", WHISPER_LANG: process.env.WHISPER_LANG ?? "de" } }
+    );
+    if (stderr) console.warn("Whisper stderr:", stderr);
+    return stdout.trim();
+  } catch (err: unknown) {
+    // execAsync wirft auch wenn nur stderr da ist — stdout trotzdem auslesen
+    const e = err as { stdout?: string; stderr?: string; message?: string };
+    if (e.stdout?.trim()) return e.stdout.trim();
+    throw new Error(e.stderr || e.message || String(err));
+  }
 }
 
 export function getTempPath(filename: string): string {
