@@ -1,9 +1,9 @@
 import fs from "fs";
 import path from "path";
+import cron from "node-cron";
 import { getAgentPath, listAgents } from "./obsidian.js";
 
 // ─── Chat-ID Persistenz ───────────────────────────────────────────────────────
-// Wird beim ersten eingehenden Message gesetzt damit Heartbeat weiß wohin senden
 
 let _chatId: number | null = null;
 const CHAT_ID_FILE = path.join(process.cwd(), ".chat_id");
@@ -27,8 +27,8 @@ export function loadChatId(): number | null {
 // ─── HEARTBEAT.md Parser ──────────────────────────────────────────────────────
 
 interface HeartbeatConfig {
-  times: string[];   // ["08:00", "18:00"]
-  prompt: string;    // Aufgaben-Text für den Agent
+  cronExpression: string;
+  prompt: string;
 }
 
 function parseHeartbeat(agentName: string): HeartbeatConfig | null {
@@ -37,13 +37,16 @@ function parseHeartbeat(agentName: string): HeartbeatConfig | null {
 
   const content = fs.readFileSync(hbPath, "utf-8");
 
-  // Zeitplan parsen: "Täglich: 08:00, 18:00"
-  const zeitplanMatch = content.match(/##\s*Zeitplan\s*\n([^\n#]+)/i);
-  if (!zeitplanMatch) return null;
+  // Cron-Expression parsen: "Cron: 0 8 * * *"
+  // Kommentarzeilen (# ...) werden ignoriert
+  const cronMatch = content.match(/^Cron:\s*(.+)$/im);
+  if (!cronMatch) return null;
 
-  const zeitplanLine = zeitplanMatch[1].trim();
-  const timeMatches = zeitplanLine.match(/\d{1,2}:\d{2}/g);
-  if (!timeMatches || timeMatches.length === 0) return null;
+  const cronExpression = cronMatch[1].trim();
+  if (!cron.validate(cronExpression)) {
+    console.warn(`[Heartbeat] Ungültige Cron-Expression für ${agentName}: "${cronExpression}"`);
+    return null;
+  }
 
   // Aufgaben-Abschnitt extrahieren
   const aufgabenMatch = content.match(/##\s*Aufgaben[^\n]*\n([\s\S]+?)(?=##|$)/i);
@@ -51,33 +54,24 @@ function parseHeartbeat(agentName: string): HeartbeatConfig | null {
     ? aufgabenMatch[1].trim()
     : "Führe deinen Standard-Heartbeat durch.";
 
-  return { times: timeMatches, prompt };
+  return { cronExpression, prompt };
 }
 
 // ─── Heartbeat Runner ─────────────────────────────────────────────────────────
 
 type ReplyFn = (chatId: number, text: string) => Promise<void>;
 
-let _lastRun: Record<string, string> = {}; // agentName → "HH:MM YYYY-MM-DD"
-
 async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> {
+  const chatId = loadChatId();
+  if (!chatId) {
+    console.log(`[Heartbeat] ${agentName}: kein Chat-ID gespeichert, überspringe.`);
+    return;
+  }
+
   const config = parseHeartbeat(agentName);
   if (!config) return;
 
-  const chatId = loadChatId();
-  if (!chatId) return; // Kein User hat sich noch gemeldet
-
-  const now = new Date();
-  const hhmm = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  const today = now.toISOString().slice(0, 10);
-  const runKey = `${agentName}-${hhmm}-${today}`;
-
-  // Nur einmal pro Minute + Zeit ausführen
-  if (!config.times.includes(hhmm)) return;
-  if (_lastRun[agentName] === runKey) return;
-  _lastRun[agentName] = runKey;
-
-  console.log(`[Heartbeat] ${agentName} um ${hhmm}`);
+  console.log(`[Heartbeat] ${agentName} läuft (${new Date().toLocaleTimeString("de-AT")})`);
 
   try {
     const { processAgent } = await import("./llm.js");
@@ -89,15 +83,30 @@ async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> 
 }
 
 // ─── Scheduler ────────────────────────────────────────────────────────────────
+// Für jeden Agent wird ein eigener Cron-Job registriert.
+// Ändert sich HEARTBEAT.md → Bot neu starten um neuen Zeitplan zu laden.
 
 export function startHeartbeat(replyFn: ReplyFn): void {
-  // Jede Minute prüfen
-  setInterval(async () => {
-    const agents = listAgents();
-    for (const agent of agents) {
-      await runHeartbeat(agent, replyFn);
-    }
-  }, 60_000);
+  const agents = listAgents();
+  let registered = 0;
 
-  console.log("Heartbeat-Scheduler gestartet (prüft jede Minute).");
+  for (const agentName of agents) {
+    const config = parseHeartbeat(agentName);
+    if (!config) continue;
+
+    cron.schedule(config.cronExpression, () => {
+      runHeartbeat(agentName, replyFn).catch(console.error);
+    }, {
+      timezone: "Europe/Vienna",
+    });
+
+    console.log(`[Heartbeat] ${agentName} → "${config.cronExpression}" (Europe/Vienna)`);
+    registered++;
+  }
+
+  if (registered === 0) {
+    console.log("[Heartbeat] Keine Agents mit Cron-Konfiguration gefunden.");
+  } else {
+    console.log(`[Heartbeat] ${registered} Cron-Job(s) registriert.`);
+  }
 }
