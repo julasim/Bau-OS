@@ -39,7 +39,3 @@ export const LOCALE           = "de-AT";
 export const LANGUAGE         = "Deutsch";
 export const CHAT_ID_FILE     = path.join(process.cwd(), ".chat_id");
 
-// ── Whisper ───────────────────────────────────────────────────────────────────
-export const PYTHON_PATH      = process.env.PYTHON_PATH || "python";
-export const WHISPER_SCRIPT   = path.join(process.cwd(), "whisper_transcribe.py");
-export const WHISPER_MODEL    = process.env.WHISPER_MODEL || "tiny";

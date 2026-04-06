@@ -1,7 +1,5 @@
 import { Bot } from "grammy";
-import fs from "fs";
 import { saveNote, isMainWorkspaceConfigured } from "./obsidian.js";
-import { downloadFile, transcribeAudio, getTempPath } from "./transcribe.js";
 import { processMessage, processBtw, processSetup, setReplyContext } from "./llm.js";
 import { enqueue } from "./queue.js";
 import { isSetupActive, activateSetup } from "./setup.js";
@@ -141,46 +139,9 @@ export function createBot(token: string): Bot {
     });
   });
 
-  // ─── Sprachnachrichten → Whisper ───────────────────────────────────────────
+  // Sprachnachrichten: aktuell nicht unterstützt
   bot.on("message:voice", (ctx) => {
-    enqueue(ctx.chat.id, async () => {
-      const typing = setInterval(() => {
-        ctx.replyWithChatAction("typing").catch(() => {});
-      }, 4000);
-      await ctx.replyWithChatAction("typing");
-
-      const file = await ctx.getFile();
-      const fileUrl = `https://api.telegram.org/file/bot${token}/${file.file_path}`;
-      const tempPath = getTempPath(`voice_${Date.now()}.ogg`);
-
-      try {
-        await downloadFile(fileUrl, tempPath);
-        const text = await transcribeAudio(tempPath);
-
-        if (!text) {
-          clearInterval(typing);
-          await ctx.reply("Transkription leer – bitte nochmal versuchen.");
-          return;
-        }
-
-        setReplyContext((msg) => safeReply(ctx, msg).then(() => {}));
-        const antwort = await processMessage(text);
-        clearInterval(typing);
-        await safeReply(ctx, `🎤 _${text}_\n\n${antwort}`);
-      } catch (err: unknown) {
-        clearInterval(typing);
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error("Fehler bei Transkription:", msg);
-
-        if (msg.includes("No module named whisper")) {
-          await ctx.reply("⚠️ Whisper nicht installiert.\n\npip install openai-whisper");
-        } else {
-          await ctx.reply(`⚠️ Transkriptionsfehler:\n${msg.slice(0, 300)}`);
-        }
-      } finally {
-        if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
-      }
-    });
+    ctx.reply("🎤 Sprachnachrichten werden derzeit nicht unterstützt. Bitte als Text schreiben.");
   });
 
   return bot;
