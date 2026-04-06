@@ -6,6 +6,7 @@ import { processMessage, processBtw, processSetup, setReplyContext } from "./llm
 import { enqueue } from "./queue.js";
 import { isSetupActive, activateSetup } from "./setup.js";
 import { fmt, stripMarkdown } from "./format.js";
+import { saveChatId } from "./heartbeat.js";
 import { handleNotiz, handleNotizen, handleLesen, handleBearbeiten, handleLoeschen } from "./commands/notiz.js";
 import { handleAufgabe, handleAufgaben, handleErledigt } from "./commands/aufgaben.js";
 import { handleTermin, handleTermine, handleTerminLoeschen } from "./commands/termine.js";
@@ -79,6 +80,7 @@ export function createBot(token: string): Bot {
   // ─── Textnachrichten → LLM ────────────────────────────────────────────────
   bot.on("message:text", (ctx) => {
     enqueue(ctx.chat.id, async () => {
+      saveChatId(ctx.chat.id);
       const raw = ctx.message.text;
 
       // ─── Setup-Wizard (Erster Start) ─────────────────────────────────────
