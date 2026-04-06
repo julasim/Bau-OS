@@ -16,7 +16,7 @@ export async function downloadFile(url: string, dest: string): Promise<void> {
 
 export async function transcribeAudio(audioPath: string): Promise<string> {
   const { stdout, stderr } = await execAsync(
-    `"${PYTHON_PATH}" "${WHISPER_SCRIPT}" "${audioPath}" --model ${WHISPER_MODEL}`,
+    `"${PYTHON_PATH}" "${WHISPER_SCRIPT}" "${audioPath}" ${WHISPER_MODEL}`,
     { timeout: 120_000, env: { ...process.env, PYTHONIOENCODING: "utf-8", WHISPER_LANG: process.env.WHISPER_LANG ?? "de" } }
   );
   if (stderr) console.error("Whisper stderr:", stderr);
