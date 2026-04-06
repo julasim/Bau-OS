@@ -4,54 +4,22 @@ import fs from "fs";
 import path from "path";
 
 const HILFE = `
-Bau-OS – Befehle
+Bau-OS
 
-Notizen
-/notiz Text
-/notiz Projekt: Text
-/notizen
-/lesen Dateiname
-/bearbeiten Dateiname: Text
-/löschen Dateiname
+Schreib einfach mit mir – ich erledige alles via KI.
+Notizen, Aufgaben, Termine, Projekte, Suche → einfach tippen.
 
-Aufgaben
-/aufgabe Text
-/aufgabe Projekt: Text
-/aufgaben
-/aufgaben Projekt
-/erledigt Text
-
-Termine
-/termin 10.04.2026 09:00 Text
-/termin Projekt: 10.04.2026 Text
-/termine
-/termine Projekt
-/termin_löschen Text
-
-Projekte
-/projekt Name
-/projekte
-/projekt_info Name
-
-Dateien
-/datei_lesen Pfad/Datei.md
-/datei_erstellen Pfad/Datei.md: Inhalt
-/datei_löschen Pfad/Datei.md
-/ordner (Pfad)
-/exportieren Pfad/Datei.md
-
-Suche
-/suchen Begriff
-/suchen Projekt: Begriff
-
-System
-/status
-/kontext
-/kompakt
-/neu
-/sprache de|en|auto
-
-Audio → automatisch transkribieren & speichern
+System-Commands
+/heute    Tages-Briefing
+/status   Bot-Status
+/config   Konfiguration
+/kontext  Kontext-Auslastung
+/kompakt  Log komprimieren
+/neu      Kontext zurücksetzen
+/agents   Sub-Agents
+/model    Modell wechseln
+/fast     Fast-Modus
+/export   Session exportieren
 `.trim();
 
 export async function handleHilfe(ctx: Context): Promise<void> {
@@ -149,41 +117,20 @@ export async function handleKompakt(ctx: Context): Promise<void> {
 
 export async function handleCommands(ctx: Context): Promise<void> {
   const out = `
-Bau-OS – Alle Befehle
+Bau-OS – System-Commands
 
-/hilfe        Ausführliche Hilfe
-/commands     Diese Liste
+/heute        Tages-Briefing (Termine + Aufgaben)
+/config       Konfiguration anzeigen
 /status       Bot-Status
 /kontext      Kontext-Auslastung
 /kompakt      Log komprimieren
 /neu          Gesprächskontext zurücksetzen
 /whoami       Meine Chat-ID anzeigen
-/sprache      Whisper-Sprache (de|en|auto)
-
-/notiz        Notiz speichern
-/notizen      Letzte Notizen
-/lesen        Notiz lesen
-/bearbeiten   Notiz bearbeiten
-/löschen      Notiz löschen
-
-/aufgabe      Aufgabe speichern
-/aufgaben     Offene Aufgaben
-/erledigt     Aufgabe abhaken
-
-/termin       Termin speichern
-/termine      Termine anzeigen
-/termin_löschen Termin löschen
-
-/projekt      Projekt erstellen
-/projekte     Projekte auflisten
-/projekt_info Projektdetails
-
 /agents       Sub-Agents auflisten
 /export       Session-Log exportieren
 /model        Modell anzeigen oder wechseln
 /fast         Fast-Modus umschalten
-
-/suchen       Im Vault suchen
+/sprache      Whisper-Sprache (de|en|auto)
   `.trim();
   await ctx.reply(out);
 }
@@ -270,4 +217,44 @@ export async function handleSprache(ctx: Context, args: string): Promise<void> {
 
   process.env.WHISPER_LANG = lang;
   await ctx.reply(`Whisper-Sprache geändert auf: ${lang}`);
+}
+
+export async function handleHeute(ctx: Context): Promise<void> {
+  const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), 4000);
+  await ctx.replyWithChatAction("typing");
+  try {
+    const { processAgent } = await import("../llm.js");
+    const { fmt, stripMarkdown } = await import("../format.js");
+    const prompt = "Erstelle ein Tages-Briefing: (1) Heutige Termine, (2) Offene Aufgaben, (3) Relevantes aus MEMORY.md. Nur was heute relevant ist. Kurz und strukturiert.";
+    const antwort = await processAgent("Main", prompt, "full");
+    clearInterval(typing);
+    try {
+      await ctx.reply(fmt(antwort), { parse_mode: "HTML" });
+    } catch {
+      await ctx.reply(stripMarkdown(antwort));
+    }
+  } catch (err) {
+    clearInterval(typing);
+    console.error("Heute Fehler:", err);
+    await ctx.reply("Fehler beim Briefing – ist Ollama erreichbar?");
+  }
+}
+
+export async function handleConfig(ctx: Context): Promise<void> {
+  const token = process.env.BOT_TOKEN ?? "–";
+  const masked = token.length > 10 ? token.slice(0, 8) + "..." + token.slice(-4) : "–";
+
+  const out = [
+    "Bau-OS Konfiguration",
+    "",
+    `BOT_TOKEN:  ${masked}`,
+    `VAULT_PATH: ${process.env.VAULT_PATH ?? "–"}`,
+    `OLLAMA_URL: ${process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1"}`,
+    `MODELL:     ${process.env.OLLAMA_MODEL ?? "qwen2.5:7b"}`,
+    `DASHBOARD:  Port ${process.env.DASHBOARD_PORT ?? "3000"}`,
+    "",
+    "Bearbeitung nur über Web-Dashboard möglich.",
+  ].join("\n");
+
+  await ctx.reply(out);
 }

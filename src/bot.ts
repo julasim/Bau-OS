@@ -5,13 +5,7 @@ import { enqueue } from "./queue.js";
 import { isSetupActive, activateSetup } from "./setup.js";
 import { fmt, stripMarkdown } from "./format.js";
 import { saveChatId } from "./heartbeat.js";
-import { handleNotiz, handleNotizen, handleLesen, handleBearbeiten, handleLoeschen } from "./commands/notiz.js";
-import { handleAufgabe, handleAufgaben, handleErledigt } from "./commands/aufgaben.js";
-import { handleTermin, handleTermine, handleTerminLoeschen } from "./commands/termine.js";
-import { handleProjekt, handleProjekte, handleProjektInfo } from "./commands/projekte.js";
-import { handleDateiLesen, handleDateiErstellen, handleDateiLoeschen, handleOrdnerListe, handleExportieren } from "./commands/dateien.js";
-import { handleSuchen } from "./commands/suchen.js";
-import { handleHilfe, handleStatus, handleSprache, handleKontext, handleKompakt, handleNeu, handleCommands, handleWhoami, handleAgents, handleExportSession, handleModel, handleFast } from "./commands/system.js";
+import { handleHilfe, handleStatus, handleSprache, handleKontext, handleKompakt, handleNeu, handleCommands, handleWhoami, handleAgents, handleExportSession, handleModel, handleFast, handleHeute, handleConfig } from "./commands/system.js";
 
 // Sendet mit HTML-Formatting, fällt bei Telegram-Fehler auf Plaintext zurück
 async function safeReply(ctx: { reply: (text: string, opts?: object) => Promise<unknown> }, text: string): Promise<void> {
@@ -39,41 +33,8 @@ export function createBot(token: string): Bot {
   bot.command("model",    (ctx) => handleModel(ctx, ctx.match));
   bot.command("fast",     (ctx) => handleFast(ctx));
   bot.command("sprache",  (ctx) => handleSprache(ctx, ctx.match));
-
-  // ─── Notizen ───────────────────────────────────────────────────────────────
-  bot.command("notiz",      (ctx) => handleNotiz(ctx, ctx.match));
-  bot.command("notizen",    (ctx) => handleNotizen(ctx));
-  bot.command("lesen",      (ctx) => handleLesen(ctx, ctx.match));
-  bot.command("bearbeiten", (ctx) => handleBearbeiten(ctx, ctx.match));
-  bot.command("loschen",    (ctx) => handleLoeschen(ctx, ctx.match));
-  bot.command("löschen",    (ctx) => handleLoeschen(ctx, ctx.match));
-
-  // ─── Aufgaben ──────────────────────────────────────────────────────────────
-  bot.command("aufgabe",  (ctx) => handleAufgabe(ctx, ctx.match));
-  bot.command("aufgaben", (ctx) => handleAufgaben(ctx, ctx.match));
-  bot.command("erledigt", (ctx) => handleErledigt(ctx, ctx.match));
-
-  // ─── Termine ───────────────────────────────────────────────────────────────
-  bot.command("termin",          (ctx) => handleTermin(ctx, ctx.match));
-  bot.command("termine",         (ctx) => handleTermine(ctx, ctx.match));
-  bot.command("termin_loschen",  (ctx) => handleTerminLoeschen(ctx, ctx.match));
-  bot.command("termin_löschen",  (ctx) => handleTerminLoeschen(ctx, ctx.match));
-
-  // ─── Projekte ──────────────────────────────────────────────────────────────
-  bot.command("projekt",      (ctx) => handleProjekt(ctx, ctx.match));
-  bot.command("projekte",     (ctx) => handleProjekte(ctx));
-  bot.command("projekt_info", (ctx) => handleProjektInfo(ctx, ctx.match));
-
-  // ─── Dateien ───────────────────────────────────────────────────────────────
-  bot.command("datei_lesen",     (ctx) => handleDateiLesen(ctx, ctx.match));
-  bot.command("datei_erstellen", (ctx) => handleDateiErstellen(ctx, ctx.match));
-  bot.command("datei_loschen",   (ctx) => handleDateiLoeschen(ctx, ctx.match));
-  bot.command("datei_löschen",   (ctx) => handleDateiLoeschen(ctx, ctx.match));
-  bot.command("ordner",          (ctx) => handleOrdnerListe(ctx, ctx.match));
-  bot.command("exportieren",     (ctx) => handleExportieren(ctx, ctx.match));
-
-  // ─── Suche ─────────────────────────────────────────────────────────────────
-  bot.command("suchen", (ctx) => handleSuchen(ctx, ctx.match));
+  bot.command("heute",    (ctx) => handleHeute(ctx));
+  bot.command("config",   (ctx) => handleConfig(ctx));
 
   // ─── Textnachrichten → LLM ────────────────────────────────────────────────
   bot.on("message:text", (ctx) => {

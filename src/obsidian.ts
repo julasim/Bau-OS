@@ -271,6 +271,27 @@ export function getAbsolutePath(relativePath: string): string {
   return path.join(vaultPath, relativePath);
 }
 
+// ─── Agent-Datei Editor ───────────────────────────────────────────────────────
+
+const EDITABLE_AGENT_FILES = [
+  "SOUL.md", "BOOT.md", "AGENTS.md", "TOOLS.md",
+  "HEARTBEAT.md", "BOOTSTRAP.md", "USER.md", "IDENTITY.md", "MEMORY.md"
+];
+
+export function readAgentFile(agentName: string, filename: string): string | null {
+  const filepath = path.join(vaultPath, VAULT_AGENTS_DIR, agentName, filename);
+  if (!fs.existsSync(filepath)) return null;
+  return fs.readFileSync(filepath, "utf-8");
+}
+
+export function writeAgentFile(agentName: string, filename: string, content: string): boolean {
+  if (!EDITABLE_AGENT_FILES.includes(filename)) return false;
+  const filepath = path.join(vaultPath, VAULT_AGENTS_DIR, agentName, filename);
+  if (!fs.existsSync(path.dirname(filepath))) return false;
+  fs.writeFileSync(filepath, content, "utf-8");
+  return true;
+}
+
 // ─── Suche ───────────────────────────────────────────────────────────────────
 
 export interface SearchResult {

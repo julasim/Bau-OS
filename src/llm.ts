@@ -3,15 +3,17 @@ import fs from "fs";
 import path from "path";
 import { OLLAMA_BASE_URL, DEFAULT_MODEL, FAST_MODEL, SUBAGENT_MODEL as SUBAGENT_MODEL_CFG, MAX_HISTORY_CHARS, MAX_TOOL_ROUNDS, MAX_SPAWN_DEPTH, LANGUAGE, LOCALE, getAgentModel } from "./config.js";
 import {
-  saveNote, listNotes, readNote,
+  saveNote, listNotes, readNote, appendToNote, deleteNote,
   saveTask, listTasks, completeTask,
-  saveTermin, listTermine,
+  saveTermin, listTermine, deleteTermin,
   createProject, listProjects, getProjectInfo,
+  readFile, createFile, listFolder,
   searchVault,
   loadAgentWorkspace, appendAgentConversation, loadAgentHistory,
   createAgentWorkspace, listAgents, getAgentPath, appendAgentMemory, isProtectedAgent,
   shouldCompact, getLogForCompaction, writeCompactedLog,
   finalizeMainWorkspace,
+  readAgentFile, writeAgentFile,
 } from "./obsidian.js";
 import { deactivateSetup } from "./setup.js";
 
@@ -173,6 +175,93 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "termin_loeschen",
+      description: "Löscht einen Termin aus der Terminliste.",
+      parameters: {
+        type: "object",
+        properties: {
+          text:    { type: "string", description: "Text oder Teiltext des Termins" },
+          projekt: { type: "string", description: "Optionaler Projektname" },
+        },
+        required: ["text"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "notiz_loeschen",
+      description: "Löscht eine Notiz dauerhaft aus dem Vault.",
+      parameters: {
+        type: "object",
+        properties: {
+          dateiname: { type: "string", description: "Name der Notiz-Datei" },
+        },
+        required: ["dateiname"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "notiz_bearbeiten",
+      description: "Fügt einer bestehenden Notiz einen Nachtrag hinzu.",
+      parameters: {
+        type: "object",
+        properties: {
+          dateiname: { type: "string", description: "Name der Notiz-Datei" },
+          text:      { type: "string", description: "Inhalt des Nachtrags" },
+        },
+        required: ["dateiname", "text"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "datei_lesen",
+      description: "Liest eine beliebige Datei aus dem Vault (relativer Pfad).",
+      parameters: {
+        type: "object",
+        properties: {
+          pfad: { type: "string", description: "Relativer Pfad im Vault, z.B. 'Projekte/Alpha/README.md'" },
+        },
+        required: ["pfad"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "datei_erstellen",
+      description: "Erstellt eine neue Datei im Vault oder überschreibt eine bestehende.",
+      parameters: {
+        type: "object",
+        properties: {
+          pfad:   { type: "string", description: "Relativer Pfad im Vault" },
+          inhalt: { type: "string", description: "Dateiinhalt" },
+        },
+        required: ["pfad", "inhalt"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "ordner_auflisten",
+      description: "Listet den Inhalt eines Ordners im Vault auf.",
+      parameters: {
+        type: "object",
+        properties: {
+          pfad: { type: "string", description: "Relativer Pfad (leer = Vault-Wurzel)" },
+        },
+        required: [],
+      },
+    },
+  },
   // Vault & Projekte
   {
     type: "function",
@@ -303,6 +392,38 @@ const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
+  // Agent-Datei Editor
+  {
+    type: "function",
+    function: {
+      name: "agent_datei_lesen",
+      description: "Liest eine Konfigurationsdatei eines Agenten (z.B. SOUL.md, HEARTBEAT.md, TOOLS.md).",
+      parameters: {
+        type: "object",
+        properties: {
+          agent: { type: "string", description: "Name des Agenten (z.B. 'Main', 'CEO')" },
+          datei: { type: "string", description: "Dateiname (z.B. 'SOUL.md', 'HEARTBEAT.md')" },
+        },
+        required: ["agent", "datei"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "agent_datei_schreiben",
+      description: "Überschreibt eine Konfigurationsdatei eines Agenten. Erlaubte Dateien: SOUL.md, BOOT.md, AGENTS.md, TOOLS.md, HEARTBEAT.md, BOOTSTRAP.md, USER.md, IDENTITY.md, MEMORY.md.",
+      parameters: {
+        type: "object",
+        properties: {
+          agent:  { type: "string", description: "Name des Agenten" },
+          datei:  { type: "string", description: "Dateiname (muss in der Whitelist sein)" },
+          inhalt: { type: "string", description: "Neuer vollständiger Inhalt der Datei" },
+        },
+        required: ["agent", "datei", "inhalt"],
+      },
+    },
+  },
 ];
 
 // ─── Tool Executor ────────────────────────────────────────────────────────────
@@ -411,6 +532,42 @@ async function executeTool(name: string, args: Record<string, string | number>):
         const agents = listAgents();
         return agents.length ? agents.join("\n") : "Keine Sub-Agenten vorhanden.";
       }
+      // Fehlende Vault-Tools
+      case "termin_loeschen": {
+        const ok = deleteTermin(String(args.text), args.projekt ? String(args.projekt) : undefined);
+        return ok ? `Termin gelöscht: ${args.text}` : "Termin nicht gefunden.";
+      }
+      case "notiz_loeschen": {
+        const deleted = deleteNote(String(args.dateiname));
+        return deleted ? `Notiz gelöscht: ${deleted}` : "Notiz nicht gefunden.";
+      }
+      case "notiz_bearbeiten": {
+        const ok = appendToNote(String(args.dateiname), String(args.text));
+        return ok ? `Nachtrag gespeichert in: ${args.dateiname}` : "Notiz nicht gefunden.";
+      }
+      case "datei_lesen": {
+        const content = readFile(String(args.pfad));
+        return content ?? `Datei nicht gefunden: ${args.pfad}`;
+      }
+      case "datei_erstellen": {
+        const fp = createFile(String(args.pfad), String(args.inhalt));
+        return `Datei erstellt: ${fp.split(/[\\/]/).pop()}`;
+      }
+      case "ordner_auflisten": {
+        const entries = listFolder(args.pfad ? String(args.pfad) : "");
+        return entries.length ? entries.join("\n") : "Ordner leer oder nicht gefunden.";
+      }
+      // Agent-Datei Editor
+      case "agent_datei_lesen": {
+        const content = readAgentFile(String(args.agent), String(args.datei));
+        return content ?? `Datei "${args.datei}" für Agent "${args.agent}" nicht gefunden.`;
+      }
+      case "agent_datei_schreiben": {
+        const ok = writeAgentFile(String(args.agent), String(args.datei), String(args.inhalt));
+        return ok
+          ? `✅ ${args.agent}/${args.datei} gespeichert.`
+          : `Fehler: "${args.datei}" nicht erlaubt oder Agent-Ordner nicht vorhanden.`;
+      }
       default:
         return `Unbekanntes Tool: ${name}`;
     }
@@ -468,9 +625,10 @@ export async function processAgent(agentName: string, userMessage: string, mode:
     // Alle Tool-Calls parallel ausführen (wichtig für Multi-Agent)
     const toolResults = await Promise.all(
       reply.tool_calls.map(async (toolCall) => {
-        const args = JSON.parse(toolCall.function.arguments) as Record<string, string | number>;
-        const result = await executeTool(toolCall.function.name, args);
-        return { role: "tool" as const, tool_call_id: toolCall.id, content: result };
+        const tc = toolCall as { id: string; function: { name: string; arguments: string } };
+        const args = JSON.parse(tc.function.arguments) as Record<string, string | number>;
+        const result = await executeTool(tc.function.name, args);
+        return { role: "tool" as const, tool_call_id: tc.id, content: result };
       })
     );
 
