@@ -172,12 +172,10 @@ export function createBot(token: string): Bot {
         const msg = err instanceof Error ? err.message : String(err);
         console.error("Fehler bei Transkription:", msg);
 
-        if (msg.includes("ENOENT") || msg.includes("not found") || msg.includes("cannot find")) {
-          await ctx.reply("⚠️ Python nicht gefunden.\n\nPYTHON_PATH in .env setzen, z.B.:\nPYTHON_PATH=C:\\Python312\\python.exe");
-        } else if (msg.includes("No module named whisper") || msg.includes("whisper")) {
+        if (msg.includes("No module named whisper")) {
           await ctx.reply("⚠️ Whisper nicht installiert.\n\npip install openai-whisper");
         } else {
-          await ctx.reply(`⚠️ Transkriptionsfehler:\n${msg.slice(0, 200)}`);
+          await ctx.reply(`⚠️ Transkriptionsfehler:\n${msg.slice(0, 300)}`);
         }
       } finally {
         if (fs.existsSync(tempPath)) fs.unlinkSync(tempPath);
