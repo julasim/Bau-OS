@@ -2,11 +2,11 @@ import fs from "fs";
 import path from "path";
 import cron from "node-cron";
 import { getAgentPath, listAgents } from "./obsidian.js";
+import { TIMEZONE, CHAT_ID_FILE } from "./config.js";
 
 // ─── Chat-ID Persistenz ───────────────────────────────────────────────────────
 
 let _chatId: number | null = null;
-const CHAT_ID_FILE = path.join(process.cwd(), ".chat_id");
 
 export function saveChatId(id: number): void {
   if (_chatId === id) return;
@@ -97,7 +97,7 @@ export function startHeartbeat(replyFn: ReplyFn): void {
     cron.schedule(config.cronExpression, () => {
       runHeartbeat(agentName, replyFn).catch(console.error);
     }, {
-      timezone: "Europe/Vienna",
+      timezone: TIMEZONE,
     });
 
     console.log(`[Heartbeat] ${agentName} → "${config.cronExpression}" (Europe/Vienna)`);

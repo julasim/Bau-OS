@@ -1,8 +1,13 @@
 import fs from "fs";
 import path from "path";
-import { PROTECTED_AGENTS as _PROTECTED_AGENTS, COMPACT_THRESHOLD } from "./config.js";
+import {
+  PROTECTED_AGENTS as _PROTECTED_AGENTS,
+  COMPACT_THRESHOLD, KEEP_RECENT_LOGS,
+  VAULT_PATH as _VAULT_PATH, VAULT_INBOX, VAULT_AGENTS_DIR, VAULT_LOGS_DIR,
+  LOCALE,
+} from "./config.js";
 
-const vaultPath = process.env.VAULT_PATH!;
+const vaultPath = _VAULT_PATH;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -12,8 +17,8 @@ function timestampFilename(): string {
 
 function frontmatter(source = "telegram"): string {
   const now = new Date();
-  const date = now.toLocaleDateString("de-AT", { year: "numeric", month: "2-digit", day: "2-digit" });
-  const time = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+  const date = now.toLocaleDateString(LOCALE, { year: "numeric", month: "2-digit", day: "2-digit" });
+  const time = now.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
   return `---\ncreated: ${date} ${time}\nsource: ${source}\n---\n\n`;
 }
 
@@ -26,7 +31,7 @@ function resolveNotePath(nameOrPath: string): string | null {
 
   for (const candidate of [
     path.join(vaultPath, withExt),
-    path.join(vaultPath, "Inbox", withExt),
+    path.join(vaultPath, VAULT_INBOX, withExt),
   ]) {
     if (fs.existsSync(candidate)) return candidate;
   }
@@ -53,7 +58,7 @@ function resolveNotePath(nameOrPath: string): string | null {
 export function saveNote(content: string, project?: string): string {
   const folder = project
     ? path.join(vaultPath, "Projekte", project, "Notizen")
-    : path.join(vaultPath, "Inbox");
+    : path.join(vaultPath, VAULT_INBOX);
 
   ensureDir(folder);
 
@@ -64,7 +69,7 @@ export function saveNote(content: string, project?: string): string {
 }
 
 export function listNotes(limit = 10): string[] {
-  const inboxPath = path.join(vaultPath, "Inbox");
+  const inboxPath = path.join(vaultPath, VAULT_INBOX);
   if (!fs.existsSync(inboxPath)) return [];
 
   return fs.readdirSync(inboxPath)
@@ -86,7 +91,7 @@ export function appendToNote(nameOrPath: string, content: string): boolean {
   if (!filepath) return false;
 
   const now = new Date();
-  const time = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+  const time = now.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
   fs.appendFileSync(filepath, `\n**Nachtrag ${time}:** ${content}\n`, "utf-8");
   return true;
 }
@@ -197,7 +202,7 @@ export function createProject(name: string): string {
   const files: Record<string, string> = {
     "Aufgaben.md": `# Aufgaben – ${name}\n\n`,
     "Termine.md": `# Termine – ${name}\n\n`,
-    "README.md": `# ${name}\n\nErstellt: ${new Date().toLocaleDateString("de-AT")}\n`,
+    "README.md": `# ${name}\n\nErstellt: ${new Date().toLocaleDateString(LOCALE)}\n`,
   };
 
   for (const [filename, content] of Object.entries(files)) {
@@ -310,7 +315,7 @@ export const PROTECTED_AGENTS = _PROTECTED_AGENTS;
 // Gibt true zurück wenn der Setup-Wizard bereits abgeschlossen wurde.
 // Kriterium: IDENTITY.md enthält "## Name:" (vom Wizard geschrieben), nicht den Standardinhalt.
 export function isMainWorkspaceConfigured(): boolean {
-  const identityPath = path.join(vaultPath, "Agents", "Main", "IDENTITY.md");
+  const identityPath = path.join(vaultPath, VAULT_AGENTS_DIR, "Main", "IDENTITY.md");
   if (!fs.existsSync(identityPath)) return false;
   return fs.readFileSync(identityPath, "utf-8").includes("## Name:");
 }
@@ -332,8 +337,8 @@ export function finalizeMainWorkspace(answers: SetupAnswers): void {
 
   const user = `# User – ${answers.userName}\n\n## Profil\n- Benutzer von ${answers.userCompany}\n- Sprache: Deutsch\n\n## Arbeitsweise\n- Bevorzugt kurze, direkte Antworten\n- Nutzt Sprachnachrichten häufig (via Whisper transkribiert)\n\n## Hinweise\n- Wenn ${answers.userName} "morgen" sagt → Datum relativ zu heute berechnen\n- Wenn unklar ob Notiz oder Aufgabe → lieber nachfragen\n`;
 
-  const agentPath = path.join(vaultPath, "Agents", "Main");
-  ensureDir(path.join(agentPath, "MEMORY_LOGS"));
+  const agentPath = path.join(vaultPath, VAULT_AGENTS_DIR, "Main");
+  ensureDir(path.join(agentPath, VAULT_LOGS_DIR));
 
   // Nur die 3 Dateien die Wizard-Antworten enthalten — der Rest existiert bereits
   fs.writeFileSync(path.join(agentPath, "IDENTITY.md"), identity, "utf-8");
@@ -342,7 +347,7 @@ export function finalizeMainWorkspace(answers: SetupAnswers): void {
 }
 
 export function getAgentPath(agentName: string): string {
-  return path.join(vaultPath, "Agents", agentName);
+  return path.join(vaultPath, VAULT_AGENTS_DIR, agentName);
 }
 
 export function isProtectedAgent(agentName: string): boolean {
@@ -398,14 +403,14 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
     addFile(path.join(agentPath, "HEARTBEAT.md"), "HEARTBEAT.md");
 
     // BOOTSTRAP.md nur wenn memory/ noch leer (allererster Start)
-    const memDir = path.join(agentPath, "MEMORY_LOGS");
+    const memDir = path.join(agentPath, VAULT_LOGS_DIR);
     const isFirstRun = !fs.existsSync(memDir) ||
       fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0;
     if (isFirstRun) addFile(path.join(agentPath, "BOOTSTRAP.md"), "BOOTSTRAP.md");
 
     // Heutiges Memory-Log
     const today = new Date().toISOString().slice(0, 10);
-    addFile(path.join(agentPath, "MEMORY_LOGS", `${today}.md`), "Tageslog");
+    addFile(path.join(agentPath, VAULT_LOGS_DIR, `${today}.md`), "Tageslog");
   }
 
   return context.trim();
@@ -413,13 +418,13 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
 
 export function appendAgentConversation(agentName: string, userMsg: string, botReply: string): void {
   const today = new Date().toISOString().slice(0, 10);
-  const memDir = path.join(getAgentPath(agentName), "MEMORY_LOGS");
+  const memDir = path.join(getAgentPath(agentName), VAULT_LOGS_DIR);
   const filepath = path.join(memDir, `${today}.md`);
   ensureDir(memDir);
 
   const now = new Date();
-  const time = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
-  const dateStr = now.toLocaleDateString("de-AT", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const time = now.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+  const dateStr = now.toLocaleDateString(LOCALE, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   if (!fs.existsSync(filepath)) {
     fs.writeFileSync(filepath, `# Log – ${dateStr}\n\n`, "utf-8");
@@ -440,7 +445,7 @@ export function loadAgentHistory(agentName: string, limit = 10): ConversationEnt
 
   for (const date of [yesterday, today]) {
     const iso = date.toISOString().slice(0, 10);
-    const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${iso}.md`);
+    const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${iso}.md`);
     if (!fs.existsSync(filepath)) continue;
 
     const content = fs.readFileSync(filepath, "utf-8");
@@ -460,7 +465,7 @@ export function loadAgentHistory(agentName: string, limit = 10): ConversationEnt
 
 export function createAgentWorkspace(agentName: string, soul: string, agentsMd = "", userMd = ""): string {
   const agentPath = getAgentPath(agentName);
-  ensureDir(path.join(agentPath, "MEMORY_LOGS"));
+  ensureDir(path.join(agentPath, VAULT_LOGS_DIR));
 
   const userDefault = `# User\n\nJulius Sima – Architekt, Wien.\nSprache: Deutsch. Kurze, direkte Antworten bevorzugt.\n`;
   const agentsDefault = `# ${agentName} – Sub-Agents\n\nKeine Sub-Agents konfiguriert.\n`;
@@ -499,7 +504,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
   const agentPath = getAgentPath(agentName);
   const today = new Date().toISOString().slice(0, 10);
 
-  const memDir = path.join(agentPath, "MEMORY_LOGS");
+  const memDir = path.join(agentPath, VAULT_LOGS_DIR);
   const isFirstRun = !fs.existsSync(memDir) ||
     fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0;
 
@@ -514,7 +519,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
       { name: "MEMORY.md",     filepath: path.join(agentPath, "MEMORY.md") },
       { name: "HEARTBEAT.md",  filepath: path.join(agentPath, "HEARTBEAT.md") },
       ...(isFirstRun ? [{ name: "BOOTSTRAP.md", filepath: path.join(agentPath, "BOOTSTRAP.md") }] : []),
-      { name: "Tageslog",      filepath: path.join(agentPath, "MEMORY_LOGS", `${today}.md`) },
+      { name: "Tageslog",      filepath: path.join(agentPath, VAULT_LOGS_DIR, `${today}.md`) },
     ] : []),
   ];
 
@@ -549,43 +554,42 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
 // Wenn der Tages-Log zu groß wird, werden alte Einträge durch eine Zusammenfassung
 // ersetzt — die letzten 5 Einträge bleiben immer erhalten
 
-// COMPACT_THRESHOLD kommt aus config.ts
-const KEEP_RECENT = 5;           // Letzte N Einträge nie anfassen
+// COMPACT_THRESHOLD + KEEP_RECENT_LOGS kommen aus config.ts
 
 export function shouldCompact(agentName: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
   if (!fs.existsSync(filepath)) return false;
   return fs.statSync(filepath).size >= COMPACT_THRESHOLD;
 }
 
 // Gibt die alten Einträge zurück die komprimiert werden sollen
-// (alles außer die letzten KEEP_RECENT — die bleiben unberührt)
+// (alles außer die letzten KEEP_RECENT_LOGS — die bleiben unberührt)
 export function getLogForCompaction(agentName: string): string | null {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
   if (!fs.existsSync(filepath)) return null;
 
   const content = fs.readFileSync(filepath, "utf-8");
   const entries = content.match(/## \d{2}:\d{2}\n[\s\S]*?(?=\n## \d{2}:\d{2}|$)/g) ?? [];
-  if (entries.length <= KEEP_RECENT) return null;
+  if (entries.length <= KEEP_RECENT_LOGS) return null;
 
-  return entries.slice(0, -KEEP_RECENT).join("\n");
+  return entries.slice(0, -KEEP_RECENT_LOGS).join("\n");
 }
 
 // Schreibt den komprimierten Log zurück — alte Einträge → Zusammenfassung
 export function writeCompactedLog(agentName: string, summary: string): void {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
   if (!fs.existsSync(filepath)) return;
 
   const content = fs.readFileSync(filepath, "utf-8");
   const header = content.match(/^(# .+\n\n)/)?.[1] ?? "";
   const entries = content.match(/## \d{2}:\d{2}\n[\s\S]*?(?=\n## \d{2}:\d{2}|$)/g) ?? [];
-  if (entries.length <= KEEP_RECENT) return;
+  if (entries.length <= KEEP_RECENT_LOGS) return;
 
-  const toKeep = entries.slice(-KEEP_RECENT);
-  const time = new Date().toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+  const toKeep = entries.slice(-KEEP_RECENT_LOGS);
+  const time = new Date().toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
 
   fs.writeFileSync(
     filepath,
@@ -603,21 +607,21 @@ export function appendAgentMemory(agentName: string, entry: string): void {
     fs.writeFileSync(filepath, `# Memory – ${agentName}\n\n`, "utf-8");
   }
 
-  const date = new Date().toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const date = new Date().toLocaleDateString(LOCALE, { day: "2-digit", month: "2-digit", year: "numeric" });
   fs.appendFileSync(filepath, `- ${date}: ${entry}\n`, "utf-8");
 }
 
 // Löscht den heutigen Conversation-Log eines Agenten (für /neu)
 export function clearAgentToday(agentName: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), "MEMORY_LOGS", `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
   if (!fs.existsSync(filepath)) return false;
   fs.unlinkSync(filepath);
   return true;
 }
 
 export function listAgents(): string[] {
-  const agentsRoot = path.join(vaultPath, "Agents");
+  const agentsRoot = path.join(vaultPath, VAULT_AGENTS_DIR);
   if (!fs.existsSync(agentsRoot)) return [];
   return fs.readdirSync(agentsRoot, { withFileTypes: true })
     .filter(e => e.isDirectory())
@@ -636,8 +640,8 @@ export function appendConversation(userMsg: string, botReply: string): void {
   ensureDir(path.dirname(filepath));
 
   const now = new Date();
-  const time = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
-  const dateStr = now.toLocaleDateString("de-AT", { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  const time = now.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+  const dateStr = now.toLocaleDateString(LOCALE, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
 
   if (!fs.existsSync(filepath)) {
     fs.writeFileSync(filepath, `# Gespräch ${dateStr}\n\n`, "utf-8");

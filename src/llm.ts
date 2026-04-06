@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
-import { OLLAMA_BASE_URL, DEFAULT_MODEL, FAST_MODEL, SUBAGENT_MODEL as SUBAGENT_MODEL_CFG, MAX_HISTORY_CHARS, getAgentModel } from "./config.js";
+import { OLLAMA_BASE_URL, DEFAULT_MODEL, FAST_MODEL, SUBAGENT_MODEL as SUBAGENT_MODEL_CFG, MAX_HISTORY_CHARS, MAX_TOOL_ROUNDS, MAX_SPAWN_DEPTH, LANGUAGE, LOCALE, getAgentModel } from "./config.js";
 import {
   saveNote, listNotes, readNote,
   saveTask, listTasks, completeTask,
@@ -47,8 +47,8 @@ export function toggleFast(): boolean {
 }
 
 // Basis-Prompt — wird durch den Agent-Workspace (SOUL.md etc.) ergänzt
-const BASE_PROMPT = `Heute ist: ${new Date().toLocaleDateString("de-AT", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-Antworte immer auf Deutsch. Halte Antworten kurz (wir sind in Telegram).`;
+const BASE_PROMPT = `Heute ist: ${new Date().toLocaleDateString(LOCALE, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
+Antworte immer auf ${LANGUAGE}. Halte Antworten kurz (wir sind in Telegram).`;
 
 // ─── Tool Definitionen ───────────────────────────────────────────────────────
 const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
@@ -421,7 +421,7 @@ async function executeTool(name: string, args: Record<string, string | number>):
 
 // ─── Agent Runtime ────────────────────────────────────────────────────────────
 export async function processAgent(agentName: string, userMessage: string, mode: "full" | "minimal" = "full", depth = 0): Promise<string> {
-  if (depth > 2) return `[${agentName}] Maximale Spawn-Tiefe erreicht (depth=${depth}).`;
+  if (depth > MAX_SPAWN_DEPTH) return `[${agentName}] Maximale Spawn-Tiefe erreicht (depth=${depth}).`;
   _currentDepth = depth;
 
   // Workspace laden — full: alle Dateien, minimal: nur IDENTITY + SOUL
@@ -446,7 +446,7 @@ export async function processAgent(agentName: string, userMessage: string, mode:
   // Modell: minimal-Modus nutzt den Sub-Agent-Konfig, sonst per-Agent-Modell aus config.ts
   const activeModel = mode === "minimal" ? SUBAGENT_MODEL_CFG : getAgentModel(agentName);
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < MAX_TOOL_ROUNDS; i++) {
     const response = await client.chat.completions.create({
       model: activeModel,
       messages,

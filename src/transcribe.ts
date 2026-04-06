@@ -1,13 +1,11 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import fs from "fs";
-import path from "path";
 import os from "os";
+import path from "path";
+import { PYTHON_PATH, WHISPER_SCRIPT, WHISPER_MODEL } from "./config.js";
 
 const execAsync = promisify(exec);
-
-const pythonPath = process.env.PYTHON_PATH || "python";
-const scriptPath = path.join(process.cwd(), "whisper_transcribe.py");
 
 export async function downloadFile(url: string, dest: string): Promise<void> {
   const res = await fetch(url);
@@ -18,7 +16,7 @@ export async function downloadFile(url: string, dest: string): Promise<void> {
 
 export async function transcribeAudio(audioPath: string): Promise<string> {
   const { stdout, stderr } = await execAsync(
-    `"${pythonPath}" "${scriptPath}" "${audioPath}"`,
+    `"${PYTHON_PATH}" "${WHISPER_SCRIPT}" "${audioPath}" --model ${WHISPER_MODEL}`,
     { timeout: 120_000, env: { ...process.env, PYTHONIOENCODING: "utf-8", WHISPER_LANG: process.env.WHISPER_LANG ?? "de" } }
   );
   if (stderr) console.error("Whisper stderr:", stderr);
