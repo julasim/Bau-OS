@@ -38,4 +38,5 @@ export const TIMEZONE         = "Europe/Vienna";
 export const LOCALE           = "de-AT";
 export const LANGUAGE         = "Deutsch";
 export const CHAT_ID_FILE     = path.join(process.cwd(), ".chat_id");
+export const DASHBOARD_PORT   = parseInt(process.env.DASHBOARD_PORT || "3000");
 

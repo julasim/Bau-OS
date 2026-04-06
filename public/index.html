@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bau-OS Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, -apple-system, sans-serif; background: #020617; color: #f1f5f9; }
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 8px; cursor: pointer; transition: all .15s; color: #94a3b8; font-size: 14px; font-weight: 500; }
+    .nav-item:hover { background: #1e293b; color: #f1f5f9; }
+    .nav-item.active { background: #1d4ed8; color: #fff; }
+    .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+    .card { background: #0f172a; border: 1px solid #1e293b; border-radius: 12px; }
+    .stat-card { padding: 20px; border-radius: 12px; border: 1px solid; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+    .badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 99px; font-size: 12px; font-weight: 600; }
+    .pill { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11px; font-weight: 600; }
+    .fade { animation: fade .25s ease; }
+    @keyframes fade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 50; display: flex; align-items: center; justify-content: center; padding: 24px; }
+    .modal { background: #0f172a; border: 1px solid #1e293b; border-radius: 16px; max-width: 720px; width: 100%; max-height: 80vh; display: flex; flex-direction: column; }
+    .modal-body { overflow-y: auto; padding: 24px; flex: 1; }
+    pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; font-size: 14px; line-height: 1.7; color: #cbd5e1; }
+    .empty { text-align: center; padding: 48px; color: #475569; }
+    .empty-icon { font-size: 40px; margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 10px 16px; font-size: 11px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: .05em; border-bottom: 1px solid #1e293b; }
+    td { padding: 12px 16px; font-size: 14px; border-bottom: 1px solid #0f172a; color: #cbd5e1; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1e293b22; }
+    .tag { background: #1e293b; color: #94a3b8; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+  </style>
+</head>
+<body class="flex h-screen overflow-hidden">
+
+<!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
+<aside style="width:220px; min-width:220px; background:#0a0f1e; border-right:1px solid #1e293b; display:flex; flex-direction:column;">
+
+  <!-- Logo -->
+  <div style="padding:20px 16px; border-bottom:1px solid #1e293b;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span style="font-size:24px;">🏗</span>
+      <div>
+        <div style="font-weight:700; font-size:15px; color:#f1f5f9;">Bau-OS</div>
+        <div style="font-size:11px; color:#475569;">System Dashboard</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div style="padding:10px 16px; border-bottom:1px solid #1e293b; display:flex; align-items:center; gap:8px;">
+    <div class="dot"></div>
+    <span style="font-size:12px; color:#64748b;">System aktiv</span>
+  </div>
+
+  <!-- Nav -->
+  <nav style="padding:12px 8px; flex:1; display:flex; flex-direction:column; gap:2px;">
+    <div class="nav-item active" data-section="overview" onclick="navigate('overview')">
+      <span class="nav-icon">⚡</span> Übersicht
+    </div>
+    <div class="nav-item" data-section="agents" onclick="navigate('agents')">
+      <span class="nav-icon">🤖</span> Agenten
+    </div>
+    <div class="nav-item" data-section="notes" onclick="navigate('notes')">
+      <span class="nav-icon">📝</span> Notizen
+    </div>
+    <div class="nav-item" data-section="tasks" onclick="navigate('tasks')">
+      <span class="nav-icon">✅</span> Aufgaben
+    </div>
+    <div class="nav-item" data-section="projects" onclick="navigate('projects')">
+      <span class="nav-icon">📁</span> Projekte
+    </div>
+    <div class="nav-item" data-section="termine" onclick="navigate('termine')">
+      <span class="nav-icon">📅</span> Termine
+    </div>
+  </nav>
+
+  <!-- Footer -->
+  <div style="padding:12px 16px; border-top:1px solid #1e293b;">
+    <div style="font-size:11px; color:#334155;" id="sidebar-uptime">—</div>
+    <div style="font-size:10px; color:#1e293b; margin-top:2px;">Bau-OS v0.1</div>
+  </div>
+</aside>
+
+<!-- ── MAIN ──────────────────────────────────────────────────────────────── -->
+<div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+
+  <!-- Topbar -->
+  <header style="background:#0a0f1e; border-bottom:1px solid #1e293b; padding:14px 24px; display:flex; align-items:center; justify-content:space-between; min-height:58px;">
+    <div style="display:flex; align-items:center; gap:12px;">
+      <span id="page-title" style="font-weight:600; font-size:16px; color:#f1f5f9;">Übersicht</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span id="model-badge" class="badge" style="background:#1e3a8a22; color:#60a5fa; border:1px solid #1e3a8a;">—</span>
+      <span id="fast-badge" class="badge" style="background:#78350f22; color:#fbbf24; border:1px solid #78350f; display:none;">⚡ Fast</span>
+      <button onclick="loadAll()" style="background:#1e293b; color:#94a3b8; border:none; padding:6px 14px; border-radius:8px; font-size:13px; cursor:pointer;" onmouseover="this.style.color='#f1f5f9'" onmouseout="this.style.color='#94a3b8'">
+        ↻ Refresh
+      </button>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <main style="flex:1; overflow-y:auto; padding:24px;">
+    <div id="content" class="fade">
+      <div class="empty"><div class="empty-icon">⏳</div><div>Wird geladen…</div></div>
+    </div>
+  </main>
+</div>
+
+<!-- ── MODAL ─────────────────────────────────────────────────────────────── -->
+<div id="modal" class="modal-overlay" style="display:none;" onclick="closeModal(event)">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div style="padding:16px 24px; border-bottom:1px solid #1e293b; display:flex; align-items:center; justify-content:space-between;">
+      <span id="modal-title" style="font-weight:600; font-size:15px;"></span>
+      <button onclick="closeModal()" style="background:none; border:none; color:#64748b; font-size:20px; cursor:pointer; padding:0 4px; line-height:1;">×</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- ── SCRIPT ─────────────────────────────────────────────────────────────── -->
+<script>
+const state = { status: null, agents: [], notes: [], tasks: [], projects: [], termine: [], current: 'overview' };
+
+const TITLES = { overview: 'Übersicht', agents: 'Agenten', notes: 'Notizen', tasks: 'Aufgaben', projects: 'Projekte', termine: 'Termine' };
+
+async function api(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+
+async function loadAll() {
+  try {
+    const [status, agents, notes, tasks, projects, termine] = await Promise.all([
+      api('/api/status'), api('/api/agents'), api('/api/notes'),
+      api('/api/tasks'), api('/api/projects'), api('/api/termine'),
+    ]);
+    Object.assign(state, { status, agents, notes, tasks, projects, termine });
+    updateTopbar();
+    render();
+  } catch(e) {
+    document.getElementById('content').innerHTML = `<div class="empty"><div class="empty-icon">❌</div><div style="color:#ef4444;">Verbindungsfehler: ${e.message}</div></div>`;
+  }
+}
+
+function updateTopbar() {
+  const s = state.status;
+  if (!s) return;
+  document.getElementById('model-badge').textContent = '🧠 ' + s.model;
+  document.getElementById('sidebar-uptime').textContent = 'Uptime: ' + s.uptime;
+  const fb = document.getElementById('fast-badge');
+  fb.style.display = s.fastMode ? 'inline-flex' : 'none';
+}
+
+function navigate(section) {
+  state.current = section;
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.section === section);
+  });
+  document.getElementById('page-title').textContent = TITLES[section];
+  render();
+}
+
+function render() {
+  const el = document.getElementById('content');
+  el.className = 'fade';
+  void el.offsetWidth;
+  const map = { overview: renderOverview, agents: renderAgents, notes: renderNotes, tasks: renderTasks, projects: renderProjects, termine: renderTermine };
+  el.innerHTML = (map[state.current] || (() => ''))();
+}
+
+// ── OVERVIEW ─────────────────────────────────────────────────────────────────
+function renderOverview() {
+  const s = state.status;
+  return `
+    <div style="margin-bottom:24px;">
+      <h2 style="font-size:22px; font-weight:700; color:#f1f5f9; margin:0 0 4px;">System-Übersicht</h2>
+      <p style="color:#475569; font-size:14px; margin:0;">Alle wichtigen Kennzahlen auf einen Blick</p>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:16px; margin-bottom:24px;">
+      ${statCard('🤖', 'Agenten', s?.agentCount, '#1d4ed8', '#3b82f6', 'agents')}
+      ${statCard('📝', 'Notizen', s?.noteCount, '#5b21b6', '#a78bfa', 'notes')}
+      ${statCard('✅', 'Aufgaben', s?.taskCount, '#92400e', '#fbbf24', 'tasks')}
+      ${statCard('📁', 'Projekte', s?.projectCount, '#065f46', '#34d399', 'projects')}
+      ${statCard('📅', 'Termine', s?.termineCount, '#831843', '#f472b6', 'termine')}
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+      <div class="card" style="padding:20px;">
+        <div style="font-size:13px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin-bottom:16px;">System Info</div>
+        ${infoRow('Modell', s?.model ?? '—')}
+        ${infoRow('Ollama URL', s?.ollamaUrl ?? '—')}
+        ${infoRow('Timezone', s?.timezone ?? '—')}
+        ${infoRow('Fast Mode', s?.fastMode ? '⚡ Aktiv' : '—')}
+        ${infoRow('Uptime', s?.uptime ?? '—')}
+      </div>
+      <div class="card" style="padding:20px;">
+        <div style="font-size:13px; font-weight:600; color:#64748b; text-transform:uppercase; letter-spacing:.05em; margin-bottom:16px;">Letzte Notizen</div>
+        ${state.notes.slice(0,5).map(n => `
+          <div onclick="openNote('${n}')" style="padding:8px 10px; border-radius:8px; cursor:pointer; margin-bottom:4px; display:flex; align-items:center; gap:8px;" onmouseover="this.style.background='#1e293b'" onmouseout="this.style.background='transparent'">
+            <span style="color:#475569;">📄</span>
+            <span style="font-size:13px; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${n}</span>
+          </div>
+        `).join('') || '<div style="color:#334155; font-size:13px;">Keine Notizen</div>'}
+      </div>
+    </div>
+  `;
+}
+
+function statCard(icon, label, value, bg, color, section) {
+  return `
+    <div class="stat-card" style="background:${bg}18; border-color:${bg}44;" onclick="navigate('${section}')">
+      <div style="font-size:22px; margin-bottom:12px;">${icon}</div>
+      <div style="font-size:32px; font-weight:800; color:${color}; line-height:1; margin-bottom:6px;">${value ?? '—'}</div>
+      <div style="font-size:13px; color:#64748b; font-weight:500;">${label}</div>
+    </div>
+  `;
+}
+
+function infoRow(label, value) {
+  return `
+    <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #1e293b;">
+      <span style="font-size:13px; color:#475569;">${label}</span>
+      <span style="font-size:13px; color:#94a3b8; max-width:60%; text-align:right; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${value}">${value}</span>
+    </div>
+  `;
+}
+
+// ── AGENTS ───────────────────────────────────────────────────────────────────
+function renderAgents() {
+  if (!state.agents.length) return empty('🤖', 'Keine Agenten gefunden');
+  return `
+    <div style="margin-bottom:20px;">
+      <h2 style="font-size:22px; font-weight:700; color:#f1f5f9; margin:0 0 4px;">Agenten</h2>
+      <p style="color:#475569; font-size:14px; margin:0;">${state.agents.length} Agent${state.agents.length !== 1 ? 'en' : ''} konfiguriert</p>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
+      ${state.agents.map(a => `
+        <div class="card" style="padding:20px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px;">
+            <div style="font-size:18px; font-weight:700; color:#f1f5f9;">${a.name}</div>
+            <div style="display:flex; gap:6px;">
+              ${a.protected ? '<span class="pill" style="background:#1e3a8a22; color:#60a5fa; border:1px solid #1e3a8a55;">🔒 Geschützt</span>' : ''}
+            </div>
+          </div>
+          <div style="font-size:13px; color:#64748b; margin-bottom:16px;">${a.description}</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; color:#475569;">Modell:</span>
+            <span class="tag">${a.model}</span>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── NOTES ────────────────────────────────────────────────────────────────────
+function renderNotes() {
+  if (!state.notes.length) return empty('📝', 'Keine Notizen in der Inbox');
+  return `
+    <div style="margin-bottom:20px;">
+      <h2 style="font-size:22px; font-weight:700; color:#f1f5f9; margin:0 0 4px;">Notizen</h2>
+      <p style="color:#475569; font-size:14px; margin:0;">${state.notes.length} Notizen in der Inbox</p>
+    </div>
+    <div class="card">
+      <table>
+        <thead><tr><th>Dateiname</th><th style="text-align:right;">Aktion</th></tr></thead>
+        <tbody>
+          ${state.notes.map(n => `
+            <tr style="cursor:pointer;" onclick="openNote('${n}')">
+              <td>
+                <span style="margin-right:8px; color:#475569;">📄</span>
+                <span>${n}</span>
+              </td>
+              <td style="text-align:right;">
+                <span style="font-size:12px; color:#334155;">Lesen →</span>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// ── TASKS ────────────────────────────────────────────────────────────────────
+function renderTasks() {
+  if (!state.tasks.length) return empty('✅', 'Alle Aufgaben erledigt!');
+  return `
+    <div style="margin-bottom:20px;">
+      <h2 style="font-size:22px; font-weight:700; color:#f1f5f9; margin:0 0 4px;">Offene Aufgaben</h2>
+      <p style="color:#475569; font-size:14px; margin:0;">${state.tasks.length} offene Aufgabe${state.tasks.length !== 1 ? 'n' : ''}</p>
+    </div>
+    <div class="card">
+      ${state.tasks.map(t => `
+        <div style="display:flex; align-items:flex-start; gap:12px; padding:14px 16px; border-bottom:1px solid #1e293b;">
+          <span style="margin-top:2px; color:#475569; flex-shrink:0;">☐</span>
+          <span style="font-size:14px; color:#cbd5e1; line-height:1.5;">${t}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── PROJECTS ─────────────────────────────────────────────────────────────────
+function renderProjects() {
+  if (!state.projects.length) return empty('📁', 'Keine Projekte vorhanden');
+  return `
+    <div style="margin-bottom:20px;">
+      <h2 style="font-size:22px; font-weight:700; color:#f1f5f9; margin:0 0 4px;">Projekte</h2>
+      <p style="color:#475569; font-size:14px; margin:0;">${state.projects.length} Projekt${state.projects.length !== 1 ? 'e' : ''}</p>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:16px;">
+      ${state.projects.map(p => `
+        <div class="card" style="padding:20px;">
+          <div style="font-size:16px; font-weight:700; color:#f1f5f9; margin-bottom:14px;">📁 ${p.name}</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
+            ${miniStat('Notizen', p.notes, '#a78bfa')}
+            ${miniStat('Aufgaben', p.tasks, '#fbbf24')}
+            ${miniStat('Termine', p.termine, '#f472b6')}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function miniStat(label, value, color) {
+  return `
+    <div style="text-align:center; background:#1e293b; border-radius:8px; padding:10px 4px;">
+      <div style="font-size:20px; font-weight:700; color:${color};">${value}</div>
+      <div style="font-size:10px; color:#475569; margin-top:2px;">${label}</div>
+    </div>
+  `;
+}
+
+// ── TERMINE ───────────────────────────────────────────────────────────────────
+function renderTermine() {
+  if (!state.termine.length) return empty('📅', 'Keine anstehenden Termine');
+  return `
+    <div style="margin-bottom:20px;">
+      <h2 style="font-size:22px; font-weight:700; color:#f1f5f9; margin:0 0 4px;">Termine</h2>
+      <p style="color:#475569; font-size:14px; margin:0;">${state.termine.length} anstehende${state.termine.length !== 1 ? '' : 'r'} Termin${state.termine.length !== 1 ? 'e' : ''}</p>
+    </div>
+    <div class="card">
+      ${state.termine.map(t => `
+        <div style="display:flex; align-items:flex-start; gap:12px; padding:14px 16px; border-bottom:1px solid #1e293b;">
+          <span style="margin-top:2px; color:#f472b6; flex-shrink:0;">📅</span>
+          <span style="font-size:14px; color:#cbd5e1; line-height:1.5;">${t}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// ── HELPERS ───────────────────────────────────────────────────────────────────
+function empty(icon, text) {
+  return `<div class="empty"><div class="empty-icon">${icon}</div><div>${text}</div></div>`;
+}
+
+async function openNote(name) {
+  document.getElementById('modal-title').textContent = '📄 ' + name;
+  document.getElementById('modal-body').innerHTML = '<div style="color:#475569; text-align:center; padding:24px;">Wird geladen…</div>';
+  document.getElementById('modal').style.display = 'flex';
+  try {
+    const data = await api('/api/note/' + encodeURIComponent(name));
+    document.getElementById('modal-body').innerHTML = `<pre>${data.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`;
+  } catch {
+    document.getElementById('modal-body').innerHTML = '<div style="color:#ef4444;">Fehler beim Laden.</div>';
+  }
+}
+
+function closeModal(e) {
+  if (!e || e.target === document.getElementById('modal')) {
+    document.getElementById('modal').style.display = 'none';
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// Auto-refresh every 60s
+setInterval(loadAll, 60_000);
+loadAll();
+</script>
+</body>
+</html>
