@@ -17,16 +17,16 @@ export function saveChatId(id: number): void {
 }
 ```
 
-Diese Chat-ID wird fuer den **Heartbeat** verwendet — der Bot sendet proaktive Nachrichten nur an diese gespeicherte ID.
+Diese Chat-ID wird für den **Heartbeat** verwendet — der Bot sendet proaktive Nachrichten nur an diese gespeicherte ID.
 
 | Mechanismus | Beschreibung |
 |---|---|
 | Erste Nachricht | Chat-ID wird in `.chat_id` gespeichert |
-| Heartbeat | Nutzt gespeicherte Chat-ID fuer Cron-Nachrichten |
-| Nachrichten | Jede Nachricht wird ueber die Session-Queue verarbeitet |
+| Heartbeat | Nutzt gespeicherte Chat-ID für Cron-Nachrichten |
+| Nachrichten | Jede Nachricht wird über die Session-Queue verarbeitet |
 
 ::: warning Aktueller Stand
-Derzeit reagiert der Bot auf **jede eingehende Nachricht**, unabhaengig von der Chat-ID. Die Chat-ID wird nur fuer ausgehende Heartbeat-Nachrichten verwendet. Eine explizite Zugriffsbeschraenkung ist in Planung.
+Derzeit reagiert der Bot auf **jede eingehende Nachricht**, unabhängig von der Chat-ID. Die Chat-ID wird nur für ausgehende Heartbeat-Nachrichten verwendet. Eine explizite Zugriffsbeschraenkung ist in Planung.
 :::
 
 ### `/whoami` — Eigene Chat-ID anzeigen
@@ -40,11 +40,11 @@ Derzeit reagiert der Bot auf **jede eingehende Nachricht**, unabhaengig von der 
 
 ## Agent-Datei-Editor: Whitelist
 
-Der LLM-Agent kann ueber `agent_datei_schreiben` Konfigurationsdateien bearbeiten. Dabei gilt eine **strenge Whitelist**:
+Der LLM-Agent kann über `agent_datei_schreiben` Konfigurationsdateien bearbeiten. Dabei gilt eine **strenge Whitelist**:
 
 ```typescript
 const EDITABLE_AGENT_FILES = [
-  "SOUL.md",       // Persoenlichkeit des Agenten
+  "SOUL.md",       // Persönlichkeit des Agenten
   "BOOT.md",       // Verhaltensregeln bei jedem Start
   "AGENTS.md",     // Sub-Agent-Konfiguration
   "TOOLS.md",      // Tool-Konventionen
@@ -52,17 +52,17 @@ const EDITABLE_AGENT_FILES = [
   "BOOTSTRAP.md",  // Erst-Start-Prompt
   "USER.md",       // Nutzer-Profil
   "IDENTITY.md",   // Name, Emoji, Vibe
-  "MEMORY.md",     // Langzeitgedaechtnis
+  "MEMORY.md",     // Langzeitgedächtnis
 ];
 ```
 
 ::: tip Nur Markdown-Dateien
-Der Agent kann **ausschliesslich** die oben genannten `.md`-Dateien bearbeiten. Zugriff auf Quellcode, `.env`, Systemdateien oder beliebige Pfade ist **nicht moeglich**.
+Der Agent kann **ausschließlich** die oben genannten `.md`-Dateien bearbeiten. Zugriff auf Quellcode, `.env`, Systemdateien oder beliebige Pfade ist **nicht möglich**.
 :::
 
 ### Geschuetzte Agenten (PROTECTED_AGENTS)
 
-Der `Main`-Agent ist als **geschuetzt** markiert und kann nicht geloescht werden:
+Der `Main`-Agent ist als **geschuetzt** markiert und kann nicht gelöscht werden:
 
 ```typescript
 // src/config.ts
@@ -78,18 +78,18 @@ export const PROTECTED_AGENTS = AGENTS.filter(a => a.protected).map(a => a.name)
 | Erstellen | Automatisch beim Setup | Via `agent_erstellen` |
 | Dateien lesen | Erlaubt | Erlaubt |
 | Dateien schreiben | Nur Whitelist | Nur Whitelist |
-| Loeschen | **Blockiert** | Erlaubt |
+| Löschen | **Blockiert** | Erlaubt |
 | Umbenennen | **Blockiert** | Nicht implementiert |
 
 ## SSH-Zugang zum Server
 
-Der VPS ist nur ueber **SSH** erreichbar:
+Der VPS ist nur über **SSH** erreichbar:
 
 ```bash
 # Verbindung zum Server
 ssh bauos@<server-ip>
 
-# Bot-Status pruefen
+# Bot-Status prüfen
 systemctl status bauos
 
 # Logs anzeigen
@@ -100,7 +100,7 @@ nano /home/bauos/bau-os/.env
 ```
 
 ::: warning Root-Zugang
-SSH-Zugang zum Server bedeutet **volle Kontrolle** ueber alle Daten. SSH-Keys sollten sicher aufbewahrt und regelmaessig rotiert werden.
+SSH-Zugang zum Server bedeutet **volle Kontrolle** über alle Daten. SSH-Keys sollten sicher aufbewahrt und regelmäßig rotiert werden.
 :::
 
 ## Geplante Erweiterungen
@@ -114,7 +114,7 @@ Geplant ist eine `ALLOWED_USERS`-Umgebungsvariable in der `.env`:
 ALLOWED_USERS=123456789,987654321
 ```
 
-Nur Chat-IDs in dieser Liste wuerden vom Bot verarbeitet. Alle anderen Nachrichten wuerden ignoriert oder mit einer Fehlermeldung beantwortet.
+Nur Chat-IDs in dieser Liste würden vom Bot verarbeitet. Alle anderen Nachrichten würden ignoriert oder mit einer Fehlermeldung beantwortet.
 
 ### Rollenbasierte Zugriffskontrolle
 
@@ -142,7 +142,7 @@ Geplant ist die Unterstuetzung von Telegram-Gruppen:
 
 ## Sicherheits-Checkliste
 
-| Pruefpunkt | Status |
+| Prüfpunkt | Status |
 |---|---|
 | Chat-ID Persistierung | Implementiert |
 | Session-Queue (Race-Condition-Schutz) | Implementiert |

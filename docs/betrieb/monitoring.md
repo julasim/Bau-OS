@@ -1,10 +1,10 @@
 # Monitoring
 
-Bau-OS ueberwachen: Logs, Health-Checks und Systemstatus.
+Bau-OS überwachen: Logs, Health-Checks und Systemstatus.
 
 ## Bot-Logs via journalctl
 
-Die wichtigste Anlaufstelle fuer Logs:
+Die wichtigste Anlaufstelle für Logs:
 
 ```bash
 # Live-Logs
@@ -28,29 +28,29 @@ sudo journalctl -u bau-os --since "2026-04-07 08:00" --until "2026-04-07 12:00"
 
 ## /logs Befehl in Telegram
 
-Bau-OS hat einen eingebauten `/logs`-Befehl fuer Administratoren:
+Bau-OS hat einen eingebauten `/logs`-Befehl für Administratoren:
 
 ```
-/logs        → Zeigt die letzten Log-Eintraege
+/logs        → Zeigt die letzten Log-Einträge
 ```
 
 ::: tip Direkt im Chat
-Du brauchst keinen SSH-Zugang fuer einen schnellen Blick auf die Logs. Schreibe einfach `/logs` an den Bot.
+Du brauchst keinen SSH-Zugang für einen schnellen Blick auf die Logs. Schreibe einfach `/logs` an den Bot.
 :::
 
 ## bot.log Datei
 
-Bau-OS schreibt zusaetzlich eine `bot.log` Datei:
+Bau-OS schreibt zusätzlich eine `bot.log` Datei:
 
 ```bash
 cat /home/bauos/bau-os/bot.log
 ```
 
 ::: warning Auto-Trimming
-Die `bot.log` Datei wird automatisch auf **maximal 500 Zeilen** gekuerzt. Aeltere Eintraege werden entfernt. Fuer vollstaendige Logs nutze `journalctl`.
+Die `bot.log` Datei wird automatisch auf **maximal 500 Zeilen** gekürzt. Ältere Einträge werden entfernt. Für vollständige Logs nutze `journalctl`.
 :::
 
-## Ollama-Status pruefen
+## Ollama-Status prüfen
 
 ```bash
 # Service-Status
@@ -75,7 +75,7 @@ free -h
 ```
 
 ::: warning Kritische Schwelle
-Wenn der freie RAM unter 200 MB faellt, wird Ollama langsam oder stuerzt ab. Pruefe regelmaessig:
+Wenn der freie RAM unter 200 MB fällt, wird Ollama langsam oder stürzt ab. Prüfe regelmäßig:
 ```bash
 free -h | grep Mem
 ```
@@ -86,13 +86,13 @@ free -h | grep Mem
 ```bash
 df -h /
 
-# Groesse des Vaults
+# Größe des Vaults
 du -sh /home/bauos/vault
 
-# Groesse der Backups
+# Größe der Backups
 du -sh /home/bauos/backups
 
-# Groesse der Ollama-Modelle
+# Größe der Ollama-Modelle
 du -sh /usr/share/ollama/.ollama/models
 ```
 
@@ -111,7 +111,7 @@ top -b -n 1 | head -20
 
 ## Health-Check-Skript
 
-Erstelle ein Skript fuer einen schnellen Gesundheitscheck:
+Erstelle ein Skript für einen schnellen Gesundheitscheck:
 
 ```bash
 nano /home/bauos/health-check.sh
@@ -129,7 +129,7 @@ echo ""
 # 1. Bot-Service
 echo -n "Bot-Service:     "
 if systemctl is-active --quiet bau-os; then
-    echo "OK (laeuft)"
+    echo "OK (läuft)"
 else
     echo "FEHLER (gestoppt!)"
 fi
@@ -137,7 +137,7 @@ fi
 # 2. Ollama-Service
 echo -n "Ollama-Service:  "
 if systemctl is-active --quiet ollama; then
-    echo "OK (laeuft)"
+    echo "OK (läuft)"
 else
     echo "FEHLER (gestoppt!)"
 fi
@@ -151,7 +151,7 @@ else
 fi
 
 # 4. RAM
-echo -n "RAM verfuegbar:  "
+echo -n "RAM verfügbar:  "
 FREE_MB=$(free -m | awk '/Mem:/ {print $7}')
 if [ "$FREE_MB" -gt 500 ]; then
     echo "OK (${FREE_MB} MB frei)"
@@ -195,10 +195,10 @@ Erwartete Ausgabe:
 === Bau-OS Health Check ===
 Datum: Mon Apr  7 10:30:00 CEST 2026
 
-Bot-Service:     OK (laeuft)
-Ollama-Service:  OK (laeuft)
+Bot-Service:     OK (läuft)
+Ollama-Service:  OK (läuft)
 Ollama-API:      OK (erreichbar)
-RAM verfuegbar:  OK (2048 MB frei)
+RAM verfügbar:  OK (2048 MB frei)
 Festplatte:      OK (35% belegt)
 Vault:           OK (vorhanden)
 
@@ -207,7 +207,7 @@ Vault:           OK (vorhanden)
 
 ## Automatischer Health Check (optional)
 
-Fuege einen stuendlichen Check zum Crontab hinzu:
+Fuege einen stündlichen Check zum Crontab hinzu:
 
 ```bash
 crontab -e
@@ -217,6 +217,6 @@ crontab -e
 0 * * * * /home/bauos/health-check.sh >> /home/bauos/health.log 2>&1
 ```
 
-## Naechster Schritt
+## Nächster Schritt
 
 → [Troubleshooting](/betrieb/troubleshooting)

@@ -1,8 +1,8 @@
 # Dateistruktur
 
-Vollstaendige Referenz aller Module im `src/`-Verzeichnis. Bau-OS besteht aus **23 TypeScript-Dateien** mit insgesamt **~2.150 Zeilen Code**.
+Vollständige Referenz aller Module im `src/`-Verzeichnis. Bau-OS besteht aus **23 TypeScript-Dateien** mit insgesamt **~2.150 Zeilen Code**.
 
-## Uebersicht
+## Übersicht
 
 ```
 src/
@@ -16,7 +16,7 @@ src/
 ├── llm/
 │   ├── client.ts         # OpenAI-Client (Ollama)
 │   ├── tools.ts          # Tool-Definitionen (JSON Schema)
-│   ├── executor.ts       # Tool-Ausfuehrung
+│   ├── executor.ts       # Tool-Ausführung
 │   ├── runtime.ts        # Agent Runtime (Agentic Loop)
 │   ├── compaction.ts     # Tageslog-Komprimierung
 │   └── setup.ts          # Setup-Wizard
@@ -48,7 +48,7 @@ Erstellt den grammY-Bot mit allen Command-Handlern und dem Text-Message-Handler.
 - System-Commands (`/hilfe`, `/status`, `/heute`, etc.) an `commands/system.ts` delegiert
 - Textnachrichten via Session-Queue an LLM Runtime weitergeleitet
 - Setup-Wizard bei erstem Start
-- `/btw`-Modus fuer direkte Antworten ohne Tool-Nutzung
+- `/btw`-Modus für direkte Antworten ohne Tool-Nutzung
 - Fallback: Nachricht als Notiz speichern wenn LLM nicht erreichbar
 
 ---
@@ -56,7 +56,7 @@ Erstellt den grammY-Bot mit allen Command-Handlern und dem Text-Message-Handler.
 ### `src/config.ts` — Zentrale Konfiguration
 **42 Zeilen** | Exports: Alle Konstanten (siehe [Konfigurationsreferenz](./config.md))
 
-Definiert alle konfigurierbaren Werte: LLM-Modelle, Agent-Definitionen, Gedaechtnis-Limits, Vault-Pfade und System-Einstellungen. Werte koennen ueber Umgebungsvariablen (`.env`) ueberschrieben werden.
+Definiert alle konfigurierbaren Werte: LLM-Modelle, Agent-Definitionen, Gedächtnis-Limits, Vault-Pfade und System-Einstellungen. Werte können über Umgebungsvariablen (`.env`) überschrieben werden.
 
 ---
 
@@ -70,21 +70,21 @@ Serialisiert die Verarbeitung pro Chat-ID. Verhindert Race Conditions wenn zwei 
 ### `src/format.ts` — Markdown-Konverter
 **34 Zeilen** | Exports: `fmt(text)`, `stripMarkdown(text)`
 
-Konvertiert LLM-Markdown-Output zu Telegram-kompatiblem HTML (`<b>`, `<i>`, `<code>`, `<pre>`). Enthalt eine Fallback-Funktion `stripMarkdown()` fuer Plaintext bei Formatierungsfehlern.
+Konvertiert LLM-Markdown-Output zu Telegram-kompatiblem HTML (`<b>`, `<i>`, `<code>`, `<pre>`). Enthalt eine Fallback-Funktion `stripMarkdown()` für Plaintext bei Formatierungsfehlern.
 
 ---
 
 ### `src/logger.ts` — Logging-Modul
 **47 Zeilen** | Exports: `logInfo(msg)`, `logError(context, err)`, `readRecentLogs(n)`
 
-Schreibt Logs in `logs/bot.log` mit Zeitstempel (de-AT, Europe/Vienna). Automatische Rotation bei ueber 500 Zeilen. Gibt Logs parallel auf `stdout`/`stderr` aus.
+Schreibt Logs in `logs/bot.log` mit Zeitstempel (de-AT, Europe/Vienna). Automatische Rotation bei über 500 Zeilen. Gibt Logs parallel auf `stdout`/`stderr` aus.
 
 ---
 
 ### `src/heartbeat.ts` — Cron-Heartbeat
 **117 Zeilen** | Exports: `startHeartbeat(replyFn)`, `saveChatId(id)`, `loadChatId()`
 
-Parst `HEARTBEAT.md`-Dateien aller Agenten, registriert Cron-Jobs mit `node-cron`. Fuehrt zur konfigurierten Zeit den Agenten aus und sendet das Ergebnis via Telegram. Stille-Modus: Wenn der Agent mit `[STILL]` antwortet, wird keine Nachricht gesendet.
+Parst `HEARTBEAT.md`-Dateien aller Agenten, registriert Cron-Jobs mit `node-cron`. Führt zur konfigurierten Zeit den Agenten aus und sendet das Ergebnis via Telegram. Stille-Modus: Wenn der Agent mit `[STILL]` antwortet, wird keine Nachricht gesendet.
 
 ## LLM-Module
 
@@ -98,14 +98,14 @@ Erstellt einen OpenAI-kompatiblen Client der auf Ollama zeigt (`localhost:11434/
 ### `src/llm/tools.ts` — Tool-Definitionen
 **375 Zeilen** | Exports: `TOOLS`
 
-Array aller Tool-Definitionen im OpenAI Function Calling Format (JSON Schema). Jedes Tool hat `name`, `description` und `parameters` mit Typen und Pflichtfeldern. Wird dem LLM bei jedem API-Call uebergeben.
+Array aller Tool-Definitionen im OpenAI Function Calling Format (JSON Schema). Jedes Tool hat `name`, `description` und `parameters` mit Typen und Pflichtfeldern. Wird dem LLM bei jedem API-Call übergeben.
 
 ---
 
-### `src/llm/executor.ts` — Tool-Ausfuehrung
+### `src/llm/executor.ts` — Tool-Ausführung
 **189 Zeilen** | Exports: `executeTool(name, args)`, `setReplyContext(fn)`, `getReplyFn()`, `setCurrentDepth(depth)`, `getCurrentDepth()`, `registerProcessAgent(fn)`
 
-Grosser Switch-Case der alle Tools ausfuehrt. Verwaltet den Reply-Context (fuer async Agents), die Spawn-Tiefe und die spaete Bindung von `processAgent` (um zirkulaere Imports zu vermeiden).
+Großer Switch-Case der alle Tools ausführt. Verwaltet den Reply-Context (für async Agents), die Spawn-Tiefe und die spaete Bindung von `processAgent` (um zirkulaere Imports zu vermeiden).
 
 ---
 
@@ -114,9 +114,9 @@ Grosser Switch-Case der alle Tools ausfuehrt. Verwaltet den Reply-Context (fuer 
 
 Kern des Agentic Loop:
 1. Workspace laden (System-Prompt aus MD-Dateien)
-2. Gespraechsverlauf laden (letzte 10 Eintraege)
+2. Gesprächsverlauf laden (letzte 10 Einträge)
 3. LLM aufrufen mit Tools
-4. Tool-Calls ausfuehren, Ergebnisse zurueckfuettern
+4. Tool-Calls ausführen, Ergebnisse zurückfuettern
 5. Wiederholen bis max. `MAX_TOOL_ROUNDS` (5) erreicht
 6. Pruning wenn Buffer zu gross wird
 7. Compaction wenn Tageslog zu lang wird
@@ -126,7 +126,7 @@ Kern des Agentic Loop:
 ### `src/llm/compaction.ts` — Tageslog-Komprimierung
 **42 Zeilen** | Exports: `runCompaction(agentName)`, `compactNow(agentName)`
 
-Fasst aeltere Gespraechseintraege per LLM in max. 5 Stichpunkten zusammen. Wird automatisch ausgeloest wenn der Tageslog `COMPACT_THRESHOLD` (8.000 Bytes) ueberschreitet. Die letzten `KEEP_RECENT_LOGS` (5) Eintraege bleiben immer erhalten.
+Fasst ältere Gesprächseinträge per LLM in max. 5 Stichpunkten zusammen. Wird automatisch ausgelöst wenn der Tageslog `COMPACT_THRESHOLD` (8.000 Bytes) überschreitet. Die letzten `KEEP_RECENT_LOGS` (5) Einträge bleiben immer erhalten.
 
 ---
 
@@ -140,7 +140,7 @@ Interaktiver Einrichtungsassistent beim ersten Start. Fragt nach Name, Emoji, Ch
 ### `src/vault/index.ts` — Barrel Re-Export
 **21 Zeilen** | Exports: Alle Vault-Funktionen und -Typen
 
-Re-exportiert alle Funktionen aus den einzelnen Vault-Modulen. Einziger Import-Punkt fuer den Rest der Anwendung.
+Re-exportiert alle Funktionen aus den einzelnen Vault-Modulen. Einziger Import-Punkt für den Rest der Anwendung.
 
 ---
 
@@ -154,14 +154,14 @@ Grundlegende Hilfsfunktionen: Vault-Pfad aus `VAULT_PATH`, sichere Verzeichniser
 ### `src/vault/notes.ts` — Notizen CRUD
 **54 Zeilen** | Exports: `saveNote(text, projekt?)`, `listNotes(n?)`, `readNote(name)`, `appendToNote(name, text)`, `deleteNote(name)`
 
-Vollstaendige CRUD-Operationen fuer Notizen. Speichert als Markdown-Dateien in `Inbox/` (oder `Projekte/<name>/`). Dateinamen werden aus dem Inhalt generiert mit Datumsprefix.
+Vollständige CRUD-Operationen für Notizen. Speichert als Markdown-Dateien in `Inbox/` (oder `Projekte/<name>/`). Dateinamen werden aus dem Inhalt generiert mit Datumsprefix.
 
 ---
 
 ### `src/vault/tasks.ts` — Aufgaben CRUD
 **42 Zeilen** | Exports: `saveTask(text, projekt?)`, `listTasks(projekt?)`, `completeTask(text, projekt?)`
 
-Verwaltet Aufgaben in `Aufgaben.md` (oder `Projekte/<name>/Aufgaben.md`). Format: `- [ ] Text` fuer offen, `- [x] Text` fuer erledigt.
+Verwaltet Aufgaben in `Aufgaben.md` (oder `Projekte/<name>/Aufgaben.md`). Format: `- [ ] Text` für offen, `- [x] Text` für erledigt.
 
 ---
 
@@ -175,7 +175,7 @@ Verwaltet Termine in `Termine.md`. Format: `- DD.MM.YYYY [HH:MM] – Beschreibun
 ### `src/vault/projects.ts` — Projekt-Verwaltung
 **28 Zeilen** | Exports: `listProjects()`, `getProjectInfo(name)`
 
-Listet Unterordner in `Projekte/` auf. Liest `README.md` oder `INFO.md` eines Projekts fuer Detailinfo.
+Listet Unterordner in `Projekte/` auf. Liest `README.md` oder `INFO.md` eines Projekts für Detailinfo.
 
 ---
 
@@ -189,14 +189,14 @@ Generische Dateioperationen innerhalb des Vaults. Relativer Pfad wird gegen `VAU
 ### `src/vault/search.ts` — Vault-Suche
 **37 Zeilen** | Exports: `searchVault(term, projekt?)`, Type: `SearchResult`
 
-Durchsucht alle `.md`-Dateien im Vault nach einem Suchbegriff. Gibt Dateiname und Trefferzeile zurueck. Kann auf ein Projekt eingegrenzt werden.
+Durchsucht alle `.md`-Dateien im Vault nach einem Suchbegriff. Gibt Dateiname und Trefferzeile zurück. Kann auf ein Projekt eingegrenzt werden.
 
 ---
 
 ### `src/vault/agents.ts` — Agent-Workspace-Verwaltung
 **351 Zeilen** | Exports: 20+ Funktionen (siehe unten)
 
-Groesstes Modul. Verwaltet den gesamten Agent-Lebenszyklus:
+Größtes Modul. Verwaltet den gesamten Agent-Lebenszyklus:
 
 | Bereich | Funktionen |
 |---|---|
@@ -220,18 +220,18 @@ Alle Telegram-Slash-Commands:
 | `handleStatus` | `/status` | Bot-Status und Vault-Info |
 | `handleKontext` | `/kontext` | Kontext-Auslastung anzeigen |
 | `handleKompakt` | `/kompakt` | Tageslog komprimieren |
-| `handleNeu` | `/neu` | Gespraechskontext zuruecksetzen |
+| `handleNeu` | `/neu` | Gesprächskontext zurücksetzen |
 | `handleCommands` | `/commands` | Alle Commands auflisten |
 | `handleWhoami` | `/whoami` | Eigene Chat-ID anzeigen |
 | `handleAgents` | `/agents` | Sub-Agents auflisten |
 | `handleExportSession` | `/export` | Session-Log als MD exportieren |
 | `handleModel` | `/model` | Modell anzeigen/wechseln |
 | `handleFast` | `/fast` | Fast-Modus umschalten |
-| `handleSprache` | `/sprache` | Whisper-Sprache aendern |
+| `handleSprache` | `/sprache` | Whisper-Sprache ändern |
 | `handleHeute` | `/heute` | Tages-Briefing |
 | `handleConfig` | `/config` | Konfiguration anzeigen |
 | `handleRestart` | `/restart` | Bot neu starten |
-| `handleLogs` | `/logs` | Letzte Log-Eintraege |
+| `handleLogs` | `/logs` | Letzte Log-Einträge |
 
 ## Zeilenverteilung
 

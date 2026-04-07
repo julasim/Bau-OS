@@ -1,12 +1,12 @@
 # Server erstellen
 
-Schritt-fuer-Schritt-Anleitung: Hetzner VPS aufsetzen und absichern.
+Schritt-für-Schritt-Anleitung: Hetzner VPS aufsetzen und absichern.
 
 ## 1. Server in Hetzner Cloud anlegen
 
 1. Melde dich bei [console.hetzner.cloud](https://console.hetzner.cloud) an
 2. Klicke **"Server erstellen"**
-3. Waehle folgende Einstellungen:
+3. Wähle folgende Einstellungen:
 
 | Einstellung | Wert |
 |---|---|
@@ -21,13 +21,13 @@ Schritt-fuer-Schritt-Anleitung: Hetzner VPS aufsetzen und absichern.
 5. Notiere dir die **IP-Adresse**
 
 ::: tip CPX11 reicht zum Testen
-Fuer erste Tests kannst du mit CPX11 (4 GB RAM) starten und spaeter upgraden. Hetzner erlaubt Upgrades ohne Datenverlust.
+Für erste Tests kannst du mit CPX11 (4 GB RAM) starten und später upgraden. Hetzner erlaubt Upgrades ohne Datenverlust.
 :::
 
 ## 2. Firewall konfigurieren
 
 ::: warning Nur SSH wird benoetigt
-Bau-OS verbindet sich aktiv zu Telegram (Long Polling) und Ollama laeuft lokal. Es sind **keine eingehenden Ports ausser SSH** noetig.
+Bau-OS verbindet sich aktiv zu Telegram (Long Polling) und Ollama läuft lokal. Es sind **keine eingehenden Ports ausser SSH** nötig.
 :::
 
 Erstelle eine Firewall in Hetzner Cloud:
@@ -69,7 +69,7 @@ adduser bauos
 # Sudo-Rechte vergeben
 usermod -aG sudo bauos
 
-# SSH Key fuer den neuen Benutzer kopieren
+# SSH Key für den neuen Benutzer kopieren
 mkdir -p /home/bauos/.ssh
 cp /root/.ssh/authorized_keys /home/bauos/.ssh/
 chown -R bauos:bauos /home/bauos/.ssh
@@ -93,7 +93,7 @@ Stelle sicher, dass der Login als `bauos` funktioniert, bevor du den Root-Login 
 sudo nano /etc/ssh/sshd_config
 ```
 
-Aendere diese Zeilen:
+Ändere diese Zeilen:
 
 ```ini
 PermitRootLogin no
@@ -119,7 +119,7 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-Pruefen:
+Prüfen:
 
 ```bash
 free -h
@@ -139,8 +139,8 @@ Nach diesen Schritten hast du:
 - [x] Firewall: nur SSH offen
 - [x] Einen `bauos`-Benutzer mit SSH-Key-Login
 - [x] Root-Login und Passwort-Login deaktiviert
-- [x] (Optional) 2 GB Swap fuer zusaetzlichen Spielraum
+- [x] (Optional) 2 GB Swap für zusätzlichen Spielraum
 
-## Naechster Schritt
+## Nächster Schritt
 
 → [Software installieren](/betrieb/software)

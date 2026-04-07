@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 export default defineConfig({
   title: "Bau-OS",
-  description: "KI-Plattform fuer Bueros und Bauunternehmen",
+  description: "KI-Plattform für Büros und Bauunternehmen",
   lang: "de-DE",
 
   themeConfig: {
@@ -18,7 +18,7 @@ export default defineConfig({
       {
         text: "Start",
         items: [
-          { text: "Uebersicht", link: "/start/uebersicht" },
+          { text: "Übersicht", link: "/start/uebersicht" },
           { text: "Schnellstart", link: "/start/schnellstart" },
           { text: "Installation", link: "/start/installation" },
           { text: "Einrichtung", link: "/start/einrichtung" },
@@ -107,7 +107,7 @@ export default defineConfig({
 
     docFooter: {
       prev: "Vorherige Seite",
-      next: "Naechste Seite",
+      next: "Nächste Seite",
     },
 
     lastUpdated: {

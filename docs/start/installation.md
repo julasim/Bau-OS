@@ -1,19 +1,19 @@
 # Installation
 
-Detaillierte Anleitung fuer die Installation auf einem frischen System.
+Detaillierte Anleitung für die Installation auf einem frischen System.
 
 ## Systemanforderungen
 
 | Komponente | Minimum | Empfohlen |
 |---|---|---|
 | **OS** | Ubuntu 22.04 / macOS / Windows | Ubuntu 24.04 LTS |
-| **RAM** | 4 GB | 8 GB (fuer 7B Modell) |
+| **RAM** | 4 GB | 8 GB (für 7B Modell) |
 | **CPU** | 2 Kerne | 4 Kerne |
 | **Speicher** | 10 GB frei | 20 GB frei |
 | **Node.js** | 20.x | 20.x LTS |
 
 ::: warning RAM ist entscheidend
-Ollama braucht RAM fuer das LLM-Modell. Ein 7B-Modell benoetigt ca. 4-5 GB RAM. Wenn der Server zu wenig RAM hat, wird das Modell sehr langsam oder stuerzt ab.
+Ollama braucht RAM für das LLM-Modell. Ein 7B-Modell benötigt ca. 4-5 GB RAM. Wenn der Server zu wenig RAM hat, wird das Modell sehr langsam oder stürzt ab.
 :::
 
 ## Node.js installieren
@@ -35,7 +35,7 @@ winget install OpenJS.NodeJS.LTS
 ```
 :::
 
-Pruefe die Installation:
+Prüfe die Installation:
 
 ```bash
 node --version   # v20.x.x
@@ -64,7 +64,7 @@ Modell herunterladen:
 ollama pull qwen2.5:7b
 ```
 
-Pruefe ob Ollama laeuft:
+Prüfe ob Ollama läuft:
 
 ```bash
 curl http://localhost:11434/v1/models
@@ -72,10 +72,10 @@ curl http://localhost:11434/v1/models
 
 ## Telegram Bot erstellen
 
-1. Oeffne Telegram und suche **@BotFather**
+1. Öffne Telegram und suche **@BotFather**
 2. Schreibe `/newbot`
-3. Waehle einen Namen (z.B. "Bau-OS Assistent")
-4. Waehle einen Username (z.B. "bauos_assistent_bot")
+3. Wähle einen Namen (z.B. "Bau-OS Assistent")
+4. Wähle einen Username (z.B. "bauos_assistent_bot")
 5. Kopiere den **Bot Token** — du brauchst ihn gleich
 
 ::: tip Tipp
@@ -90,7 +90,7 @@ cd bau-os
 npm install
 ```
 
-## Setup ausfuehren
+## Setup ausführen
 
 ```bash
 npm run setup
@@ -111,7 +111,7 @@ VAULT_PATH/
 │       ├── IDENTITY.md
 │       ├── SOUL.md
 │       ├── BOOT.md
-│       ├── BOOTSTRAP.md    ← wird nach Ersteinrichtung geloescht
+│       ├── BOOTSTRAP.md    ← wird nach Ersteinrichtung gelöscht
 │       ├── AGENTS.md
 │       ├── USER.md
 │       ├── TOOLS.md
@@ -123,7 +123,7 @@ VAULT_PATH/
 └── Termine/                ← hier landen Termine
 ```
 
-## Naechste Schritte
+## Nächste Schritte
 
 - [Einrichtung](/start/einrichtung) — Setup-Wizard via Telegram starten
-- [Betrieb](/betrieb/voraussetzungen) — Fuer Produktion auf einem Server
+- [Betrieb](/betrieb/voraussetzungen) — Für Produktion auf einem Server

@@ -1,6 +1,6 @@
 # Einrichtung
 
-Nach der Installation fuehrt der Setup-Wizard dich durch die Ersteinrichtung — direkt in Telegram.
+Nach der Installation führt der Setup-Wizard dich durch die Ersteinrichtung — direkt in Telegram.
 
 ## So funktioniert der Wizard
 
@@ -12,11 +12,11 @@ Der Wizard wird durch die Datei `BOOTSTRAP.md` gesteuert. Er stellt 6 Fragen, im
 
 | # | Frage | Beispiel-Antwort |
 |---|---|---|
-| 1 | Wie soll der Assistent heissen? | Bau-OS |
+| 1 | Wie soll der Assistent heißen? | Bau-OS |
 | 2 | Welches Emoji passt dazu? | :construction: |
-| 3 | Wie soll sein Charakter sein? | Praezise, verlaesslich, direkt |
-| 4 | Fuer was fuer ein Unternehmen? | Architekturbuero in Wien |
-| 5 | Wie heisst du? | Julius |
+| 3 | Wie soll sein Charakter sein? | Präzise, verlässlich, direkt |
+| 4 | Für was für ein Unternehmen? | Architekturbüro in Wien |
+| 5 | Wie heißt du? | Julius |
 | 6 | Name des Unternehmens? | Sima Architekten |
 
 ## Was passiert nach dem Wizard?
@@ -25,9 +25,9 @@ Sobald alle 6 Antworten vorliegen, erstellt der Wizard automatisch:
 
 - **IDENTITY.md** — Name, Emoji, Vibe, Kontext
 - **SOUL.md** — Kompletter Charakter und Ton des Agenten
-- **USER.md** — Dein Profil und Praeferenzen
+- **USER.md** — Dein Profil und Präferenzen
 
-Die `BOOTSTRAP.md` Datei wird geloescht — der Wizard laeuft nur einmal.
+Die `BOOTSTRAP.md` Datei wird gelöscht — der Wizard läuft nur einmal.
 
 Ab jetzt antwortet der Agent normal und kennt dich bereits.
 
@@ -42,19 +42,19 @@ Du bist ein freundlicher Einrichtungsassistent.
 Stelle je eine Frage pro Nachricht.
 
 ## Fragen (der Reihe nach)
-1. Wie soll der Assistent heissen?
+1. Wie soll der Assistent heißen?
 2. Welches Emoji passt dazu?
 3. Wie soll sein Charakter sein?
-4. Fuer was fuer ein Unternehmen ist er?
-5. Wie heisst du?
+4. Für was für ein Unternehmen ist er?
+5. Wie heißt du?
 6. Name des Unternehmens?
 
 ## Abschluss
-Sobald du alle 6 Antworten hast, rufe setup_abschliessen auf.
+Sobald du alle 6 Antworten hast, rufe setup_abschließen auf.
 ```
 
 ::: tip Eigene Fragen
-Du kannst Fragen hinzufuegen, entfernen oder umformulieren. Der LLM folgt den Anweisungen in der Datei.
+Du kannst Fragen hinzufügen, entfernen oder umformulieren. Der LLM folgt den Anweisungen in der Datei.
 :::
 
 ## Wizard erneut starten
@@ -65,8 +65,8 @@ Falls du den Wizard nochmal durchlaufen willst:
 npm run fresh
 ```
 
-Das setzt den Main Agent zurueck — alle Workspace-Dateien werden neu erstellt, inklusive `BOOTSTRAP.md`.
+Das setzt den Main Agent zurück — alle Workspace-Dateien werden neu erstellt, inklusive `BOOTSTRAP.md`.
 
 ::: warning Achtung
-`npm run fresh` loescht den bestehenden Agent-Workspace. MEMORY.md und MEMORY_LOGS gehen verloren.
+`npm run fresh` löscht den bestehenden Agent-Workspace. MEMORY.md und MEMORY_LOGS gehen verloren.
 :::

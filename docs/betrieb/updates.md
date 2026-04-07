@@ -21,13 +21,13 @@ npm run build
 # Service neu starten
 sudo systemctl restart bau-os
 
-# Pruefen ob alles laeuft
+# Prüfen ob alles läuft
 sudo systemctl status bau-os
 ```
 
 ### Update-Skript
 
-Erstelle ein Skript fuer bequeme Updates:
+Erstelle ein Skript für bequeme Updates:
 
 ```bash
 nano /home/bauos/update-bau-os.sh
@@ -59,7 +59,7 @@ npm run build
 echo "4/5 Service neu starten..."
 sudo systemctl restart "$SERVICE"
 
-echo "5/5 Status pruefen..."
+echo "5/5 Status prüfen..."
 sleep 2
 sudo systemctl status "$SERVICE" --no-pager
 
@@ -67,13 +67,13 @@ echo ""
 echo "=== Update abgeschlossen ==="
 ```
 
-Ausfuehrbar machen:
+Ausführbar machen:
 
 ```bash
 chmod +x /home/bauos/update-bau-os.sh
 ```
 
-Ausfuehren:
+Ausführen:
 
 ```bash
 ./update-bau-os.sh
@@ -94,19 +94,19 @@ curl -fsSL https://ollama.ai/install.sh | sh
 ```
 
 ::: warning Modell-Update = neuer Download
-`ollama pull` laedt das Modell neu herunter, wenn eine neuere Version verfuegbar ist. Das kann einige Minuten dauern und verbraucht Bandbreite.
+`ollama pull` lädt das Modell neu herunter, wenn eine neuere Version verfügbar ist. Das kann einige Minuten dauern und verbraucht Bandbreite.
 :::
 
-## Wann ist ein frisches Setup noetig?
+## Wann ist ein frisches Setup nötig?
 
-Ein `npm run setup` ist **nur** noetig, wenn:
+Ein `npm run setup` ist **nur** nötig, wenn:
 
 - Der Bot zum ersten Mal auf einem Server installiert wird
 - Die `.env` Datei verloren gegangen ist
 - Der Vault von Grund auf neu erstellt werden soll
 
-::: danger Setup ueberschreibt Agent-Dateien
-`npm run setup` erstellt die Agent-Dateien (`IDENTITY.md`, `SOUL.md`, etc.) neu. Wenn du sie bereits angepasst hast, gehen diese Aenderungen verloren. Mache vorher ein Backup:
+::: danger Setup überschreibt Agent-Dateien
+`npm run setup` erstellt die Agent-Dateien (`IDENTITY.md`, `SOUL.md`, etc.) neu. Wenn du sie bereits angepasst hast, gehen diese Änderungen verloren. Mache vorher ein Backup:
 ```bash
 cp -r /home/bauos/vault/Agents/Main/ /home/bauos/agents-backup-$(date +%Y%m%d)
 ```
@@ -121,7 +121,7 @@ Falls eine neue Node.js LTS Version erscheint:
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
 sudo apt-get install -y nodejs
 
-# Version pruefen
+# Version prüfen
 node --version
 
 # Bau-OS neu bauen
@@ -138,13 +138,13 @@ sudo apt update && sudo apt upgrade -y
 ```
 
 ::: tip Neustart nach Kernel-Update
-Nach einem Kernel-Update ist ein Neustart noetig:
+Nach einem Kernel-Update ist ein Neustart nötig:
 ```bash
 sudo reboot
 ```
 Bau-OS und Ollama starten dank systemd automatisch wieder.
 :::
 
-## Naechster Schritt
+## Nächster Schritt
 
 → [Backup-Strategie](/betrieb/backup)

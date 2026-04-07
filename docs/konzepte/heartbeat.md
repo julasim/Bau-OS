@@ -1,6 +1,6 @@
 # Heartbeat
 
-Der Heartbeat ist das proaktive System von Bau-OS. Statt nur auf Nachrichten zu reagieren, prueft der Agent regelmaessig ob es etwas Wichtiges zu melden gibt.
+Der Heartbeat ist das proaktive System von Bau-OS. Statt nur auf Nachrichten zu reagieren, prüft der Agent regelmäßig ob es etwas Wichtiges zu melden gibt.
 
 ## Wie funktioniert es?
 
@@ -12,7 +12,7 @@ Der Heartbeat ist das proaktive System von Bau-OS. Statt nur auf Nachrichten zu 
 [Heartbeat-Runner]
         |
         v
-[Agent prueft Termine + Aufgaben]
+[Agent prüft Termine + Aufgaben]
         |
         +→ Etwas relevant? → Nachricht an Telegram
         +→ Nichts relevant? → [STILL] → keine Nachricht
@@ -28,9 +28,9 @@ Jeder Agent hat eine `HEARTBEAT.md` Datei:
 Cron: */30 8-20 * * 1-6
 
 ## Aufgaben
-Pruefe ob es etwas Relevantes zu melden gibt:
+Prüfe ob es etwas Relevantes zu melden gibt:
 1. Termine die HEUTE anstehen (nutze termine_auflisten)
-2. Offene Aufgaben die ueberfaellig oder dringend sind
+2. Offene Aufgaben die überfaellig oder dringend sind
 3. Wichtige Erinnerungen aus MEMORY.md
 
 ## Regeln
@@ -42,17 +42,17 @@ Pruefe ob es etwas Relevantes zu melden gibt:
 
 ## Cron-Ausdruck
 
-Der Cron-Ausdruck steuert wann der Heartbeat laeuft:
+Der Cron-Ausdruck steuert wann der Heartbeat läuft:
 
 | Ausdruck | Bedeutung |
 |---|---|
 | `*/30 8-20 * * 1-6` | Alle 30 Min, Mo-Sa, 8-20 Uhr |
-| `0 9 * * 1-5` | Taeglich 9 Uhr, Mo-Fr |
+| `0 9 * * 1-5` | Täglich 9 Uhr, Mo-Fr |
 | `0 8,12,17 * * *` | Um 8, 12 und 17 Uhr, jeden Tag |
 | `0 */2 * * 1-5` | Alle 2 Stunden, Mo-Fr |
 
 ::: tip Cron-Generator
-Nutze [crontab.guru](https://crontab.guru/) um Cron-Ausdruecke zu erstellen.
+Nutze [crontab.guru](https://crontab.guru/) um Cron-Ausdrücke zu erstellen.
 :::
 
 ## Stille-Modus
@@ -61,18 +61,18 @@ Wenn der Agent nichts zu melden hat, antwortet er mit `[STILL]`. Diese Antwort w
 
 ## Anpassen
 
-Du kannst die HEARTBEAT.md jederzeit aendern:
+Du kannst die HEARTBEAT.md jederzeit ändern:
 
-- **Haeufigkeit aendern:** Cron-Ausdruck anpassen
-- **Aufgaben aendern:** Was der Agent pruefen soll
-- **Regeln aendern:** Wie und wann er sich melden soll
+- **Häufigkeit ändern:** Cron-Ausdruck anpassen
+- **Aufgaben ändern:** Was der Agent prüfen soll
+- **Regeln ändern:** Wie und wann er sich melden soll
 - **Deaktivieren:** Cron-Zeile entfernen oder auskommentieren
 
-Aenderungen an der Datei werden beim naechsten **Bot-Neustart** wirksam (der Cron-Scheduler wird beim Start einmalig konfiguriert).
+Änderungen an der Datei werden beim nächsten **Bot-Neustart** wirksam (der Cron-Scheduler wird beim Start einmalig konfiguriert).
 
 ## Beispiel-Nachricht
 
 Wenn heute ein Termin ansteht, bekommst du z.B.:
 
-> 10:00 — Kundentermin Projekt Alpha (Buero Wien)
-> Aufgabe ueberfaellig: "Angebot erstellen" (faellig: gestern)
+> 10:00 — Kundentermin Projekt Alpha (Büro Wien)
+> Aufgabe überfaellig: "Angebot erstellen" (fällig: gestern)

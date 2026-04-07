@@ -1,6 +1,6 @@
 # Kundenisolation
 
-Jeder Bau-OS-Kunde erhaelt eine **vollstaendig getrennte Infrastruktur**. Es gibt keine gemeinsam genutzten Ressourcen zwischen Kunden.
+Jeder Bau-OS-Kunde erhält eine **vollständig getrennte Infrastruktur**. Es gibt keine gemeinsam genutzten Ressourcen zwischen Kunden.
 
 ## Prinzip: Ein Kunde = Ein Server
 
@@ -46,24 +46,24 @@ Jeder Bau-OS-Kunde erhaelt eine **vollstaendig getrennte Infrastruktur**. Es gib
 | SSH-Zugang | Eigener SSH-Key |
 
 ::: tip Keine Shared Infrastructure
-Es gibt **keinen zentralen Server**, keine gemeinsame Datenbank und kein API-Gateway. Jede Bau-OS-Instanz ist voellig unabhaengig. Wenn ein Server ausfaellt, sind andere Kunden nicht betroffen.
+Es gibt **keinen zentralen Server**, keine gemeinsame Datenbank und kein API-Gateway. Jede Bau-OS-Instanz ist völlig unabhängig. Wenn ein Server ausfaellt, sind andere Kunden nicht betroffen.
 :::
 
 ## Warum kein Multi-Tenant?
 
-Viele SaaS-Produkte nutzen Multi-Tenant-Architekturen (eine Instanz fuer alle Kunden). Bau-OS vermeidet dies bewusst:
+Viele SaaS-Produkte nutzen Multi-Tenant-Architekturen (eine Instanz für alle Kunden). Bau-OS vermeidet dies bewusst:
 
-| Multi-Tenant (ueblich) | Bau-OS (Single-Tenant) |
+| Multi-Tenant (üblich) | Bau-OS (Single-Tenant) |
 |---|---|
 | Gemeinsame Datenbank | Eigener Vault pro Kunde |
 | Shared LLM-API | Eigene Ollama-Instanz |
-| Ein Server fuer alle | Ein VPS pro Kunde |
+| Ein Server für alle | Ein VPS pro Kunde |
 | Datenleck-Risiko zwischen Kunden | Physisch getrennte Daten |
-| Zentrale Ausfallpunkte | Unabhaengige Instanzen |
+| Zentrale Ausfallpunkte | Unabhängige Instanzen |
 | Komplexe Berechtigungslogik | Einfache Dateisystem-Isolation |
 
 ::: warning Hoehere Kosten, hoeherer Schutz
-Single-Tenant-Architektur bedeutet hoehere Infrastrukturkosten (ein VPS pro Kunde statt ein grosser Server). Dafuer erhaelt jeder Kunde maximale Datenisolation und keine Abhaengigkeit von anderen Kunden.
+Single-Tenant-Architektur bedeutet hoehere Infrastrukturkosten (ein VPS pro Kunde statt ein großer Server). Dafür erhält jeder Kunde maximale Datenisolation und keine Abhängigkeit von anderen Kunden.
 :::
 
 ## Deployment pro Kunde
@@ -108,7 +108,7 @@ Internet
 └──────────────┘
 ```
 
-- **Ollama** laeuft auf `localhost` und ist **nicht von aussen erreichbar**
+- **Ollama** läuft auf `localhost` und ist **nicht von außen erreichbar**
 - **Kein offener Port** ausser SSH (22)
-- Telegram-Kommunikation laeuft ueber **Long Polling** (ausgehende Verbindung, kein Webhook)
+- Telegram-Kommunikation läuft über **Long Polling** (ausgehende Verbindung, kein Webhook)
 - Der Vault ist ein **lokaler Ordner** ohne Netzwerkzugriff

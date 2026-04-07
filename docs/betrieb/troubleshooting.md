@@ -1,10 +1,10 @@
 # Troubleshooting
 
-Haeufige Probleme und Loesungen fuer Bau-OS im Produktivbetrieb.
+Haeufige Probleme und Lösungen für Bau-OS im Produktivbetrieb.
 
 ## Bot antwortet nicht
 
-### 1. Service pruefen
+### 1. Service prüfen
 
 ```bash
 sudo systemctl status bau-os
@@ -17,14 +17,14 @@ sudo journalctl -u bau-os -n 50 --no-pager
 sudo systemctl restart bau-os
 ```
 
-### 2. Ollama pruefen
+### 2. Ollama prüfen
 
 ```bash
 sudo systemctl status ollama
 curl http://localhost:11434/v1/models
 ```
 
-Falls Ollama nicht laeuft:
+Falls Ollama nicht läuft:
 
 ```bash
 sudo systemctl restart ollama
@@ -33,7 +33,7 @@ sleep 10
 sudo systemctl restart bau-os
 ```
 
-### 3. Bot Token pruefen
+### 3. Bot Token prüfen
 
 ```bash
 grep BOT_TOKEN /home/bauos/bau-os/.env
@@ -47,14 +47,14 @@ sudo systemctl restart bau-os
 ```
 :::
 
-### 4. Netzwerk pruefen
+### 4. Netzwerk prüfen
 
 ```bash
 # Kann der Server Telegram erreichen?
 curl -s https://api.telegram.org/bot<DEIN_TOKEN>/getMe
 ```
 
-Falls keine Verbindung: DNS oder Firewall pruefen.
+Falls keine Verbindung: DNS oder Firewall prüfen.
 
 ```bash
 # DNS-Aufloesung testen
@@ -74,7 +74,7 @@ Symptome: Bot antwortet extrem langsam oder gar nicht. In den Logs:
 Error: model requires more memory than available
 ```
 
-### Loesung 1: Kleineres Modell verwenden
+### Lösung 1: Kleineres Modell verwenden
 
 ```bash
 ollama pull qwen2.5:3b
@@ -88,7 +88,7 @@ nano /home/bauos/bau-os/.env
 sudo systemctl restart bau-os
 ```
 
-### Loesung 2: Swap hinzufuegen
+### Lösung 2: Swap hinzufuegen
 
 ```bash
 sudo fallocate -l 4G /swapfile
@@ -102,9 +102,9 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 Swap auf SSD ist akzeptabel, aber deutlich langsamer als RAM. Besser: Server upgraden (z.B. CPX11 → CPX21).
 :::
 
-### Loesung 3: Server upgraden
+### Lösung 3: Server upgraden
 
-In der Hetzner Cloud Console: Server → Rescale → CPX21 (8 GB RAM) waehlen. Erfordert kurzen Neustart.
+In der Hetzner Cloud Console: Server → Rescale → CPX21 (8 GB RAM) wählen. Erfordert kurzen Neustart.
 
 ---
 
@@ -135,10 +135,10 @@ Error: ETIMEOUT connecting to api.telegram.org
 ```
 
 ```bash
-# Netzwerk pruefen
+# Netzwerk prüfen
 ping -c 3 api.telegram.org
 
-# DNS pruefen
+# DNS prüfen
 cat /etc/resolv.conf
 
 # Ggf. Google DNS setzen
@@ -161,7 +161,7 @@ npm install
 ### TypeScript-Kompilierungsfehler
 
 ```bash
-# Node.js Version pruefen
+# Node.js Version prüfen
 node --version
 # Muss v20.x.x sein
 
@@ -173,10 +173,10 @@ sudo apt-get install -y nodejs
 ### Permission-Fehler
 
 ```bash
-# Eigentuemer pruefen
+# Eigentuemer prüfen
 ls -la /home/bauos/bau-os/
 
-# Falls noetig, Eigentuemer korrigieren
+# Falls nötig, Eigentuemer korrigieren
 sudo chown -R bauos:bauos /home/bauos/bau-os
 sudo chown -R bauos:bauos /home/bauos/vault
 ```
@@ -185,9 +185,9 @@ sudo chown -R bauos:bauos /home/bauos/vault
 
 ## Heartbeat funktioniert nicht
 
-Der Heartbeat (geplante Nachrichten) wird ueber die `HEARTBEAT.md` Datei konfiguriert.
+Der Heartbeat (geplante Nachrichten) wird über die `HEARTBEAT.md` Datei konfiguriert.
 
-### 1. HEARTBEAT.md pruefen
+### 1. HEARTBEAT.md prüfen
 
 ```bash
 cat /home/bauos/vault/Agents/Main/HEARTBEAT.md
@@ -201,15 +201,15 @@ Cron: 0 8 * * 1-5
 Ohne diese Zeile wird kein Heartbeat ausgefuehrt.
 :::
 
-### 2. Nach Aenderungen neu starten
+### 2. Nach Änderungen neu starten
 
-Heartbeat-Aenderungen werden erst nach einem Neustart wirksam:
+Heartbeat-Änderungen werden erst nach einem Neustart wirksam:
 
 ```bash
 sudo systemctl restart bau-os
 ```
 
-### 3. Cronjob in den Logs pruefen
+### 3. Cronjob in den Logs prüfen
 
 ```bash
 sudo journalctl -u bau-os --since today | grep -i heartbeat
@@ -219,9 +219,9 @@ sudo journalctl -u bau-os --since today | grep -i heartbeat
 
 ## Agent gibt falsche oder unpassende Antworten
 
-### SOUL.md pruefen
+### SOUL.md prüfen
 
-Die Persoenlichkeit des Agenten ist in `SOUL.md` definiert:
+Die Persönlichkeit des Agenten ist in `SOUL.md` definiert:
 
 ```bash
 cat /home/bauos/vault/Agents/Main/SOUL.md
@@ -233,19 +233,19 @@ Passe die Datei an, falls der Ton oder die Anweisungen nicht stimmen:
 nano /home/bauos/vault/Agents/Main/SOUL.md
 ```
 
-::: tip Kein Neustart noetig
-Aenderungen an `SOUL.md`, `BOOT.md` und anderen Agent-Dateien werden bei der naechsten Nachricht automatisch geladen. Kein Neustart erforderlich.
+::: tip Kein Neustart nötig
+Änderungen an `SOUL.md`, `BOOT.md` und anderen Agent-Dateien werden bei der nächsten Nachricht automatisch geladen. Kein Neustart erforderlich.
 :::
 
-### BOOT.md pruefen
+### BOOT.md prüfen
 
-Die Startanweisungen fuer jeden Chat:
+Die Startanweisungen für jeden Chat:
 
 ```bash
 cat /home/bauos/vault/Agents/Main/BOOT.md
 ```
 
-### Tages-Log zuruecksetzen
+### Tages-Log zurücksetzen
 
 Falls der Kontext durch einen fehlerhaften Tages-Log verunreinigt ist:
 
@@ -263,7 +263,7 @@ Falls das Modell grundsaetzlich unpassende Antworten gibt:
 # Anderes Modell testen
 ollama pull llama3.1:8b
 
-# In .env aendern
+# In .env ändern
 nano /home/bauos/bau-os/.env
 # OLLAMA_MODEL=llama3.1:8b
 
@@ -275,13 +275,13 @@ sudo systemctl restart bau-os
 ## Festplatte voll
 
 ```bash
-# Plattennutzung pruefen
+# Plattennutzung prüfen
 df -h /
 
-# Groesste Verzeichnisse finden
+# Größte Verzeichnisse finden
 du -sh /home/bauos/* | sort -rh
 
-# Alte Backups aufraeumen
+# Alte Backups aufräumen
 ls -lh /home/bauos/backups/
 find /home/bauos/backups/ -name "vault-*.tar.gz" -mtime +30 -delete
 
@@ -297,7 +297,7 @@ sudo journalctl --vacuum-size=100M
 
 ## Schnelldiagnose
 
-Kopiere diesen Block und fuehre ihn auf dem Server aus:
+Kopiere diesen Block und führe ihn auf dem Server aus:
 
 ```bash
 echo "=== Schnelldiagnose ==="

@@ -2,11 +2,11 @@
 
 Bau-OS bietet eine Reihe von Slash-Befehlen, die du direkt im Telegram-Chat verwenden kannst. Tippe `/` um die Befehlsliste zu sehen.
 
-## Uebersicht
+## Übersicht
 
 | Befehl | Beschreibung |
 |---|---|
-| `/hilfe` | Zeigt alle verfuegbaren Befehle |
+| `/hilfe` | Zeigt alle verfügbaren Befehle |
 | `/heute` | Tagesbericht und aktuelle Aufgaben |
 | `/status` | Systemstatus und Bot-Informationen |
 | `/config` | Aktuelle Konfiguration anzeigen |
@@ -16,15 +16,15 @@ Bau-OS bietet eine Reihe von Slash-Befehlen, die du direkt im Telegram-Chat verw
 | `/whoami` | Benutzer-Informationen anzeigen |
 | `/export` | Daten exportieren |
 | `/restart` | Bot neu starten |
-| `/logs` | Letzte Log-Eintraege anzeigen |
+| `/logs` | Letzte Log-Einträge anzeigen |
 | `/commands` | Befehlsliste anzeigen |
-| `/clear` | Chat-Verlauf zuruecksetzen |
+| `/clear` | Chat-Verlauf zurücksetzen |
 
 ## Befehle im Detail
 
 ### /hilfe
 
-Zeigt eine Uebersicht aller verfuegbaren Slash-Befehle mit kurzer Beschreibung.
+Zeigt eine Übersicht aller verfügbaren Slash-Befehle mit kurzer Beschreibung.
 
 ```
 /hilfe
@@ -36,13 +36,13 @@ Identisch mit `/commands` — beide zeigen die Befehlsliste an.
 
 ### /heute
 
-Erstellt einen Tagesbericht basierend auf dem aktuellen Datum. Der Agent liest den Vault, fasst offene Aufgaben zusammen und gibt einen Ueberblick ueber den Tag.
+Erstellt einen Tagesbericht basierend auf dem aktuellen Datum. Der Agent liest den Vault, fasst offene Aufgaben zusammen und gibt einen Überblick über den Tag.
 
 ```
 /heute
 ```
 
-**Intern:** Laedt den Tageslog und aktuelle Vault-Inhalte, generiert eine LLM-basierte Zusammenfassung des Tages.
+**Intern:** Lädt den Tageslog und aktuelle Vault-Inhalte, generiert eine LLM-basierte Zusammenfassung des Tages.
 
 ### /status
 
@@ -52,7 +52,7 @@ Zeigt den aktuellen Systemstatus: aktives Modell, Anzahl der Agenten, Speicherve
 /status
 ```
 
-**Intern:** Sammelt Laufzeit-Informationen und prueft die Erreichbarkeit der Ollama-API.
+**Intern:** Sammelt Laufzeit-Informationen und prüft die Erreichbarkeit der Ollama-API.
 
 ### /config
 
@@ -78,11 +78,11 @@ Wechselt das aktive LLM-Modell oder zeigt das aktuell verwendete Modell an.
 /model qwen2.5:14b
 ```
 
-**Intern:** Setzt das Modell fuer die aktuelle Session. Das Modell muss in Ollama verfuegbar sein (siehe [Modelle](./modelle)).
+**Intern:** Setzt das Modell für die aktuelle Session. Das Modell muss in Ollama verfügbar sein (siehe [Modelle](./modelle)).
 
 ### /fast
 
-Schaltet auf das konfigurierte schnelle Modell (`OLLAMA_FAST_MODEL`) um. Ideal fuer einfache Fragen, bei denen Geschwindigkeit wichtiger ist.
+Schaltet auf das konfigurierte schnelle Modell (`OLLAMA_FAST_MODEL`) um. Ideal für einfache Fragen, bei denen Geschwindigkeit wichtiger ist.
 
 ```
 /fast
@@ -91,7 +91,7 @@ Schaltet auf das konfigurierte schnelle Modell (`OLLAMA_FAST_MODEL`) um. Ideal f
 **Intern:** Setzt das Session-Modell auf den Wert von `OLLAMA_FAST_MODEL`.
 
 ::: tip
-Zurueck zum Standardmodell geht es mit `/model` gefolgt vom gewuenschten Modellnamen.
+Zurück zum Standardmodell geht es mit `/model` gefolgt vom gewünschten Modellnamen.
 :::
 
 ### /agents
@@ -116,7 +116,7 @@ Zeigt Informationen zum aktuellen Benutzer — Telegram-Name, Chat-ID und Berech
 
 ### /export
 
-Exportiert Daten aus dem Bot — z.B. Gespraechsverlaeufe oder Tagesberichte.
+Exportiert Daten aus dem Bot — z.B. Gesprächsverläufe oder Tagesberichte.
 
 ```
 /export
@@ -124,29 +124,29 @@ Exportiert Daten aus dem Bot — z.B. Gespraechsverlaeufe oder Tagesberichte.
 
 ### /restart
 
-Startet den Bot neu. Nuetzlich nach Konfigurationsaenderungen.
+Startet den Bot neu. Nützlich nach Konfigurationsänderungen.
 
 ```
 /restart
 ```
 
 ::: warning
-Ein Restart unterbricht laufende Operationen. Der Bot ist fuer einige Sekunden nicht erreichbar.
+Ein Restart unterbricht laufende Operationen. Der Bot ist für einige Sekunden nicht erreichbar.
 :::
 
 ### /logs
 
-Zeigt die letzten Log-Eintraege an. Die Anzahl wird durch `KEEP_RECENT_LOGS` (Standard: 5) begrenzt.
+Zeigt die letzten Log-Einträge an. Die Anzahl wird durch `KEEP_RECENT_LOGS` (Standard: 5) begrenzt.
 
 ```
 /logs
 ```
 
-**Intern:** Liest die letzten Eintraege aus dem Log-Verzeichnis des aktiven Agenten (`Agents/<Name>/MEMORY_LOGS/`).
+**Intern:** Liest die letzten Einträge aus dem Log-Verzeichnis des aktiven Agenten (`Agents/<Name>/MEMORY_LOGS/`).
 
 ### /commands
 
-Zeigt die vollstaendige Befehlsliste an. Funktioniert identisch zu `/hilfe`.
+Zeigt die vollständige Befehlsliste an. Funktioniert identisch zu `/hilfe`.
 
 ```
 /commands
@@ -154,7 +154,7 @@ Zeigt die vollstaendige Befehlsliste an. Funktioniert identisch zu `/hilfe`.
 
 ### /clear
 
-Setzt den Chat-Verlauf des Bots zurueck. Der Agent beginnt mit einem leeren Gespraechspuffer.
+Setzt den Chat-Verlauf des Bots zurück. Der Agent beginnt mit einem leeren Gesprächspuffer.
 
 ```
 /clear
@@ -163,9 +163,9 @@ Setzt den Chat-Verlauf des Bots zurueck. Der Agent beginnt mit einem leeren Gesp
 **Intern:** Leert den In-Memory Message-Buffer. Tagesberichte und Vault-Inhalte bleiben erhalten.
 
 ::: warning
-Der gesamte Gespraechskontext geht verloren. Der Agent erinnert sich nicht mehr an vorherige Nachrichten der aktuellen Session.
+Der gesamte Gesprächskontext geht verloren. Der Agent erinnert sich nicht mehr an vorherige Nachrichten der aktuellen Session.
 :::
 
 ## Eigene Befehle
 
-Slash-Befehle sind im Quellcode definiert. Um eigene Befehle hinzuzufuegen, siehe [Anpassung](./anpassung).
+Slash-Befehle sind im Quellcode definiert. Um eigene Befehle hinzuzufügen, siehe [Anpassung](./anpassung).

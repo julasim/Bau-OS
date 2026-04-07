@@ -40,7 +40,7 @@ npm run build
 
 Das erstellt den `dist/` Ordner mit dem kompilierten JavaScript.
 
-## 4. Setup ausfuehren
+## 4. Setup ausführen
 
 ```bash
 npm run setup
@@ -59,7 +59,7 @@ Der interaktive Installer fragt nach:
 Verwende einen **absoluten Pfad**. Der Ordner wird automatisch erstellt, falls er nicht existiert.
 :::
 
-## 5. Ergebnis pruefen
+## 5. Ergebnis prüfen
 
 ### .env Datei
 
@@ -103,10 +103,10 @@ Der Bot sollte starten und du siehst:
 [INFO] Ollama verbunden: qwen2.5:7b
 ```
 
-Oeffne jetzt Telegram und schreibe dem Bot eine Nachricht. Wenn er antwortet, funktioniert alles.
+Öffne jetzt Telegram und schreibe dem Bot eine Nachricht. Wenn er antwortet, funktioniert alles.
 
 ::: tip Ersteinrichtung via Telegram
-Beim ersten Start fuehrt der Bot dich durch die Ersteinrichtung (Bootstrap). Beantworte die Fragen — danach loescht der Bot die `BOOTSTRAP.md` und ist betriebsbereit.
+Beim ersten Start führt der Bot dich durch die Ersteinrichtung (Bootstrap). Beantworte die Fragen — danach loescht der Bot die `BOOTSTRAP.md` und ist betriebsbereit.
 :::
 
 Stoppe den Bot mit `Ctrl+C`.
@@ -133,6 +133,6 @@ Nach dem erfolgreichen Start sieht die Struktur so aus:
 Die `.env` Datei enthaelt den Bot Token. Sie darf **niemals** in ein Git-Repository gelangen. Sie steht bereits in `.gitignore`.
 :::
 
-## Naechster Schritt
+## Nächster Schritt
 
 → [systemd-Service einrichten](/betrieb/systemd)

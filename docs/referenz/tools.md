@@ -1,6 +1,6 @@
 # LLM Tools Referenz
 
-Bau-OS stellt dem LLM **28 Tools** zur Verfuegung, mit denen es eigenstaendig Daten im Vault verwalten kann. Alle Tools sind in `src/llm/tools.ts` definiert und in `src/llm/executor.ts` implementiert.
+Bau-OS stellt dem LLM **28 Tools** zur Verfügung, mit denen es eigenständig Daten im Vault verwalten kann. Alle Tools sind in `src/llm/tools.ts` definiert und in `src/llm/executor.ts` implementiert.
 
 ## Notizen
 
@@ -57,7 +57,7 @@ User: "Was steht in der Notiz zur Baustellenbegehung?"
 
 ### `notiz_bearbeiten`
 
-Fuegt einer bestehenden Notiz einen Nachtrag hinzu.
+Fügt einer bestehenden Notiz einen Nachtrag hinzu.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
@@ -65,7 +65,7 @@ Fuegt einer bestehenden Notiz einen Nachtrag hinzu.
 | `text` | `string` | Ja | Inhalt des Nachtrags |
 
 ```
-User: "Ergaenze die Baustellennotiz: Statiker kommt Freitag"
+User: "Ergänze die Baustellennotiz: Statiker kommt Freitag"
 → Tool: notiz_bearbeiten({ dateiname: "2026-04-07_baustellenbegehung.md", text: "Statiker kommt Freitag" })
 → Nachtrag gespeichert
 ```
@@ -74,16 +74,16 @@ User: "Ergaenze die Baustellennotiz: Statiker kommt Freitag"
 
 ### `notiz_loeschen`
 
-Loescht eine Notiz dauerhaft aus dem Vault.
+Löscht eine Notiz dauerhaft aus dem Vault.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
 | `dateiname` | `string` | Ja | Name der Notiz-Datei |
 
 ```
-User: "Loesch die alte Materialliste"
+User: "Lösch die alte Materialliste"
 → Tool: notiz_loeschen({ dateiname: "2026-04-06_materialliste.md" })
-→ Notiz geloescht
+→ Notiz gelöscht
 ```
 
 ## Aufgaben
@@ -178,7 +178,7 @@ User: "Welche Termine habe ich?"
 
 ### `termin_loeschen`
 
-Loescht einen Termin aus der Terminliste.
+Löscht einen Termin aus der Terminliste.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
@@ -188,7 +188,7 @@ Loescht einen Termin aus der Terminliste.
 ```
 User: "Streich den Termin mit dem Statiker"
 → Tool: termin_loeschen({ text: "Baustellenbegehung mit Statiker" })
-→ Termin geloescht
+→ Termin gelöscht
 ```
 
 ## Projekte
@@ -221,7 +221,7 @@ Zeigt Informationen zu einem bestimmten Projekt.
 | `name` | `string` | Ja | Name des Projekts |
 
 ```
-User: "Was weisst du ueber Projekt Alpha?"
+User: "Was weißt du über Projekt Alpha?"
 → Tool: projekt_info({ name: "Projekt Alpha" })
 → [Projektinformationen]
 ```
@@ -246,7 +246,7 @@ User: "Lies mir die README aus Projekt Alpha vor"
 
 ### `datei_erstellen`
 
-Erstellt eine neue Datei im Vault oder ueberschreibt eine bestehende.
+Erstellt eine neue Datei im Vault oder überschreibt eine bestehende.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
@@ -254,7 +254,7 @@ Erstellt eine neue Datei im Vault oder ueberschreibt eine bestehende.
 | `inhalt` | `string` | Ja | Dateiinhalt |
 
 ```
-User: "Erstell mir eine Checkliste fuer die Baustellenbegehung"
+User: "Erstell mir eine Checkliste für die Baustellenbegehung"
 → Tool: datei_erstellen({ pfad: "Projekte/Alpha/checkliste.md", inhalt: "# Checkliste\n- [ ] ..." })
 → Datei erstellt: checkliste.md
 ```
@@ -289,7 +289,7 @@ Sucht nach einem Begriff in allen Notizen.
 | `projekt` | `string` | Nein | Suche auf ein Projekt begrenzen |
 
 ```
-User: "Wo steht was ueber den Statiker?"
+User: "Wo steht was über den Statiker?"
 → Tool: vault_suchen({ suchbegriff: "Statiker" })
 → 2026-04-07_baustellenbegehung.md
      Statiker kommt Freitag
@@ -305,11 +305,11 @@ Speichert eine wichtige Information dauerhaft in der `MEMORY.md` des Agenten.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
-| `eintrag` | `string` | Ja | Die zu speichernde Information (1-2 Saetze) |
+| `eintrag` | `string` | Ja | Die zu speichernde Information (1-2 Sätze) |
 
 ::: tip Wann wird Memory verwendet?
 - Nutzer sagt explizit: "merk dir", "vergiss nicht", "speicher dauerhaft"
-- Information ist fuer zukuenftige Gespraeche wichtig (Praeferenzen, Kontakte, Entscheidungen)
+- Information ist für zukünftige Gespräche wichtig (Präferenzen, Kontakte, Entscheidungen)
 :::
 
 ```
@@ -339,7 +339,7 @@ User: "Erstell mir einen Protokoll-Agenten"
 
 ### `agent_spawnen`
 
-Startet einen Sub-Agenten und wartet auf das Ergebnis (**blocking**). Fuer kurze Aufgaben.
+Startet einen Sub-Agenten und wartet auf das Ergebnis (**blocking**). Für kurze Aufgaben.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
@@ -355,7 +355,7 @@ Startet einen Sub-Agenten und wartet auf das Ergebnis (**blocking**). Fuer kurze
 
 ### `agent_spawnen_async`
 
-Startet einen Sub-Agenten **non-blocking** im Hintergrund. Sofortige Rueckkehr — Ergebnis wird als separate Nachricht gepostet wenn fertig.
+Startet einen Sub-Agenten **non-blocking** im Hintergrund. Sofortige Rückkehr — Ergebnis wird als separate Nachricht gepostet wenn fertig.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
@@ -371,7 +371,7 @@ Startet einen Sub-Agenten **non-blocking** im Hintergrund. Sofortige Rueckkehr �
 
 ### `agenten_auflisten`
 
-Listet alle verfuegbaren Sub-Agenten auf.
+Listet alle verfügbaren Sub-Agenten auf.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
@@ -382,7 +382,7 @@ _Keine Parameter._
 
 ### `agent_verlauf`
 
-Liest den heutigen Gespraechsverlauf eines anderen Agenten.
+Liest den heutigen Gesprächsverlauf eines anderen Agenten.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
@@ -414,13 +414,13 @@ Liest eine Konfigurationsdatei eines Agenten.
 
 ### `agent_datei_schreiben`
 
-Ueberschreibt eine Konfigurationsdatei eines Agenten.
+Überschreibt eine Konfigurationsdatei eines Agenten.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
 | `agent` | `string` | Ja | Name des Agenten |
 | `datei` | `string` | Ja | Dateiname (muss in der Whitelist sein) |
-| `inhalt` | `string` | Ja | Neuer vollstaendiger Inhalt der Datei |
+| `inhalt` | `string` | Ja | Neuer vollständiger Inhalt der Datei |
 
 ::: warning Whitelist
 Erlaubte Dateien: `SOUL.md`, `BOOT.md`, `AGENTS.md`, `TOOLS.md`, `HEARTBEAT.md`, `BOOTSTRAP.md`, `USER.md`, `IDENTITY.md`, `MEMORY.md`
@@ -431,7 +431,7 @@ Erlaubte Dateien: `SOUL.md`, `BOOT.md`, `AGENTS.md`, `TOOLS.md`, `HEARTBEAT.md`,
 ### `heute_briefing`
 
 ::: tip Hinweis
-Das Tages-Briefing wird nicht als eigenes Tool aufgerufen, sondern ueber den `/heute`-Command ausgeloest. Intern fuehrt es `processAgent("Main", <briefing-prompt>)` aus.
+Das Tages-Briefing wird nicht als eigenes Tool aufgerufen, sondern über den `/heute`-Command ausgeloest. Intern führt es `processAgent("Main", <briefing-prompt>)` aus.
 :::
 
 ---
@@ -439,10 +439,10 @@ Das Tages-Briefing wird nicht als eigenes Tool aufgerufen, sondern ueber den `/h
 ### `konversation_loeschen`
 
 ::: tip Hinweis
-Das Zuruecksetzen des Gespraechskontexts erfolgt ueber den `/neu`-Command. Intern wird `clearAgentToday("Main")` aufgerufen, was den heutigen Tageslog loescht.
+Das Zurücksetzen des Gesprächskontexts erfolgt über den `/neu`-Command. Intern wird `clearAgentToday("Main")` aufgerufen, was den heutigen Tageslog löscht.
 :::
 
-## Uebersicht: Alle Tools nach Kategorie
+## Übersicht: Alle Tools nach Kategorie
 
 | Kategorie | Tools | Anzahl |
 |---|---|---|

@@ -27,7 +27,7 @@ cd bau-os
 npm install
 ```
 
-## 3. Setup ausfuehren
+## 3. Setup ausführen
 
 ```bash
 npm run setup
@@ -52,15 +52,15 @@ npm start
 
 ## 5. Erste Nachricht
 
-Oeffne Telegram, suche deinen Bot und schreibe:
+Öffne Telegram, suche deinen Bot und schreibe:
 
 > Hallo!
 
-Der Setup-Wizard startet automatisch und fuehrt dich durch 6 kurze Fragen:
+Der Setup-Wizard startet automatisch und führt dich durch 6 kurze Fragen:
 1. Name des Assistenten
 2. Emoji
 3. Charakter/Vibe
-4. Fuer was fuer ein Unternehmen
+4. Für was für ein Unternehmen
 5. Dein Name
 6. Name des Unternehmens
 
@@ -70,9 +70,9 @@ Danach ist der Bot einsatzbereit.
 
 - Schreibe "Erstelle eine Notiz: Meeting morgen um 10 Uhr"
 - Schreibe "Welche Termine habe ich heute?"
-- Tippe `/hilfe` fuer alle Befehle
-- Lies [Konzepte](/konzepte/architektur) um zu verstehen wie alles zusammenhaengt
+- Tippe `/hilfe` für alle Befehle
+- Lies [Konzepte](/konzepte/architektur) um zu verstehen wie alles zusammenhängt
 
 ::: tip Produktion
-Fuer den Einsatz auf einem Server lies das [Deployment-Playbook](/betrieb/voraussetzungen).
+Für den Einsatz auf einem Server lies das [Deployment-Playbook](/betrieb/voraussetzungen).
 :::

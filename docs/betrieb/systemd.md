@@ -45,8 +45,8 @@ SyslogIdentifier=bau-os
 WantedBy=multi-user.target
 ```
 
-::: tip Abhaengigkeit von Ollama
-`After=ollama.service` stellt sicher, dass Ollama zuerst startet. `Wants=ollama.service` startet Ollama mit, falls es noch nicht laeuft.
+::: tip Abhängigkeit von Ollama
+`After=ollama.service` stellt sicher, dass Ollama zuerst startet. `Wants=ollama.service` startet Ollama mit, falls es noch nicht läuft.
 :::
 
 ## Service aktivieren und starten
@@ -73,7 +73,7 @@ sudo systemctl start bau-os
 | `sudo systemctl enable bau-os` | Autostart aktivieren |
 | `sudo systemctl disable bau-os` | Autostart deaktivieren |
 
-### Status pruefen
+### Status prüfen
 
 ```bash
 sudo systemctl status bau-os
@@ -109,7 +109,7 @@ sudo journalctl -u bau-os -p err
 ```
 
 ::: warning Restart-Limits
-Die Konfiguration erlaubt maximal **5 Neustarts in 60 Sekunden**. Wenn der Bot oefter abstuerzt, stoppt systemd den Service. Pruefe dann die Logs:
+Die Konfiguration erlaubt maximal **5 Neustarts in 60 Sekunden**. Wenn der Bot oefter abstuerzt, stoppt systemd den Service. Prüfe dann die Logs:
 ```bash
 sudo journalctl -u bau-os -n 100 --no-pager
 ```
@@ -120,18 +120,18 @@ sudo systemctl start bau-os
 ```
 :::
 
-## Service nach .env-Aenderung neu laden
+## Service nach .env-Änderung neu laden
 
-Wenn du die `.env` Datei aenderst, muss der Service neu gestartet werden:
+Wenn du die `.env` Datei änderst, muss der Service neu gestartet werden:
 
 ```bash
 sudo systemctl restart bau-os
 ```
 
-::: tip Kein daemon-reload noetig
-Bei Aenderungen an der `.env` reicht ein `restart`. Nur bei Aenderungen an der `.service`-Datei selbst brauchst du vorher `sudo systemctl daemon-reload`.
+::: tip Kein daemon-reload nötig
+Bei Änderungen an der `.env` reicht ein `restart`. Nur bei Änderungen an der `.service`-Datei selbst brauchst du vorher `sudo systemctl daemon-reload`.
 :::
 
-## Naechster Schritt
+## Nächster Schritt
 
-→ [Updates durchfuehren](/betrieb/updates)
+→ [Updates durchführen](/betrieb/updates)

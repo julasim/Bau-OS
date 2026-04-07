@@ -6,13 +6,13 @@ Der Vault ist das "Dateisystem-Brain" von Bau-OS. Alle Daten — Notizen, Aufgab
 
 | Aspekt | Filesystem (Vault) | Datenbank |
 |---|---|---|
-| **Lesbarkeit** | Jeder kann die Dateien oeffnen | Braucht Client/Tool |
-| **Versionierung** | Git-kompatibel | Extra Setup noetig |
-| **Portabilitaet** | Copy-Paste genuegt | Export/Import noetig |
+| **Lesbarkeit** | Jeder kann die Dateien öffnen | Braucht Client/Tool |
+| **Versionierung** | Git-kompatibel | Extra Setup nötig |
+| **Portabilitaet** | Copy-Paste genügt | Export/Import nötig |
 | **Wartung** | Keine — es sind nur Dateien | Updates, Migrations, Backups |
-| **Obsidian** | Direkt als Vault nutzbar | Nicht moeglich |
+| **Obsidian** | Direkt als Vault nutzbar | Nicht möglich |
 
-Fuer das aktuelle MVP ist der Filesystem-Ansatz ideal. Eine Datenbank (z.B. SQLite) kann spaeter ergaenzt werden wenn strukturierte Abfragen noetig sind.
+Für das aktuelle MVP ist der Filesystem-Ansatz ideal. Eine Datenbank (z.B. SQLite) kann später ergänzt werden wenn strukturierte Abfragen nötig sind.
 
 ## Ordnerstruktur
 
@@ -50,7 +50,7 @@ tags:
 Meeting mit Kunde Alpha besprochen:
 - Budget: 500k EUR
 - Timeline: 6 Monate
-- Naechster Schritt: Angebot bis Freitag
+- Nächster Schritt: Angebot bis Freitag
 ```
 
 ### Aufgaben
@@ -58,15 +58,15 @@ Meeting mit Kunde Alpha besprochen:
 ---
 type: Aufgabe
 status: offen
-prioritaet: hoch
-faellig: 11.04.2026
+priorität: hoch
+fällig: 11.04.2026
 created: 07.04.2026 14:35
 tags:
   - angebot
   - projekt-alpha
 ---
 
-Angebot fuer Projekt Alpha erstellen.
+Angebot für Projekt Alpha erstellen.
 Budget: 500k EUR, Deadline: Freitag.
 ```
 
@@ -76,7 +76,7 @@ Budget: 500k EUR, Deadline: Freitag.
 type: Termin
 datum: 10.04.2026
 uhrzeit: 10:00
-ort: Buero Wien
+ort: Büro Wien
 created: 07.04.2026 14:40
 tags:
   - kunde
@@ -94,7 +94,7 @@ Der Agent kann den gesamten Vault durchsuchen:
 
 > "Suche alles zum Thema Projekt Alpha"
 
-Die Suche durchsucht Dateinamen und Dateiinhalte und gibt die relevantesten Treffer zurueck.
+Die Suche durchsucht Dateinamen und Dateiinhalte und gibt die relevantesten Treffer zurück.
 
 ## Zugriff durch den Agent
 
@@ -104,11 +104,11 @@ Der Agent hat folgende Vault-Operationen als Tools:
 |---|---|
 | `notiz_speichern` | Neue Notiz erstellen |
 | `notiz_bearbeiten` | Nachtrag an bestehende Notiz |
-| `notiz_loeschen` | Notiz loeschen |
+| `notiz_löschen` | Notiz löschen |
 | `aufgabe_speichern` | Neue Aufgabe erstellen |
 | `aufgabe_erledigen` | Aufgabe als erledigt markieren |
 | `termin_speichern` | Neuen Termin erstellen |
-| `termin_loeschen` | Termin loeschen |
+| `termin_löschen` | Termin löschen |
 | `vault_suchen` | Volltextsuche |
 | `datei_lesen` | Beliebige Datei lesen |
 | `datei_erstellen` | Neue Datei erstellen |

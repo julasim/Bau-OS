@@ -8,7 +8,7 @@ Was du brauchst, bevor du Bau-OS auf einem Server installierst.
 |---|---|---|
 | **Hetzner Cloud Account** | [hetzner.com](https://www.hetzner.com/cloud) | Oder ein anderer VPS-Anbieter mit EU-Standort |
 | **Telegram Bot Token** | [@BotFather](https://t.me/BotFather) | `/newbot` → Token kopieren |
-| **SSH Client** | Bereits installiert (Linux/macOS) oder PuTTY (Windows) | Fuer den Zugang zum Server |
+| **SSH Client** | Bereits installiert (Linux/macOS) oder PuTTY (Windows) | Für den Zugang zum Server |
 | **SSH Key** | `ssh-keygen -t ed25519` | Wird beim Server-Erstellen hinterlegt |
 
 ::: tip Warum Hetzner?
@@ -25,19 +25,19 @@ Hetzner hat Rechenzentren in Deutschland und Finnland (EU). Das erleichtert die 
 | **OS** | Ubuntu 22.04 LTS | Ubuntu 24.04 LTS |
 
 ::: warning RAM ist entscheidend
-Ollama laedt das gesamte LLM-Modell in den RAM. Ein 7B-Modell (z.B. `qwen2.5:7b`) braucht ca. 4-5 GB RAM. Bei 4 GB Gesamt-RAM wird es knapp — 8 GB sind deutlich stabiler.
+Ollama lädt das gesamte LLM-Modell in den RAM. Ein 7B-Modell (z.B. `qwen2.5:7b`) braucht ca. 4-5 GB RAM. Bei 4 GB Gesamt-RAM wird es knapp — 8 GB sind deutlich stabiler.
 :::
 
 ## Empfohlene Hetzner-Server
 
-| Server | vCPU | RAM | SSD | Preis/Monat | Geeignet fuer |
+| Server | vCPU | RAM | SSD | Preis/Monat | Geeignet für |
 |---|---|---|---|---|---|
 | **CPX11** | 2 | 4 GB | 40 GB | ~5 EUR | Minimum, kleine Modelle |
-| **CPX21** | 3 | 8 GB | 80 GB | ~9 EUR | Empfohlen fuer 7B Modelle |
-| **CPX31** | 4 | 16 GB | 160 GB | ~16 EUR | Groessere Modelle, mehrere Agenten |
+| **CPX21** | 3 | 8 GB | 80 GB | ~9 EUR | Empfohlen für 7B Modelle |
+| **CPX31** | 4 | 16 GB | 160 GB | ~16 EUR | Größere Modelle, mehrere Agenten |
 
 ::: tip Kosteneinschaetzung
-Fuer einen einzelnen Kunden mit einem 7B-Modell rechne mit **5-10 EUR/Monat**. Das umfasst Server, Traffic und Snapshots.
+Für einen einzelnen Kunden mit einem 7B-Modell rechne mit **5-10 EUR/Monat**. Das umfasst Server, Traffic und Snapshots.
 :::
 
 ## Lokale Werkzeuge
@@ -59,6 +59,6 @@ cat ~/.ssh/id_ed25519.pub
 - [ ] SSH Key-Paar generiert
 - [ ] Oeffentlichen Key in Hetzner hinterlegt
 
-## Naechster Schritt
+## Nächster Schritt
 
 → [Server erstellen](/betrieb/server)

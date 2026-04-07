@@ -27,12 +27,12 @@ Bau-OS besteht aus vier Schichten: **Telegram** (Interface), **Agent Runtime** (
 
 ### Ablauf einer Nachricht
 
-1. **Telegram** empfaengt die Nachricht
+1. **Telegram** empfängt die Nachricht
 2. **Session Queue** reiht sie ein (eine Nachricht pro Chat-ID gleichzeitig)
-3. **Agent Runtime** laedt den Workspace (MD-Dateien) als System-Prompt
+3. **Agent Runtime** lädt den Workspace (MD-Dateien) als System-Prompt
 4. **LLM** generiert eine Antwort — evtl. mit Tool-Aufrufen
-5. **Tools** fuehren Aktionen aus (Notiz speichern, Termin anlegen, etc.)
-6. **Antwort** geht zurueck an Telegram
+5. **Tools** führen Aktionen aus (Notiz speichern, Termin anlegen, etc.)
+6. **Antwort** geht zurück an Telegram
 
 ## Modulstruktur
 
@@ -50,7 +50,7 @@ src/
 |-- llm/
 |   |-- client.ts         OpenAI-Client, Model-State, buildDateLine()
 |   |-- tools.ts          28 Tool-Definitionen (JSON-Schema)
-|   |-- executor.ts       Tool-Ausfuehrung (Switch-Case)
+|   |-- executor.ts       Tool-Ausführung (Switch-Case)
 |   |-- runtime.ts        Agent-Loop: processAgent(), processBtw()
 |   |-- compaction.ts     Log-Komprimierung
 |   +-- setup.ts          Setup-Wizard + State
@@ -82,10 +82,10 @@ Keine Datei hat mehr als 200 Zeilen. Jede hat eine klare Verantwortlichkeit.
 ## Design-Prinzipien
 
 ### Markdown First
-Alle Daten und Konfigurationen sind Markdown-Dateien. Kein proprietaeres Format, keine Datenbank. Alles ist menschlich lesbar und mit jedem Texteditor aenderbar.
+Alle Daten und Konfigurationen sind Markdown-Dateien. Kein proprietäres Format, keine Datenbank. Alles ist menschlich lesbar und mit jedem Texteditor änderbar.
 
 ### Verhalten in Dateien, nicht in Code
-Der Code injiziert nur das heutige Datum. Alles andere — Sprache, Ton, Stil, Regeln, Tool-Konventionen — kommt aus den Agent-MD-Dateien. Aenderungen am Verhalten erfordern keinen Code-Eingriff.
+Der Code injiziert nur das heutige Datum. Alles andere — Sprache, Ton, Stil, Regeln, Tool-Konventionen — kommt aus den Agent-MD-Dateien. Änderungen am Verhalten erfordern keinen Code-Eingriff.
 
 ### Pro Kunde eine Instanz
-Keine geteilte Infrastruktur. Jeder Kunde bekommt einen eigenen Server, eigenen Vault, eigene Konfiguration. Vollstaendige Datenisolation.
+Keine geteilte Infrastruktur. Jeder Kunde bekommt einen eigenen Server, eigenen Vault, eigene Konfiguration. Vollständige Datenisolation.

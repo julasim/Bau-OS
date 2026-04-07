@@ -2,20 +2,20 @@
 
 Jeder Agent hat einen eigenen Ordner mit 10 Markdown-Dateien. Zusammen bilden sie das "Gehirn" des Agenten.
 
-## Uebersicht
+## Übersicht
 
 ```
 Agents/Main/
 ├── IDENTITY.md      ← Wer bin ich?
 ├── SOUL.md          ← Wie bin ich?
-├── BOOT.md          ← Grundregeln bei jedem Gespraech
-├── BOOTSTRAP.md     ← Ersteinrichtung (wird danach geloescht)
+├── BOOT.md          ← Grundregeln bei jedem Gespräch
+├── BOOTSTRAP.md     ← Ersteinrichtung (wird danach gelöscht)
 ├── AGENTS.md        ← Betriebsanweisungen & Limits
 ├── USER.md          ← Benutzerprofil
 ├── TOOLS.md         ← Tool-Konventionen
-├── MEMORY.md        ← Langzeitgedaechtnis
+├── MEMORY.md        ← Langzeitgedächtnis
 ├── HEARTBEAT.md     ← Cron-basierte Erinnerungen
-└── MEMORY_LOGS/     ← Tages-Gespraechsprotokolle
+└── MEMORY_LOGS/     ← Tages-Gesprächsprotokolle
     ├── 2026-04-07.md
     └── 2026-04-06.md
 ```
@@ -36,7 +36,7 @@ Agents/Main/
 | MEMORY_LOGS/ (heute) | Ja | — |
 
 **full-Modus:** Der Main Agent — bekommt den kompletten Kontext.
-**minimal-Modus:** Sub-Agents — nur das Noetigste fuer fokussierte Aufgaben.
+**minimal-Modus:** Sub-Agents — nur das Nötigste für fokussierte Aufgaben.
 
 ## Lade-Reihenfolge
 
@@ -60,18 +60,18 @@ Die Dateien werden in dieser Reihenfolge als System-Prompt zusammengesetzt:
 |---|---|
 | Max. Zeichen pro Datei | 20.000 |
 | Max. Zeichen gesamt (alle Dateien) | 150.000 |
-| Dateien die das Limit ueberschreiten | Werden gekuerzt mit Hinweis |
+| Dateien die das Limit überschreiten | Werden gekürzt mit Hinweis |
 | Dateien die das Gesamtbudget sprengen | Werden nicht geladen (Warnung im Log) |
 
 ## Dateien editieren
 
-Agent-Dateien koennen auf drei Wegen geaendert werden:
+Agent-Dateien können auf drei Wegen geändert werden:
 
-1. **Per LLM-Tool:** "Aendere meine SOUL.md so dass du formeller antwortest"
-2. **Per Texteditor:** Die Dateien direkt im Obsidian Vault oeffnen und bearbeiten
+1. **Per LLM-Tool:** "Ändere meine SOUL.md so dass du formeller antwortest"
+2. **Per Texteditor:** Die Dateien direkt im Obsidian Vault öffnen und bearbeiten
 3. **Per `/config` Command:** Zeigt die aktuelle Konfiguration an (read-only)
 
-Aenderungen werden beim naechsten Gespraech sofort wirksam — kein Neustart noetig.
+Änderungen werden beim nächsten Gespräch sofort wirksam — kein Neustart nötig.
 
 ::: tip Tipp
 Jede Datei ist einzeln dokumentiert unter [Agenten-Dateien](/agenten/identity).

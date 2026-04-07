@@ -1,6 +1,6 @@
 # Modelle & LLM-Konfiguration
 
-Bau-OS nutzt Ollama als lokale LLM-Runtime. Du kannst verschiedene Modelle fuer unterschiedliche Aufgaben einsetzen.
+Bau-OS nutzt Ollama als lokale LLM-Runtime. Du kannst verschiedene Modelle für unterschiedliche Aufgaben einsetzen.
 
 ## Modell-Architektur
 
@@ -8,9 +8,9 @@ Bau-OS kennt drei Modell-Rollen:
 
 | Rolle | Env-Variable | Standard | Verwendung |
 |---|---|---|---|
-| **Default** | `OLLAMA_MODEL` | `qwen2.5:7b` | Haupt-Agent, alle regulaeren Aufgaben |
+| **Default** | `OLLAMA_MODEL` | `qwen2.5:7b` | Haupt-Agent, alle regulären Aufgaben |
 | **Fast** | `OLLAMA_FAST_MODEL` | wie Default | Schnelle Antworten, Zusammenfassungen |
-| **Subagent** | `OLLAMA_SUBAGENT_MODEL` | wie Default | Sub-Agenten fuer delegierte Aufgaben |
+| **Subagent** | `OLLAMA_SUBAGENT_MODEL` | wie Default | Sub-Agenten für delegierte Aufgaben |
 
 ## Modell wechseln mit /model
 
@@ -20,7 +20,7 @@ Im Chat kannst du das aktive Modell jederzeit wechseln:
 /model qwen2.5:14b
 ```
 
-Der Bot bestaetigt den Wechsel und verwendet ab sofort das neue Modell. Der Wechsel gilt fuer die aktuelle Session.
+Der Bot bestätigt den Wechsel und verwendet ab sofort das neue Modell. Der Wechsel gilt für die aktuelle Session.
 
 ::: tip
 Nutze `/model` ohne Parameter, um das aktuell aktive Modell anzuzeigen.
@@ -34,7 +34,7 @@ Der `/fast`-Befehl schaltet auf das konfigurierte `OLLAMA_FAST_MODEL` um:
 /fast
 ```
 
-Das ist nuetzlich fuer einfache Fragen, bei denen Geschwindigkeit wichtiger ist als Qualitaet. Um zurueck zum Standardmodell zu wechseln, verwende `/model` ohne Parameter oder setze das Modell explizit.
+Das ist nützlich für einfache Fragen, bei denen Geschwindigkeit wichtiger ist als Qualität. Um zurück zum Standardmodell zu wechseln, verwende `/model` ohne Parameter oder setze das Modell explizit.
 
 ::: warning
 Wenn `OLLAMA_FAST_MODEL` nicht gesetzt ist, hat `/fast` keinen Effekt — es wird ohnehin das Standardmodell verwendet.
@@ -42,37 +42,37 @@ Wenn `OLLAMA_FAST_MODEL` nicht gesetzt ist, hat `/fast` keinen Effekt — es wir
 
 ## Empfohlene Modelle
 
-### Fuer den taeglichen Einsatz (7B)
+### Für den täglichen Einsatz (7B)
 
-Ideal fuer die meisten Aufgaben — schnelle Antworten bei moderatem RAM-Verbrauch (~4-5 GB).
+Ideal für die meisten Aufgaben — schnelle Antworten bei moderatem RAM-Verbrauch (~4-5 GB).
 
 ```bash
 ollama pull qwen2.5:7b
 ```
 
-Gut geeignet fuer:
+Gut geeignet für:
 - Tagesplanung und Zusammenfassungen
 - Einfache Recherchen im Vault
 - Schnelle Antworten auf Fragen
 - Datei-Operationen und Notizen
 
-### Fuer komplexe Aufgaben (14B)
+### Für komplexe Aufgaben (14B)
 
-Deutlich bessere Reasoning-Faehigkeiten — braucht aber mehr RAM (~8-10 GB).
+Deutlich bessere Reasoning-Fähigkeiten — braucht aber mehr RAM (~8-10 GB).
 
 ```bash
 ollama pull qwen2.5:14b
 ```
 
-Gut geeignet fuer:
+Gut geeignet für:
 - Komplexe Analysen und Planungen
 - Mehrstufige Aufgaben mit Sub-Agenten
 - Detaillierte Berichte und Auswertungen
-- Aufgaben die praezises Textverstaendnis erfordern
+- Aufgaben die präzises Textverständnis erfordern
 
 ### Empfohlene Kombination
 
-Fuer die beste Balance zwischen Geschwindigkeit und Qualitaet:
+Für die beste Balance zwischen Geschwindigkeit und Qualität:
 
 ```bash
 # .env
@@ -81,7 +81,7 @@ OLLAMA_FAST_MODEL=qwen2.5:7b
 OLLAMA_SUBAGENT_MODEL=qwen2.5:7b
 ```
 
-So nutzt der Haupt-Agent das staerkere 14B-Modell, waehrend schnelle Aufgaben und Sub-Agenten das effizientere 7B-Modell verwenden.
+So nutzt der Haupt-Agent das stärkere 14B-Modell, während schnelle Aufgaben und Sub-Agenten das effizientere 7B-Modell verwenden.
 
 ## Neue Modelle installieren
 
@@ -94,7 +94,7 @@ ollama pull qwen2.5:14b
 ollama pull llama3.1:8b
 ```
 
-### Verfuegbare Modelle auflisten
+### Verfügbare Modelle auflisten
 
 ```bash
 ollama list
@@ -106,13 +106,13 @@ ollama list
 ollama rm qwen2.5:7b
 ```
 
-::: tip Kompatibilitaet
-Bau-OS funktioniert mit jedem Modell, das Ollama unterstuetzt und Tool-Calling beherrscht. Modelle der Qwen2.5-Familie sind empfohlen, da sie zuverlaessig Function-Calling unterstuetzen.
+::: tip Kompatibilität
+Bau-OS funktioniert mit jedem Modell, das Ollama unterstützt und Tool-Calling beherrscht. Modelle der Qwen2.5-Familie sind empfohlen, da sie zuverlässig Function-Calling unterstützen.
 :::
 
 ## Remote-Ollama
 
-Wenn Ollama auf einem anderen Rechner laeuft (z.B. ein Server mit GPU):
+Wenn Ollama auf einem anderen Rechner läuft (z.B. ein Server mit GPU):
 
 ```bash
 # .env
@@ -143,10 +143,10 @@ ollama pull qwen2.5:14b
 Error: connect ECONNREFUSED 127.0.0.1:11434
 ```
 
-Pruefe ob Ollama laeuft:
+Prüfe ob Ollama läuft:
 
 ```bash
-# Status pruefen
+# Status prüfen
 ollama serve
 
 # Oder als Service
@@ -155,7 +155,7 @@ systemctl status ollama
 
 ### Zu wenig RAM
 
-Wenn Antworten extrem langsam sind oder der Rechner einfriert, ist das Modell zu gross fuer den verfuegbaren Arbeitsspeicher. Wechsle auf ein kleineres Modell:
+Wenn Antworten extrem langsam sind oder der Rechner einfriert, ist das Modell zu gross für den verfügbaren Arbeitsspeicher. Wechsle auf ein kleineres Modell:
 
 ```
 /model qwen2.5:7b
