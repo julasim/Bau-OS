@@ -3,701 +3,825 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bau-OS</title>
+  <title>Bau-OS Dashboard</title>
   <style>
-    /* ── Design System ────────────────────────────────────────────────────────
-       #000000 · #333333 · #888888 · #CCCCCC · #F5F5F5 · #FFFFFF
-       Calibri / Aptos / system-ui — serifenlos, zeitlos
-    ──────────────────────────────────────────────────────────────────────── */
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: "Calibri","Aptos",system-ui,Arial,sans-serif; font-size: 14px; color: #333333; background: #F5F5F5; display: flex; height: 100vh; overflow: hidden; }
-    ::-webkit-scrollbar { width: 4px; }
-    ::-webkit-scrollbar-track { background: #F5F5F5; }
-    ::-webkit-scrollbar-thumb { background: #CCCCCC; border-radius: 2px; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    /* ── Sidebar ── */
-    .sidebar { width: 210px; min-width: 210px; background: #000000; color: #FFFFFF; display: flex; flex-direction: column; }
-    .sidebar-logo { padding: 22px 20px 18px; border-bottom: 1px solid #1a1a1a; }
-    .sidebar-logo-title { font-size: 18pt; font-weight: 700; color: #FFFFFF; letter-spacing: -0.5px; }
-    .sidebar-logo-sub { font-size: 10px; color: #555555; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.08em; }
-    .sidebar-status { padding: 9px 20px; border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; gap: 8px; }
-    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #FFFFFF; flex-shrink: 0; animation: blink 3s infinite; }
-    @keyframes blink { 0%,90%,100% { opacity:1; } 95% { opacity:.3; } }
-    .status-label { font-size: 11px; color: #555555; }
-    .sidebar-nav { flex: 1; padding: 10px 8px; display: flex; flex-direction: column; gap: 1px; overflow-y: auto; }
-    .nav-section-label { font-size: 9px; color: #333333; text-transform: uppercase; letter-spacing: 0.1em; padding: 10px 12px 4px; font-weight: 700; }
-    .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 3px; cursor: pointer; transition: background .1s; color: #888888; font-size: 13px; font-weight: 500; user-select: none; }
-    .nav-item:hover { background: #1a1a1a; color: #CCCCCC; }
-    .nav-item.active { background: #FFFFFF; color: #000000; }
-    .nav-icon { font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; }
-    .sidebar-footer { padding: 12px 20px; border-top: 1px solid #1a1a1a; font-size: 10px; color: #333333; line-height: 1.6; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex;
+    }
 
-    /* ── Main ── */
-    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .topbar { background: #FFFFFF; border-bottom: 1px solid #CCCCCC; padding: 0 28px; height: 52px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-    .topbar-title { font-size: 15px; font-weight: 700; color: #000000; }
-    .topbar-right { display: flex; align-items: center; gap: 10px; }
-    .model-tag { font-size: 11px; color: #888888; border: 1px solid #CCCCCC; padding: 3px 10px; border-radius: 2px; background: #F5F5F5; font-weight: 600; }
-    .btn { font-size: 12px; font-weight: 600; color: #333333; background: #F5F5F5; border: 1px solid #CCCCCC; padding: 5px 14px; border-radius: 2px; cursor: pointer; font-family: inherit; transition: background .1s; }
-    .btn:hover { background: #E8E8E8; }
-    .btn-dark { background: #000000; color: #FFFFFF; border-color: #000000; }
-    .btn-dark:hover { background: #222222; }
+    /* ── Sidebar ─────────────────────────────────────────── */
+    .sidebar {
+      width: 210px; background: #1e293b; border-right: 1px solid #334155;
+      display: flex; flex-direction: column; flex-shrink: 0;
+      transition: transform .25s ease;
+    }
+    .sidebar-logo {
+      padding: 1.25rem 1.5rem 1rem; font-size: 1.15rem; font-weight: 700;
+      color: #f1f5f9; border-bottom: 1px solid #334155;
+    }
+    .sidebar-logo span { color: #3b82f6; }
+    .nav-item {
+      padding: .7rem 1.5rem; cursor: pointer; color: #94a3b8; font-size: .875rem;
+      display: flex; align-items: center; gap: .65rem;
+      transition: background .12s, color .12s; user-select: none;
+    }
+    .nav-item:hover { background: #334155; color: #e2e8f0; }
+    .nav-item.active { background: #1d4ed8; color: #fff; font-weight: 500; }
+    .nav-icon { width: 16px; text-align: center; font-size: .85rem; }
 
-    /* ── Content ── */
-    .content { flex: 1; overflow-y: auto; padding: 28px; }
+    /* ── Main ────────────────────────────────────────────── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+    .topbar {
+      padding: .9rem 1.5rem; background: #1e293b; border-bottom: 1px solid #334155;
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; gap: 1rem;
+    }
+    .topbar-left { display: flex; align-items: center; gap: .75rem; }
+    .topbar-title { font-size: 1rem; font-weight: 600; color: #f1f5f9; }
+    .topbar-status { display: flex; align-items: center; gap: .5rem; font-size: .8rem; color: #64748b; }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: #10b981; flex-shrink: 0; }
+    .dot.offline { background: #ef4444; }
+    .hamburger {
+      display: none; background: none; border: none; color: #94a3b8; cursor: pointer;
+      font-size: 1.2rem; padding: .2rem .4rem; line-height: 1;
+    }
+    .content { flex: 1; overflow-y: auto; padding: 1.75rem 1.75rem; }
 
-    /* ── Chat layout (special — no scroll on outer) ── */
-    .chat-layout { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-    .chat-messages { flex: 1; overflow-y: auto; padding: 24px 28px; display: flex; flex-direction: column; gap: 16px; }
-    .chat-input-bar { background: #FFFFFF; border-top: 1px solid #CCCCCC; padding: 16px 28px; display: flex; gap: 10px; align-items: flex-end; }
-    .chat-textarea { flex: 1; border: 1px solid #CCCCCC; border-radius: 2px; padding: 10px 14px; font-family: inherit; font-size: 14px; color: #333333; resize: none; outline: none; min-height: 44px; max-height: 140px; line-height: 1.5; background: #FFFFFF; }
-    .chat-textarea:focus { border-color: #888888; }
-    .chat-send { background: #000000; color: #FFFFFF; border: none; padding: 10px 20px; border-radius: 2px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; height: 44px; transition: background .1s; }
-    .chat-send:hover { background: #222222; }
-    .chat-send:disabled { background: #CCCCCC; cursor: not-allowed; }
+    /* ── Cards ───────────────────────────────────────────── */
+    .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 1rem; margin-bottom: 1.75rem; }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 1rem 1.15rem; }
+    .card-label { font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: #64748b; margin-bottom: .3rem; }
+    .card-value { font-size: 1.6rem; font-weight: 700; color: #f1f5f9; line-height: 1; }
+    .card-value.sm { font-size: .9rem; padding-top: .3rem; }
 
-    /* ── Message bubbles ── */
-    .msg { display: flex; gap: 12px; max-width: 80%; }
-    .msg-user { align-self: flex-end; flex-direction: row-reverse; }
-    .msg-ai { align-self: flex-start; }
-    .msg-avatar { width: 32px; height: 32px; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; margin-top: 2px; }
-    .msg-avatar-ai { background: #000000; color: #FFFFFF; }
-    .msg-avatar-user { background: #F5F5F5; color: #888888; border: 1px solid #CCCCCC; }
-    .msg-bubble { padding: 11px 15px; border-radius: 2px; font-size: 13px; line-height: 1.6; }
-    .msg-bubble-ai { background: #FFFFFF; border: 1px solid #CCCCCC; color: #333333; }
-    .msg-bubble-user { background: #000000; color: #FFFFFF; }
-    .msg-bubble pre { background: #F5F5F5; border: 1px solid #CCCCCC; padding: 10px 12px; border-radius: 2px; font-size: 12px; overflow-x: auto; margin: 8px 0; white-space: pre-wrap; word-break: break-word; }
-    .msg-bubble code { font-family: "Consolas", monospace; font-size: 12px; background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 2px; }
-    .msg-bubble-user code { background: rgba(255,255,255,0.15); }
-    .msg-time { font-size: 10px; color: #CCCCCC; margin-top: 4px; }
-    .msg-user .msg-time { text-align: right; }
-    .msg-inner { display: flex; flex-direction: column; }
-    .typing-indicator { display: flex; align-items: center; gap: 4px; padding: 11px 15px; background: #FFFFFF; border: 1px solid #CCCCCC; border-radius: 2px; }
-    .typing-dot { width: 6px; height: 6px; border-radius: 50%; background: #CCCCCC; animation: typing 1.2s infinite; }
-    .typing-dot:nth-child(2) { animation-delay: .2s; }
-    .typing-dot:nth-child(3) { animation-delay: .4s; }
-    @keyframes typing { 0%,60%,100% { transform: translateY(0); } 30% { transform: translateY(-5px); } }
-    .chat-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #CCCCCC; gap: 10px; }
-    .chat-empty-icon { font-size: 36px; }
-    .chat-empty-text { font-size: 13px; color: #888888; }
-    .chat-agent-bar { background: #F5F5F5; border-bottom: 1px solid #CCCCCC; padding: 8px 28px; display: flex; align-items: center; gap: 12px; font-size: 12px; color: #888888; }
-    .chat-agent-bar strong { color: #333333; }
+    /* ── Section ─────────────────────────────────────────── */
+    .section { display: none; }
+    .section.active { display: block; }
+    .sec-head {
+      font-size: .95rem; font-weight: 600; color: #f1f5f9; margin-bottom: 1rem;
+      display: flex; align-items: center; justify-content: space-between;
+    }
 
-    /* ── Section header ── */
-    .section-head { margin-bottom: 20px; }
-    .section-head h2 { font-size: 18pt; font-weight: 700; color: #000000; margin-bottom: 3px; }
-    .section-head p { font-size: 11px; color: #888888; text-transform: uppercase; letter-spacing: 0.06em; }
-    .divider { height: 1px; background: #CCCCCC; margin: 18px 0; }
+    /* ── Table ───────────────────────────────────────────── */
+    .table-wrap { background: #1e293b; border: 1px solid #334155; border-radius: 8px; overflow: hidden; margin-bottom: 1.25rem; }
+    table { width: 100%; border-collapse: collapse; }
+    thead th { background: #0f172a; padding: .6rem 1rem; text-align: left; font-size: .7rem; text-transform: uppercase; letter-spacing: .06em; color: #475569; font-weight: 500; }
+    tbody td { padding: .65rem 1rem; border-top: 1px solid #334155; font-size: .85rem; vertical-align: middle; }
+    tbody tr:hover td { background: rgba(255,255,255,.02); }
 
-    /* ── Stat Cards ── */
-    .stats-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 22px; }
-    .stat-card { background: #FFFFFF; border: 1px solid #CCCCCC; border-radius: 2px; padding: 18px; cursor: pointer; transition: border-color .12s, box-shadow .12s; }
-    .stat-card:hover { border-color: #888888; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
-    .stat-card.active-card { border-color: #000000; border-width: 2px; }
-    .stat-number { font-size: 36pt; font-weight: 700; color: #000000; line-height: 1; margin-bottom: 5px; }
-    .stat-label { font-size: 10px; color: #888888; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; }
+    /* ── Badges ──────────────────────────────────────────── */
+    .badge { display: inline-block; padding: .18rem .5rem; border-radius: 4px; font-size: .72rem; font-weight: 500; }
+    .badge-blue  { background: #1e3a5f; color: #93c5fd; }
+    .badge-green { background: #064e3b; color: #6ee7b7; }
+    .badge-gray  { background: #374151; color: #9ca3af; }
 
-    /* ── Cards ── */
-    .card { background: #FFFFFF; border: 1px solid #CCCCCC; border-radius: 2px; }
-    .card-header { padding: 12px 18px; border-bottom: 1px solid #CCCCCC; font-size: 10px; font-weight: 700; color: #000000; text-transform: uppercase; letter-spacing: 0.08em; display: flex; align-items: center; justify-content: space-between; }
-    .card-body { padding: 16px 18px; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .grid-auto { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+    /* ── Buttons ─────────────────────────────────────────── */
+    .btn { padding: .45rem .9rem; border-radius: 6px; border: none; cursor: pointer; font-size: .825rem; font-weight: 500; transition: opacity .12s; font-family: inherit; }
+    .btn:hover { opacity: .82; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; }
+    .btn-primary   { background: #3b82f6; color: #fff; }
+    .btn-secondary { background: #334155; color: #e2e8f0; }
+    .btn-sm { padding: .28rem .6rem; font-size: .78rem; }
 
-    /* ── Info rows ── */
-    .info-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #F5F5F5; font-size: 13px; }
-    .info-row:last-child { border-bottom: none; }
-    .info-label { color: #888888; }
-    .info-value { color: #333333; font-weight: 600; max-width: 55%; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* ── Inputs ──────────────────────────────────────────── */
+    input, select, textarea {
+      background: #0f172a; border: 1px solid #475569; color: #e2e8f0;
+      border-radius: 6px; padding: .42rem .7rem; font-size: .85rem; outline: none; font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+    textarea { resize: vertical; }
+    select.narrow { width: auto; }
+    .search-input { width: 100%; max-width: 320px; }
 
-    /* ── Table ── */
-    .data-table { width: 100%; border-collapse: collapse; }
-    .data-table th { text-align: left; padding: 9px 16px; font-size: 10px; font-weight: 700; color: #000000; text-transform: uppercase; letter-spacing: 0.06em; background: #CCCCCC; border-bottom: 1px solid #CCCCCC; }
-    .data-table td { padding: 11px 16px; font-size: 13px; color: #333333; border-bottom: 1px solid #F5F5F5; }
-    .data-table tr:nth-child(even) td { background: #F5F5F5; }
-    .data-table tr:last-child td { border-bottom: none; }
-    .data-table tr:hover td { background: #EBEBEB !important; cursor: pointer; }
+    /* ── Tabs ────────────────────────────────────────────── */
+    .tabs { display: flex; border-bottom: 1px solid #334155; margin-bottom: 1.25rem; }
+    .tab { padding: .5rem 1rem; cursor: pointer; color: #64748b; font-size: .85rem; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color .12s; }
+    .tab.active { color: #3b82f6; border-color: #3b82f6; font-weight: 500; }
+    .tab:hover:not(.active) { color: #94a3b8; }
 
-    /* ── Badge ── */
-    .badge { display: inline-block; padding: 2px 8px; border-radius: 2px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-    .badge-dark { background: #333333; color: #FFFFFF; }
-    .badge-light { background: #F5F5F5; color: #888888; border: 1px solid #CCCCCC; }
+    /* ── Logs ────────────────────────────────────────────── */
+    .log-toolbar { display: flex; gap: .6rem; margin-bottom: .85rem; align-items: center; flex-wrap: wrap; }
+    .log-box {
+      background: #0a0f1a; border: 1px solid #334155; border-radius: 8px;
+      padding: 1rem 1.1rem; font-family: 'Consolas','Monaco',monospace; font-size: .78rem;
+      line-height: 1.65; color: #94a3b8; max-height: 60vh; overflow-y: auto;
+      white-space: pre-wrap; word-break: break-all;
+    }
+    .log-info  { color: #86efac; }
+    .log-error { color: #fca5a5; }
+    .log-ts { font-size: .75rem; color: #475569; margin-left: auto; }
 
-    /* ── List items ── */
-    .list-item { display: flex; align-items: flex-start; gap: 12px; padding: 11px 18px; border-bottom: 1px solid #F5F5F5; font-size: 13px; }
-    .list-item:last-child { border-bottom: none; }
-    .list-item:nth-child(even) { background: #F5F5F5; }
-    .list-icon { color: #CCCCCC; flex-shrink: 0; margin-top: 1px; }
-    .list-text { color: #333333; line-height: 1.5; }
+    /* ── Agent Editor ────────────────────────────────────── */
+    .editor-panel { background: #1e293b; border: 1px solid #334155; border-radius: 8px; overflow: hidden; margin-top: 1.25rem; }
+    .editor-panel-hd { padding: .7rem 1rem; background: #0f172a; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+    .editor-panel-title { font-size: .875rem; font-weight: 600; color: #f1f5f9; }
+    .file-chips { display: flex; flex-wrap: wrap; gap: .4rem; padding: .9rem 1rem; border-bottom: 1px solid #334155; }
+    .file-chip { padding: .22rem .6rem; background: #0f172a; border: 1px solid #475569; border-radius: 4px; cursor: pointer; font-size: .77rem; font-family: monospace; color: #94a3b8; transition: border-color .12s, color .12s; }
+    .file-chip:hover { border-color: #3b82f6; color: #93c5fd; }
+    .file-chip.active { border-color: #3b82f6; color: #93c5fd; background: #1e3a5f; }
+    .editor-file-hd { padding: .6rem 1rem; background: #0f172a; border-bottom: 1px solid #334155; display: flex; align-items: center; justify-content: space-between; }
+    .editor-filename { font-family: monospace; font-size: .82rem; color: #93c5fd; }
+    .editor-ta { width: 100%; border: none; border-radius: 0; background: #0a0f1a; color: #e2e8f0; font-family: 'Consolas','Monaco',monospace; font-size: .78rem; line-height: 1.65; padding: 1rem; min-height: 360px; display: block; }
 
-    /* ── Agent cards ── */
-    .agent-card { background: #FFFFFF; border: 1px solid #CCCCCC; border-radius: 2px; padding: 20px; }
-    .agent-avatar { width: 38px; height: 38px; background: #000000; color: #FFFFFF; border-radius: 2px; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700; margin-bottom: 12px; }
-    .agent-name { font-size: 14pt; font-weight: 700; color: #000000; margin-bottom: 4px; }
-    .agent-desc { font-size: 12px; color: #888888; margin-bottom: 12px; line-height: 1.4; }
+    /* ── Project detail ──────────────────────────────────── */
+    .proj-detail { background: #0f172a; border-top: 2px solid #3b82f6; padding: 1.1rem 1.25rem; }
+    .proj-detail-tabs { display: flex; gap: 0; margin-bottom: 1rem; border-bottom: 1px solid #334155; }
+    .proj-detail-tab { padding: .4rem .9rem; cursor: pointer; color: #64748b; font-size: .82rem; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+    .proj-detail-tab.active { color: #3b82f6; border-color: #3b82f6; font-weight: 500; }
 
-    /* ── Project cards ── */
-    .project-card { background: #FFFFFF; border: 1px solid #CCCCCC; border-radius: 2px; padding: 18px; }
-    .project-name { font-size: 13pt; font-weight: 700; color: #000000; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid #CCCCCC; }
-    .project-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
-    .project-stat { text-align: center; padding: 10px 4px; background: #F5F5F5; border: 1px solid #CCCCCC; border-radius: 2px; }
-    .project-stat-num { font-size: 18pt; font-weight: 700; color: #000000; }
-    .project-stat-label { font-size: 9px; color: #888888; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+    /* ── Checkbox task ───────────────────────────────────── */
+    .task-cb { width: 15px; height: 15px; cursor: pointer; accent-color: #3b82f6; flex-shrink: 0; }
+    .task-done { text-decoration: line-through; color: #475569; }
 
-    /* ── Logs ── */
-    .log-block { background: #FFFFFF; border: 1px solid #CCCCCC; border-radius: 2px; padding: 18px; font-family: "Consolas", monospace; font-size: 12px; color: #333333; line-height: 1.8; white-space: pre-wrap; word-break: break-word; overflow-x: auto; max-height: 600px; overflow-y: auto; }
-    .log-select { border: 1px solid #CCCCCC; background: #FFFFFF; padding: 6px 12px; border-radius: 2px; font-family: inherit; font-size: 13px; color: #333333; outline: none; cursor: pointer; }
+    /* ── Termine date-group ──────────────────────────────── */
+    .date-group-hd { background: #0f172a; padding: .45rem 1rem; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: #475569; border-top: 1px solid #334155; }
 
-    /* ── Config ── */
-    .config-section { margin-bottom: 20px; }
-    .config-section-title { font-size: 12pt; font-weight: 700; color: #000000; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #000000; }
-    .config-table { width: 100%; border-collapse: collapse; background: #FFFFFF; border: 1px solid #CCCCCC; }
-    .config-table th { text-align: left; padding: 8px 14px; font-size: 10px; font-weight: 700; color: #000000; text-transform: uppercase; letter-spacing: 0.06em; background: #CCCCCC; }
-    .config-table td { padding: 9px 14px; font-size: 13px; color: #333333; border-bottom: 1px solid #F5F5F5; }
-    .config-table tr:last-child td { border-bottom: none; }
-    .config-table tr:nth-child(even) td { background: #F5F5F5; }
-    .config-value { font-family: "Consolas", monospace; font-size: 12px; color: #333333; }
+    /* ── Chat ────────────────────────────────────────────── */
+    .chat-container { background: #1e293b; border: 1px solid #334155; border-radius: 8px; display: flex; flex-direction: column; height: 60vh; }
+    .chat-messages { flex: 1; overflow-y: auto; padding: 1rem; display: flex; flex-direction: column; gap: .75rem; }
+    .chat-msg-wrap { display: flex; flex-direction: column; max-width: 82%; }
+    .chat-msg-wrap.user { align-self: flex-end; align-items: flex-end; }
+    .chat-msg-wrap.agent { align-self: flex-start; align-items: flex-start; }
+    .chat-msg-name { font-size: .7rem; color: #64748b; margin-bottom: .25rem; padding: 0 .15rem; }
+    .chat-bubble { padding: .6rem .85rem; border-radius: 8px; font-size: .85rem; line-height: 1.55; word-break: break-word; }
+    .chat-msg-wrap.user .chat-bubble  { background: #1d4ed8; color: #bfdbfe; }
+    .chat-msg-wrap.agent .chat-bubble { background: #0f172a; color: #e2e8f0; border: 1px solid #334155; }
+    .chat-input-row { padding: .8rem; border-top: 1px solid #334155; display: flex; gap: .6rem; align-items: flex-end; }
+    .chat-input-row textarea { flex: 1; min-height: 40px; max-height: 110px; }
 
-    /* ── Empty / Modal ── */
-    .empty { text-align: center; padding: 52px 24px; }
-    .empty-icon { font-size: 30px; opacity: 0.4; margin-bottom: 10px; }
-    .empty-text { font-size: 13px; color: #888888; }
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; display: none; align-items: center; justify-content: center; padding: 32px; }
-    .modal-overlay.open { display: flex; }
-    .modal { background: #FFFFFF; border: 1px solid #CCCCCC; border-radius: 2px; width: 100%; max-width: 680px; max-height: 80vh; display: flex; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.15); }
-    .modal-head { padding: 13px 20px; border-bottom: 1px solid #CCCCCC; display: flex; justify-content: space-between; align-items: center; background: #F5F5F5; }
-    .modal-head-title { font-size: 13px; font-weight: 700; color: #000000; }
-    .modal-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #888888; line-height: 1; padding: 0; }
-    .modal-close:hover { color: #000000; }
-    .modal-content { overflow-y: auto; padding: 22px; flex: 1; }
-    .modal-content pre { font-family: inherit; font-size: 13px; line-height: 1.7; color: #333333; white-space: pre-wrap; word-break: break-word; }
+    /* ── Config ──────────────────────────────────────────── */
+    .config-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 1rem; }
+    .config-card { background: #1e293b; border: 1px solid #334155; border-radius: 8px; padding: 1.1rem 1.2rem; }
+    .config-card h3 { font-size: .7rem; text-transform: uppercase; letter-spacing: .07em; color: #475569; margin-bottom: .7rem; }
+    .config-row { display: flex; justify-content: space-between; padding: .32rem 0; border-bottom: 1px solid #1e293b; font-size: .83rem; gap: .5rem; align-items: center; }
+    .config-row:last-child { border-bottom: none; }
+    .config-key { color: #94a3b8; flex-shrink: 0; }
+    .config-val { color: #f1f5f9; font-family: monospace; font-size: .78rem; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; }
+    .config-edit-row { display: flex; gap: .5rem; padding: .5rem 0; align-items: center; border-bottom: 1px solid #1e293b; }
+    .config-edit-row:last-child { border-bottom: none; }
+    .config-edit-row label { color: #94a3b8; font-size: .83rem; flex-shrink: 0; min-width: 120px; }
+    .config-edit-row input { flex: 1; min-width: 0; }
 
-    /* ── Animation ── */
-    .fade { animation: fadeIn .2s ease; }
-    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
+    /* ── Toast ───────────────────────────────────────────── */
+    .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; padding: .6rem 1rem; border-radius: 7px; font-size: .82rem; z-index: 999; animation: slideup .2s ease; }
+    .toast-ok  { background: #064e3b; color: #6ee7b7; border: 1px solid #10b981; }
+    .toast-err { background: #7f1d1d; color: #fca5a5; border: 1px solid #ef4444; }
+    @keyframes slideup { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+    /* ── Misc ────────────────────────────────────────────── */
+    .empty { color: #475569; font-size: .85rem; text-align: center; padding: 2rem; }
+    code { font-family: 'Consolas','Monaco',monospace; font-size: .8rem; color: #93c5fd; }
+    .gap { margin-bottom: 1.25rem; }
+    .toolbar { display: flex; gap: .6rem; margin-bottom: .9rem; align-items: center; flex-wrap: wrap; }
+
+    /* ── Responsive ──────────────────────────────────────── */
+    @media (max-width: 768px) {
+      .sidebar {
+        position: fixed; top: 0; left: 0; height: 100vh; z-index: 100;
+        transform: translateX(-100%);
+      }
+      .sidebar.open { transform: translateX(0); box-shadow: 4px 0 24px rgba(0,0,0,.5); }
+      .hamburger { display: block; }
+      .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 99; }
+      .overlay.show { display: block; }
+      .content { padding: 1.25rem 1rem; }
+      .cards { grid-template-columns: repeat(auto-fill, minmax(130px,1fr)); }
+    }
   </style>
 </head>
 <body>
 
-<!-- ── SIDEBAR ─────────────────────────────────────────────────────────────── -->
-<aside class="sidebar">
-  <div class="sidebar-logo">
-    <div class="sidebar-logo-title">Bau-OS</div>
-    <div class="sidebar-logo-sub">Control Dashboard</div>
-  </div>
-  <div class="sidebar-status">
-    <div class="status-dot" id="status-dot"></div>
-    <span class="status-label" id="status-label">Verbinde…</span>
-  </div>
-  <nav class="sidebar-nav">
-    <div class="nav-section-label">Übersicht</div>
-    <div class="nav-item active" data-section="overview" onclick="navigate('overview')">
-      <span class="nav-icon">◼</span> Dashboard
-    </div>
-    <div class="nav-section-label">Control UI</div>
-    <div class="nav-item" data-section="chat" onclick="navigate('chat')">
-      <span class="nav-icon">◈</span> Chat
-    </div>
-    <div class="nav-item" data-section="agents" onclick="navigate('agents')">
-      <span class="nav-icon">◉</span> Agenten
-    </div>
-    <div class="nav-item" data-section="logs" onclick="navigate('logs')">
-      <span class="nav-icon">▤</span> Logs
-    </div>
-    <div class="nav-item" data-section="config" onclick="navigate('config')">
-      <span class="nav-icon">◧</span> Konfiguration
-    </div>
-    <div class="nav-section-label">Vault</div>
-    <div class="nav-item" data-section="notes" onclick="navigate('notes')">
-      <span class="nav-icon">◻</span> Notizen
-    </div>
-    <div class="nav-item" data-section="tasks" onclick="navigate('tasks')">
-      <span class="nav-icon">◇</span> Aufgaben
-    </div>
-    <div class="nav-item" data-section="projects" onclick="navigate('projects')">
-      <span class="nav-icon">▣</span> Projekte
-    </div>
-    <div class="nav-item" data-section="termine" onclick="navigate('termine')">
-      <span class="nav-icon">▷</span> Termine
-    </div>
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">Bau<span>-OS</span></div>
+  <nav>
+    <div class="nav-item active" onclick="go('status')"> <span class="nav-icon">◈</span> Status</div>
+    <div class="nav-item"        onclick="go('logs')">   <span class="nav-icon">▣</span> Logs</div>
+    <div class="nav-item"        onclick="go('agents')"> <span class="nav-icon">◉</span> Agenten</div>
+    <div class="nav-item"        onclick="go('vault')">  <span class="nav-icon">◫</span> Vault</div>
+    <div class="nav-item"        onclick="go('chat')">   <span class="nav-icon">◎</span> Chat</div>
+    <div class="nav-item"        onclick="go('config')"> <span class="nav-icon">⬡</span> Konfiguration</div>
   </nav>
-  <div class="sidebar-footer">
-    <div id="sidebar-uptime">—</div>
-    <div style="margin-top:2px; color:#222222;">Bau-OS v0.1</div>
-  </div>
 </aside>
 
-<!-- ── MAIN ───────────────────────────────────────────────────────────────── -->
-<div class="main" id="main-wrapper">
-  <header class="topbar">
-    <span class="topbar-title" id="page-title">Dashboard</span>
-    <div class="topbar-right">
-      <span class="model-tag" id="model-tag">—</span>
-      <button class="btn" onclick="loadAll()" id="refresh-btn">↻ Aktualisieren</button>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="hamburger" onclick="toggleSidebar()" title="Menü">☰</button>
+      <div class="topbar-title" id="page-title">Status</div>
     </div>
-  </header>
-
-  <!-- Normal content (scrollable) -->
-  <main class="content" id="content-wrap">
-    <div id="content">
-      <div class="empty"><div class="empty-icon">◌</div><div class="empty-text">Wird geladen…</div></div>
-    </div>
-  </main>
-
-  <!-- Chat layout (replaces content-wrap for chat section) -->
-  <div class="chat-layout" id="chat-wrap" style="display:none;">
-    <div class="chat-agent-bar">
-      Agent: <strong id="chat-agent-label">Main</strong>
-      &nbsp;·&nbsp; Geteilter Speicher mit Telegram
-      <div style="flex:1;"></div>
-      <button class="btn" onclick="clearChat()" style="font-size:11px; padding:3px 10px;">Chat leeren</button>
-    </div>
-    <div class="chat-messages" id="chat-messages">
-      <div class="chat-empty" id="chat-empty">
-        <div class="chat-empty-icon">◈</div>
-        <div class="chat-empty-text">Schreibe eine Nachricht um mit dem Agenten zu chatten</div>
-      </div>
-    </div>
-    <div class="chat-input-bar">
-      <textarea class="chat-textarea" id="chat-input" placeholder="Nachricht eingeben… (Enter = Senden, Shift+Enter = Zeilenumbruch)" rows="1" onkeydown="handleChatKey(event)" oninput="autoResize(this)"></textarea>
-      <button class="chat-send" id="chat-send-btn" onclick="sendChat()">Senden →</button>
+    <div class="topbar-status">
+      <div class="dot" id="status-dot"></div>
+      <span id="status-label">Verbinde…</span>
     </div>
   </div>
-</div>
 
-<!-- ── MODAL ──────────────────────────────────────────────────────────────── -->
-<div class="modal-overlay" id="modal" onclick="closeModal(event)">
-  <div class="modal" onclick="event.stopPropagation()">
-    <div class="modal-head">
-      <span class="modal-head-title" id="modal-title"></span>
-      <button class="modal-close" onclick="closeModal()">×</button>
+  <div class="content">
+
+    <!-- ── STATUS ────────────────────────────────────────── -->
+    <div id="sec-status" class="section active">
+      <div class="cards">
+        <div class="card"><div class="card-label">Uptime</div>    <div class="card-value sm" id="c-uptime">–</div></div>
+        <div class="card"><div class="card-label">Modell</div>    <div class="card-value sm" id="c-model">–</div></div>
+        <div class="card"><div class="card-label">Fast-Modus</div><div class="card-value"    id="c-fast">–</div></div>
+        <div class="card"><div class="card-label">Agenten</div>   <div class="card-value"    id="c-agents">–</div></div>
+        <div class="card"><div class="card-label">Notizen</div>   <div class="card-value"    id="c-notes">–</div></div>
+        <div class="card"><div class="card-label">Aufgaben</div>  <div class="card-value"    id="c-tasks">–</div></div>
+        <div class="card"><div class="card-label">Projekte</div>  <div class="card-value"    id="c-projects">–</div></div>
+        <div class="card"><div class="card-label">Termine</div>   <div class="card-value"    id="c-termine">–</div></div>
+      </div>
+      <div class="sec-head">Heartbeat <button class="btn btn-secondary btn-sm" onclick="loadStatus()">↺ Refresh</button></div>
+      <div class="table-wrap" id="hb-table"><div class="empty">Lade…</div></div>
     </div>
-    <div class="modal-content" id="modal-body"></div>
+
+    <!-- ── LOGS ──────────────────────────────────────────── -->
+    <div id="sec-logs" class="section">
+      <div class="tabs">
+        <div class="tab active" id="log-tab-sys"    onclick="logTab('sys',this)">System-Logs</div>
+        <div class="tab"        id="log-tab-memory" onclick="logTab('memory',this)">Memory-Logs</div>
+      </div>
+
+      <!-- System Logs -->
+      <div id="log-sys">
+        <div class="log-toolbar">
+          <label style="color:#64748b;font-size:.83rem">Letzte</label>
+          <select id="log-n" class="narrow" onchange="loadSysLogs()">
+            <option value="20">20</option><option value="50" selected>50</option>
+            <option value="100">100</option><option value="200">200</option>
+          </select>
+          <label style="color:#64748b;font-size:.83rem">Einträge</label>
+          <button class="btn btn-secondary btn-sm" onclick="loadSysLogs()">↺ Refresh</button>
+          <span class="log-ts" id="log-ts"></span>
+        </div>
+        <div class="log-box" id="log-box">Lade…</div>
+      </div>
+
+      <!-- Memory Logs -->
+      <div id="log-memory" style="display:none">
+        <div class="log-toolbar">
+          <label style="color:#64748b;font-size:.83rem">Agent:</label>
+          <select id="mem-agent" class="narrow" onchange="loadMemDates()"></select>
+          <label style="color:#64748b;font-size:.83rem">Datum:</label>
+          <select id="mem-date" class="narrow"></select>
+          <button class="btn btn-secondary btn-sm" onclick="loadMemLog()">Laden</button>
+        </div>
+        <div class="log-box" id="mem-box" style="color:#e2e8f0;white-space:pre-wrap">Wähle Agent und Datum.</div>
+      </div>
+    </div>
+
+    <!-- ── AGENTEN ────────────────────────────────────────── -->
+    <div id="sec-agents" class="section">
+      <div class="sec-head">Agenten <button class="btn btn-secondary btn-sm" onclick="loadAgents()">↺ Refresh</button></div>
+      <div class="table-wrap" id="agents-table"><div class="empty">Lade…</div></div>
+      <div id="agent-editor" style="display:none">
+        <div class="editor-panel">
+          <div class="editor-panel-hd">
+            <div class="editor-panel-title" id="editor-title">–</div>
+            <button class="btn btn-secondary btn-sm" onclick="closeEditor()">✕ Schließen</button>
+          </div>
+          <div class="file-chips" id="file-chips"></div>
+          <div id="editor-file-area" style="display:none">
+            <div class="editor-file-hd">
+              <span class="editor-filename" id="editor-file-name">–</span>
+              <button class="btn btn-primary btn-sm" id="save-btn" onclick="saveFile()">Speichern</button>
+            </div>
+            <textarea id="editor-ta" class="editor-ta" spellcheck="false"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── VAULT ─────────────────────────────────────────── -->
+    <div id="sec-vault" class="section">
+      <div class="tabs">
+        <div class="tab active" onclick="vaultTab('notes',this)">Notizen</div>
+        <div class="tab"        onclick="vaultTab('tasks',this)">Aufgaben</div>
+        <div class="tab"        onclick="vaultTab('termine',this)">Termine</div>
+        <div class="tab"        onclick="vaultTab('projects',this)">Projekte</div>
+      </div>
+      <div id="vault-toolbar" class="toolbar" style="display:none">
+        <input type="search" id="vault-search" class="search-input" placeholder="Suchen…" oninput="filterVault()">
+      </div>
+      <div id="vault-body"><div class="empty">Lade…</div></div>
+    </div>
+
+    <!-- ── CHAT ──────────────────────────────────────────── -->
+    <div id="sec-chat" class="section">
+      <div class="toolbar">
+        <label style="color:#64748b;font-size:.83rem">Agent:</label>
+        <select id="chat-agent" class="narrow"></select>
+        <button class="btn btn-secondary btn-sm" onclick="clearChat()">Verlauf löschen</button>
+      </div>
+      <div class="chat-container">
+        <div class="chat-messages" id="chat-msgs">
+          <div class="empty" id="chat-empty">Schreib eine Nachricht…</div>
+        </div>
+        <div class="chat-input-row">
+          <textarea id="chat-in" placeholder="Nachricht… (Enter = Senden, Shift+Enter = Zeilenumbruch)" rows="1" onkeydown="chatKey(event)"></textarea>
+          <button class="btn btn-primary" id="chat-btn" onclick="sendChat()">Senden</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── KONFIGURATION ─────────────────────────────────── -->
+    <div id="sec-config" class="section">
+      <div class="sec-head">Konfiguration <button class="btn btn-secondary btn-sm" onclick="loadConfig()">↺ Refresh</button></div>
+      <div class="config-grid" id="cfg-grid"><div class="empty">Lade…</div></div>
+    </div>
+
   </div>
 </div>
 
 <script>
-// ── State ──────────────────────────────────────────────────────────────────
-const TITLES = { overview:'Dashboard', chat:'Chat', agents:'Agenten', logs:'Logs', config:'Konfiguration', notes:'Notizen', tasks:'Aufgaben', projects:'Projekte', termine:'Termine' };
-const state = { current:'overview', status:null, agents:[], notes:[], tasks:[], projects:[], termine:[], chatMsgs:[], config:null, logs:null };
-let chatBusy = false;
+// ── State ───────────────────────────────────────────────────
+const SECTIONS = ['status','logs','agents','vault','chat','config'];
+const TITLES   = { status:'Status', logs:'Logs', agents:'Agenten', vault:'Vault', chat:'Chat', config:'Konfiguration' };
+let curVault  = 'notes';
+let curAgent  = null;
+let curFile   = null;
+let curLogTab = 'sys';
+let vaultData = [];
+let openProjRow = null;
 
-// ── API ────────────────────────────────────────────────────────────────────
-async function api(url, opts) {
-  const r = await fetch(url, opts);
-  if (!r.ok) throw new Error(r.statusText);
-  return r.json();
+// ── Routing ─────────────────────────────────────────────────
+function go(name) {
+  SECTIONS.forEach(s => document.getElementById('sec-'+s).classList.toggle('active', s===name));
+  document.querySelectorAll('.nav-item').forEach((el,i) => el.classList.toggle('active', SECTIONS[i]===name));
+  document.getElementById('page-title').textContent = TITLES[name];
+  closeSidebar();
+  if (name==='logs')   { loadSysLogs(); loadMemAgents(); }
+  if (name==='agents') loadAgents();
+  if (name==='vault')  loadVault(curVault);
+  if (name==='chat')   loadChatAgents();
+  if (name==='config') loadConfig();
 }
 
-async function loadAll() {
+// ── Sidebar mobile ──────────────────────────────────────────
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('overlay').classList.toggle('show');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('overlay').classList.remove('show');
+}
+
+// ── Toast ────────────────────────────────────────────────────
+function toast(msg, ok=true) {
+  const el = document.createElement('div');
+  el.className = 'toast '+(ok?'toast-ok':'toast-err');
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(()=>el.remove(), 3000);
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+function h(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+async function api(url) { const r=await fetch(url); if(!r.ok) throw new Error(r.status); return r.json(); }
+function setText(id,v) { const e=document.getElementById(id); if(e) e.textContent=v; }
+
+// ── STATUS ───────────────────────────────────────────────────
+async function loadStatus() {
   try {
-    const [status, agents, notes, tasks, projects, termine] = await Promise.all([
-      api('/api/status'), api('/api/agents'), api('/api/notes'),
-      api('/api/tasks'), api('/api/projects'), api('/api/termine')
-    ]);
-    Object.assign(state, { status, agents, notes, tasks, projects, termine });
-    updateChrome();
-    if (state.current !== 'chat') render();
-  } catch(e) {
-    document.getElementById('status-label').textContent = 'Offline';
-    document.getElementById('status-dot').style.background = '#888888';
+    const d = await api('/api/status');
+    setText('c-uptime',  d.uptime);  setText('c-model',   d.model);
+    setText('c-fast',    d.fastMode?'⚡ An':'Aus');
+    setText('c-agents',  d.agentCount);  setText('c-notes',   d.noteCount);
+    setText('c-tasks',   d.taskCount);   setText('c-projects',d.projectCount);
+    setText('c-termine', d.termineCount);
+    setText('status-label','Online · '+d.uptime);
+    document.getElementById('status-dot').classList.remove('offline');
+  } catch {
+    setText('status-label','Nicht erreichbar');
+    document.getElementById('status-dot').classList.add('offline');
   }
-}
-
-function updateChrome() {
-  const s = state.status;
-  if (!s) return;
-  document.getElementById('model-tag').textContent = s.model;
-  document.getElementById('sidebar-uptime').textContent = 'Laufzeit: ' + s.uptime;
-  document.getElementById('status-label').textContent = 'Aktiv';
-}
-
-// ── Navigation ─────────────────────────────────────────────────────────────
-function navigate(section) {
-  state.current = section;
-  document.querySelectorAll('.nav-item').forEach(el =>
-    el.classList.toggle('active', el.dataset.section === section)
-  );
-  document.getElementById('page-title').textContent = TITLES[section];
-
-  const isChat = section === 'chat';
-  document.getElementById('content-wrap').style.display = isChat ? 'none' : '';
-  document.getElementById('chat-wrap').style.display    = isChat ? 'flex' : 'none';
-  document.getElementById('refresh-btn').style.display  = isChat ? 'none' : '';
-
-  if (!isChat) render();
-}
-
-// ── Render ─────────────────────────────────────────────────────────────────
-function render() {
-  const el = document.getElementById('content');
-  el.className = 'fade';
-  void el.offsetWidth;
-  const fns = { overview:renderOverview, agents:renderAgents, notes:renderNotes, tasks:renderTasks, projects:renderProjects, termine:renderTermine, logs:renderLogs, config:renderConfig };
-  el.innerHTML = (fns[state.current] || (() => ''))();
-}
-
-// ── OVERVIEW ───────────────────────────────────────────────────────────────
-function renderOverview() {
-  const s = state.status;
-  return `
-    <div class="section-head"><h2>System-Übersicht</h2><p>Kennzahlen & Status</p></div>
-    <div class="stats-grid">
-      ${sCard('◈','Agenten', s?.agentCount,'agents')}
-      ${sCard('◻','Notizen',  s?.noteCount,'notes')}
-      ${sCard('◇','Aufgaben', s?.taskCount,'tasks')}
-      ${sCard('▣','Projekte', s?.projectCount,'projects')}
-      ${sCard('▷','Termine',  s?.termineCount,'termine')}
-    </div>
-    <div class="divider"></div>
-    <div class="grid-2">
-      <div class="card">
-        <div class="card-header">System-Information</div>
-        <div class="card-body">
-          ${iRow('Modell',    s?.model    ?? '—')}
-          ${iRow('Ollama',    s?.ollamaUrl ?? '—')}
-          ${iRow('Zeitzone',  s?.timezone  ?? '—')}
-          ${iRow('Fast Mode', s?.fastMode ? 'Aktiv' : 'Inaktiv')}
-          ${iRow('Laufzeit',  s?.uptime   ?? '—')}
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-header">Letzte Notizen</div>
-        ${state.notes.slice(0,6).map(n => `
-          <div class="list-item" style="cursor:pointer;" onclick="openNote('${n}')">
-            <span class="list-icon">◻</span>
-            <span class="list-text">${n}</span>
-          </div>`).join('') || '<div style="padding:16px 18px; color:#888888; font-size:13px;">Keine Notizen</div>'}
-      </div>
-    </div>`;
-}
-
-function sCard(icon, label, value, section) {
-  return `<div class="stat-card${state.current===section?' active-card':''}" data-section="${section}" onclick="navigate('${section}')">
-    <div style="font-size:11px;color:#CCCCCC;margin-bottom:8px;">${icon}</div>
-    <div class="stat-number">${value??'—'}</div>
-    <div class="stat-label">${label}</div>
-  </div>`;
-}
-
-function iRow(label, value) {
-  return `<div class="info-row"><span class="info-label">${label}</span><span class="info-value" title="${value}">${value}</span></div>`;
-}
-
-// ── AGENTS ─────────────────────────────────────────────────────────────────
-function renderAgents() {
-  if (!state.agents.length) return empty('◉','Keine Agenten konfiguriert');
-  return `
-    <div class="section-head"><h2>Agenten</h2><p>${state.agents.length} konfiguriert</p></div>
-    <div class="grid-auto">
-      ${state.agents.map(a => `
-        <div class="agent-card">
-          <div class="agent-avatar">${a.name.charAt(0)}</div>
-          <div class="agent-name">${a.name}</div>
-          <div class="agent-desc">${a.description}</div>
-          <div class="divider" style="margin:10px 0;"></div>
-          <div style="font-size:12px;color:#888888;margin-bottom:6px;">Modell: <strong style="color:#333333;">${a.model}</strong></div>
-          <div>${a.protected?'<span class="badge badge-dark">Geschützt</span>':'<span class="badge badge-light">Standard</span>'}</div>
-        </div>`).join('')}
-    </div>`;
-}
-
-// ── NOTES ──────────────────────────────────────────────────────────────────
-function renderNotes() {
-  if (!state.notes.length) return empty('◻','Keine Notizen in der Inbox');
-  return `
-    <div class="section-head"><h2>Notizen</h2><p>${state.notes.length} in der Inbox</p></div>
-    <div class="card">
-      <table class="data-table">
-        <thead><tr><th>Dateiname</th><th style="width:80px;text-align:right;">Aktion</th></tr></thead>
-        <tbody>${state.notes.map(n=>`
-          <tr onclick="openNote('${n}')">
-            <td><span style="color:#CCCCCC;margin-right:8px;">◻</span>${n}</td>
-            <td style="text-align:right;color:#888888;font-size:12px;">Lesen →</td>
-          </tr>`).join('')}</tbody>
-      </table>
-    </div>`;
-}
-
-// ── TASKS ──────────────────────────────────────────────────────────────────
-function renderTasks() {
-  if (!state.tasks.length) return empty('◇','Alle Aufgaben erledigt');
-  return `
-    <div class="section-head"><h2>Offene Aufgaben</h2><p>${state.tasks.length} offen</p></div>
-    <div class="card">
-      ${state.tasks.map(t=>`
-        <div class="list-item">
-          <span class="list-icon">◇</span>
-          <span class="list-text">${t}</span>
-        </div>`).join('')}
-    </div>`;
-}
-
-// ── PROJECTS ───────────────────────────────────────────────────────────────
-function renderProjects() {
-  if (!state.projects.length) return empty('▣','Keine Projekte vorhanden');
-  return `
-    <div class="section-head"><h2>Projekte</h2><p>${state.projects.length} Projekt${state.projects.length!==1?'e':''}</p></div>
-    <div class="grid-auto">
-      ${state.projects.map(p=>`
-        <div class="project-card">
-          <div class="project-name">▣ ${p.name}</div>
-          <div class="project-stats">
-            ${pStat(p.notes,'Notizen')}${pStat(p.tasks,'Aufgaben')}${pStat(p.termine,'Termine')}
-          </div>
-        </div>`).join('')}
-    </div>`;
-}
-
-function pStat(val,label) {
-  return `<div class="project-stat"><div class="project-stat-num">${val}</div><div class="project-stat-label">${label}</div></div>`;
-}
-
-// ── TERMINE ────────────────────────────────────────────────────────────────
-function renderTermine() {
-  if (!state.termine.length) return empty('▷','Keine anstehenden Termine');
-  return `
-    <div class="section-head"><h2>Termine</h2><p>${state.termine.length} anstehend</p></div>
-    <div class="card">
-      ${state.termine.map(t=>`
-        <div class="list-item">
-          <span class="list-icon">▷</span>
-          <span class="list-text">${t}</span>
-        </div>`).join('')}
-    </div>`;
-}
-
-// ── LOGS ───────────────────────────────────────────────────────────────────
-function renderLogs() {
-  const agents = state.agents.map(a=>a.name);
-  const firstAgent = agents[0] ?? 'Main';
-  loadLog(firstAgent);
-  return `
-    <div class="section-head">
-      <h2>Logs</h2>
-      <p>Tages-Gesprächsprotokoll des Agenten</p>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-      <label style="font-size:12px;color:#888888;">Agent:</label>
-      <select class="log-select" id="log-agent-select" onchange="loadLog(this.value)">
-        ${agents.map(a=>`<option value="${a}">${a}</option>`).join('')}
-      </select>
-      <button class="btn" onclick="loadLog(document.getElementById('log-agent-select').value)" style="font-size:12px;">↻ Neu laden</button>
-    </div>
-    <div id="log-content">
-      <div class="empty"><div class="empty-icon">▤</div><div class="empty-text">Wird geladen…</div></div>
-    </div>`;
-}
-
-async function loadLog(agentName) {
-  const el = document.getElementById('log-content');
-  if (!el) return;
   try {
-    const data = await api(`/api/logs/${encodeURIComponent(agentName)}`);
-    if (!data.content) {
-      el.innerHTML = '<div class="empty"><div class="empty-icon">▤</div><div class="empty-text">Noch keine Log-Einträge heute</div></div>';
-    } else {
-      el.innerHTML = `<div class="log-block">${data.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
-      el.querySelector('.log-block').scrollTop = 999999;
-    }
-  } catch { el.innerHTML = '<div class="empty"><div class="empty-text">Fehler beim Laden</div></div>'; }
+    const hb = await api('/api/heartbeat');
+    const tb = document.getElementById('hb-table');
+    if (!hb.length) { tb.innerHTML='<div class="empty">Keine Heartbeat-Konfiguration.</div>'; return; }
+    tb.innerHTML = `<table><thead><tr><th>Agent</th><th>Cron</th><th>Status</th></tr></thead><tbody>
+      ${hb.map(r=>`<tr>
+        <td><strong>${h(r.name)}</strong></td>
+        <td><code>${h(r.cron??'–')}</code></td>
+        <td>${r.cron?'<span class="badge badge-green">Aktiv</span>':'<span class="badge badge-gray">Kein Cron</span>'}</td>
+      </tr>`).join('')}</tbody></table>`;
+  } catch {}
 }
 
-// ── CONFIG ─────────────────────────────────────────────────────────────────
-function renderConfig() {
-  api('/api/config').then(cfg => {
-    state.config = cfg;
-    const el = document.getElementById('config-content');
-    if (!el) return;
-    el.innerHTML = buildConfig(cfg);
-  });
-  return `
-    <div class="section-head"><h2>Konfiguration</h2><p>Aktuelle Systemkonfiguration (schreibgeschützt)</p></div>
-    <div id="config-content">
-      <div class="empty"><div class="empty-icon">◧</div><div class="empty-text">Wird geladen…</div></div>
-    </div>`;
+// ── LOGS ─────────────────────────────────────────────────────
+function logTab(tab, el) {
+  curLogTab = tab;
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('log-sys').style.display    = tab==='sys'?'block':'none';
+  document.getElementById('log-memory').style.display = tab==='memory'?'block':'none';
 }
 
-function buildConfig(cfg) {
-  return `
-    <div class="config-section">
-      <div class="config-section-title">LLM & Modelle</div>
-      <table class="config-table">
-        <thead><tr><th>Einstellung</th><th>Wert</th></tr></thead>
-        <tbody>
-          ${Object.entries(cfg.llm).map(([k,v])=>`
-            <tr><td>${k}</td><td class="config-value">${String(v)}</td></tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-    <div class="config-section">
-      <div class="config-section-title">Agenten</div>
-      <table class="config-table">
-        <thead><tr><th>Name</th><th>Modell</th><th>Beschreibung</th><th>Geschützt</th></tr></thead>
-        <tbody>
-          ${cfg.agenten.map(a=>`
-            <tr>
-              <td><strong>${a.name}</strong></td>
-              <td class="config-value">${a.modell}</td>
-              <td>${a.beschreibung}</td>
-              <td>${a.geschützt?'<span class="badge badge-dark">Ja</span>':'<span class="badge badge-light">Nein</span>'}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-    <div class="grid-2" style="gap:14px;">
-      <div class="config-section">
-        <div class="config-section-title">Gedächtnis</div>
-        <table class="config-table">
-          <thead><tr><th>Einstellung</th><th>Wert</th></tr></thead>
-          <tbody>${Object.entries(cfg.gedächtnis).map(([k,v])=>`
-            <tr><td>${k}</td><td class="config-value">${v}</td></tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-      <div class="config-section">
-        <div class="config-section-title">System</div>
-        <table class="config-table">
-          <thead><tr><th>Einstellung</th><th>Wert</th></tr></thead>
-          <tbody>${Object.entries(cfg.system).map(([k,v])=>`
-            <tr><td>${k}</td><td class="config-value">${v}</td></tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>`;
-}
-
-// ── CHAT ───────────────────────────────────────────────────────────────────
-function handleChatKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
-}
-
-function autoResize(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 140) + 'px';
-}
-
-async function sendChat() {
-  if (chatBusy) return;
-  const input = document.getElementById('chat-input');
-  const message = input.value.trim();
-  if (!message) return;
-
-  chatBusy = true;
-  document.getElementById('chat-send-btn').disabled = true;
-  input.value = '';
-  input.style.height = 'auto';
-
-  // hide empty state
-  document.getElementById('chat-empty').style.display = 'none';
-
-  // add user message
-  appendMsg('user', message);
-
-  // typing indicator
-  const typingId = 'typing-' + Date.now();
-  appendTyping(typingId);
-
+async function loadSysLogs() {
+  const n=document.getElementById('log-n').value, box=document.getElementById('log-box');
+  box.textContent='Lade…';
   try {
-    const data = await api('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, agent: 'Main' })
+    const d=await api('/api/botlogs?n='+n);
+    const raw=d.logs||'Keine Logs vorhanden.';
+    box.innerHTML=raw.split('\n').map(l=>{
+      if(!l.trim())return '';
+      return l.includes('] ERROR')?`<span class="log-error">${h(l)}</span>`:`<span class="log-info">${h(l)}</span>`;
+    }).join('\n');
+    box.scrollTop=box.scrollHeight;
+    setText('log-ts','Aktualisiert: '+new Date().toLocaleTimeString('de-AT'));
+  } catch { box.textContent='Fehler beim Laden.'; }
+}
+
+async function loadMemAgents() {
+  const sel=document.getElementById('mem-agent');
+  sel.innerHTML='';
+  try {
+    const agents=await api('/api/agents');
+    sel.innerHTML=agents.map(a=>`<option value="${h(a.name)}">${h(a.name)}</option>`).join('');
+    if (agents.length) loadMemDates();
+  } catch {}
+}
+
+async function loadMemDates() {
+  const agent=document.getElementById('mem-agent').value;
+  const dateSel=document.getElementById('mem-date');
+  dateSel.innerHTML='<option>Lade…</option>';
+  try {
+    const d=await api('/api/agent-logs/'+encodeURIComponent(agent));
+    if (!d.dates.length) { dateSel.innerHTML='<option>Keine Logs</option>'; return; }
+    dateSel.innerHTML=d.dates.map(dt=>`<option value="${h(dt)}">${h(dt)}</option>`).join('');
+  } catch { dateSel.innerHTML='<option>Fehler</option>'; }
+}
+
+async function loadMemLog() {
+  const agent=document.getElementById('mem-agent').value;
+  const date =document.getElementById('mem-date').value;
+  const box  =document.getElementById('mem-box');
+  box.textContent='Lade…';
+  try {
+    const d=await api('/api/agent-logs/'+encodeURIComponent(agent)+'/'+encodeURIComponent(date));
+    box.textContent=d.content||'(Leer)';
+  } catch { box.textContent='Fehler beim Laden.'; }
+}
+
+// ── AGENTEN ──────────────────────────────────────────────────
+async function loadAgents() {
+  const wrap=document.getElementById('agents-table');
+  try {
+    const agents=await api('/api/agents');
+    if (!agents.length) { wrap.innerHTML='<div class="empty">Keine Agenten.</div>'; return; }
+    wrap.innerHTML=`<table><thead><tr><th>Name</th><th>Modell</th><th>Beschreibung</th><th>Typ</th><th></th></tr></thead>
+    <tbody>${agents.map(a=>`<tr>
+      <td><strong>${h(a.name)}</strong></td>
+      <td><code>${h(a.model)}</code></td>
+      <td style="color:#94a3b8">${h(a.description)}</td>
+      <td>${a.protected?'<span class="badge badge-blue">Geschützt</span>':'<span class="badge badge-gray">Sub-Agent</span>'}</td>
+      <td><button class="btn btn-secondary btn-sm" onclick="openEditor(${JSON.stringify(a.name)})">Dateien ›</button></td>
+    </tr>`).join('')}</tbody></table>`;
+  } catch { wrap.innerHTML='<div class="empty">Fehler.</div>'; }
+}
+
+async function openEditor(agentName) {
+  curAgent=agentName; curFile=null;
+  document.getElementById('agent-editor').style.display='block';
+  document.getElementById('editor-file-area').style.display='none';
+  setText('editor-title', agentName+' – Workspace');
+  const chips=document.getElementById('file-chips');
+  chips.innerHTML='<span style="color:#475569;font-size:.8rem">Lade…</span>';
+  try {
+    const d=await api('/api/agent/'+encodeURIComponent(agentName)+'/files');
+    chips.innerHTML=d.files.map(f=>
+      `<div class="file-chip" id="chip-${h(f)}" onclick="loadFile(${JSON.stringify(agentName)},${JSON.stringify(f)})">${h(f)}</div>`
+    ).join('');
+  } catch { chips.innerHTML='<span style="color:#fca5a5">Fehler.</span>'; }
+  document.getElementById('agent-editor').scrollIntoView({behavior:'smooth'});
+}
+
+async function loadFile(agentName, filename) {
+  document.querySelectorAll('.file-chip').forEach(c=>c.classList.remove('active'));
+  document.getElementById('chip-'+filename)?.classList.add('active');
+  curFile=filename;
+  document.getElementById('editor-file-area').style.display='block';
+  setText('editor-file-name', agentName+' / '+filename);
+  const ta=document.getElementById('editor-ta');
+  ta.value='Lade…';
+  try {
+    const d=await api('/api/agent/'+encodeURIComponent(agentName)+'/file/'+encodeURIComponent(filename));
+    ta.value=d.content;
+  } catch { ta.value='Fehler.'; }
+}
+
+async function saveFile() {
+  if (!curAgent||!curFile) return;
+  const btn=document.getElementById('save-btn');
+  btn.disabled=true; btn.textContent='…';
+  try {
+    const r=await fetch('/api/agent/'+encodeURIComponent(curAgent)+'/file/'+encodeURIComponent(curFile),{
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({content:document.getElementById('editor-ta').value}),
     });
-    removeTyping(typingId);
-    appendMsg('ai', data.response);
-  } catch(e) {
-    removeTyping(typingId);
-    appendMsg('ai', '⚠ Fehler: ' + e.message);
+    const d=await r.json();
+    d.ok?toast('✓ '+curFile+' gespeichert'):toast(d.error??'Fehler',false);
+  } catch { toast('Speichern fehlgeschlagen.',false); }
+  btn.disabled=false; btn.textContent='Speichern';
+}
+
+function closeEditor() {
+  document.getElementById('agent-editor').style.display='none';
+  curAgent=null; curFile=null;
+}
+
+// ── VAULT ────────────────────────────────────────────────────
+async function loadVault(tab) {
+  curVault=tab; vaultData=[];
+  const el=document.getElementById('vault-body');
+  const tb=document.getElementById('vault-toolbar');
+  const si=document.getElementById('vault-search');
+  el.innerHTML='<div class="empty">Lade…</div>';
+  tb.style.display='none';
+  if (si) si.value='';
+
+  try {
+    if (tab==='notes') {
+      const notes=await api('/api/notes');
+      vaultData=notes;
+      tb.style.display=notes.length?'flex':'none';
+      renderNotes(notes);
+
+    } else if (tab==='tasks') {
+      const tasks=await api('/api/tasks');
+      vaultData=tasks;
+      tb.style.display=tasks.length?'flex':'none';
+      renderTasks(tasks);
+
+    } else if (tab==='termine') {
+      const termine=await api('/api/termine');
+      renderTermine(termine);
+
+    } else if (tab==='projects') {
+      const projects=await api('/api/projects');
+      renderProjects(projects);
+    }
+  } catch { el.innerHTML='<div class="empty">Fehler beim Laden.</div>'; }
+}
+
+function filterVault() {
+  const q=document.getElementById('vault-search').value.toLowerCase();
+  const filtered=vaultData.filter(item=>String(item).toLowerCase().includes(q));
+  if (curVault==='notes') renderNotes(filtered);
+  if (curVault==='tasks') renderTasks(filtered);
+}
+
+function renderNotes(notes) {
+  const el=document.getElementById('vault-body');
+  if (!notes.length) { el.innerHTML='<div class="empty">Keine Notizen.</div>'; return; }
+  el.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Dateiname</th></tr></thead>
+    <tbody>${notes.map((n,i)=>`<tr><td style="color:#475569;width:3rem">${i+1}</td><td>${h(n)}</td></tr>`).join('')}</tbody>
+  </table></div>`;
+}
+
+function renderTasks(tasks) {
+  const el=document.getElementById('vault-body');
+  if (!tasks.length) { el.innerHTML='<div class="empty">Keine offenen Aufgaben.</div>'; return; }
+  el.innerHTML=`<div class="table-wrap"><table>
+    <thead><tr><th style="width:2.5rem"></th><th>Aufgabe</th></tr></thead>
+    <tbody id="task-tbody">${tasks.map((t,i)=>`
+      <tr id="task-row-${i}">
+        <td><input type="checkbox" class="task-cb" onchange="completeTask(${JSON.stringify(t)},${i})"></td>
+        <td id="task-text-${i}">${h(t)}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+async function completeTask(text, idx) {
+  try {
+    const r=await fetch('/api/task/complete',{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({text}),
+    });
+    const d=await r.json();
+    if (d.ok) {
+      const textEl=document.getElementById('task-text-'+idx);
+      if (textEl) textEl.classList.add('task-done');
+      setTimeout(()=>document.getElementById('task-row-'+idx)?.remove(), 600);
+      toast('✓ Aufgabe erledigt');
+    } else { toast('Fehler beim Abhaken.',false); }
+  } catch { toast('Fehler.',false); }
+}
+
+function renderTermine(termine) {
+  const el=document.getElementById('vault-body');
+  if (!termine.length) { el.innerHTML='<div class="empty">Keine Termine.</div>'; return; }
+
+  // Gruppe nach Datum
+  const groups={};
+  for (const t of termine) {
+    const parts=t.split('|').map(p=>p.trim());
+    const datum=parts[0]??'–';
+    const isTime=parts.length>=3&&/^\d{1,2}:\d{2}$/.test(parts[1]);
+    const zeit =isTime?parts[1]:'–';
+    const text =isTime?parts.slice(2).join(' | '):parts.slice(1).join(' | ');
+    if (!groups[datum]) groups[datum]=[];
+    groups[datum].push({zeit,text});
   }
 
-  chatBusy = false;
-  document.getElementById('chat-send-btn').disabled = false;
-  input.focus();
+  let html='<div class="table-wrap"><table><thead><tr><th>Uhrzeit</th><th>Termin</th></tr></thead><tbody>';
+  for (const [datum,rows] of Object.entries(groups)) {
+    html+=`</tbody></table><div class="date-group-hd">📅 ${h(datum)}</div><table><tbody>`;
+    for (const r of rows) {
+      html+=`<tr><td style="color:#64748b;width:6rem">${h(r.zeit)}</td><td>${h(r.text)}</td></tr>`;
+    }
+  }
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
 }
 
-function appendMsg(role, text) {
-  const container = document.getElementById('chat-messages');
-  const time = new Date().toLocaleTimeString('de-AT', { hour:'2-digit', minute:'2-digit' });
-  const isUser = role === 'user';
-  const div = document.createElement('div');
-  div.className = `msg ${isUser ? 'msg-user' : 'msg-ai'}`;
-  div.innerHTML = `
-    <div class="msg-avatar ${isUser ? 'msg-avatar-user' : 'msg-avatar-ai'}">${isUser ? '?' : 'AI'}</div>
-    <div class="msg-inner">
-      <div class="msg-bubble ${isUser ? 'msg-bubble-user' : 'msg-bubble-ai'}">${formatMsg(text, isUser)}</div>
-      <div class="msg-time">${time}</div>
-    </div>`;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
-  state.chatMsgs.push({ role, text, time });
+function renderProjects(projects) {
+  const el=document.getElementById('vault-body');
+  if (!projects.length) { el.innerHTML='<div class="empty">Keine Projekte.</div>'; return; }
+  el.innerHTML=`<div class="table-wrap" id="proj-table"><table>
+    <thead><tr><th>Projekt</th><th>Notizen</th><th>Aufgaben</th><th>Termine</th><th></th></tr></thead>
+    <tbody>${projects.map(p=>`
+      <tr id="proj-row-${h(p.name)}">
+        <td><strong>${h(p.name)}</strong></td>
+        <td>${p.notes}</td><td>${p.tasks}</td><td>${p.termine}</td>
+        <td><button class="btn btn-secondary btn-sm" onclick="toggleProjDetail(${JSON.stringify(p.name)}, this)">Details ›</button></td>
+      </tr>
+      <tr id="proj-detail-${h(p.name)}" style="display:none">
+        <td colspan="5" style="padding:0">
+          <div class="proj-detail" id="proj-detail-body-${h(p.name)}">Lade…</div>
+        </td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
 }
 
-function appendTyping(id) {
-  const container = document.getElementById('chat-messages');
-  const div = document.createElement('div');
-  div.className = 'msg msg-ai';
-  div.id = id;
-  div.innerHTML = `
-    <div class="msg-avatar msg-avatar-ai">AI</div>
-    <div class="typing-indicator">
-      <div class="typing-dot"></div>
-      <div class="typing-dot"></div>
-      <div class="typing-dot"></div>
-    </div>`;
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight;
+async function toggleProjDetail(name, btn) {
+  const row=document.getElementById('proj-detail-'+name);
+  const body=document.getElementById('proj-detail-body-'+name);
+  if (row.style.display==='table-row') {
+    row.style.display='none'; btn.textContent='Details ›'; return;
+  }
+  row.style.display='table-row'; btn.textContent='Schließen';
+  body.innerHTML='Lade…';
+  try {
+    const d=await api('/api/project/'+encodeURIComponent(name));
+    let html=`<div class="proj-detail-tabs">
+      <div class="proj-detail-tab active" onclick="showProjTab(${JSON.stringify(name)},'tasks',this)">Aufgaben (${d.tasks.length})</div>
+      <div class="proj-detail-tab" onclick="showProjTab(${JSON.stringify(name)},'termine',this)">Termine (${d.termine.length})</div>
+      <div class="proj-detail-tab" onclick="showProjTab(${JSON.stringify(name)},'notes',this)">Notizen (${d.notes.length})</div>
+    </div>
+    <div id="pdtab-tasks-${h(name)}">`;
+    if (d.tasks.length) {
+      html+=`<table><tbody>${d.tasks.map((t,i)=>`
+        <tr id="ptask-${h(name)}-${i}">
+          <td style="width:2.5rem"><input type="checkbox" class="task-cb" onchange="completeProjTask(${JSON.stringify(t)},${JSON.stringify(name)},${i})"></td>
+          <td id="ptask-t-${h(name)}-${i}">${h(t)}</td>
+        </tr>`).join('')}</tbody></table>`;
+    } else html+='<div class="empty">Keine Aufgaben.</div>';
+    html+='</div>';
+    html+=`<div id="pdtab-termine-${h(name)}" style="display:none">`;
+    html+=d.termine.length?`<table><tbody>${d.termine.map(t=>`<tr><td>${h(t)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Keine Termine.</div>';
+    html+='</div>';
+    html+=`<div id="pdtab-notes-${h(name)}" style="display:none">`;
+    html+=d.notes.length?`<table><tbody>${d.notes.map(n=>`<tr><td>${h(n)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Keine Notizen.</div>';
+    html+='</div>';
+    body.innerHTML=html;
+  } catch { body.innerHTML='<div class="empty">Fehler beim Laden.</div>'; }
 }
 
-function removeTyping(id) {
-  document.getElementById(id)?.remove();
+function showProjTab(name, tab, el) {
+  ['tasks','termine','notes'].forEach(t=>{
+    document.getElementById(`pdtab-${t}-${name}`)?.style.setProperty('display',t===tab?'block':'none');
+  });
+  el.closest('.proj-detail-tabs').querySelectorAll('.proj-detail-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
 }
 
-function formatMsg(text, isUser) {
-  if (isUser) return escHtml(text).replace(/\n/g, '<br>');
-  return escHtml(text)
-    .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/\n/g, '<br>');
+async function completeProjTask(text, project, idx) {
+  try {
+    const r=await fetch('/api/task/complete',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,project})});
+    const d=await r.json();
+    if (d.ok) {
+      document.getElementById(`ptask-t-${project}-${idx}`)?.classList.add('task-done');
+      setTimeout(()=>document.getElementById(`ptask-${project}-${idx}`)?.remove(),600);
+      toast('✓ Aufgabe erledigt');
+    } else toast('Fehler.',false);
+  } catch { toast('Fehler.',false); }
 }
 
-function escHtml(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function vaultTab(tab, el) {
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  loadVault(tab);
+}
+
+// ── CHAT ─────────────────────────────────────────────────────
+async function loadChatAgents() {
+  try {
+    const agents=await api('/api/agents');
+    const sel=document.getElementById('chat-agent');
+    sel.innerHTML=agents.map(a=>`<option value="${h(a.name)}">${h(a.name)}</option>`).join('');
+  } catch {}
 }
 
 function clearChat() {
-  state.chatMsgs = [];
-  const c = document.getElementById('chat-messages');
-  c.innerHTML = '<div class="chat-empty" id="chat-empty"><div class="chat-empty-icon">◈</div><div class="chat-empty-text">Schreibe eine Nachricht um mit dem Agenten zu chatten</div></div>';
+  document.getElementById('chat-msgs').innerHTML='<div class="empty" id="chat-empty">Schreib eine Nachricht…</div>';
 }
 
-// ── HELPERS ────────────────────────────────────────────────────────────────
-function empty(icon, text) {
-  return `<div class="empty"><div class="empty-icon">${icon}</div><div class="empty-text">${text}</div></div>`;
-}
+function chatKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();} }
 
-async function openNote(name) {
-  document.getElementById('modal-title').textContent = name;
-  document.getElementById('modal-body').innerHTML = '<div style="color:#888888;padding:16px;font-size:13px;">Wird geladen…</div>';
-  document.getElementById('modal').classList.add('open');
+async function sendChat() {
+  const input=document.getElementById('chat-in');
+  const msg=input.value.trim();
+  if (!msg) return;
+  const agent=document.getElementById('chat-agent').value||'Main';
+  const msgs=document.getElementById('chat-msgs');
+  document.getElementById('chat-empty')?.remove();
+
+  // User bubble
+  const uw=document.createElement('div'); uw.className='chat-msg-wrap user';
+  uw.innerHTML=`<div class="chat-msg-name">Du</div><div class="chat-bubble">${h(msg)}</div>`;
+  msgs.appendChild(uw); msgs.scrollTop=msgs.scrollHeight; input.value='';
+
+  const btn=document.getElementById('chat-btn');
+  btn.disabled=true; btn.textContent='…';
+
+  // Agent loading bubble
+  const aw=document.createElement('div'); aw.className='chat-msg-wrap agent';
+  aw.innerHTML=`<div class="chat-msg-name">${h(agent)}</div><div class="chat-bubble" id="chat-loading">…</div>`;
+  msgs.appendChild(aw); msgs.scrollTop=msgs.scrollHeight;
+
   try {
-    const data = await api('/api/note/' + encodeURIComponent(name));
-    document.getElementById('modal-body').innerHTML = `<pre>${escHtml(data.content)}</pre>`;
-  } catch { document.getElementById('modal-body').innerHTML = '<div style="color:#888888;padding:16px;">Fehler beim Laden.</div>'; }
+    const r=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg,agent})});
+    const d=await r.json();
+    document.getElementById('chat-loading').textContent=d.response??d.error??'–';
+    document.getElementById('chat-loading').id='';
+  } catch {
+    document.getElementById('chat-loading').textContent='Fehler – ist der Bot erreichbar?';
+    document.getElementById('chat-loading').style.color='#fca5a5';
+    document.getElementById('chat-loading').id='';
+  }
+  msgs.scrollTop=msgs.scrollHeight;
+  btn.disabled=false; btn.textContent='Senden';
 }
 
-function closeModal(e) {
-  if (!e || e.target === document.getElementById('modal'))
-    document.getElementById('modal').classList.remove('open');
+// ── CONFIG ────────────────────────────────────────────────────
+async function loadConfig() {
+  const grid=document.getElementById('cfg-grid');
+  try {
+    const c=await api('/api/config');
+    grid.innerHTML=`
+      <div class="config-card">
+        <h3>LLM – Laufzeit</h3>
+        <div class="config-edit-row">
+          <label>Aktives Modell</label>
+          <input id="cfg-model" value="${h(c.llm.aktuellesModell)}" style="flex:1;min-width:0">
+          <button class="btn btn-primary btn-sm" onclick="applyModel()">Anwenden</button>
+        </div>
+        ${cfgRows({'Fast-Modell':c.llm.fastModell,'Sub-Agent-Modell':c.llm.subagentModell,'Ollama URL':c.llm.ollamaUrl,'Fast-Modus':c.llm.fastMode?'An ⚡':'Aus'})}
+        <div style="font-size:.72rem;color:#475569;margin-top:.5rem">Modellwechsel wirkt sofort. Für permanente Änderungen → .env bearbeiten + Neustart.</div>
+      </div>
+      <div class="config-card">
+        <h3>Gedächtnis</h3>
+        ${cfgRows({'Max. History':c.gedächtnis.maxHistoryChars+' Z','Compact ab':c.gedächtnis.compactThreshold+' Z','Logs behalten':c.gedächtnis.keepRecentLogs})}
+      </div>
+      <div class="config-card">
+        <h3>System</h3>
+        ${cfgRows({'Max. Spawn-Tiefe':c.system.maxSpawnTiefe,'Zeitzone':c.system.zeitzone})}
+      </div>
+      <div class="config-card">
+        <h3>Agenten (${c.agenten.length})</h3>
+        ${c.agenten.map(a=>`<div class="config-row"><span class="config-key">${h(a.name)}</span><span class="config-val" title="${h(a.modell)}">${h(a.modell)}</span></div>`).join('')}
+      </div>`;
+  } catch { grid.innerHTML='<div class="empty">Fehler.</div>'; }
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+async function applyModel() {
+  const model=document.getElementById('cfg-model')?.value?.trim();
+  if (!model) return;
+  try {
+    const r=await fetch('/api/config',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({model})});
+    const d=await r.json();
+    toast('✓ Modell: '+d.model);
+    setText('c-model', d.model);
+  } catch { toast('Fehler.',false); }
+}
 
-// ── Init ───────────────────────────────────────────────────────────────────
-setInterval(loadAll, 60_000);
-loadAll();
+function cfgRows(obj) {
+  return Object.entries(obj).map(([k,v])=>
+    `<div class="config-row"><span class="config-key">${h(k)}</span><span class="config-val" title="${h(v)}">${h(v)}</span></div>`
+  ).join('');
+}
+
+// ── Init ──────────────────────────────────────────────────────
+loadStatus();
+setInterval(loadStatus, 30_000);
 </script>
 </body>
 </html>

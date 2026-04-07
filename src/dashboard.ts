@@ -4,16 +4,23 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import {
   listNotes, readNote,
-  listTasks, listTermine,
-  listProjects, getProjectInfo,
+  listTasks, listTermine, completeTask,
+  listProjects, getProjectInfo, getVaultPath,
   listAgents, getAgentPath,
+  readAgentFile, writeAgentFile,
 } from "./obsidian.js";
-import { getModel, isFastMode, processAgent, setReplyContext } from "./llm.js";
+import { getModel, isFastMode, processAgent, setReplyContext, setModel } from "./llm.js";
+import { readRecentLogs } from "./logger.js";
 import {
   AGENTS, DASHBOARD_PORT, TIMEZONE, OLLAMA_BASE_URL,
   DEFAULT_MODEL, FAST_MODEL, SUBAGENT_MODEL,
   MAX_SPAWN_DEPTH, MAX_HISTORY_CHARS, COMPACT_THRESHOLD, KEEP_RECENT_LOGS,
 } from "./config.js";
+
+const EDITABLE_AGENT_FILES = [
+  "SOUL.md", "BOOT.md", "AGENTS.md", "TOOLS.md",
+  "HEARTBEAT.md", "BOOTSTRAP.md", "USER.md", "IDENTITY.md", "MEMORY.md",
+];
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -149,6 +156,90 @@ app.get("/api/config", (_req, res) => {
       zeitzone: TIMEZONE,
     },
   });
+});
+
+// ── Bot-Logs ──────────────────────────────────────────────────────────────────
+
+app.get("/api/botlogs", (req, res) => {
+  const n = Math.min(parseInt(String(req.query.n)) || 50, 200);
+  res.json({ logs: readRecentLogs(n) });
+});
+
+// ── Agent-Dateien ─────────────────────────────────────────────────────────────
+
+app.get("/api/agent/:name/files", (req, res) => {
+  const agentPath = getAgentPath(req.params.name);
+  if (!fs.existsSync(agentPath)) return res.status(404).json({ error: "Agent nicht gefunden" });
+  const files = EDITABLE_AGENT_FILES.filter(f => fs.existsSync(path.join(agentPath, f)));
+  res.json({ files });
+});
+
+app.get("/api/agent/:name/file/:filename", (req, res) => {
+  const { name, filename } = req.params;
+  if (!EDITABLE_AGENT_FILES.includes(filename)) return res.status(403).json({ error: "Nicht erlaubt" });
+  const content = readAgentFile(name, filename);
+  if (content === null) return res.status(404).json({ error: "Nicht gefunden" });
+  res.json({ content });
+});
+
+app.put("/api/agent/:name/file/:filename", (req, res) => {
+  const { name, filename } = req.params;
+  const { content } = req.body as { content?: string };
+  if (!EDITABLE_AGENT_FILES.includes(filename)) return res.status(403).json({ error: "Nicht erlaubt" });
+  if (typeof content !== "string") return res.status(400).json({ error: "Inhalt fehlt" });
+  const ok = writeAgentFile(name, filename, content);
+  if (!ok) return res.status(404).json({ error: "Agent nicht gefunden" });
+  res.json({ ok: true });
+});
+
+// ── Aufgabe abhaken ───────────────────────────────────────────────────────────
+
+app.post("/api/task/complete", (req, res) => {
+  const { text, project } = req.body as { text?: string; project?: string };
+  if (!text) return res.status(400).json({ error: "text fehlt" });
+  const ok = completeTask(text, project);
+  res.json({ ok });
+});
+
+// ── Projekt Detail ────────────────────────────────────────────────────────────
+
+app.get("/api/project/:name", (req, res) => {
+  const name     = decodeURIComponent(req.params.name);
+  const tasks    = listTasks(name);
+  const termine  = listTermine(name);
+  const notesDir = path.join(getVaultPath(), "Projekte", name, "Notizen");
+  const notes    = fs.existsSync(notesDir)
+    ? fs.readdirSync(notesDir).filter(f => f.endsWith(".md")).map(f => f.replace(".md", ""))
+    : [];
+  res.json({ name, tasks, termine, notes });
+});
+
+// ── Memory-Log Verlauf ────────────────────────────────────────────────────────
+
+app.get("/api/agent-logs/:agent", (req, res) => {
+  const logsDir = path.join(getAgentPath(req.params.agent), "MEMORY_LOGS");
+  if (!fs.existsSync(logsDir)) return res.json({ dates: [] });
+  const dates = fs.readdirSync(logsDir)
+    .filter(f => f.endsWith(".md"))
+    .map(f => f.replace(".md", ""))
+    .sort()
+    .reverse();
+  res.json({ dates });
+});
+
+app.get("/api/agent-logs/:agent/:date", (req, res) => {
+  const { agent, date } = req.params;
+  const logPath = path.join(getAgentPath(agent), "MEMORY_LOGS", `${date}.md`);
+  if (!fs.existsSync(logPath)) return res.json({ content: null });
+  res.json({ content: fs.readFileSync(logPath, "utf-8") });
+});
+
+// ── Modell zur Laufzeit ändern ────────────────────────────────────────────────
+
+app.patch("/api/config", (req, res) => {
+  const { model } = req.body as { model?: string };
+  if (model?.trim()) setModel(model.trim());
+  res.json({ model: getModel() });
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────

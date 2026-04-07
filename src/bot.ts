@@ -1,11 +1,12 @@
 import { Bot } from "grammy";
 import { saveNote, isMainWorkspaceConfigured } from "./obsidian.js";
 import { processMessage, processBtw, processSetup, setReplyContext } from "./llm.js";
+import { logError } from "./logger.js";
 import { enqueue } from "./queue.js";
 import { isSetupActive, activateSetup } from "./setup.js";
 import { fmt, stripMarkdown } from "./format.js";
 import { saveChatId } from "./heartbeat.js";
-import { handleHilfe, handleStatus, handleSprache, handleKontext, handleKompakt, handleNeu, handleCommands, handleWhoami, handleAgents, handleExportSession, handleModel, handleFast, handleHeute, handleConfig } from "./commands/system.js";
+import { handleHilfe, handleStatus, handleSprache, handleKontext, handleKompakt, handleNeu, handleCommands, handleWhoami, handleAgents, handleExportSession, handleModel, handleFast, handleHeute, handleConfig, handleRestart, handleLogs } from "./commands/system.js";
 
 // Sendet mit HTML-Formatting, fällt bei Telegram-Fehler auf Plaintext zurück
 async function safeReply(ctx: { reply: (text: string, opts?: object) => Promise<unknown> }, text: string): Promise<void> {
@@ -35,6 +36,8 @@ export function createBot(token: string): Bot {
   bot.command("sprache",  (ctx) => handleSprache(ctx, ctx.match));
   bot.command("heute",    (ctx) => handleHeute(ctx));
   bot.command("config",   (ctx) => handleConfig(ctx));
+  bot.command("restart",  (ctx) => handleRestart(ctx));
+  bot.command("logs",     (ctx) => handleLogs(ctx, ctx.match));
 
   // ─── Textnachrichten → LLM ────────────────────────────────────────────────
   bot.on("message:text", (ctx) => {
@@ -53,7 +56,7 @@ export function createBot(token: string): Bot {
           await safeReply(ctx, antwort);
         } catch (err) {
           clearInterval(typing);
-          console.error("Setup Fehler:", err);
+          logError("Setup", err);
           await ctx.reply("Fehler beim Setup – ist das LLM gestartet?");
         }
         return;
@@ -88,7 +91,7 @@ export function createBot(token: string): Bot {
         await safeReply(ctx, antwort);
       } catch (err: unknown) {
         clearInterval(typing);
-        console.error("LLM Fehler:", err);
+        logError("LLM", err);
         try {
           const filepath = saveNote(text);
           const filename = filepath.split(/[\\/]/).pop();

@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
+import { logInfo, logError } from "./logger.js";
 import { OLLAMA_BASE_URL, DEFAULT_MODEL, FAST_MODEL, SUBAGENT_MODEL as SUBAGENT_MODEL_CFG, MAX_HISTORY_CHARS, MAX_TOOL_ROUNDS, MAX_SPAWN_DEPTH, LANGUAGE, LOCALE, getAgentModel } from "./config.js";
 import {
   saveNote, listNotes, readNote, appendToNote, deleteNote,
@@ -580,6 +581,8 @@ async function executeTool(name: string, args: Record<string, string | number>):
 export async function processAgent(agentName: string, userMessage: string, mode: "full" | "minimal" = "full", depth = 0): Promise<string> {
   if (depth > MAX_SPAWN_DEPTH) return `[${agentName}] Maximale Spawn-Tiefe erreicht (depth=${depth}).`;
   _currentDepth = depth;
+  const preview = userMessage.length > 80 ? userMessage.slice(0, 80) + "…" : userMessage;
+  logInfo(`[${agentName}] Start — "${preview}"`);
 
   // Workspace laden — full: alle Dateien, minimal: nur IDENTITY + SOUL
   const workspaceContext = loadAgentWorkspace(agentName, mode);
@@ -617,12 +620,15 @@ export async function processAgent(agentName: string, userMessage: string, mode:
     if (!reply.tool_calls || reply.tool_calls.length === 0) {
       const antwort = reply.content ?? "Erledigt.";
       appendAgentConversation(agentName, userMessage, antwort);
+      logInfo(`[${agentName}] Antwort (Runde ${i + 1}, ${antwort.length} Z)`);
       // Compaction im Hintergrund — blockiert nicht
-      if (shouldCompact(agentName)) runCompaction(agentName).catch(console.error);
+      if (shouldCompact(agentName)) runCompaction(agentName).catch(err => logError("Compaction", err));
       return antwort;
     }
 
     // Alle Tool-Calls parallel ausführen (wichtig für Multi-Agent)
+    const toolNames = reply.tool_calls.map(tc => (tc as { function: { name: string } }).function.name).join(", ");
+    logInfo(`[${agentName}] Tools (Runde ${i + 1}): ${toolNames}`);
     const toolResults = await Promise.all(
       reply.tool_calls.map(async (toolCall) => {
         const tc = toolCall as { id: string; function: { name: string; arguments: string } };
@@ -654,7 +660,8 @@ export async function processAgent(agentName: string, userMessage: string, mode:
 
   const fallback = "Ich konnte deine Anfrage nicht vollständig bearbeiten.";
   appendAgentConversation(agentName, userMessage, fallback);
-  if (shouldCompact(agentName)) runCompaction(agentName).catch(console.error);
+  logInfo(`[${agentName}] Fallback nach ${MAX_TOOL_ROUNDS} Runden`);
+  if (shouldCompact(agentName)) runCompaction(agentName).catch(err => logError("Compaction", err));
   return fallback;
 }
 
@@ -663,6 +670,7 @@ export async function processAgent(agentName: string, userMessage: string, mode:
 async function runCompaction(agentName: string): Promise<void> {
   const toSummarize = getLogForCompaction(agentName);
   if (!toSummarize) return;
+  logInfo(`[${agentName}] Compaction gestartet`);
 
   const response = await client.chat.completions.create({
     model: MODEL,
@@ -673,7 +681,10 @@ async function runCompaction(agentName: string): Promise<void> {
   });
 
   const summary = response.choices[0].message.content ?? "";
-  if (summary) writeCompactedLog(agentName, summary);
+  if (summary) {
+    writeCompactedLog(agentName, summary);
+    logInfo(`[${agentName}] Compaction abgeschlossen`);
+  }
 }
 
 // Manueller Compaction-Trigger (für /kompakt Befehl)

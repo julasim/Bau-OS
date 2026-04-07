@@ -1,5 +1,6 @@
 import type { Context } from "grammy";
 import { vaultExists, getVaultPath, inspectAgentWorkspace, estimateTokens, clearAgentToday, listAgents, getAgentPath, loadAgentHistory } from "../obsidian.js";
+import { readRecentLogs } from "../logger.js";
 import fs from "fs";
 import path from "path";
 
@@ -13,6 +14,8 @@ System-Commands
 /heute    Tages-Briefing
 /status   Bot-Status
 /config   Konfiguration
+/logs     Fehler-Logs anzeigen
+/restart  Bot neu starten
 /kontext  Kontext-Auslastung
 /kompakt  Log komprimieren
 /neu      Kontext zurücksetzen
@@ -125,6 +128,8 @@ Bau-OS – System-Commands
 /kontext      Kontext-Auslastung
 /kompakt      Log komprimieren
 /neu          Gesprächskontext zurücksetzen
+/restart      Bot neu starten
+/logs [n]     Letzte n Log-Einträge (Standard: 20, max: 50)
 /whoami       Meine Chat-ID anzeigen
 /agents       Sub-Agents auflisten
 /export       Session-Log exportieren
@@ -235,9 +240,21 @@ export async function handleHeute(ctx: Context): Promise<void> {
     }
   } catch (err) {
     clearInterval(typing);
-    console.error("Heute Fehler:", err);
+    logError("Heute", err);
     await ctx.reply("Fehler beim Briefing – ist Ollama erreichbar?");
   }
+}
+
+export async function handleRestart(ctx: Context): Promise<void> {
+  await ctx.reply("Bot wird neu gestartet...");
+  setTimeout(() => process.exit(0), 500);
+}
+
+export async function handleLogs(ctx: Context, args: string): Promise<void> {
+  const n = Math.min(parseInt(args?.trim()) || 20, 50);
+  const logs = readRecentLogs(n);
+  const out = logs.length > 3800 ? "...(gekürzt)\n" + logs.slice(-3800) : logs;
+  await ctx.reply(`Letzte ${n} Log-Einträge:\n\n${out}`);
 }
 
 export async function handleConfig(ctx: Context): Promise<void> {

@@ -3,6 +3,7 @@ import path from "path";
 import cron from "node-cron";
 import { getAgentPath, listAgents } from "./obsidian.js";
 import { TIMEZONE, CHAT_ID_FILE } from "./config.js";
+import { logInfo, logError } from "./logger.js";
 
 // ─── Chat-ID Persistenz ───────────────────────────────────────────────────────
 
@@ -71,14 +72,15 @@ async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> 
   const config = parseHeartbeat(agentName);
   if (!config) return;
 
-  console.log(`[Heartbeat] ${agentName} läuft (${new Date().toLocaleTimeString("de-AT")})`);
+  logInfo(`[Heartbeat] ${agentName} gestartet`);
 
   try {
     const { processAgent } = await import("./llm.js");
     const antwort = await processAgent(agentName, config.prompt, "full");
+    logInfo(`[Heartbeat] ${agentName} abgeschlossen`);
     await replyFn(chatId, `🫀 ${agentName}:\n\n${antwort}`);
   } catch (err) {
-    console.error(`[Heartbeat] Fehler bei ${agentName}:`, err);
+    logError(`Heartbeat/${agentName}`, err);
   }
 }
 
@@ -95,18 +97,18 @@ export function startHeartbeat(replyFn: ReplyFn): void {
     if (!config) continue;
 
     cron.schedule(config.cronExpression, () => {
-      runHeartbeat(agentName, replyFn).catch(console.error);
+      runHeartbeat(agentName, replyFn).catch(err => logError(`Heartbeat/cron/${agentName}`, err));
     }, {
       timezone: TIMEZONE,
     });
 
-    console.log(`[Heartbeat] ${agentName} → "${config.cronExpression}" (Europe/Vienna)`);
+    logInfo(`[Heartbeat] ${agentName} registriert: "${config.cronExpression}"`);
     registered++;
   }
 
   if (registered === 0) {
-    console.log("[Heartbeat] Keine Agents mit Cron-Konfiguration gefunden.");
+    logInfo("[Heartbeat] Keine Agents mit Cron-Konfiguration.");
   } else {
-    console.log(`[Heartbeat] ${registered} Cron-Job(s) registriert.`);
+    logInfo(`[Heartbeat] ${registered} Cron-Job(s) registriert`);
   }
 }
