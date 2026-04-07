@@ -146,7 +146,7 @@ export function createAgentWorkspace(agentName: string, soul: string, agentsMd =
     "TOOLS.md":      `# ${agentName} – Tool-Konventionen\n\nNoch keine Konventionen definiert.\n`,
     "MEMORY.md":     `# Memory – ${agentName}\n\nNoch keine dauerhaften Erkenntnisse.\n`,
     "BOOT.md":       `# ${agentName} – Boot\n\nKein spezieller Startup-Check konfiguriert.\n`,
-    "HEARTBEAT.md":  `# ${agentName} – Heartbeat\n\nKein periodischer Heartbeat konfiguriert.\n`,
+    "HEARTBEAT.md":  `# ${agentName} – Heartbeat\n\nCron: */30 8-20 * * 1-6\n\n## Aufgaben\nPruefe ob es etwas Relevantes zu melden gibt:\n1. Termine die HEUTE anstehen (nutze termine_auflisten)\n2. Offene Aufgaben die ueberfaellig oder dringend sind (nutze aufgaben_auflisten)\n3. Wichtige Erinnerungen aus MEMORY.md\n\n## Regeln\n- NUR melden wenn es etwas Konkretes gibt (Termin heute, ueberfaellige Aufgabe)\n- Wenn NICHTS relevant ist: antworte exakt mit [STILL] — keine Nachricht wird gesendet\n- Kurz und knapp — maximal 3-5 Zeilen\n- Keine Floskeln, kein "Guten Morgen", direkt zur Sache\n- Termine: Uhrzeit + was ansteht\n- Aufgaben: nur ueberfaellige oder heute faellige\n`,
     "BOOTSTRAP.md":  `# ${agentName} – Bootstrap\n\nErster Start. Stelle dich kurz vor und frage womit du helfen kannst.\n`,
   };
 

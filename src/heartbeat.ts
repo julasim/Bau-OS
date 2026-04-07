@@ -75,6 +75,14 @@ async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> 
     const { processAgent } = await import("./llm/runtime.js");
     const antwort = await processAgent(agentName, config.prompt, "full");
     logInfo(`[Heartbeat] ${agentName} abgeschlossen`);
+
+    // Stille-Modus: Agent antwortet mit [STILL] wenn nichts zu melden ist
+    const trimmed = antwort.trim();
+    if (trimmed.startsWith("[STILL]") || trimmed.toLowerCase() === "nichts zu melden.") {
+      logInfo(`[Heartbeat] ${agentName}: nichts zu melden, ueberspringe Nachricht`);
+      return;
+    }
+
     await replyFn(chatId, `\u{1FAC0} ${agentName}:\n\n${antwort}`);
   } catch (err) {
     logError(`Heartbeat/${agentName}`, err);
