@@ -1,0 +1,26 @@
+[Unit]
+Description=Bau-OS KI-Assistent (Telegram Bot)
+Documentation=https://docs.bau-os.at
+After=network.target ollama.service
+Wants=ollama.service
+
+[Service]
+Type=simple
+User=bauos
+WorkingDirectory=/opt/bau-os
+EnvironmentFile=/opt/bau-os/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=bau-os
+
+# Sicherheit
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/bau-os/logs
+
+[Install]
+WantedBy=multi-user.target
