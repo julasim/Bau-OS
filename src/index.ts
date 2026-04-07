@@ -12,7 +12,6 @@ if (!vaultPath) throw new Error("VAULT_PATH fehlt in .env");
 
 const bot = createBot(token) as Bot;
 
-// Heartbeat: sendet Ergebnis direkt via Telegram API
 startHeartbeat(async (chatId, text) => {
   const { fmt } = await import("./format.js");
   try {

@@ -1,5 +1,5 @@
 import type { Context } from "grammy";
-import { vaultExists, getVaultPath, inspectAgentWorkspace, estimateTokens, clearAgentToday, listAgents, getAgentPath, loadAgentHistory } from "../obsidian.js";
+import { vaultExists, getVaultPath, inspectAgentWorkspace, estimateTokens, clearAgentToday, listAgents, getAgentPath, loadAgentHistory } from "../vault/index.js";
 import { readRecentLogs, logError } from "../logger.js";
 import fs from "fs";
 import path from "path";
@@ -55,7 +55,7 @@ export async function handleStatus(ctx: Context): Promise<void> {
   const status = `
 Bau-OS Status
 
-Vault: ${vault ? "✓ erreichbar" : "✗ nicht gefunden"}
+Vault: ${vault ? "\u2713 erreichbar" : "\u2717 nicht gefunden"}
 Pfad: ${vaultPath}
 Notizen in Inbox: ${inboxCount}
 Offene Aufgaben: ${taskCount}
@@ -77,7 +77,6 @@ export async function handleKontext(ctx: Context): Promise<void> {
 
   const totalInjected = files.filter(f => f.loaded).reduce((s, f) => s + f.injectedChars, 0);
   const totalTokens = files.filter(f => f.loaded).reduce((s, f) => s + f.tokens, 0);
-  const limitTokens = estimateTokens(150_000 + ""); // 37.500 tok
 
   const lines = files.map(f => {
     const size = f.rawChars >= 1000
@@ -87,14 +86,14 @@ export async function handleKontext(ctx: Context): Promise<void> {
       !f.loaded   ? "SKIP" : "",
       f.truncated ? "TRUNCATED" : "",
     ].filter(Boolean).join(" ");
-    return `${f.name.padEnd(12)} ${size.padStart(5)} Z  (~${f.tokens} tok)${flags ? "  ⚠ " + flags : ""}`;
+    return `${f.name.padEnd(12)} ${size.padStart(5)} Z  (~${f.tokens} tok)${flags ? "  \u26A0 " + flags : ""}`;
   });
 
   const out = [
-    "📊 Main Agent Kontext",
-    "─".repeat(36),
+    "\u{1F4CA} Main Agent Kontext",
+    "\u2500".repeat(36),
     ...lines,
-    "─".repeat(36),
+    "\u2500".repeat(36),
     `Gesamt:      ${(totalInjected / 1000).toFixed(1)}k Z  (~${totalTokens} tok)`,
     `Limit:       150k Z  (~37.500 tok)`,
     `Auslastung:  ${Math.round((totalInjected / 150_000) * 100)}%`,
@@ -106,13 +105,13 @@ export async function handleKontext(ctx: Context): Promise<void> {
 export async function handleNeu(ctx: Context): Promise<void> {
   const cleared = clearAgentToday("Main");
   await ctx.reply(cleared
-    ? "Gesprächskontext zurückgesetzt. Ich starte frisch."
+    ? "Gespraechskontext zurueckgesetzt. Ich starte frisch."
     : "Kein heutiger Verlauf gefunden – bin bereits frisch."
   );
 }
 
 export async function handleKompakt(ctx: Context): Promise<void> {
-  const { compactNow } = await import("../llm.js");
+  const { compactNow } = await import("../llm/compaction.js");
   await ctx.replyWithChatAction("typing");
   const result = await compactNow("Main");
   await ctx.reply(result);
@@ -127,9 +126,9 @@ Bau-OS – System-Commands
 /status       Bot-Status
 /kontext      Kontext-Auslastung
 /kompakt      Log komprimieren
-/neu          Gesprächskontext zurücksetzen
+/neu          Gespraechskontext zuruecksetzen
 /restart      Bot neu starten
-/logs [n]     Letzte n Log-Einträge (Standard: 20, max: 50)
+/logs [n]     Letzte n Log-Eintraege (Standard: 20, max: 50)
 /whoami       Meine Chat-ID anzeigen
 /agents       Sub-Agents auflisten
 /export       Session-Log exportieren
@@ -161,7 +160,7 @@ export async function handleAgents(ctx: Context): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const lines = agents.map(name => {
     const logPath = path.join(getAgentPath(name), "MEMORY_LOGS", `${today}.md`);
-    const aktiv = fs.existsSync(logPath) ? "● aktiv" : "○";
+    const aktiv = fs.existsSync(logPath) ? "\u25CF aktiv" : "\u25CB";
     return `${aktiv} ${name}`;
   });
 
@@ -171,7 +170,7 @@ export async function handleAgents(ctx: Context): Promise<void> {
 export async function handleExportSession(ctx: Context): Promise<void> {
   const history = loadAgentHistory("Main", 100);
   if (!history.length) {
-    await ctx.reply("Kein Gesprächsverlauf für heute.");
+    await ctx.reply("Kein Gespraechsverlauf fuer heute.");
     return;
   }
 
@@ -184,11 +183,11 @@ export async function handleExportSession(ctx: Context): Promise<void> {
   if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
   fs.writeFileSync(exportPath, content, "utf-8");
 
-  await ctx.reply(`✅ Exportiert nach:\nExports/session_${today}.md`);
+  await ctx.reply(`\u2705 Exportiert nach:\nExports/session_${today}.md`);
 }
 
 export async function handleModel(ctx: Context, args: string): Promise<void> {
-  const { getModel, getSubagentModel, isFastMode, setModel } = await import("../llm.js");
+  const { getModel, getSubagentModel, isFastMode, setModel } = await import("../llm/client.js");
   const name = args?.trim();
 
   if (!name) {
@@ -199,16 +198,16 @@ export async function handleModel(ctx: Context, args: string): Promise<void> {
   }
 
   setModel(name);
-  await ctx.reply(`✅ Modell gewechselt auf: ${name}`);
+  await ctx.reply(`\u2705 Modell gewechselt auf: ${name}`);
 }
 
 export async function handleFast(ctx: Context): Promise<void> {
-  const { toggleFast, getModel } = await import("../llm.js");
+  const { toggleFast, getModel } = await import("../llm/client.js");
   const isNowFast = toggleFast();
   await ctx.reply(
     isNowFast
-      ? `⚡ Fast-Modus an — aktives Modell: ${getModel()}`
-      : `🐢 Fast-Modus aus — aktives Modell: ${getModel()}`
+      ? `\u26A1 Fast-Modus an — aktives Modell: ${getModel()}`
+      : `\u{1F422} Fast-Modus aus — aktives Modell: ${getModel()}`
   );
 }
 
@@ -221,14 +220,14 @@ export async function handleSprache(ctx: Context, args: string): Promise<void> {
   }
 
   process.env.WHISPER_LANG = lang;
-  await ctx.reply(`Whisper-Sprache geändert auf: ${lang}`);
+  await ctx.reply(`Whisper-Sprache geaendert auf: ${lang}`);
 }
 
 export async function handleHeute(ctx: Context): Promise<void> {
   const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), 4000);
   await ctx.replyWithChatAction("typing");
   try {
-    const { processAgent } = await import("../llm.js");
+    const { processAgent } = await import("../llm/runtime.js");
     const { fmt, stripMarkdown } = await import("../format.js");
     const prompt = "Erstelle ein Tages-Briefing: (1) Heutige Termine, (2) Offene Aufgaben, (3) Relevantes aus MEMORY.md. Nur was heute relevant ist. Kurz und strukturiert.";
     const antwort = await processAgent("Main", prompt, "full");
@@ -253,24 +252,21 @@ export async function handleRestart(ctx: Context): Promise<void> {
 export async function handleLogs(ctx: Context, args: string): Promise<void> {
   const n = Math.min(parseInt(args?.trim()) || 20, 50);
   const logs = readRecentLogs(n);
-  const out = logs.length > 3800 ? "...(gekürzt)\n" + logs.slice(-3800) : logs;
-  await ctx.reply(`Letzte ${n} Log-Einträge:\n\n${out}`);
+  const out = logs.length > 3800 ? "...(gekuerzt)\n" + logs.slice(-3800) : logs;
+  await ctx.reply(`Letzte ${n} Log-Eintraege:\n\n${out}`);
 }
 
 export async function handleConfig(ctx: Context): Promise<void> {
-  const token = process.env.BOT_TOKEN ?? "–";
-  const masked = token.length > 10 ? token.slice(0, 8) + "..." + token.slice(-4) : "–";
+  const token = process.env.BOT_TOKEN ?? "\u2013";
+  const masked = token.length > 10 ? token.slice(0, 8) + "..." + token.slice(-4) : "\u2013";
 
   const out = [
     "Bau-OS Konfiguration",
     "",
     `BOT_TOKEN:  ${masked}`,
-    `VAULT_PATH: ${process.env.VAULT_PATH ?? "–"}`,
+    `VAULT_PATH: ${process.env.VAULT_PATH ?? "\u2013"}`,
     `OLLAMA_URL: ${process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1"}`,
     `MODELL:     ${process.env.OLLAMA_MODEL ?? "qwen2.5:7b"}`,
-    `DASHBOARD:  Port ${process.env.DASHBOARD_PORT ?? "3000"}`,
-    "",
-    "Bearbeitung nur über Web-Dashboard möglich.",
   ].join("\n");
 
   await ctx.reply(out);

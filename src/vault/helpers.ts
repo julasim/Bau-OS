@@ -1,0 +1,47 @@
+import fs from "fs";
+import path from "path";
+import { VAULT_PATH, VAULT_INBOX, LOCALE } from "../config.js";
+
+export const vaultPath = VAULT_PATH;
+
+export function timestampFilename(): string {
+  return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+}
+
+export function frontmatter(source = "telegram"): string {
+  const now = new Date();
+  const date = now.toLocaleDateString(LOCALE, { year: "numeric", month: "2-digit", day: "2-digit" });
+  const time = now.toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+  return `---\ncreated: ${date} ${time}\nsource: ${source}\n---\n\n`;
+}
+
+export function ensureDir(dir: string): void {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+export function resolveNotePath(nameOrPath: string): string | null {
+  const withExt = nameOrPath.endsWith(".md") ? nameOrPath : nameOrPath + ".md";
+
+  for (const candidate of [
+    path.join(vaultPath, withExt),
+    path.join(vaultPath, VAULT_INBOX, withExt),
+  ]) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+
+  function searchDir(dir: string): string | null {
+    if (!fs.existsSync(dir)) return null;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const found = searchDir(full);
+        if (found) return found;
+      } else if (entry.name === withExt || entry.name.includes(nameOrPath)) {
+        return full;
+      }
+    }
+    return null;
+  }
+
+  return searchDir(vaultPath);
+}

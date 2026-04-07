@@ -1,14 +1,15 @@
 import { Bot } from "grammy";
-import { saveNote, isMainWorkspaceConfigured } from "./obsidian.js";
-import { processMessage, processBtw, processSetup, setReplyContext } from "./llm.js";
+import { saveNote, isMainWorkspaceConfigured } from "./vault/index.js";
+import { processMessage, processBtw, processAgent } from "./llm/runtime.js";
+import { processSetup, isSetupActive, activateSetup } from "./llm/setup.js";
+import { setReplyContext } from "./llm/executor.js";
 import { logError } from "./logger.js";
 import { enqueue } from "./queue.js";
-import { isSetupActive, activateSetup } from "./setup.js";
 import { fmt, stripMarkdown } from "./format.js";
 import { saveChatId } from "./heartbeat.js";
 import { handleHilfe, handleStatus, handleSprache, handleKontext, handleKompakt, handleNeu, handleCommands, handleWhoami, handleAgents, handleExportSession, handleModel, handleFast, handleHeute, handleConfig, handleRestart, handleLogs } from "./commands/system.js";
 
-// Sendet mit HTML-Formatting, fällt bei Telegram-Fehler auf Plaintext zurück
+// Sendet mit HTML-Formatting, faellt bei Telegram-Fehler auf Plaintext zurueck
 async function safeReply(ctx: { reply: (text: string, opts?: object) => Promise<unknown> }, text: string): Promise<void> {
   try {
     await ctx.reply(fmt(text), { parse_mode: "HTML" });
@@ -20,7 +21,7 @@ async function safeReply(ctx: { reply: (text: string, opts?: object) => Promise<
 export function createBot(token: string): Bot {
   const bot = new Bot(token);
 
-  // ─── System ────────────────────────────────────────────────────────────────
+  // --- System ---
   bot.command("start",   (ctx) => handleHilfe(ctx));
   bot.command("hilfe",   (ctx) => handleHilfe(ctx));
   bot.command("commands", (ctx) => handleCommands(ctx));
@@ -39,13 +40,13 @@ export function createBot(token: string): Bot {
   bot.command("restart",  (ctx) => handleRestart(ctx));
   bot.command("logs",     (ctx) => handleLogs(ctx, ctx.match));
 
-  // ─── Textnachrichten → LLM ────────────────────────────────────────────────
+  // --- Textnachrichten -> LLM ---
   bot.on("message:text", (ctx) => {
     enqueue(ctx.chat.id, async () => {
       saveChatId(ctx.chat.id);
       const raw = ctx.message.text;
 
-      // ─── Setup-Wizard (Erster Start) ─────────────────────────────────────
+      // Setup-Wizard (Erster Start)
       if (!isMainWorkspaceConfigured() || isSetupActive()) {
         if (!isSetupActive()) activateSetup();
         const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), 4000);
@@ -62,7 +63,7 @@ export function createBot(token: string): Bot {
         return;
       }
 
-      // /btw Direktive: geht ans LLM, wird nicht ins Log geschrieben
+      // /btw Direktive
       const btwMatch = raw.match(/^\/btw\s+(.+)/is);
       if (btwMatch) {
         const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), 4000);
@@ -103,9 +104,8 @@ export function createBot(token: string): Bot {
     });
   });
 
-  // Sprachnachrichten: aktuell nicht unterstützt
   bot.on("message:voice", (ctx) => {
-    ctx.reply("🎤 Sprachnachrichten werden derzeit nicht unterstützt. Bitte als Text schreiben.");
+    ctx.reply("\u{1F3A4} Sprachnachrichten werden derzeit nicht unterstuetzt. Bitte als Text schreiben.");
   });
 
   return bot;
