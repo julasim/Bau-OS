@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { OLLAMA_BASE_URL, DEFAULT_MODEL, FAST_MODEL, SUBAGENT_MODEL, LANGUAGE, LOCALE } from "../config.js";
+import { OLLAMA_BASE_URL, DEFAULT_MODEL, FAST_MODEL, SUBAGENT_MODEL, LOCALE } from "../config.js";
 
 export const client = new OpenAI({
   baseURL: OLLAMA_BASE_URL,
@@ -23,5 +23,7 @@ export function toggleFast(): boolean {
   return _fastMode;
 }
 
-export const BASE_PROMPT = `Heute ist: ${new Date().toLocaleDateString(LOCALE, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-Antworte immer auf ${LANGUAGE}. Halte Antworten kurz (wir sind in Telegram).`;
+/** Einzige Code-Injektion: dynamisches Datum. Alles andere kommt aus den Agent-MD-Dateien. */
+export function buildDateLine(): string {
+  return `Heute ist: ${new Date().toLocaleDateString(LOCALE, { weekday: "long", year: "numeric", month: "long", day: "numeric" })}`;
+}

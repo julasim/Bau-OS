@@ -143,9 +143,9 @@ export function createAgentWorkspace(agentName: string, soul: string, agentsMd =
     "SOUL.md":       soul,
     "AGENTS.md":     agentsMd || agentsDefault,
     "USER.md":       userMd || userDefault,
-    "TOOLS.md":      `# ${agentName} – Tool-Konventionen\n\nNoch keine Konventionen definiert.\n`,
+    "TOOLS.md":      `# ${agentName} – Tool-Konventionen\n\n## Wann welches Tool\n- notiz_speichern → freie Gedanken, Beobachtungen, Ideen\n- aufgabe_speichern → konkrete To-dos mit Verb am Anfang\n- termin_speichern → Meetings, Deadlines (immer mit Datum TT.MM.JJJJ)\n- memory_speichern → dauerhaft wichtige Fakten\n- vault_suchen → vor dem Erstellen erst suchen ob es schon existiert\n- agent_spawnen → fuer kurze Sub-Aufgaben\n- agent_spawnen_async → fuer laengere Aufgaben\n\n## Regeln\n- Nie doppelt speichern — zuerst suchen\n- Aufgaben immer mit konkretem Verb beginnen\n- Termine immer mit Datum im Format TT.MM.JJJJ\n- Bei Unsicherheit nachfragen statt raten\n`,
     "MEMORY.md":     `# Memory – ${agentName}\n\nNoch keine dauerhaften Erkenntnisse.\n`,
-    "BOOT.md":       `# ${agentName} – Boot\n\nKein spezieller Startup-Check konfiguriert.\n`,
+    "BOOT.md":       `# ${agentName} – Boot\n\n## Bei jedem Gespraech\n- Antworte immer auf Deutsch\n- Halte Antworten kurz und direkt — wir sind in Telegram, kein Fliesstext\n- Bestaetigungen kurz halten (z.B. "gespeichert", "erledigt")\n- Bei Unsicherheit nachfragen statt raten\n- Keine unnoetige Hoeflichkeitsfloskeln\n`,
     "HEARTBEAT.md":  `# ${agentName} – Heartbeat\n\nCron: */30 8-20 * * 1-6\n\n## Aufgaben\nPruefe ob es etwas Relevantes zu melden gibt:\n1. Termine die HEUTE anstehen (nutze termine_auflisten)\n2. Offene Aufgaben die ueberfaellig oder dringend sind (nutze aufgaben_auflisten)\n3. Wichtige Erinnerungen aus MEMORY.md\n\n## Regeln\n- NUR melden wenn es etwas Konkretes gibt (Termin heute, ueberfaellige Aufgabe)\n- Wenn NICHTS relevant ist: antworte exakt mit [STILL] — keine Nachricht wird gesendet\n- Kurz und knapp — maximal 3-5 Zeilen\n- Keine Floskeln, kein "Guten Morgen", direkt zur Sache\n- Termine: Uhrzeit + was ansteht\n- Aufgaben: nur ueberfaellige oder heute faellige\n`,
     "BOOTSTRAP.md":  `# ${agentName} – Bootstrap\n\nErster Start. Stelle dich kurz vor und frage womit du helfen kannst.\n`,
   };

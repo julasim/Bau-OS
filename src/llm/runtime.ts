@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import { client, BASE_PROMPT } from "./client.js";
+import { client, buildDateLine } from "./client.js";
 import { TOOLS } from "./tools.js";
 import { executeTool, setCurrentDepth, registerProcessAgent } from "./executor.js";
 import { runCompaction } from "./compaction.js";
@@ -16,9 +16,10 @@ export async function processAgent(agentName: string, userMessage: string, mode:
   logInfo(`[${agentName}] Start — "${preview}"`);
 
   const workspaceContext = loadAgentWorkspace(agentName, mode);
+  const dateLine = buildDateLine();
   const systemPrompt = workspaceContext
-    ? `${BASE_PROMPT}\n\n${workspaceContext}`
-    : BASE_PROMPT;
+    ? `${dateLine}\n\n${workspaceContext}`
+    : dateLine;
 
   const history = mode === "full" ? loadAgentHistory(agentName, 10) : [];
 
@@ -90,7 +91,8 @@ export async function processAgent(agentName: string, userMessage: string, mode:
 // btw-Modus: direkte Antwort ohne Tools und ohne Log
 export async function processBtw(userMessage: string): Promise<string> {
   const workspaceContext = loadAgentWorkspace("Main", "minimal");
-  const systemPrompt = workspaceContext ? `${BASE_PROMPT}\n\n${workspaceContext}` : BASE_PROMPT;
+  const dateLine = buildDateLine();
+  const systemPrompt = workspaceContext ? `${dateLine}\n\n${workspaceContext}` : dateLine;
 
   const response = await client.chat.completions.create({
     model: (await import("./client.js")).getModel(),

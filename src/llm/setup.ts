@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type OpenAI from "openai";
-import { client, getModel, BASE_PROMPT } from "./client.js";
+import { client, getModel } from "./client.js";
 import { loadAgentWorkspace, finalizeMainWorkspace } from "../vault/index.js";
 
 // ---- Setup State (replaces src/setup.ts) ----
