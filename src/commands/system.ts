@@ -1,6 +1,6 @@
 import type { Context } from "grammy";
 import { vaultExists, getVaultPath, inspectAgentWorkspace, estimateTokens, clearAgentToday, listAgents, getAgentPath, loadAgentHistory } from "../obsidian.js";
-import { readRecentLogs } from "../logger.js";
+import { readRecentLogs, logError } from "../logger.js";
 import fs from "fs";
 import path from "path";
 

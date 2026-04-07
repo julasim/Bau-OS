@@ -1,7 +1,6 @@
 import "dotenv/config";
 import { createBot } from "./bot.js";
 import { startHeartbeat } from "./heartbeat.js";
-import { startDashboard } from "./dashboard.js";
 import { logInfo } from "./logger.js";
 import { Bot } from "grammy";
 
@@ -23,6 +22,5 @@ startHeartbeat(async (chatId, text) => {
   }
 });
 
-startDashboard();
 bot.start();
 logInfo("Bau-OS gestartet");
