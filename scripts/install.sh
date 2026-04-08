@@ -11,21 +11,78 @@
 
 set -e
 
-# ── Farben ────────────────────────────────────────────────────────────────────
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-RED='\033[0;31m'
-BOLD='\033[1m'
-NC='\033[0m'
+# ─────────────────────────────────────────────────────────────────────────────
+# Konfiguration
+# ─────────────────────────────────────────────────────────────────────────────
+readonly INSTALL_DIR_DEFAULT="/opt/bau-os"
+readonly VAULT_DIR_DEFAULT="/opt/bau-os-vault"
+readonly SERVICE_USER="bauos"
 
-ok()    { echo -e "${GREEN}✓${NC} $1"; }
-warn()  { echo -e "${YELLOW}!${NC} $1"; }
-err()   { echo -e "${RED}✗${NC} $1"; exit 1; }
-step()  { echo -e "\n${YELLOW}▶${NC} ${BOLD}$1${NC}"; }
-info()  { echo -e "  ${BLUE}→${NC} $1"; }
+# ─────────────────────────────────────────────────────────────────────────────
+# Farben & Formatierung
+# ─────────────────────────────────────────────────────────────────────────────
+readonly GREEN='\033[0;32m'
+readonly YELLOW='\033[1;33m'
+readonly BLUE='\033[0;34m'
+readonly RED='\033[0;31m'
+readonly BOLD='\033[1m'
+readonly DIM='\033[2m'
+readonly NC='\033[0m'
 
-ask() {
+# ─────────────────────────────────────────────────────────────────────────────
+# Hilfsfunktionen
+# ─────────────────────────────────────────────────────────────────────────────
+ok()    { echo -e "${GREEN}  ✓${NC} $1"; }
+warn()  { echo -e "${YELLOW}  !${NC} $1"; }
+err()   { echo -e "${RED}  ✗${NC} $1"; exit 1; }
+
+print_header() {
+  echo ""
+  echo -e "${BOLD}╔══════════════════════════════════════════════════════════════════════════╗${NC}"
+  echo -e "${BOLD}║${NC}  $1"
+  echo -e "${BOLD}╚══════════════════════════════════════════════════════════════════════════╝${NC}"
+}
+
+print_section() {
+  echo ""
+  echo -e "${BOLD}── $1${NC}"
+  echo ""
+}
+
+step() {
+  echo ""
+  echo -e "${YELLOW}▶${NC} ${BOLD}$1${NC}"
+}
+
+info() {
+  echo -e "${DIM}   $1${NC}"
+}
+
+# Menü-Auswahl mit Validierung (Ausgabe auf stderr, nur Ergebnis auf stdout)
+select_option() {
+  local prompt="$1"
+  shift
+  local options=("$@")
+  local choice
+
+  echo "" >&2
+  for i in "${!options[@]}"; do
+    echo "  [$((i + 1))] ${options[$i]}" >&2
+  done
+  echo "" >&2
+
+  while true; do
+    read -rp "  $prompt: " choice
+    if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
+      echo "$choice"
+      return
+    fi
+    echo -e "  ${RED}Ungültige Eingabe. Bitte 1-${#options[@]} eingeben.${NC}" >&2
+  done
+}
+
+# Eingabe mit Validierung (nicht leer)
+ask_required() {
   local prompt="$1"
   local var
   while true; do
@@ -34,10 +91,11 @@ ask() {
       echo "$var"
       return
     fi
-    echo -e "  ${RED}Darf nicht leer sein. Bitte erneut eingeben.${NC}" >&2
+    echo -e "  ${RED}Darf nicht leer sein. Bitte erneut eingeben.${NC}"
   done
 }
 
+# Eingabe mit Default-Wert
 ask_default() {
   local prompt="$1"
   local default="$2"
@@ -46,71 +104,58 @@ ask_default() {
   echo "${var:-$default}"
 }
 
-# ── Root-Check ────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────────────────────
+# Root-Check
+# ─────────────────────────────────────────────────────────────────────────────
 if [ "$EUID" -ne 0 ]; then
   err "Bitte als root ausführen: sudo bash scripts/install.sh"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-echo ""
-echo -e "${BOLD}╔══════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║        Bau-OS Installation           ║${NC}"
-echo -e "${BOLD}╚══════════════════════════════════════╝${NC}"
-echo ""
+# Hauptprogramm
+# ─────────────────────────────────────────────────────────────────────────────
+print_header "Bau-OS Installation"
+
 echo "Dieses Script installiert Bau-OS vollautomatisch auf Ubuntu 24.04."
-echo "Du wirst nur nach wenigen Werten gefragt."
+echo "Du wirst nach wenigen Werten gefragt."
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SCHRITT 1: Konfiguration abfragen (alles VOR der Installation)
+# SCHRITT 1: Konfiguration
 # ─────────────────────────────────────────────────────────────────────────────
-echo -e "${BOLD}── Konfiguration ────────────────────────────────────────────────────────────${NC}"
-echo ""
+print_section "Konfiguration"
 
 # Telegram Bot Token
 echo -e "  ${BOLD}Telegram Bot Token${NC}"
 info "Erstelle einen Bot via @BotFather in Telegram → /newbot"
-BOT_TOKEN=$(ask "Bot Token")
-
+echo ""
+BOT_TOKEN=$(ask_required "Bot Token")
 echo ""
 
-# LLM-Modus: Cloud oder Lokal
+# LLM-Modus
 echo -e "  ${BOLD}LLM-Modus${NC}"
 info "Cloud: kein lokaler RAM nötig, benötigt Ollama-Konto (ollama.com)"
 info "Lokal: Modell wird heruntergeladen, braucht mind. 8 GB RAM"
-echo ""
-echo "  [1] Cloud  (empfohlen — kimi-k2.5, gemma4, qwen3 etc.)"
-echo "  [2] Lokal  (qwen2.5:7b, llama3.1:8b etc.)"
-echo ""
-while true; do
-  read -rp "  Auswahl [1/2]: " LLM_CHOICE
-  case "$LLM_CHOICE" in
-    1) LLM_MODE="cloud"; break ;;
-    2) LLM_MODE="local"; break ;;
-    *) echo -e "  ${RED}Bitte 1 oder 2 eingeben.${NC}" ;;
-  esac
-done
+LLM_CHOICE=$(select_option "Auswahl" "Cloud  (empfohlen — kimi-k2.5, gemma4, qwen3 etc.)" "Lokal  (qwen2.5:7b, llama3.1:8b etc.)")
 
-if [ "$LLM_MODE" = "cloud" ]; then
+if [ "$LLM_CHOICE" -eq 1 ]; then
+  LLM_MODE="cloud"
   echo ""
-  echo "  Verfügbare Cloud-Modelle: kimi-k2.5:cloud, gemma4:cloud, qwen3-next:cloud"
+  info "Verfügbare Cloud-Modelle: kimi-k2.5:cloud, gemma4:cloud, qwen3-next:cloud"
   OLLAMA_MODEL=$(ask_default "Modell" "kimi-k2.5:cloud")
 else
+  LLM_MODE="local"
   echo ""
-  echo "  Verfügbare lokale Modelle: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
+  info "Verfügbare lokale Modelle: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
   OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:7b")
 fi
 
 echo ""
+INSTALL_DIR=$(ask_default "Installationsverzeichnis" "$INSTALL_DIR_DEFAULT")
+VAULT_DIR=$(ask_default "Vault-Verzeichnis" "$VAULT_DIR_DEFAULT")
 
-# Installationspfade (Defaults anzeigen, änderbar)
-INSTALL_DIR=$(ask_default "Installationsverzeichnis" "/opt/bau-os")
-VAULT_DIR=$(ask_default "Vault-Verzeichnis" "/opt/bau-os-vault")
-SERVICE_USER="bauos"
-
-echo ""
-echo -e "${BOLD}── Zusammenfassung ──────────────────────────────────────────────────────────${NC}"
-echo ""
+# Zusammenfassung
+print_section "Zusammenfassung"
 info "Bot Token:    ${BOT_TOKEN:0:8}...${BOT_TOKEN: -4}"
 info "LLM-Modus:    $LLM_MODE ($OLLAMA_MODEL)"
 info "Install-Pfad: $INSTALL_DIR"
@@ -171,50 +216,39 @@ if [ "$LLM_MODE" = "cloud" ]; then
   if ! ollama signin; then
     echo ""
     warn "Ollama Login fehlgeschlagen"
-    echo ""
-    echo "  Was möchtest du tun?"
-    echo ""
-    echo "  [1] Auf lokales Modell umstellen (wird heruntergeladen)"
-    echo "  [2] Installation abbrechen"
-    echo "  [3] Login erneut versuchen"
-    echo ""
-    while true; do
-      read -rp "  Auswahl [1/2/3]: " LOGIN_FAIL_CHOICE
-      case "$LOGIN_FAIL_CHOICE" in
-        1)
-          echo ""
-          info "Wechsle zu lokalem Modell..."
-          LLM_MODE="local"
-          # Lokales Standardmodell verwenden
-          OLLAMA_MODEL="qwen2.5:7b"
-          info "Lokales Modell: $OLLAMA_MODEL"
-          step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
-          warn "Das kann je nach Internetverbindung einige Minuten dauern..."
-          ollama pull "$OLLAMA_MODEL"
-          ok "Modell '$OLLAMA_MODEL' bereit"
-          break
-          ;;
-        2)
-          echo ""
-          info "Installation wurde abgebrochen"
-          exit 0
-          ;;
-        3)
-          echo ""
-          info "Erneuter Login-Versuch..."
-          if ollama signin; then
-            ok "Login erfolgreich"
-            ok "Cloud-Modus konfiguriert ($OLLAMA_MODEL)"
-            break
-          fi
-          echo ""
-          warn "Login erneut fehlgeschlagen"
-          ;;
-        *)
-          echo -e "  ${RED}Bitte 1, 2 oder 3 eingeben.${NC}"
-          ;;
-      esac
-    done
+    FAIL_CHOICE=$(select_option "Was möchtest du tun?" \
+      "Auf lokales Modell umstellen (wird heruntergeladen)" \
+      "Installation abbrechen" \
+      "Login erneut versuchen")
+
+    case "$FAIL_CHOICE" in
+      1)
+        echo ""
+        info "Wechsle zu lokalem Modell..."
+        LLM_MODE="local"
+        OLLAMA_MODEL="qwen2.5:7b"
+        info "Lokales Modell: $OLLAMA_MODEL"
+        step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
+        warn "Das kann einige Minuten dauern..."
+        ollama pull "$OLLAMA_MODEL"
+        ok "Modell '$OLLAMA_MODEL' bereit"
+        ;;
+      2)
+        echo ""
+        info "Installation wurde abgebrochen"
+        exit 0
+        ;;
+      3)
+        echo ""
+        info "Erneuter Login-Versuch..."
+        if ollama signin; then
+          ok "Login erfolgreich"
+          ok "Cloud-Modus konfiguriert ($OLLAMA_MODEL)"
+        else
+          err "Login erneut fehlgeschlagen. Bitte manuell nachholen: ollama signin"
+        fi
+        ;;
+    esac
   else
     ok "Cloud-Modus konfiguriert ($OLLAMA_MODEL)"
   fi
@@ -257,12 +291,10 @@ ok "Bau-OS gebaut"
 # ─────────────────────────────────────────────────────────────────────────────
 step "Verzeichnisse anlegen und Berechtigungen setzen..."
 
-# Vault
 mkdir -p "$VAULT_DIR"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$VAULT_DIR"
 info "Vault: $VAULT_DIR"
 
-# Logs-Ordner VOR chown erstellen (sonst gehört er root)
 mkdir -p "$INSTALL_DIR/logs"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 chmod 600 "$INSTALL_DIR/.env" 2>/dev/null || true
@@ -285,7 +317,7 @@ ENVEOF
   chmod 600 "$INSTALL_DIR/.env"
   ok ".env erstellt"
 else
-  warn ".env bereits vorhanden — übersprungen (bestehende Konfiguration bleibt erhalten)"
+  warn ".env bereits vorhanden — übersprungen"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -293,7 +325,6 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 step "systemd Service installieren..."
 
-# Pfade + Vault in Service-Datei eintragen
 sed \
   "s|/opt/bau-os-vault|$VAULT_DIR|g; \
    s|/opt/bau-os|$INSTALL_DIR|g; \
@@ -319,12 +350,10 @@ fi
 # FERTIG
 # ─────────────────────────────────────────────────────────────────────────────
 echo ""
-echo -e "${BOLD}╔══════════════════════════════════════╗${NC}"
-echo -e "${BOLD}║     ✓  Installation abgeschlossen!  ║${NC}"
-echo -e "${BOLD}╚══════════════════════════════════════╝${NC}"
+print_header "Installation abgeschlossen!"
 echo ""
-echo -e "  ${GREEN}▸ Öffne deinen Telegram Bot und schreibe 'Hallo'${NC}"
-echo    "    Der Setup-Wizard führt dich durch die Einrichtung."
+echo -e "  ${GREEN}▸${NC} Öffne deinen Telegram Bot und schreibe 'Hallo'"
+echo    "   Der Setup-Wizard führt dich durch die Einrichtung."
 echo ""
 echo    "Nützliche Befehle:"
 echo    "  systemctl status bau-os        → Status prüfen"
