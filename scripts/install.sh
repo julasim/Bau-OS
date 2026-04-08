@@ -172,11 +172,11 @@ fi
 # SCHRITT 2: System-Pakete
 # ─────────────────────────────────────────────────────────────────────────────
 step "System aktualisieren..."
-apt-get update -qq && apt-get upgrade -y -qq
+apt-get update -y >/dev/null 2>&1 && apt-get upgrade -y -qq >/dev/null 2>&1
 ok "System aktualisiert"
 
 step "Pakete installieren (git, curl)..."
-apt-get install -y git curl -qq
+apt-get install -y git curl >/dev/null 2>&1
 ok "Pakete installiert"
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -184,8 +184,8 @@ ok "Pakete installiert"
 # ─────────────────────────────────────────────────────────────────────────────
 step "Node.js 20 LTS installieren..."
 if ! command -v node &> /dev/null || [[ $(node --version | cut -d. -f1 | tr -d 'v') -lt 20 ]]; then
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash - -qq
-  apt-get install -y nodejs -qq
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+  apt-get install -y nodejs >/dev/null 2>&1
   ok "Node.js $(node --version) installiert"
 else
   ok "Node.js $(node --version) bereits vorhanden"
