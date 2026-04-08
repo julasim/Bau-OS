@@ -26,7 +26,7 @@ step() { echo -e "\n${YELLOW}▶${NC} $1"; }
 INSTALL_DIR="/opt/bau-os"
 VAULT_DIR="/opt/bau-os-vault"
 SERVICE_USER="bauos"
-OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:7b}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-kimi-k2.5:cloud}"
 
 # ── Root-Check ────────────────────────────────────────────────────────────────
 if [ "$EUID" -ne 0 ]; then
@@ -73,11 +73,17 @@ systemctl start ollama
 sleep 2
 ok "Ollama Service gestartet"
 
-# ── 5. LLM-Modell herunterladen ───────────────────────────────────────────────
-step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
-warn "Das kann je nach Internetverbindung einige Minuten dauern..."
-ollama pull "$OLLAMA_MODEL"
-ok "Modell '$OLLAMA_MODEL' bereit"
+# ── 5. LLM-Modell vorbereiten ────────────────────────────────────────────────
+if [[ "$OLLAMA_MODEL" == *":cloud"* ]]; then
+  step "Cloud-Modell erkannt ($OLLAMA_MODEL) — kein lokaler Download nötig"
+  warn "Nach der Installation: 'ollama signin' auf dem Server ausführen"
+  ok "Modell '$OLLAMA_MODEL' wird via Ollama Cloud geladen"
+else
+  step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
+  warn "Das kann je nach Internetverbindung einige Minuten dauern..."
+  ollama pull "$OLLAMA_MODEL"
+  ok "Modell '$OLLAMA_MODEL' bereit"
+fi
 
 # ── 6. Benutzer anlegen ───────────────────────────────────────────────────────
 step "Service-Benutzer anlegen ($SERVICE_USER)..."
