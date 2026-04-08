@@ -59,6 +59,7 @@ info() {
 }
 
 # Menü-Auswahl mit Validierung (Ausgabe auf stderr, nur Ergebnis auf stdout)
+# WICHTIG: read von /dev/tty, damit es bei "curl | bash" funktioniert
 select_option() {
   local prompt="$1"
   shift
@@ -72,7 +73,7 @@ select_option() {
   echo "" >&2
 
   while true; do
-    read -rp "  $prompt: " choice
+    read -rp "  $prompt: " choice < /dev/tty
     if [[ "$choice" =~ ^[0-9]+$ ]] && [ "$choice" -ge 1 ] && [ "$choice" -le "${#options[@]}" ]; then
       echo "$choice"
       return
@@ -86,12 +87,12 @@ ask_required() {
   local prompt="$1"
   local var
   while true; do
-    read -rp "  $prompt: " var
+    read -rp "  $prompt: " var < /dev/tty
     if [ -n "$var" ]; then
       echo "$var"
       return
     fi
-    echo -e "  ${RED}Darf nicht leer sein. Bitte erneut eingeben.${NC}"
+    echo -e "  ${RED}Darf nicht leer sein. Bitte erneut eingeben.${NC}" >&2
   done
 }
 
@@ -100,7 +101,7 @@ ask_default() {
   local prompt="$1"
   local default="$2"
   local var
-  read -rp "  $prompt [$default]: " var
+  read -rp "  $prompt [$default]: " var < /dev/tty
   echo "${var:-$default}"
 }
 
@@ -161,7 +162,7 @@ info "LLM-Modus:    $LLM_MODE ($OLLAMA_MODEL)"
 info "Install-Pfad: $INSTALL_DIR"
 info "Vault-Pfad:   $VAULT_DIR"
 echo ""
-read -rp "  Installation starten? [j/N]: " CONFIRM
+read -rp "  Installation starten? [j/N]: " CONFIRM < /dev/tty
 if [[ ! "$CONFIRM" =~ ^[jJ]$ ]]; then
   echo "Abgebrochen."
   exit 0
