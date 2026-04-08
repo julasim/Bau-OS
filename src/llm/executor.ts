@@ -1,5 +1,7 @@
 import fs from "fs";
+import path from "path";
 import { logInfo } from "../logger.js";
+import { VAULT_LOGS_DIR } from "../config.js";
 import {
   saveNote, listNotes, readNote, appendToNote, deleteNote,
   saveTask, listTasks, completeTask,
@@ -130,7 +132,7 @@ export async function executeTool(name: string, args: Record<string, string | nu
       case "agent_aktiv": {
         const today = new Date().toISOString().slice(0, 10);
         const active = listAgents().filter(agentName => {
-          const logPath = `${getAgentPath(agentName)}/memory/${today}.md`;
+          const logPath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
           return fs.existsSync(logPath);
         });
         return active.length

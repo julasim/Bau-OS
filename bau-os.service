@@ -20,7 +20,7 @@ SyslogIdentifier=bau-os
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/opt/bau-os/logs
+ReadWritePaths=/opt/bau-os/logs /opt/bau-os/.chat_id /opt/bau-os-vault
 
 [Install]
 WantedBy=multi-user.target
