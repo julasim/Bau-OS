@@ -96,7 +96,7 @@ if [ -d "$INSTALL_DIR/.git" ]; then
   git pull
 else
   # Passe die URL an wenn du ein privates Repo verwendest
-  git clone https://github.com/YOUR_USER/bau-os.git "$INSTALL_DIR"
+  git clone https://github.com/julasim/Bau-OS.git "$INSTALL_DIR"
   cd "$INSTALL_DIR"
 fi
 npm install --production
