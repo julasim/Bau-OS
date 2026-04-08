@@ -168,9 +168,56 @@ if [ "$LLM_MODE" = "cloud" ]; then
   step "Ollama Cloud einrichten..."
   info "Melde dich mit deinem Ollama-Konto an (ollama.com):"
   echo ""
-  ollama signin || warn "Login fehlgeschlagen — bitte nach der Installation manuell: ollama signin"
-  echo ""
-  ok "Cloud-Modus konfiguriert ($OLLAMA_MODEL)"
+  if ! ollama signin; then
+    echo ""
+    warn "Ollama Login fehlgeschlagen"
+    echo ""
+    echo "  Was möchtest du tun?"
+    echo ""
+    echo "  [1] Auf lokales Modell umstellen (wird heruntergeladen)"
+    echo "  [2] Installation abbrechen"
+    echo "  [3] Login erneut versuchen"
+    echo ""
+    while true; do
+      read -rp "  Auswahl [1/2/3]: " LOGIN_FAIL_CHOICE
+      case "$LOGIN_FAIL_CHOICE" in
+        1)
+          echo ""
+          info "Wechsle zu lokalem Modell..."
+          LLM_MODE="local"
+          # Lokales Standardmodell verwenden
+          OLLAMA_MODEL="qwen2.5:7b"
+          info "Lokales Modell: $OLLAMA_MODEL"
+          step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
+          warn "Das kann je nach Internetverbindung einige Minuten dauern..."
+          ollama pull "$OLLAMA_MODEL"
+          ok "Modell '$OLLAMA_MODEL' bereit"
+          break
+          ;;
+        2)
+          echo ""
+          info "Installation wurde abgebrochen"
+          exit 0
+          ;;
+        3)
+          echo ""
+          info "Erneuter Login-Versuch..."
+          if ollama signin; then
+            ok "Login erfolgreich"
+            ok "Cloud-Modus konfiguriert ($OLLAMA_MODEL)"
+            break
+          fi
+          echo ""
+          warn "Login erneut fehlgeschlagen"
+          ;;
+        *)
+          echo -e "  ${RED}Bitte 1, 2 oder 3 eingeben.${NC}"
+          ;;
+      esac
+    done
+  else
+    ok "Cloud-Modus konfiguriert ($OLLAMA_MODEL)"
+  fi
 else
   step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
   warn "Das kann je nach Internetverbindung einige Minuten dauern..."
