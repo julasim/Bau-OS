@@ -111,8 +111,8 @@ ok "Vault-Verzeichnis: $VAULT_DIR"
 
 # ── 9. Berechtigungen setzen ──────────────────────────────────────────────────
 step "Berechtigungen setzen..."
-chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR/logs"
+chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
 ok "Berechtigungen gesetzt"
 
 # ── 10. .env konfigurieren ────────────────────────────────────────────────────
