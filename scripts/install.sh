@@ -17,13 +17,13 @@ set -e
 readonly INSTALL_DIR_DEFAULT="/opt/bau-os"
 readonly VAULT_DIR_DEFAULT="/opt/bau-os-vault"
 readonly SERVICE_USER="bauos"
+readonly REPO_URL="https://github.com/julasim/Bau-OS.git"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Farben & Formatierung
 # ─────────────────────────────────────────────────────────────────────────────
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
-readonly BLUE='\033[0;34m'
 readonly RED='\033[0;31m'
 readonly BOLD='\033[1m'
 readonly DIM='\033[2m'
@@ -58,8 +58,8 @@ info() {
   echo -e "${DIM}   $1${NC}"
 }
 
-# Menü-Auswahl mit Validierung (Ausgabe auf stderr, nur Ergebnis auf stdout)
-# WICHTIG: read von /dev/tty, damit es bei "curl | bash" funktioniert
+# Menü-Auswahl (Ausgabe auf stderr, Ergebnis auf stdout)
+# read von /dev/tty für curl|bash Kompatibilität
 select_option() {
   local prompt="$1"
   shift
@@ -68,7 +68,7 @@ select_option() {
 
   echo "" >&2
   for i in "${!options[@]}"; do
-    echo "  [$((i + 1))] ${options[$i]}" >&2
+    echo -e "  [$((i + 1))] ${options[$i]}" >&2
   done
   echo "" >&2
 
@@ -105,6 +105,30 @@ ask_default() {
   echo "${var:-$default}"
 }
 
+# Warte bis Service aktiv ist (max. 15 Sekunden)
+wait_for_service() {
+  local service="$1"
+  local max_wait=15
+  local waited=0
+  while [ $waited -lt $max_wait ]; do
+    if systemctl is-active --quiet "$service"; then
+      return 0
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  return 1
+}
+
+# Pfad-Validierung (nur sichere Zeichen)
+validate_path() {
+  local path="$1"
+  if [[ "$path" =~ ^[a-zA-Z0-9/._-]+$ ]]; then
+    return 0
+  fi
+  return 1
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Root-Check
 # ─────────────────────────────────────────────────────────────────────────────
@@ -121,23 +145,25 @@ echo "Dieses Script installiert Bau-OS vollautomatisch auf Ubuntu 24.04."
 echo "Du wirst nach wenigen Werten gefragt."
 echo ""
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SCHRITT 1: Konfiguration
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
+# SCHRITT 1: Konfiguration abfragen (alles VOR der Installation)
+# ═════════════════════════════════════════════════════════════════════════════
 print_section "Konfiguration"
 
-# Telegram Bot Token
+# ── Telegram Bot Token ────────────────────────────────────────────────────────
 echo -e "  ${BOLD}Telegram Bot Token${NC}"
 info "Erstelle einen Bot via @BotFather in Telegram → /newbot"
 echo ""
 BOT_TOKEN=$(ask_required "Bot Token")
 echo ""
 
-# LLM-Modus
+# ── LLM-Modus ────────────────────────────────────────────────────────────────
 echo -e "  ${BOLD}LLM-Modus${NC}"
 info "Cloud: kein lokaler RAM nötig, benötigt Ollama-Konto (ollama.com)"
 info "Lokal: Modell wird heruntergeladen, braucht mind. 8 GB RAM"
-LLM_CHOICE=$(select_option "Auswahl" "Cloud  (empfohlen — kimi-k2.5, gemma4, qwen3 etc.)" "Lokal  (qwen2.5:7b, llama3.1:8b etc.)")
+LLM_CHOICE=$(select_option "Auswahl" \
+  "Cloud  (empfohlen — kimi-k2.5, gemma4, qwen3 etc.)" \
+  "Lokal  (qwen2.5:7b, llama3.1:8b etc.)")
 
 if [ "$LLM_CHOICE" -eq 1 ]; then
   LLM_MODE="cloud"
@@ -152,10 +178,20 @@ else
 fi
 
 echo ""
+
+# ── Installationspfade ────────────────────────────────────────────────────────
 INSTALL_DIR=$(ask_default "Installationsverzeichnis" "$INSTALL_DIR_DEFAULT")
 VAULT_DIR=$(ask_default "Vault-Verzeichnis" "$VAULT_DIR_DEFAULT")
 
-# Zusammenfassung
+# Pfade validieren
+if ! validate_path "$INSTALL_DIR"; then
+  err "Ungültiger Installationspfad: $INSTALL_DIR (nur a-z, 0-9, /, ., _, - erlaubt)"
+fi
+if ! validate_path "$VAULT_DIR"; then
+  err "Ungültiger Vault-Pfad: $VAULT_DIR (nur a-z, 0-9, /, ., _, - erlaubt)"
+fi
+
+# ── Zusammenfassung ───────────────────────────────────────────────────────────
 print_section "Zusammenfassung"
 info "Bot Token:    ${BOT_TOKEN:0:8}...${BOT_TOKEN: -4}"
 info "LLM-Modus:    $LLM_MODE ($OLLAMA_MODEL)"
@@ -168,20 +204,20 @@ if [[ ! "$CONFIRM" =~ ^[jJ]$ ]]; then
   exit 0
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 2: System-Pakete
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 step "System aktualisieren..."
-apt-get update -y >/dev/null 2>&1 && apt-get upgrade -y -qq >/dev/null 2>&1
+apt-get update -y >/dev/null 2>&1 && apt-get upgrade -y >/dev/null 2>&1
 ok "System aktualisiert"
 
 step "Pakete installieren (git, curl)..."
 apt-get install -y git curl >/dev/null 2>&1
 ok "Pakete installiert"
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 3: Node.js 20
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 step "Node.js 20 LTS installieren..."
 if ! command -v node &> /dev/null || [[ $(node --version | cut -d. -f1 | tr -d 'v') -lt 20 ]]; then
   curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
@@ -191,9 +227,9 @@ else
   ok "Node.js $(node --version) bereits vorhanden"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 4: Ollama
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 step "Ollama installieren..."
 if ! command -v ollama &> /dev/null; then
   curl -fsSL https://ollama.ai/install.sh | sh
@@ -202,19 +238,61 @@ else
   ok "Ollama bereits vorhanden"
 fi
 
-systemctl enable ollama --quiet
-systemctl start ollama
+systemctl enable ollama --quiet 2>/dev/null || true
+systemctl start ollama 2>/dev/null || true
 sleep 3
 ok "Ollama Service gestartet"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SCHRITT 5: LLM-Modell vorbereiten
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
+# SCHRITT 5: Bau-OS klonen und bauen (VOR useradd — verhindert skel-Konflikt)
+# ═════════════════════════════════════════════════════════════════════════════
+step "Bau-OS installieren..."
+if [ -d "$INSTALL_DIR/.git" ]; then
+  warn "Verzeichnis existiert bereits — führe Update durch"
+  cd "$INSTALL_DIR"
+  git pull
+elif [ -d "$INSTALL_DIR" ] && [ "$(ls -A "$INSTALL_DIR" 2>/dev/null)" ]; then
+  # Verzeichnis existiert aber ist kein git repo (z.B. von useradd -m aus vorigem Versuch)
+  warn "Verzeichnis $INSTALL_DIR existiert aber ist kein Git-Repo — wird bereinigt"
+  rm -rf "$INSTALL_DIR"
+  if ! git clone "$REPO_URL" "$INSTALL_DIR" 2>&1; then
+    echo ""
+    err "git clone fehlgeschlagen. Ist das Repo auf GitHub auf 'public' gestellt?"
+  fi
+  cd "$INSTALL_DIR"
+else
+  if ! git clone "$REPO_URL" "$INSTALL_DIR" 2>&1; then
+    echo ""
+    err "git clone fehlgeschlagen. Ist das Repo auf GitHub auf 'public' gestellt?"
+  fi
+  cd "$INSTALL_DIR"
+fi
+npm install --omit=dev --loglevel=error
+npm run build
+ok "Bau-OS gebaut"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SCHRITT 6: Service-Benutzer (NACH git clone — kein -m Flag)
+# ═════════════════════════════════════════════════════════════════════════════
+step "Service-Benutzer anlegen ($SERVICE_USER)..."
+if ! id "$SERVICE_USER" &>/dev/null; then
+  useradd -r -s /bin/bash -d "$INSTALL_DIR" -M "$SERVICE_USER"
+  ok "Benutzer '$SERVICE_USER' erstellt"
+else
+  ok "Benutzer '$SERVICE_USER' bereits vorhanden"
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SCHRITT 7: LLM-Modell vorbereiten
+# ═════════════════════════════════════════════════════════════════════════════
 if [ "$LLM_MODE" = "cloud" ]; then
   step "Ollama Cloud einrichten..."
-  info "Melde dich mit deinem Ollama-Konto an (ollama.com):"
+  info "Melde dich mit deinem Ollama-Konto an (ollama.com)."
+  info "Es wird ein Link angezeigt — öffne ihn im Browser/Handy."
   echo ""
-  if ! ollama signin; then
+
+  # ollama signin als Service-User ausführen (Token muss für bauos zugänglich sein)
+  if ! su -s /bin/bash "$SERVICE_USER" -c "ollama signin" < /dev/tty; then
     echo ""
     warn "Ollama Login fehlgeschlagen"
     FAIL_CHOICE=$(select_option "Was möchtest du tun?" \
@@ -227,8 +305,8 @@ if [ "$LLM_MODE" = "cloud" ]; then
         echo ""
         info "Wechsle zu lokalem Modell..."
         LLM_MODE="local"
-        OLLAMA_MODEL="qwen2.5:7b"
-        info "Lokales Modell: $OLLAMA_MODEL"
+        info "Verfügbare: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
+        OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:3b")
         step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
         warn "Das kann einige Minuten dauern..."
         ollama pull "$OLLAMA_MODEL"
@@ -236,17 +314,19 @@ if [ "$LLM_MODE" = "cloud" ]; then
         ;;
       2)
         echo ""
-        info "Installation wurde abgebrochen"
+        info "Installation wurde abgebrochen."
+        info "Ollama Login nachholen: su -s /bin/bash $SERVICE_USER -c 'ollama signin'"
         exit 0
         ;;
       3)
         echo ""
         info "Erneuter Login-Versuch..."
-        if ollama signin; then
+        if su -s /bin/bash "$SERVICE_USER" -c "ollama signin" < /dev/tty; then
           ok "Login erfolgreich"
-          ok "Cloud-Modus konfiguriert ($OLLAMA_MODEL)"
         else
-          err "Login erneut fehlgeschlagen. Bitte manuell nachholen: ollama signin"
+          warn "Login erneut fehlgeschlagen."
+          info "Manuell nachholen: su -s /bin/bash $SERVICE_USER -c 'ollama signin'"
+          info "Installation wird trotzdem fortgesetzt."
         fi
         ;;
     esac
@@ -260,72 +340,65 @@ else
   ok "Modell '$OLLAMA_MODEL' bereit"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SCHRITT 6: Service-Benutzer
-# ─────────────────────────────────────────────────────────────────────────────
-step "Service-Benutzer anlegen ($SERVICE_USER)..."
-if ! id "$SERVICE_USER" &>/dev/null; then
-  useradd -r -s /bin/bash -d "$INSTALL_DIR" -m "$SERVICE_USER"
-  ok "Benutzer '$SERVICE_USER' erstellt"
-else
-  ok "Benutzer '$SERVICE_USER' bereits vorhanden"
-fi
-
-# ─────────────────────────────────────────────────────────────────────────────
-# SCHRITT 7: Bau-OS klonen und bauen
-# ─────────────────────────────────────────────────────────────────────────────
-step "Bau-OS installieren..."
-if [ -d "$INSTALL_DIR/.git" ]; then
-  warn "Verzeichnis existiert bereits — führe Update durch"
-  cd "$INSTALL_DIR"
-  git pull
-else
-  git clone https://github.com/julasim/Bau-OS.git "$INSTALL_DIR"
-  cd "$INSTALL_DIR"
-fi
-npm install --omit=dev --silent
-npm run build
-ok "Bau-OS gebaut"
-
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 8: Verzeichnisse + Berechtigungen
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 step "Verzeichnisse anlegen und Berechtigungen setzen..."
 
+# Vault-Verzeichnis
 mkdir -p "$VAULT_DIR"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$VAULT_DIR"
 info "Vault: $VAULT_DIR"
 
+# Logs-Ordner erstellen (VOR chown)
 mkdir -p "$INSTALL_DIR/logs"
+
+# Alle Berechtigungen setzen
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
-chmod 600 "$INSTALL_DIR/.env" 2>/dev/null || true
 info "Installationsverzeichnis: $INSTALL_DIR"
 
 ok "Berechtigungen gesetzt"
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SCHRITT 9: .env erstellen
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
+# SCHRITT 9: .env erstellen (immer BOT_TOKEN prüfen)
+# ═════════════════════════════════════════════════════════════════════════════
 step ".env konfigurieren..."
-if [ ! -f "$INSTALL_DIR/.env" ]; then
-  cat > "$INSTALL_DIR/.env" << ENVEOF
+if [ -f "$INSTALL_DIR/.env" ]; then
+  # .env existiert — prüfen ob BOT_TOKEN gesetzt ist
+  EXISTING_TOKEN=$(grep -oP '^BOT_TOKEN=\K.+' "$INSTALL_DIR/.env" 2>/dev/null || true)
+  if [ -z "$EXISTING_TOKEN" ]; then
+    warn ".env existiert, aber BOT_TOKEN ist leer — wird aktualisiert"
+    # BOT_TOKEN ersetzen, Rest beibehalten
+    sed -i "s|^BOT_TOKEN=.*|BOT_TOKEN=$BOT_TOKEN|" "$INSTALL_DIR/.env"
+    # Modell auch aktualisieren
+    sed -i "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$OLLAMA_MODEL|" "$INSTALL_DIR/.env"
+    ok ".env aktualisiert (Token + Modell)"
+  else
+    warn ".env bereits vorhanden mit Token — übersprungen"
+    info "Modell manuell ändern: nano $INSTALL_DIR/.env"
+  fi
+else
+  cat > "$INSTALL_DIR/.env" << 'ENVHEADER'
+# Bau-OS Konfiguration (generiert von install.sh)
+ENVHEADER
+  cat >> "$INSTALL_DIR/.env" << ENVEOF
 BOT_TOKEN=$BOT_TOKEN
 VAULT_PATH=$VAULT_DIR
 OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=$OLLAMA_MODEL
 ENVEOF
-  chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.env"
-  chmod 600 "$INSTALL_DIR/.env"
   ok ".env erstellt"
-else
-  warn ".env bereits vorhanden — übersprungen"
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
+chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.env"
+chmod 600 "$INSTALL_DIR/.env"
+
+# ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 10: systemd Service
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 step "systemd Service installieren..."
 
+# Pfade in der Service-Datei anpassen (Vault-Pfad ZUERST, da er den kürzeren enthält)
 sed \
   "s|/opt/bau-os-vault|$VAULT_DIR|g; \
    s|/opt/bau-os|$INSTALL_DIR|g; \
@@ -333,32 +406,36 @@ sed \
   "$INSTALL_DIR/bau-os.service" > /etc/systemd/system/bau-os.service
 
 systemctl daemon-reload
-systemctl enable bau-os --quiet
-systemctl start bau-os
-sleep 3
+systemctl enable bau-os --quiet 2>/dev/null || true
 
-if systemctl is-active --quiet bau-os; then
+# Eventuell laufenden Service stoppen vor Neustart
+systemctl stop bau-os 2>/dev/null || true
+systemctl start bau-os
+
+# Aktiv warten statt festes sleep (max 15 Sekunden)
+if wait_for_service "bau-os"; then
   ok "Bau-OS Service läuft"
 else
   echo ""
   warn "Service konnte nicht gestartet werden. Logs:"
-  journalctl -u bau-os -n 15 --no-pager
+  echo ""
+  journalctl -u bau-os -n 20 --no-pager
   echo ""
   err "Installation fehlgeschlagen. Siehe Logs oben."
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 # FERTIG
-# ─────────────────────────────────────────────────────────────────────────────
+# ═════════════════════════════════════════════════════════════════════════════
 echo ""
 print_header "Installation abgeschlossen!"
 echo ""
-echo -e "  ${GREEN}▸${NC} Öffne deinen Telegram Bot und schreibe 'Hallo'"
-echo    "   Der Setup-Wizard führt dich durch die Einrichtung."
+echo -e "  ${GREEN}▸${NC} Öffne deinen Telegram Bot und schreibe ${BOLD}'Hallo'${NC}"
+echo    "    Der Setup-Wizard führt dich durch die Einrichtung."
 echo ""
-echo    "Nützliche Befehle:"
-echo    "  systemctl status bau-os        → Status prüfen"
-echo    "  journalctl -u bau-os -f        → Live-Logs"
-echo    "  systemctl restart bau-os       → Neustart"
-echo    "  bash $INSTALL_DIR/scripts/update.sh  → Update einspielen"
+echo    "  Nützliche Befehle:"
+echo    "    systemctl status bau-os              → Status prüfen"
+echo    "    journalctl -u bau-os -f              → Live-Logs"
+echo    "    systemctl restart bau-os             → Neustart"
+echo    "    bash $INSTALL_DIR/scripts/update.sh  → Update einspielen"
 echo ""
