@@ -345,13 +345,46 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "befehl_ausfuehren",
-      description: "Fuehrt einen Shell-Befehl auf dem Server aus. Fuer Systeminfo (df, uptime, free), Datei-Operationen (ls, cat, wc), Service-Status (systemctl status) etc. Keine destruktiven Befehle (rm, shutdown, reboot) erlaubt.",
+      description: "Fuehrt einen Shell-Befehl auf dem Server aus. Fuer: Systeminfo (df -h, uptime, free -h, top -bn1), Dateien (ls, cat, wc, head, tail, grep, find), Services (systemctl status), Netzwerk (curl, ping, dig), Pakete (apt list), Prozesse (ps aux), Logs (journalctl -u bau-os -n 50). Befehle koennen mit | verkettet werden. Destruktive Befehle (rm -rf, shutdown, reboot) sind blockiert.",
       parameters: {
         type: "object",
         properties: {
-          befehl: { type: "string", description: "Der auszufuehrende Shell-Befehl (z.B. 'df -h', 'uptime', 'ls /opt/bau-os')" },
+          befehl: { type: "string", description: "Shell-Befehl (z.B. 'df -h', 'cat /etc/hostname', 'ps aux | grep node')" },
+          verzeichnis: { type: "string", description: "Optionales Arbeitsverzeichnis (Standard: /opt/bau-os)" },
+          timeout: { type: "number", description: "Timeout in Sekunden (Standard: 15, max: 60)" },
         },
         required: ["befehl"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "code_ausfuehren",
+      description: "Fuehrt JavaScript-Code direkt auf dem Server aus. Fuer: Berechnungen (Flaechen, Kosten, Prozent), Daten transformieren (JSON parsen, CSV verarbeiten, Datumsberechnungen), Text verarbeiten (Regex, Split, Format). Der Code laeuft in Node.js — alle eingebauten Module verfuegbar (fs, path, crypto etc.). Letzter Ausdruck wird als Ergebnis zurueckgegeben.",
+      parameters: {
+        type: "object",
+        properties: {
+          code: { type: "string", description: "JavaScript-Code (z.B. 'Math.round(125.5 * 0.2 * 100) / 100' oder mehrzeiliger Code)" },
+        },
+        required: ["code"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "http_anfrage",
+      description: "Sendet eine HTTP-Anfrage an eine beliebige URL. Fuer: REST APIs aufrufen, Webhooks triggern, Daten von externen Diensten abrufen, JSON APIs abfragen.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Die Ziel-URL (z.B. 'https://api.example.com/data')" },
+          methode: { type: "string", description: "HTTP-Methode: GET, POST, PUT, PATCH, DELETE (Standard: GET)" },
+          body: { type: "string", description: "Request-Body als JSON-String (fuer POST/PUT/PATCH)" },
+          headers: { type: "string", description: "Zusaetzliche Headers als JSON-String (z.B. '{\"Authorization\": \"Bearer xxx\"}')" },
+        },
+        required: ["url"],
       },
     },
   },

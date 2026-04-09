@@ -182,20 +182,78 @@ export async function executeTool(name: string, args: Record<string, string | nu
       case "befehl_ausfuehren": {
         const cmd = String(args.befehl).trim();
         // Sicherheit: destruktive Befehle blockieren
-        const blocked = /^\s*(rm\s|rmdir|shutdown|reboot|poweroff|mkfs|dd\s|>\s*\/|sudo\s)/i;
+        const blocked = /(\brm\s+-rf\b|\bshutdown\b|\breboot\b|\bpoweroff\b|\bmkfs\b|\bdd\s+if=|\b>\s*\/dev\/|\bsudo\s+(rm|shutdown|reboot|mkfs|dd|poweroff))/i;
         if (blocked.test(cmd)) return "Befehl blockiert — destruktive Befehle sind nicht erlaubt.";
 
+        const cwd = args.verzeichnis ? String(args.verzeichnis) : process.cwd();
+        const timeoutMs = Math.min((Number(args.timeout) || 15), 60) * 1000;
+
         return new Promise<string>((resolve) => {
-          exec(cmd, { timeout: 15_000, maxBuffer: 1024 * 512, env: { ...process.env, LANG: "de_AT.UTF-8" } }, (error, stdout, stderr) => {
+          exec(cmd, { timeout: timeoutMs, maxBuffer: 1024 * 1024, cwd, env: { ...process.env, LANG: "de_AT.UTF-8" } }, (error, stdout, stderr) => {
             if (error) {
-              if (error.killed) resolve(`Befehl abgebrochen (Timeout nach 15s): ${cmd}`);
+              if (error.killed) resolve(`Befehl abgebrochen (Timeout nach ${timeoutMs / 1000}s): ${cmd}`);
               else resolve(`Fehler: ${stderr || error.message}`);
               return;
             }
             const output = (stdout + (stderr ? `\n[stderr] ${stderr}` : "")).trim();
-            resolve(output.length > 4000 ? output.slice(0, 4000) + "\n[... gekuerzt]" : output || "(kein Output)");
+            resolve(output.length > 8000 ? output.slice(0, 8000) + `\n\n[... gekuerzt, ${output.length - 8000} Zeichen entfernt]` : output || "(kein Output)");
           });
         });
+      }
+      case "code_ausfuehren": {
+        const code = String(args.code);
+        const { runInNewContext } = await import("vm");
+        try {
+          const sandbox = {
+            Math, Date, JSON, parseInt, parseFloat, String, Number, Boolean, Array, Object,
+            RegExp, Map, Set, console: { log: (...a: unknown[]) => logs.push(a.map(String).join(" ")) },
+            setTimeout: undefined, setInterval: undefined, fetch: undefined,
+            require: undefined, process: undefined,
+          };
+          const logs: string[] = [];
+          const result = runInNewContext(code, sandbox, { timeout: 10_000 });
+          const output = logs.length ? logs.join("\n") + "\n" : "";
+          const resultStr = result !== undefined ? String(result) : "";
+          const full = (output + resultStr).trim();
+          return full.length > 4000 ? full.slice(0, 4000) + "\n[... gekuerzt]" : full || "(kein Ergebnis)";
+        } catch (err) {
+          return `Code-Fehler: ${err}`;
+        }
+      }
+      case "http_anfrage": {
+        const url = String(args.url);
+        const method = (args.methode ? String(args.methode) : "GET").toUpperCase();
+        const timeoutMs = 15_000;
+
+        const options: RequestInit = {
+          method,
+          signal: AbortSignal.timeout(timeoutMs),
+          headers: { "User-Agent": "Bau-OS/1.0" },
+        };
+
+        if (args.headers) {
+          try { Object.assign(options.headers!, JSON.parse(String(args.headers))); }
+          catch { return "Fehler: headers ist kein gueltiges JSON."; }
+        }
+
+        if (args.body && ["POST", "PUT", "PATCH"].includes(method)) {
+          options.body = String(args.body);
+          (options.headers as Record<string, string>)["Content-Type"] ??= "application/json";
+        }
+
+        try {
+          const resp = await fetch(url, options);
+          const contentType = resp.headers.get("content-type") || "";
+          const text = await resp.text();
+          const status = `HTTP ${resp.status} ${resp.statusText}`;
+
+          if (text.length > 6000) {
+            return `${status}\n\n${text.slice(0, 6000)}\n\n[... gekuerzt, ${text.length - 6000} Zeichen entfernt]`;
+          }
+          return `${status}\n\n${text}`;
+        } catch (err) {
+          return `HTTP-Fehler: ${err}`;
+        }
       }
       case "web_suchen": {
         const { webSearch } = await import("../web.js");
