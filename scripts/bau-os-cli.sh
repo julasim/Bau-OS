@@ -113,6 +113,60 @@ cmd_update() {
   bash "$INSTALL_DIR/scripts/update.sh"
 }
 
+cmd_check_update() {
+  echo ""
+  echo -e "  ${BOLD}Update-Check...${NC}"
+  echo ""
+
+  if [ ! -d "$INSTALL_DIR/.git" ]; then
+    echo -e "  ${RED}Kein Git-Repository in $INSTALL_DIR${NC}"
+    return 1
+  fi
+
+  cd "$INSTALL_DIR"
+
+  # Remote-Status holen (als Service-User wegen git ownership)
+  su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git fetch origin" 2>/dev/null
+
+  LOCAL=$(su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git rev-parse HEAD")
+  REMOTE=$(su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git rev-parse origin/main")
+
+  if [ "$LOCAL" = "$REMOTE" ]; then
+    echo -e "  ${GREEN}✓${NC} Bau-OS ist auf dem neuesten Stand"
+    echo -e "  ${DIM}  Version: ${LOCAL:0:7}${NC}"
+    echo ""
+    return 0
+  fi
+
+  # Neue Commits anzeigen
+  BEHIND=$(su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git rev-list HEAD..origin/main --count")
+  echo -e "  ${YELLOW}!${NC} ${BOLD}$BEHIND neue(s) Update(s) verfügbar${NC}"
+  echo -e "  ${DIM}  Lokal:  ${LOCAL:0:7}${NC}"
+  echo -e "  ${DIM}  Remote: ${REMOTE:0:7}${NC}"
+  echo ""
+  echo -e "  ${BOLD}Änderungen:${NC}"
+  su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git log HEAD..origin/main --oneline --no-decorate" | while read -r line; do
+    echo -e "    ${CYAN}•${NC} $line"
+  done
+  echo ""
+
+  # Fragen ob installiert werden soll
+  if [ "$EUID" -eq 0 ]; then
+    read -rp "  Update jetzt installieren? [j/N]: " confirm
+    if [[ "$confirm" =~ ^[jJ]$ ]]; then
+      echo ""
+      bash "$INSTALL_DIR/scripts/update.sh"
+    else
+      echo ""
+      echo -e "  ${DIM}Update übersprungen. Manuell: sudo bau-os update${NC}"
+      echo ""
+    fi
+  else
+    echo -e "  ${DIM}Zum Installieren: sudo bau-os check-update${NC}"
+    echo ""
+  fi
+}
+
 cmd_env() {
   echo ""
   echo -e "  ${BOLD}Konfiguration (.env):${NC}"
@@ -245,6 +299,7 @@ cmd_help() {
   echo -e "    ${BOLD}start${NC}            Service starten       ${DIM}(sudo)${NC}"
   echo -e "    ${BOLD}stop${NC}             Service stoppen       ${DIM}(sudo)${NC}"
   echo -e "    ${BOLD}update${NC}           Update von GitHub einspielen ${DIM}(sudo)${NC}"
+  echo -e "    ${BOLD}check-update${NC}     Auf Updates prüfen"
   echo -e "    ${BOLD}user${NC} add|list|delete  Web-Benutzer verwalten"
   echo -e "    ${BOLD}env${NC}              .env Konfiguration anzeigen"
   echo -e "    ${BOLD}vault${NC}            Vault-Verzeichnis anzeigen"
@@ -272,7 +327,7 @@ cmd_menu() {
     echo -e "  ${CYAN}[4]${NC}  Service neu starten"
     echo -e "  ${CYAN}[5]${NC}  Service starten"
     echo -e "  ${CYAN}[6]${NC}  Service stoppen"
-    echo -e "  ${CYAN}[7]${NC}  Update einspielen"
+    echo -e "  ${CYAN}[7]${NC}  Auf Updates prüfen"
     echo -e "  ${CYAN}[8]${NC}  .env Konfiguration"
     echo -e "  ${CYAN}[9]${NC}  Vault anzeigen"
     echo -e "  ${CYAN}[10]${NC} Ollama Status"
@@ -289,7 +344,7 @@ cmd_menu() {
       4) clear; cmd_restart; read -rp "  [Enter] zurück..." ;;
       5) clear; cmd_start;   read -rp "  [Enter] zurück..." ;;
       6) clear; cmd_stop;    read -rp "  [Enter] zurück..." ;;
-      7) clear; cmd_update;  read -rp "  [Enter] zurück..." ;;
+      7) clear; cmd_check_update; read -rp "  [Enter] zurück..." ;;
       8) clear; cmd_env;     read -rp "  [Enter] zurück..." ;;
       9) clear; cmd_vault;   read -rp "  [Enter] zurück..." ;;
       10) clear; cmd_ollama; read -rp "  [Enter] zurück..." ;;
@@ -314,6 +369,7 @@ case "${1:-}" in
   start)               cmd_start ;;
   stop)                cmd_stop ;;
   update)              cmd_update ;;
+  check-update|check)  cmd_check_update ;;
   user)                cmd_user "${2:-}" "${3:-}" ;;
   env|config)          cmd_env ;;
   vault)               cmd_vault ;;
