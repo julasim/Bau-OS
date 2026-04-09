@@ -77,7 +77,10 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "aufgaben_auflisten": {
         const tasks = listTasks(args.projekt ? String(args.projekt) : undefined);
-        return tasks.length ? tasks.map(t => `\u2022 ${t}`).join("\n") : "Keine offenen Aufgaben.";
+        const open = tasks.filter(t => t.status !== "done");
+        return open.length
+          ? open.map(t => `\u2022 ${t.text}${t.assignee ? ` (@${t.assignee})` : ""}${t.date ? ` [${t.date}]` : ""}`).join("\n")
+          : "Keine offenen Aufgaben.";
       }
       case "aufgabe_erledigen": {
         const ok = completeTask(String(args.text), args.projekt ? String(args.projekt) : undefined);
@@ -89,7 +92,9 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "termine_auflisten": {
         const termine = listTermine(args.projekt ? String(args.projekt) : undefined);
-        return termine.length ? termine.map(t => `\u{1F4C5} ${t}`).join("\n") : "Keine Termine.";
+        return termine.length
+          ? termine.map(t => `\u{1F4C5} ${t.datum}${t.uhrzeit ? ` ${t.uhrzeit}` : ""} – ${t.text}${t.location ? ` (${t.location})` : ""}`).join("\n")
+          : "Keine Termine.";
       }
       case "termin_loeschen": {
         const ok = deleteTermin(String(args.text), args.projekt ? String(args.projekt) : undefined);

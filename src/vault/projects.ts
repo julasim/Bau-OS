@@ -24,7 +24,7 @@ export function getProjectInfo(name: string): ProjectInfo | null {
   const projectPath = path.join(vaultPath, "Projekte", name);
   if (!fs.existsSync(projectPath)) return null;
 
-  const openTasks = listTasks(name).length;
+  const openTasks = listTasks(name).filter(t => t.status !== "done").length;
   const termine = listTermine(name).length;
   const notesDir = path.join(projectPath, "Notizen");
   const noteCount = fs.existsSync(notesDir)

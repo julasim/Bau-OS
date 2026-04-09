@@ -1,7 +1,10 @@
 // Barrel re-export for all vault modules
 export { saveNote, listNotes, readNote, updateNote, appendToNote, deleteNote } from "./notes.js";
-export { saveTask, listTasks, completeTask } from "./tasks.js";
-export { saveTermin, listTermine, deleteTermin } from "./termine.js";
+export { saveTask, listTasks, listOpenTasks, getTask, updateTask, completeTask, deleteTask } from "./tasks.js";
+export type { Task } from "./tasks.js";
+export { saveTermin, listTermine, getTermin, updateTermin, deleteTermin } from "./termine.js";
+export type { Termin } from "./termine.js";
+export { listTeam, addTeamMember, removeTeamMember } from "./team.js";
 export { listProjects, getProjectInfo, listProjectNotes, readProjectNote } from "./projects.js";
 export type { ProjectInfo } from "./projects.js";
 export { readFile, createFile, listFolder } from "./files.js";

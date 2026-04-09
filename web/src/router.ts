@@ -14,6 +14,7 @@ const router = createRouter({
         { path: "notes/:name", name: "note-editor", component: () => import("./views/NoteEditorView.vue") },
         { path: "tasks", name: "tasks", component: () => import("./views/TasksView.vue") },
         { path: "termine", name: "termine", component: () => import("./views/TermineView.vue") },
+        { path: "calendar", name: "calendar", component: () => import("./views/CalendarView.vue") },
         { path: "projects", name: "projects", component: () => import("./views/ProjectsView.vue") },
         { path: "projects/:name", name: "project-detail", component: () => import("./views/ProjectDetailView.vue") },
         { path: "agents", name: "agents", component: () => import("./views/AgentsView.vue") },
