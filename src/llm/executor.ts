@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
-import { logInfo } from "../logger.js";
+import { exec } from "child_process";
+import { logInfo, logError } from "../logger.js";
 import { VAULT_LOGS_DIR } from "../config.js";
 import {
   saveNote, listNotes, readNote, appendToNote, deleteNote,
@@ -177,6 +178,34 @@ export async function executeTool(name: string, args: Record<string, string | nu
       case "agenten_auflisten": {
         const agents = listAgents();
         return agents.length ? agents.join("\n") : "Keine Sub-Agenten vorhanden.";
+      }
+      case "befehl_ausfuehren": {
+        const cmd = String(args.befehl).trim();
+        // Sicherheit: destruktive Befehle blockieren
+        const blocked = /^\s*(rm\s|rmdir|shutdown|reboot|poweroff|mkfs|dd\s|>\s*\/|sudo\s)/i;
+        if (blocked.test(cmd)) return "Befehl blockiert — destruktive Befehle sind nicht erlaubt.";
+
+        return new Promise<string>((resolve) => {
+          exec(cmd, { timeout: 15_000, maxBuffer: 1024 * 512, env: { ...process.env, LANG: "de_AT.UTF-8" } }, (error, stdout, stderr) => {
+            if (error) {
+              if (error.killed) resolve(`Befehl abgebrochen (Timeout nach 15s): ${cmd}`);
+              else resolve(`Fehler: ${stderr || error.message}`);
+              return;
+            }
+            const output = (stdout + (stderr ? `\n[stderr] ${stderr}` : "")).trim();
+            resolve(output.length > 4000 ? output.slice(0, 4000) + "\n[... gekuerzt]" : output || "(kein Output)");
+          });
+        });
+      }
+      case "web_suchen": {
+        const { webSearch } = await import("../web.js");
+        const results = await webSearch(String(args.suchbegriff), Number(args.anzahl) || 5);
+        if (!results.length) return `Keine Ergebnisse fuer "${args.suchbegriff}".`;
+        return results.map((r, i) => `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.snippet}`).join("\n\n");
+      }
+      case "webseite_lesen": {
+        const { fetchPage } = await import("../web.js");
+        return await fetchPage(String(args.url));
       }
       case "agent_datei_lesen": {
         const content = readAgentFile(String(args.agent), String(args.datei));

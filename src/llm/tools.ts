@@ -340,6 +340,50 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
+  // System & Web
+  {
+    type: "function",
+    function: {
+      name: "befehl_ausfuehren",
+      description: "Fuehrt einen Shell-Befehl auf dem Server aus. Fuer Systeminfo (df, uptime, free), Datei-Operationen (ls, cat, wc), Service-Status (systemctl status) etc. Keine destruktiven Befehle (rm, shutdown, reboot) erlaubt.",
+      parameters: {
+        type: "object",
+        properties: {
+          befehl: { type: "string", description: "Der auszufuehrende Shell-Befehl (z.B. 'df -h', 'uptime', 'ls /opt/bau-os')" },
+        },
+        required: ["befehl"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_suchen",
+      description: "Sucht im Internet nach Informationen. Gibt Suchergebnisse mit Titel, URL und Beschreibung zurueck.",
+      parameters: {
+        type: "object",
+        properties: {
+          suchbegriff: { type: "string", description: "Der Suchbegriff (z.B. 'OENORM B 1801 Kalkulation')" },
+          anzahl: { type: "number", description: "Anzahl Ergebnisse (Standard: 5, max 10)" },
+        },
+        required: ["suchbegriff"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "webseite_lesen",
+      description: "Liest den Textinhalt einer Webseite. Gibt den bereinigten Text zurueck (ohne HTML-Tags).",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Die URL der Webseite (z.B. 'https://example.com/artikel')" },
+        },
+        required: ["url"],
+      },
+    },
+  },
   // Agent-Datei Editor
   {
     type: "function",
