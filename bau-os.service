@@ -9,6 +9,7 @@ Type=simple
 User=bauos
 WorkingDirectory=/opt/bau-os
 EnvironmentFile=/opt/bau-os/.env
+Environment=LANG=de_AT.UTF-8 LC_ALL=de_AT.UTF-8
 ExecStart=/usr/bin/node dist/index.js
 Restart=always
 RestartSec=3

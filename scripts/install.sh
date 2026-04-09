@@ -30,6 +30,8 @@ readonly REPO_URL="https://github.com/julasim/Bau-OS.git"
 readonly GREEN='\033[0;32m'
 readonly YELLOW='\033[1;33m'
 readonly RED='\033[0;31m'
+readonly BLUE='\033[1;34m'
+readonly CYAN='\033[0;36m'
 readonly BOLD='\033[1m'
 readonly DIM='\033[2m'
 readonly NC='\033[0m'
@@ -42,15 +44,26 @@ warn()  { echo -e "${YELLOW}  !${NC} $1"; }
 err()   { echo -e "${RED}  ✗${NC} $1"; exit 1; }
 
 print_logo() {
-  echo -e "${BOLD}"
-  echo '  ██████╗  █████╗ ██╗   ██╗      ██████╗ ███████╗'
-  echo '  ██╔══██╗██╔══██╗██║   ██║     ██╔═══██╗██╔════╝'
-  echo '  ██████╔╝███████║██║   ██║     ██║   ██║███████╗'
-  echo '  ██╔══██╗██╔══██║██║   ██║     ██║   ██║╚════██║'
-  echo '  ██████╔╝██║  ██║╚██████╔╝     ╚██████╔╝███████║'
-  echo '  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝       ╚═════╝ ╚══════╝'
-  echo -e "${NC}"
-  echo -e "  ${DIM}KI-Assistent für die Baubranche${NC}"
+  echo ""
+  echo -e "${CYAN}              /\\${NC}"
+  echo -e "${CYAN}            /    \\${NC}"
+  echo -e "${CYAN}          /  ${BLUE}.---.${CYAN}  \\          ${DIM}__|__${NC}"
+  echo -e "${CYAN}        /  ${BLUE}/ o o \\${CYAN}  \\        ${DIM}|     |${NC}"
+  echo -e "${CYAN}       |  ${BLUE}( \\_|_/ )${CYAN}  |  ${DIM}----+     |${NC}"
+  echo -e "${CYAN}       |   ${BLUE}\\ === /${CYAN}   |       ${DIM}|     |${NC}"
+  echo -e "${CYAN}        \\   ${BLUE}'---'${CYAN}   /        ${DIM}|_____|${NC}"
+  echo -e "${CYAN}          \\       /         ${DIM}|   |${NC}"
+  echo -e "${CYAN}            \\   /           ${DIM}|   |${NC}"
+  echo -e "${CYAN}              \\/${NC}"
+  echo ""
+  echo -e "${BLUE}  ██████╗  █████╗ ██╗   ██╗      ██████╗ ███████╗${NC}"
+  echo -e "${BLUE}  ██╔══██╗██╔══██╗██║   ██║     ██╔═══██╗██╔════╝${NC}"
+  echo -e "${BLUE}  ██████╔╝███████║██║   ██║     ██║   ██║███████╗${NC}"
+  echo -e "${BLUE}  ██╔══██╗██╔══██║██║   ██║     ██║   ██║╚════██║${NC}"
+  echo -e "${BLUE}  ██████╔╝██║  ██║╚██████╔╝     ╚██████╔╝███████║${NC}"
+  echo -e "${BLUE}  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝       ╚═════╝ ╚══════╝${NC}"
+  echo ""
+  echo -e "  ${CYAN}KI-Assistent für die Baubranche${NC}"
   echo -e "  ${DIM}────────────────────────────────────────────────${NC}"
   echo ""
 }

@@ -184,9 +184,16 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "agent_datei_schreiben": {
         const ok = writeAgentFile(String(args.agent), String(args.datei), String(args.inhalt));
-        return ok
-          ? `\u2705 ${args.agent}/${args.datei} gespeichert.`
-          : `Fehler: "${args.datei}" nicht erlaubt oder Agent-Ordner nicht vorhanden.`;
+        if (!ok) return `Fehler: "${args.datei}" nicht erlaubt oder Agent-Ordner nicht vorhanden.`;
+
+        // HEARTBEAT.md geschrieben → Cron-Job sofort aktualisieren
+        if (String(args.datei).toUpperCase() === "HEARTBEAT.MD") {
+          const { reloadHeartbeat } = await import("../heartbeat.js");
+          const reload = reloadHeartbeat(String(args.agent));
+          return `\u2705 ${args.agent}/${args.datei} gespeichert. ${reload}`;
+        }
+
+        return `\u2705 ${args.agent}/${args.datei} gespeichert.`;
       }
       default:
         return `Unbekanntes Tool: ${name}`;

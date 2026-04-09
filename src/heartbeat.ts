@@ -93,6 +93,8 @@ async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> 
 
 // Agents die bereits einen Cron-Job haben (verhindert Duplikate)
 const _registeredAgents = new Set<string>();
+const _cronTasks = new Map<string, cron.ScheduledTask>();
+let _replyFn: ReplyFn | null = null;
 
 function registerAgentIfNeeded(agentName: string, replyFn: ReplyFn): boolean {
   if (_registeredAgents.has(agentName)) return false;
@@ -103,16 +105,49 @@ function registerAgentIfNeeded(agentName: string, replyFn: ReplyFn): boolean {
     return false;
   }
 
-  cron.schedule(config.cronExpression, () => {
+  const task = cron.schedule(config.cronExpression, () => {
     runHeartbeat(agentName, replyFn).catch(err => logError(`Heartbeat/cron/${agentName}`, err));
   }, { timezone: TIMEZONE });
 
+  _cronTasks.set(agentName, task);
   _registeredAgents.add(agentName);
   logInfo(`[Heartbeat] ${agentName} registriert: "${config.cronExpression}"`);
   return true;
 }
 
+/** Live-Reload: Cron-Job eines Agenten aktualisieren (nach HEARTBEAT.md-Aenderung) */
+export function reloadHeartbeat(agentName: string): string {
+  const replyFn = _replyFn;
+  if (!replyFn) return "Heartbeat nicht initialisiert (kein replyFn).";
+
+  // Alten Job stoppen und entfernen
+  const oldTask = _cronTasks.get(agentName);
+  if (oldTask) {
+    oldTask.stop();
+    _cronTasks.delete(agentName);
+    _registeredAgents.delete(agentName);
+  }
+
+  // Neuen Job registrieren
+  const config = parseHeartbeat(agentName);
+  if (!config) {
+    logInfo(`[Heartbeat] ${agentName}: HEARTBEAT.md entfernt oder ungueltig — Cron gestoppt`);
+    return `Heartbeat fuer ${agentName} deaktiviert (keine gueltige Cron-Expression).`;
+  }
+
+  const task = cron.schedule(config.cronExpression, () => {
+    runHeartbeat(agentName, replyFn).catch(err => logError(`Heartbeat/cron/${agentName}`, err));
+  }, { timezone: TIMEZONE });
+
+  _cronTasks.set(agentName, task);
+  _registeredAgents.add(agentName);
+  logInfo(`[Heartbeat] ${agentName} neu geladen: "${config.cronExpression}"`);
+  return `Heartbeat fuer ${agentName} aktualisiert: "${config.cronExpression}"`;
+}
+
 export function startHeartbeat(replyFn: ReplyFn): void {
+  _replyFn = replyFn;
+
   // Initial-Registrierung (Agents die beim Start schon existieren)
   for (const agentName of listAgents()) {
     registerAgentIfNeeded(agentName, replyFn);
