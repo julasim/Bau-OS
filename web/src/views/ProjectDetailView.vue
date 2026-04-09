@@ -19,11 +19,9 @@ const notes = ref<string[]>([]);
 const tasks = ref<string[]>([]);
 const termine = ref<string[]>([]);
 
-// Note viewer
 const viewingNote = ref<string | null>(null);
 const noteContent = ref("");
 
-// New task/termin
 const newTask = ref("");
 const newDatum = ref("");
 const newUhrzeit = ref("");
@@ -94,36 +92,27 @@ async function removeTermin(text: string) {
 
 <template>
   <div>
-    <div class="flex items-center gap-3 mb-4">
-      <button @click="router.push('/projects')" class="text-sm text-blue-600 hover:underline">Projekte</button>
-      <span class="text-gray-400">/</span>
-      <h2 class="text-xl font-bold">{{ projectName }}</h2>
+    <div class="flex items-center gap-2 mb-6">
+      <button @click="router.push('/projects')" class="text-sm text-gray-400 hover:text-gray-600 transition">Projekte</button>
+      <span class="text-gray-300">/</span>
+      <h2 class="text-lg font-semibold">{{ projectName }}</h2>
     </div>
 
     <!-- Stats -->
-    <div v-if="info" class="grid grid-cols-3 gap-4 mb-6">
-      <div class="bg-white p-4 rounded-xl shadow-sm border text-center">
-        <p class="text-2xl font-bold text-blue-600">{{ info.notes }}</p>
-        <p class="text-sm text-gray-500">Notizen</p>
-      </div>
-      <div class="bg-white p-4 rounded-xl shadow-sm border text-center">
-        <p class="text-2xl font-bold text-amber-600">{{ info.openTasks }}</p>
-        <p class="text-sm text-gray-500">Offene Aufgaben</p>
-      </div>
-      <div class="bg-white p-4 rounded-xl shadow-sm border text-center">
-        <p class="text-2xl font-bold text-green-600">{{ info.termine }}</p>
-        <p class="text-sm text-gray-500">Termine</p>
-      </div>
+    <div v-if="info" class="flex gap-6 mb-6 text-sm text-gray-400">
+      <span><span class="text-gray-900 font-medium">{{ info.notes }}</span> Notizen</span>
+      <span><span class="text-gray-900 font-medium">{{ info.openTasks }}</span> Aufgaben</span>
+      <span><span class="text-gray-900 font-medium">{{ info.termine }}</span> Termine</span>
     </div>
 
     <!-- Tabs -->
-    <div class="flex gap-1 mb-4 bg-gray-100 p-1 rounded-lg w-fit">
+    <div class="flex gap-4 mb-6 border-b border-gray-200">
       <button
         v-for="t in (['notes', 'tasks', 'termine'] as const)"
         :key="t"
         @click="tab = t; viewingNote = null"
-        :class="tab === t ? 'bg-white shadow-sm font-medium' : 'text-gray-500'"
-        class="px-4 py-2 text-sm rounded-md transition"
+        :class="tab === t ? 'border-gray-900 text-gray-900' : 'border-transparent text-gray-400 hover:text-gray-600'"
+        class="pb-2 text-sm font-medium border-b-2 transition"
       >
         {{ t === 'notes' ? 'Notizen' : t === 'tasks' ? 'Aufgaben' : 'Termine' }}
       </button>
@@ -131,25 +120,25 @@ async function removeTermin(text: string) {
 
     <!-- Notes Tab -->
     <div v-if="tab === 'notes'">
-      <div v-if="viewingNote" class="mb-4">
-        <div class="flex items-center justify-between mb-2">
-          <span class="font-mono text-sm font-medium">{{ viewingNote }}</span>
-          <button @click="viewingNote = null" class="text-sm text-blue-600 hover:underline">Schliessen</button>
+      <div v-if="viewingNote">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm font-mono text-gray-500">{{ viewingNote }}</span>
+          <button @click="viewingNote = null" class="text-sm text-gray-400 hover:text-gray-600 transition">Schliessen</button>
         </div>
-        <div class="bg-white p-6 rounded-xl border overflow-auto max-h-[500px]">
+        <div class="border border-gray-100 rounded p-5 overflow-auto max-h-[500px]">
           <MarkdownRenderer :content="noteContent" />
         </div>
       </div>
-      <div v-else class="space-y-1">
+      <div v-else class="divide-y divide-gray-100">
         <button
           v-for="n in notes"
           :key="n"
           @click="openNote(n)"
-          class="bg-white p-3 rounded-lg border w-full text-left text-sm hover:bg-gray-50 font-mono"
+          class="block w-full text-left py-2.5 text-sm text-gray-700 hover:text-gray-900 transition"
         >
           {{ n }}
         </button>
-        <p v-if="notes.length === 0" class="text-gray-500 text-sm">Keine Notizen in diesem Projekt.</p>
+        <p v-if="notes.length === 0" class="text-gray-400 text-sm py-4">Keine Notizen in diesem Projekt.</p>
       </div>
     </div>
 
@@ -160,33 +149,33 @@ async function removeTermin(text: string) {
           v-model="newTask"
           placeholder="Neue Aufgabe..."
           @keyup.enter="addTask"
-          class="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+          class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
         />
-        <button @click="addTask" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">Hinzufuegen</button>
+        <button @click="addTask" class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">Hinzufuegen</button>
       </div>
-      <div class="space-y-1">
-        <div v-for="t in tasks" :key="t" class="bg-white p-3 rounded-lg border flex items-center gap-3">
-          <input type="checkbox" @change="completeTask(t)" class="w-4 h-4 rounded" />
-          <span class="text-sm">{{ t }}</span>
+      <div class="divide-y divide-gray-100">
+        <div v-for="t in tasks" :key="t" class="flex items-center gap-3 py-2.5">
+          <input type="checkbox" @change="completeTask(t)" class="w-4 h-4 rounded border-gray-300" />
+          <span class="text-sm text-gray-700">{{ t }}</span>
         </div>
-        <p v-if="tasks.length === 0" class="text-gray-500 text-sm">Keine offenen Aufgaben.</p>
+        <p v-if="tasks.length === 0" class="text-gray-400 text-sm py-4">Keine offenen Aufgaben.</p>
       </div>
     </div>
 
     <!-- Termine Tab -->
     <div v-if="tab === 'termine'">
       <div class="flex gap-2 mb-4">
-        <input v-model="newDatum" placeholder="TT.MM.JJJJ" class="px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm w-36" />
-        <input v-model="newUhrzeit" placeholder="HH:MM" class="px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm w-28" />
-        <input v-model="newTerminText" placeholder="Beschreibung..." @keyup.enter="addTermin" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm" />
-        <button @click="addTermin" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">Erstellen</button>
+        <input v-model="newDatum" placeholder="TT.MM.JJJJ" class="px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400 w-32" />
+        <input v-model="newUhrzeit" placeholder="HH:MM" class="px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400 w-24" />
+        <input v-model="newTerminText" placeholder="Beschreibung..." @keyup.enter="addTermin" class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
+        <button @click="addTermin" class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">Erstellen</button>
       </div>
-      <div class="space-y-1">
-        <div v-for="t in termine" :key="t" class="bg-white p-3 rounded-lg border flex items-center justify-between">
-          <span class="text-sm">{{ t }}</span>
-          <button @click="removeTermin(t)" class="text-xs text-red-500 hover:text-red-700">Loeschen</button>
+      <div class="divide-y divide-gray-100">
+        <div v-for="t in termine" :key="t" class="flex items-center justify-between py-2.5">
+          <span class="text-sm text-gray-700">{{ t }}</span>
+          <button @click="removeTermin(t)" class="text-xs text-gray-400 hover:text-red-500 transition">Loeschen</button>
         </div>
-        <p v-if="termine.length === 0" class="text-gray-500 text-sm">Keine Termine.</p>
+        <p v-if="termine.length === 0" class="text-gray-400 text-sm py-4">Keine Termine.</p>
       </div>
     </div>
   </div>

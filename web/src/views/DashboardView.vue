@@ -26,31 +26,31 @@ onMounted(async () => {
 
 <template>
   <div>
-    <h2 class="text-xl font-bold mb-4">Dashboard</h2>
+    <h2 class="text-lg font-semibold mb-6">Dashboard</h2>
 
-    <p v-if="error" class="text-red-600">{{ error }}</p>
+    <p v-if="error" class="text-red-600 text-sm">{{ error }}</p>
 
-    <div v-if="data" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-      <div class="bg-white p-4 rounded-xl shadow-sm border">
-        <p class="text-2xl font-bold">{{ data.notes }}</p>
-        <p class="text-sm text-gray-500">Notizen</p>
+    <div v-if="data" class="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
+      <div>
+        <p class="text-2xl font-semibold text-gray-900">{{ data.notes }}</p>
+        <p class="text-sm text-gray-400">Notizen</p>
       </div>
-      <div class="bg-white p-4 rounded-xl shadow-sm border">
-        <p class="text-2xl font-bold">{{ data.openTasks }}</p>
-        <p class="text-sm text-gray-500">Offene Aufgaben</p>
+      <div>
+        <p class="text-2xl font-semibold text-gray-900">{{ data.openTasks }}</p>
+        <p class="text-sm text-gray-400">Offene Aufgaben</p>
       </div>
-      <div class="bg-white p-4 rounded-xl shadow-sm border">
-        <p class="text-2xl font-bold">{{ data.termine }}</p>
-        <p class="text-sm text-gray-500">Termine</p>
+      <div>
+        <p class="text-2xl font-semibold text-gray-900">{{ data.termine }}</p>
+        <p class="text-sm text-gray-400">Termine</p>
       </div>
-      <div class="bg-white p-4 rounded-xl shadow-sm border">
-        <p class="text-2xl font-bold">{{ data.agents.length }}</p>
-        <p class="text-sm text-gray-500">Agenten</p>
+      <div>
+        <p class="text-2xl font-semibold text-gray-900">{{ data.agents.length }}</p>
+        <p class="text-sm text-gray-400">Agenten</p>
       </div>
     </div>
 
-    <div v-if="data && data.todayTermine.length > 0" class="bg-white p-4 rounded-xl shadow-sm border">
-      <h3 class="font-semibold mb-2">Termine heute</h3>
+    <div v-if="data && data.todayTermine.length > 0">
+      <h3 class="text-sm font-medium text-gray-500 mb-2">Termine heute</h3>
       <ul class="space-y-1">
         <li v-for="t in data.todayTermine" :key="t" class="text-sm text-gray-700">{{ t }}</li>
       </ul>

@@ -30,32 +30,32 @@ async function save() {
 <template>
   <div>
     <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-bold">{{ name }}</h2>
+      <h2 class="text-lg font-semibold">{{ name }}</h2>
       <div class="flex gap-2">
         <button
           @click="preview = !preview"
-          :class="preview ? 'bg-green-600 text-white' : 'bg-gray-200 text-gray-700'"
-          class="px-4 py-2 text-sm rounded-lg transition"
+          :class="preview ? 'text-gray-900' : 'text-gray-400'"
+          class="px-3 py-1.5 text-sm hover:text-gray-700 transition"
         >
           {{ preview ? "Bearbeiten" : "Vorschau" }}
         </button>
         <button
           @click="save"
           :disabled="saving"
-          class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+          class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 disabled:opacity-50 transition"
         >
           {{ saving ? "Speichert..." : "Speichern" }}
         </button>
         <button
           @click="router.back()"
-          class="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition"
+          class="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-600 transition"
         >
           Zurueck
         </button>
       </div>
     </div>
 
-    <div v-if="preview" class="bg-white p-6 rounded-xl border min-h-[400px]">
+    <div v-if="preview" class="border border-gray-100 rounded p-5 min-h-[400px]">
       <MarkdownRenderer :content="content" />
     </div>
 
@@ -63,7 +63,7 @@ async function save() {
       v-else
       v-model="content"
       rows="25"
-      class="w-full px-4 py-3 border border-gray-300 rounded-xl font-mono text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-y bg-white"
+      class="w-full px-4 py-3 border border-gray-200 rounded font-mono text-sm outline-none focus:ring-1 focus:ring-gray-400 resize-y"
     ></textarea>
   </div>
 </template>

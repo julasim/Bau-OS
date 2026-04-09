@@ -30,23 +30,21 @@ onMounted(load);
 
 <template>
   <div>
-    <h2 class="text-xl font-bold mb-4">Termine</h2>
+    <h2 class="text-lg font-semibold mb-6">Termine</h2>
 
-    <div class="bg-white p-4 rounded-xl shadow-sm border mb-4 space-y-2">
-      <div class="flex gap-2">
-        <input v-model="datum" placeholder="TT.MM.JJJJ" class="px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm w-36" />
-        <input v-model="uhrzeit" placeholder="HH:MM (optional)" class="px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm w-36" />
-        <input v-model="text" placeholder="Beschreibung..." @keyup.enter="create" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none text-sm" />
-        <button @click="create" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">Erstellen</button>
-      </div>
+    <div class="flex gap-2 mb-6">
+      <input v-model="datum" placeholder="TT.MM.JJJJ" class="px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400 w-32" />
+      <input v-model="uhrzeit" placeholder="HH:MM" class="px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400 w-24" />
+      <input v-model="text" placeholder="Beschreibung..." @keyup.enter="create" class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
+      <button @click="create" class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">Erstellen</button>
     </div>
 
-    <div class="space-y-1">
-      <div v-for="t in termine" :key="t" class="bg-white p-3 rounded-lg border flex items-center justify-between">
-        <span class="text-sm">{{ t }}</span>
-        <button @click="remove(t)" class="text-xs text-red-500 hover:text-red-700">Loeschen</button>
+    <div class="divide-y divide-gray-100">
+      <div v-for="t in termine" :key="t" class="flex items-center justify-between py-2.5">
+        <span class="text-sm text-gray-700">{{ t }}</span>
+        <button @click="remove(t)" class="text-xs text-gray-400 hover:text-red-500 transition">Loeschen</button>
       </div>
-      <p v-if="termine.length === 0" class="text-gray-500 text-sm">Keine Termine vorhanden.</p>
+      <p v-if="termine.length === 0" class="text-gray-400 text-sm py-4">Keine Termine vorhanden.</p>
     </div>
   </div>
 </template>

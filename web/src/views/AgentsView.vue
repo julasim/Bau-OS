@@ -33,32 +33,32 @@ onMounted(loadAgents);
 
 <template>
   <div>
-    <h2 class="text-xl font-bold mb-4">Agenten</h2>
+    <h2 class="text-lg font-semibold mb-6">Agenten</h2>
 
-    <div class="flex gap-2 mb-4">
+    <div class="flex gap-2 mb-6">
       <button
         v-for="name in agents"
         :key="name"
         @click="selectAgent(name)"
-        :class="selectedAgent === name ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border'"
-        class="px-4 py-2 text-sm rounded-lg transition"
+        :class="selectedAgent === name ? 'bg-gray-900 text-white' : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'"
+        class="px-3 py-1.5 text-sm rounded border border-gray-200 transition"
       >
         {{ name }}
       </button>
     </div>
 
-    <div v-if="files.length > 0" class="space-y-1">
+    <div v-if="files.length > 0" class="divide-y divide-gray-100">
       <div
         v-for="f in files"
         :key="f.name"
         @click="openFile(f.name)"
-        class="bg-white p-3 rounded-lg border flex items-center justify-between hover:bg-gray-50 cursor-pointer"
+        class="flex items-center justify-between py-2.5 cursor-pointer hover:bg-gray-50 -mx-2 px-2 rounded transition"
       >
-        <span class="text-sm font-medium font-mono">{{ f.name }}</span>
+        <span class="text-sm font-mono text-gray-700">{{ f.name }}</span>
         <span class="text-xs text-gray-400">{{ f.chars }} Zeichen</span>
       </div>
     </div>
 
-    <p v-if="agents.length === 0" class="text-gray-500 text-sm">Keine Agenten vorhanden.</p>
+    <p v-if="agents.length === 0" class="text-gray-400 text-sm">Keine Agenten vorhanden.</p>
   </div>
 </template>

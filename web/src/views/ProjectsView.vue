@@ -20,33 +20,24 @@ onMounted(async () => {
 
 <template>
   <div>
-    <h2 class="text-xl font-bold mb-4">Projekte</h2>
+    <h2 class="text-lg font-semibold mb-6">Projekte</h2>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div class="divide-y divide-gray-100">
       <div
         v-for="p in projects"
         :key="p.name"
         @click="router.push(`/projects/${encodeURIComponent(p.name)}`)"
-        class="bg-white p-5 rounded-xl shadow-sm border hover:shadow-md hover:border-blue-300 cursor-pointer transition"
+        class="flex items-center justify-between py-3 cursor-pointer hover:bg-gray-50 -mx-2 px-2 rounded transition"
       >
-        <h3 class="font-bold text-lg mb-3">{{ p.name }}</h3>
-        <div class="grid grid-cols-3 gap-2 text-center">
-          <div>
-            <p class="text-xl font-bold text-blue-600">{{ p.notes }}</p>
-            <p class="text-xs text-gray-500">Notizen</p>
-          </div>
-          <div>
-            <p class="text-xl font-bold text-amber-600">{{ p.openTasks }}</p>
-            <p class="text-xs text-gray-500">Aufgaben</p>
-          </div>
-          <div>
-            <p class="text-xl font-bold text-green-600">{{ p.termine }}</p>
-            <p class="text-xs text-gray-500">Termine</p>
-          </div>
+        <span class="text-sm font-medium text-gray-900">{{ p.name }}</span>
+        <div class="flex gap-4 text-xs text-gray-400">
+          <span>{{ p.notes }} Notizen</span>
+          <span>{{ p.openTasks }} Aufgaben</span>
+          <span>{{ p.termine }} Termine</span>
         </div>
       </div>
     </div>
 
-    <p v-if="projects.length === 0" class="text-gray-500 text-sm">Keine Projekte vorhanden.</p>
+    <p v-if="projects.length === 0" class="text-gray-400 text-sm py-4">Keine Projekte vorhanden.</p>
   </div>
 </template>

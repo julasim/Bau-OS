@@ -21,24 +21,24 @@ async function search() {
 
 <template>
   <div>
-    <h2 class="text-xl font-bold mb-4">Vault durchsuchen</h2>
+    <h2 class="text-lg font-semibold mb-6">Vault durchsuchen</h2>
 
-    <div class="flex gap-2 mb-4">
+    <div class="flex gap-2 mb-6">
       <input
         v-model="query"
         placeholder="Suchbegriff..."
         @keyup.enter="search"
-        class="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+        class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
       />
-      <button @click="search" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition">Suchen</button>
+      <button @click="search" class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">Suchen</button>
     </div>
 
-    <div class="space-y-2">
-      <div v-for="r in results" :key="r.file + r.lineNumber" class="bg-white p-3 rounded-lg border">
-        <p class="text-xs text-gray-500 font-mono">{{ r.file }}:{{ r.lineNumber }}</p>
-        <p class="text-sm mt-1">{{ r.line }}</p>
+    <div class="divide-y divide-gray-100">
+      <div v-for="r in results" :key="r.file + r.lineNumber" class="py-2.5">
+        <p class="text-xs text-gray-400 font-mono">{{ r.file }}:{{ r.lineNumber }}</p>
+        <p class="text-sm text-gray-700 mt-0.5">{{ r.line }}</p>
       </div>
-      <p v-if="searched && results.length === 0" class="text-gray-500 text-sm">Keine Ergebnisse.</p>
+      <p v-if="searched && results.length === 0" class="text-gray-400 text-sm py-4">Keine Ergebnisse.</p>
     </div>
   </div>
 </template>

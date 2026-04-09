@@ -28,30 +28,30 @@ async function login() {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-gray-100">
-    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm">
-      <h1 class="text-2xl font-bold text-center mb-1">Bau-OS</h1>
-      <p class="text-gray-500 text-center text-sm mb-6">Vault-Editor</p>
+  <div class="min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-xs">
+      <h1 class="text-xl font-semibold text-center mb-1">Bau-OS</h1>
+      <p class="text-gray-400 text-center text-sm mb-8">Vault-Editor</p>
 
       <form @submit.prevent="login" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Benutzername</label>
+          <label class="block text-sm text-gray-600 mb-1">Benutzername</label>
           <input
             v-model="username"
             type="text"
             autocomplete="username"
             required
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            class="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-gray-400 focus:border-gray-400 outline-none"
           />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-700 mb-1">Passwort</label>
+          <label class="block text-sm text-gray-600 mb-1">Passwort</label>
           <input
             v-model="password"
             type="password"
             autocomplete="current-password"
             required
-            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+            class="w-full px-3 py-2 border border-gray-200 rounded text-sm focus:ring-1 focus:ring-gray-400 focus:border-gray-400 outline-none"
           />
         </div>
 
@@ -60,7 +60,7 @@ async function login() {
         <button
           type="submit"
           :disabled="loading"
-          class="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+          class="w-full py-2 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 disabled:opacity-50 transition"
         >
           {{ loading ? "..." : "Anmelden" }}
         </button>

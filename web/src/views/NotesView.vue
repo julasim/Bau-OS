@@ -6,7 +6,6 @@ import { api } from "../api";
 const router = useRouter();
 const notes = ref<string[]>([]);
 const newContent = ref("");
-const error = ref("");
 
 async function load() {
   notes.value = await api.get<string[]>("/notes");
@@ -30,41 +29,39 @@ onMounted(load);
 
 <template>
   <div>
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-xl font-bold">Notizen</h2>
-    </div>
+    <h2 class="text-lg font-semibold mb-6">Notizen</h2>
 
-    <div class="bg-white p-4 rounded-xl shadow-sm border mb-4">
+    <div class="mb-6">
       <textarea
         v-model="newContent"
         placeholder="Neue Notiz..."
         rows="3"
-        class="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+        class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 resize-y"
       ></textarea>
       <button
         @click="create"
-        class="mt-2 px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition"
+        class="mt-2 px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition"
       >
         Speichern
       </button>
     </div>
 
-    <div class="space-y-2">
+    <div class="divide-y divide-gray-100">
       <div
         v-for="name in notes"
         :key="name"
-        class="bg-white p-3 rounded-lg border flex items-center justify-between hover:bg-gray-50 cursor-pointer"
+        class="flex items-center justify-between py-2.5 cursor-pointer hover:bg-gray-50 -mx-2 px-2 rounded transition"
         @click="router.push(`/notes/${encodeURIComponent(name)}`)"
       >
-        <span class="text-sm font-medium">{{ name }}</span>
+        <span class="text-sm text-gray-700">{{ name }}</span>
         <button
           @click.stop="remove(name)"
-          class="text-xs text-red-500 hover:text-red-700"
+          class="text-xs text-gray-400 hover:text-red-500 transition"
         >
           Loeschen
         </button>
       </div>
-      <p v-if="notes.length === 0" class="text-gray-500 text-sm">Keine Notizen vorhanden.</p>
+      <p v-if="notes.length === 0" class="text-gray-400 text-sm py-4">Keine Notizen vorhanden.</p>
     </div>
   </div>
 </template>

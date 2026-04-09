@@ -39,39 +39,39 @@ onMounted(() => loadFolder());
 
 <template>
   <div>
-    <div class="flex items-center gap-2 mb-4">
-      <h2 class="text-xl font-bold">Dateien</h2>
-      <span class="text-sm text-gray-500 font-mono">/ {{ currentPath || "Vault" }}</span>
+    <div class="flex items-center gap-2 mb-6">
+      <h2 class="text-lg font-semibold">Dateien</h2>
+      <span class="text-sm text-gray-400 font-mono">/ {{ currentPath || "Vault" }}</span>
     </div>
 
-    <div v-if="fileContent !== null" class="mb-4">
-      <div class="flex items-center justify-between mb-2">
-        <span class="font-mono text-sm font-medium">{{ fileName }}</span>
-        <button @click="fileContent = null" class="text-sm text-blue-600 hover:underline">Schliessen</button>
+    <div v-if="fileContent !== null">
+      <div class="flex items-center justify-between mb-3">
+        <span class="text-sm font-mono text-gray-500">{{ fileName }}</span>
+        <button @click="fileContent = null" class="text-sm text-gray-400 hover:text-gray-600 transition">Schliessen</button>
       </div>
-      <div v-if="isMarkdown" class="bg-white p-6 rounded-xl border overflow-auto max-h-[600px]">
+      <div v-if="isMarkdown" class="border border-gray-100 rounded p-5 overflow-auto max-h-[600px]">
         <MarkdownRenderer :content="fileContent" />
       </div>
-      <pre v-else class="bg-white p-4 rounded-xl border text-sm font-mono whitespace-pre-wrap overflow-auto max-h-[600px]">{{ fileContent }}</pre>
+      <pre v-else class="p-4 border border-gray-100 rounded text-sm font-mono whitespace-pre-wrap overflow-auto max-h-[600px] text-gray-700">{{ fileContent }}</pre>
     </div>
 
-    <div v-else class="space-y-1">
+    <div v-else class="divide-y divide-gray-100">
       <button
         v-if="currentPath"
         @click="goUp"
-        class="bg-white p-3 rounded-lg border w-full text-left text-sm text-gray-500 hover:bg-gray-50"
+        class="block w-full text-left py-2.5 text-sm text-gray-400 hover:text-gray-600 transition"
       >
-        ../ (zurueck)
+        ../
       </button>
       <button
         v-for="item in items"
         :key="item"
         @click="openItem(item)"
-        class="bg-white p-3 rounded-lg border w-full text-left text-sm hover:bg-gray-50 font-mono"
+        class="block w-full text-left py-2.5 text-sm font-mono text-gray-700 hover:text-gray-900 transition"
       >
         {{ item }}
       </button>
-      <p v-if="items.length === 0" class="text-gray-500 text-sm">Ordner ist leer.</p>
+      <p v-if="items.length === 0" class="text-gray-400 text-sm py-4">Ordner ist leer.</p>
     </div>
   </div>
 </template>

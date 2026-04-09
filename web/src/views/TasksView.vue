@@ -35,41 +35,41 @@ onMounted(load);
 
 <template>
   <div>
-    <h2 class="text-xl font-bold mb-4">Aufgaben</h2>
+    <h2 class="text-lg font-semibold mb-6">Aufgaben</h2>
 
-    <div class="bg-white p-4 rounded-xl shadow-sm border mb-4 flex gap-2">
+    <div class="flex gap-2 mb-6">
       <input
         v-model="newTask"
         placeholder="Neue Aufgabe..."
         @keyup.enter="create"
-        class="flex-1 px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+        class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
       />
       <button
         @click="create"
-        class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition"
+        class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition"
       >
         Hinzufuegen
       </button>
     </div>
 
-    <div class="space-y-1">
+    <div class="divide-y divide-gray-100">
       <div
         v-for="task in tasks"
         :key="task"
-        class="bg-white p-3 rounded-lg border flex items-center gap-3"
+        class="flex items-center gap-3 py-2.5"
       >
         <input
           type="checkbox"
           :checked="!isOpen(task)"
           @change="complete(task)"
           :disabled="!isOpen(task)"
-          class="w-4 h-4"
+          class="w-4 h-4 rounded border-gray-300"
         />
-        <span :class="{ 'line-through text-gray-400': !isOpen(task) }" class="text-sm">
+        <span :class="{ 'line-through text-gray-300': !isOpen(task) }" class="text-sm text-gray-700">
           {{ taskText(task) }}
         </span>
       </div>
-      <p v-if="tasks.length === 0" class="text-gray-500 text-sm">Keine Aufgaben vorhanden.</p>
+      <p v-if="tasks.length === 0" class="text-gray-400 text-sm py-4">Keine Aufgaben vorhanden.</p>
     </div>
   </div>
 </template>

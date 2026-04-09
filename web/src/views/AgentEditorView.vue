@@ -35,20 +35,22 @@ async function save() {
 <template>
   <div>
     <div class="flex items-center justify-between mb-4">
-      <div>
-        <h2 class="text-xl font-bold">{{ agentName }} / {{ filename }}</h2>
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-gray-400">{{ agentName }}</span>
+        <span class="text-gray-300">/</span>
+        <h2 class="text-lg font-semibold">{{ filename }}</h2>
       </div>
       <div class="flex gap-2">
         <button
           @click="save"
           :disabled="saving"
-          class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 transition"
+          class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 disabled:opacity-50 transition"
         >
           {{ saving ? "Speichert..." : "Speichern" }}
         </button>
         <button
           @click="router.back()"
-          class="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 transition"
+          class="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition"
         >
           Zurueck
         </button>
@@ -58,7 +60,7 @@ async function save() {
     <textarea
       v-model="content"
       rows="30"
-      class="w-full px-4 py-3 border border-gray-300 rounded-xl font-mono text-sm outline-none focus:ring-2 focus:ring-blue-500 resize-y bg-white"
+      class="w-full px-4 py-3 border border-gray-200 rounded font-mono text-sm outline-none focus:ring-1 focus:ring-gray-400 resize-y"
     ></textarea>
   </div>
 </template>
