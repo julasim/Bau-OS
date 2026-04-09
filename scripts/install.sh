@@ -443,7 +443,21 @@ chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.env"
 chmod 600 "$INSTALL_DIR/.env"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 10: systemd Service
+# SCHRITT 10: CLI-Tool installieren
+# ═════════════════════════════════════════════════════════════════════════════
+step "bau-os CLI installieren..."
+cp "$INSTALL_DIR/scripts/bau-os-cli.sh" /usr/local/bin/bau-os
+chmod +x /usr/local/bin/bau-os
+
+# Pfade im CLI auf tatsächliche Installationspfade anpassen
+sed -i "s|INSTALL_DIR=\"/opt/bau-os\"|INSTALL_DIR=\"$INSTALL_DIR\"|" /usr/local/bin/bau-os
+sed -i "s|VAULT_DIR=\"/opt/bau-os-vault\"|VAULT_DIR=\"$VAULT_DIR\"|" /usr/local/bin/bau-os
+sed -i "s|SERVICE_USER=\"bauos\"|SERVICE_USER=\"$SERVICE_USER\"|" /usr/local/bin/bau-os
+
+ok "CLI verfügbar: 'bau-os' oder 'sudo bau-os'"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SCHRITT 11: systemd Service
 # ═════════════════════════════════════════════════════════════════════════════
 step "systemd Service installieren..."
 
@@ -482,9 +496,11 @@ echo ""
 echo -e "  ${GREEN}▸${NC} Öffne deinen Telegram Bot und schreibe ${BOLD}'Hallo'${NC}"
 echo    "    Der Setup-Wizard führt dich durch die Einrichtung."
 echo ""
-echo    "  Nützliche Befehle:"
-echo    "    systemctl status bau-os              → Status prüfen"
-echo    "    journalctl -u bau-os -f              → Live-Logs"
-echo    "    systemctl restart bau-os             → Neustart"
-echo    "    bash $INSTALL_DIR/scripts/update.sh  → Update einspielen"
+echo -e "  ${BOLD}CLI-Befehle:${NC}"
+echo    "    bau-os                   → Interaktives Menü"
+echo    "    bau-os status            → Status"
+echo    "    bau-os logs              → Logs anzeigen"
+echo    "    bau-os logs live         → Live-Logs"
+echo    "    sudo bau-os restart      → Neustart"
+echo    "    sudo bau-os update       → Update einspielen"
 echo ""

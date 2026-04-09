@@ -16,6 +16,11 @@ su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git pull"
 
 npm install --omit=dev --loglevel=error
 npm run build
+
+# CLI-Tool aktualisieren
+cp "$INSTALL_DIR/scripts/bau-os-cli.sh" /usr/local/bin/bau-os
+chmod +x /usr/local/bin/bau-os
+
 systemctl restart bau-os
 
 echo "✓ Update abgeschlossen"
