@@ -25,29 +25,53 @@ import { teamRoutes } from "./routes/team.js";
 const app = new Hono<AppEnv>();
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
+const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",").map(s => s.trim())
+  : undefined;
+
 app.use("/api/*", cors({
-  origin: "*",
+  origin: allowedOrigins ?? "*",
   allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   allowHeaders: ["Content-Type", "Authorization"],
 }));
 
+// ── Rate Limiting (Login) ────────────────────────────────────────────────────
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten
+
 // ── Login (ohne Auth) ────────────────────────────────────────────────────────
 app.post("/api/auth/login", async (c) => {
-  const body = await c.req.json<{ username: string; password: string }>();
+  const ip = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "unknown";
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (entry && now < entry.resetAt && entry.count >= RATE_LIMIT) {
+    return c.json({ error: "Zu viele Login-Versuche. Bitte spaeter erneut versuchen." }, 429);
+  }
+
+  let body: { username: string; password: string };
+  try {
+    body = await c.req.json<{ username: string; password: string }>();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
   if (!body.username || !body.password) {
     return c.json({ error: "Benutzername und Passwort erforderlich" }, 400);
   }
 
   const user = findUser(body.username);
   if (!user) {
+    loginAttempts.set(ip, { count: (entry && now < entry.resetAt ? entry.count : 0) + 1, resetAt: now + RATE_WINDOW_MS });
     return c.json({ error: "Benutzername oder Passwort falsch" }, 401);
   }
 
   const valid = await verifyPassword(body.password, user.passwordHash);
   if (!valid) {
+    loginAttempts.set(ip, { count: (entry && now < entry.resetAt ? entry.count : 0) + 1, resetAt: now + RATE_WINDOW_MS });
     return c.json({ error: "Benutzername oder Passwort falsch" }, 401);
   }
 
+  loginAttempts.delete(ip);
   const token = createToken(user.username, user.role);
   return c.json({ token, username: user.username, role: user.role });
 });

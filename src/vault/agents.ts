@@ -62,9 +62,13 @@ export function isProtectedAgent(agentName: string): boolean {
 export function listAgents(): string[] {
   const agentsRoot = path.join(vaultPath, VAULT_AGENTS_DIR);
   if (!fs.existsSync(agentsRoot)) return [];
-  return fs.readdirSync(agentsRoot, { withFileTypes: true })
-    .filter(e => e.isDirectory())
-    .map(e => e.name);
+  try {
+    return fs.readdirSync(agentsRoot, { withFileTypes: true })
+      .filter(e => e.isDirectory())
+      .map(e => e.name);
+  } catch {
+    return [];
+  }
 }
 
 export function vaultExists(): boolean {
@@ -120,8 +124,10 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
     addFile(path.join(agentDir, "HEARTBEAT.md"), "HEARTBEAT.md");
 
     const memDir = path.join(agentDir, VAULT_LOGS_DIR);
-    const isFirstRun = !fs.existsSync(memDir) ||
-      fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0;
+    let isFirstRun = !fs.existsSync(memDir);
+    if (!isFirstRun) {
+      try { isFirstRun = fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0; } catch { isFirstRun = true; }
+    }
     if (isFirstRun) addFile(path.join(agentDir, "BOOTSTRAP.md"), "BOOTSTRAP.md");
 
     const today = new Date().toISOString().slice(0, 10);
@@ -178,8 +184,10 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
   const today = new Date().toISOString().slice(0, 10);
 
   const memDir = path.join(agentDir, VAULT_LOGS_DIR);
-  const isFirstRun = !fs.existsSync(memDir) ||
-    fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0;
+  let isFirstRun = !fs.existsSync(memDir);
+  if (!isFirstRun) {
+    try { isFirstRun = fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0; } catch { isFirstRun = true; }
+  }
 
   const candidates: { name: string; filepath: string }[] = [
     { name: "IDENTITY.md",   filepath: path.join(agentDir, "IDENTITY.md") },

@@ -150,7 +150,6 @@ export async function executeDynamicTool(
         Math, Date, JSON, parseInt, parseFloat, String, Number, Boolean, Array, Object,
         RegExp, Map, Set, Error,
         console: { log: (...a: unknown[]) => logs.push(a.map(String).join(" ")) },
-        fetch: globalThis.fetch,  // Netzwerk erlaubt fuer dynamische Tools
       };
 
       const logs: string[] = [];
@@ -178,7 +177,10 @@ export async function executeDynamicTool(
   if (fs.existsSync(shPath)) {
     return new Promise<string>((resolve) => {
       // Args als Umgebungsvariablen uebergeben (TOOL_ARG_name=wert)
-      const env: Record<string, string> = { ...process.env as Record<string, string>, LANG: "de_AT.UTF-8" };
+      // Nur sichere Env-Vars weitergeben (keine Secrets)
+      const { PATH, HOME, USER, LANG: _LANG, SHELL, TERM, VAULT_PATH: _VP } = process.env;
+      const env: Record<string, string> = { PATH: PATH ?? "", HOME: HOME ?? "", USER: USER ?? "", LANG: "de_AT.UTF-8", SHELL: SHELL ?? "", TERM: TERM ?? "" };
+      if (_VP) env.VAULT_PATH = _VP;
       for (const [key, val] of Object.entries(args)) {
         env[`TOOL_ARG_${key.toUpperCase()}`] = String(val);
       }

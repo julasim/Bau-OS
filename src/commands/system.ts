@@ -1,6 +1,7 @@
 import type { Context } from "grammy";
-import { vaultExists, getVaultPath, inspectAgentWorkspace, estimateTokens, clearAgentToday, listAgents, getAgentPath, loadAgentHistory } from "../vault/index.js";
+import { vaultExists, getVaultPath, inspectAgentWorkspace, clearAgentToday, listAgents, getAgentPath, loadAgentHistory } from "../vault/index.js";
 import { readRecentLogs, logError } from "../logger.js";
+import { VAULT_LOGS_DIR } from "../config.js";
 import fs from "fs";
 import path from "path";
 
@@ -159,7 +160,7 @@ export async function handleAgents(ctx: Context): Promise<void> {
 
   const today = new Date().toISOString().slice(0, 10);
   const lines = agents.map(name => {
-    const logPath = path.join(getAgentPath(name), "MEMORY_LOGS", `${today}.md`);
+    const logPath = path.join(getAgentPath(name), VAULT_LOGS_DIR, `${today}.md`);
     const aktiv = fs.existsSync(logPath) ? "\u25CF aktiv" : "\u25CB";
     return `${aktiv} ${name}`;
   });

@@ -70,10 +70,12 @@ export async function processSetup(userMessage: string): Promise<string> {
 
   if (reply.tool_calls?.length) {
     const call = reply.tool_calls[0] as { id: string; function: { name: string; arguments: string } };
-    const args = JSON.parse(call.function.arguments) as {
-      name: string; emoji: string; vibe: string;
-      context: string; userName: string; userCompany: string;
-    };
+    let args: { name: string; emoji: string; vibe: string; context: string; userName: string; userCompany: string };
+    try {
+      args = JSON.parse(call.function.arguments);
+    } catch {
+      return "Fehler beim Verarbeiten der Setup-Daten. Bitte versuche es erneut.";
+    }
 
     finalizeMainWorkspace(args);
     deactivateSetup();

@@ -60,7 +60,12 @@ export async function processAgent(agentName: string, userMessage: string, mode:
     const toolResults = await Promise.all(
       reply.tool_calls.map(async (toolCall) => {
         const tc = toolCall as { id: string; function: { name: string; arguments: string } };
-        const args = JSON.parse(tc.function.arguments) as Record<string, string | number>;
+        let args: Record<string, string | number>;
+        try {
+          args = JSON.parse(tc.function.arguments) as Record<string, string | number>;
+        } catch {
+          return { role: "tool" as const, tool_call_id: tc.id, content: `Fehler: Ungueltige Tool-Argumente fuer ${tc.function.name}.` };
+        }
         const result = await executeTool(tc.function.name, args);
         return { role: "tool" as const, tool_call_id: tc.id, content: result };
       })

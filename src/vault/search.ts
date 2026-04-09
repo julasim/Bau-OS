@@ -16,7 +16,9 @@ export function searchVault(query: string, limitTo?: string): SearchResult[] {
 
   function searchDir(dir: string): void {
     if (!fs.existsSync(dir)) return;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         searchDir(full);

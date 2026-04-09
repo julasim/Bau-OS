@@ -144,6 +144,12 @@ export async function disconnectServer(name: string): Promise<boolean> {
   return true;
 }
 
+export async function disconnectAll(): Promise<void> {
+  for (const name of [..._servers.keys()]) {
+    await disconnectServer(name);
+  }
+}
+
 // ---- Startup ----
 
 export async function initMcp(): Promise<void> {

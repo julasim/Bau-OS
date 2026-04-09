@@ -33,7 +33,11 @@ function legacyTerminePath(project?: string): string {
 function loadTermine(project?: string): Termin[] {
   const fp = termineFilePath(project);
   if (fs.existsSync(fp)) {
-    return JSON.parse(fs.readFileSync(fp, "utf-8"));
+    try {
+      return JSON.parse(fs.readFileSync(fp, "utf-8"));
+    } catch {
+      return [];
+    }
   }
   return migrateLegacy(project);
 }

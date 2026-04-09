@@ -182,9 +182,22 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "befehl_ausfuehren": {
         const cmd = String(args.befehl).trim();
-        // Sicherheit: destruktive Befehle blockieren
-        const blocked = /(\brm\s+-rf\b|\bshutdown\b|\breboot\b|\bpoweroff\b|\bmkfs\b|\bdd\s+if=|\b>\s*\/dev\/|\bsudo\s+(rm|shutdown|reboot|mkfs|dd|poweroff))/i;
-        if (blocked.test(cmd)) return "Befehl blockiert — destruktive Befehle sind nicht erlaubt.";
+        // Sicherheit: nur erlaubte Befehle zulassen (Allowlist)
+        const baseCmd = cmd.split(/[\s|;&]/)[0].replace(/^.*\//, "");
+        const ALLOWED_COMMANDS = [
+          "ls", "dir", "cat", "head", "tail", "grep", "rg", "find", "wc", "sort", "uniq",
+          "df", "du", "free", "uptime", "uname", "whoami", "hostname", "date", "cal",
+          "ps", "top", "htop", "systemctl", "journalctl", "service",
+          "curl", "wget", "ping", "dig", "nslookup", "ip", "ss", "netstat",
+          "pwd", "which", "whereis", "file", "stat", "lsblk", "lscpu",
+          "echo", "printf", "tr", "cut", "awk", "sed", "jq", "xargs",
+          "git", "npm", "node", "npx", "tsc",
+          "tar", "zip", "unzip", "gzip", "gunzip",
+          "cp", "mv", "mkdir", "touch", "ln", "chmod", "chown",
+          "docker", "docker-compose",
+          "ollama",
+        ];
+        if (!ALLOWED_COMMANDS.includes(baseCmd)) return `Befehl "${baseCmd}" nicht erlaubt. Erlaubte Befehle: ${ALLOWED_COMMANDS.slice(0, 15).join(", ")}...`;
 
         const cwd = args.verzeichnis ? String(args.verzeichnis) : process.cwd();
         const timeoutMs = Math.min((Number(args.timeout) || 15), 60) * 1000;

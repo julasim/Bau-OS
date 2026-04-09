@@ -36,3 +36,15 @@ if (API_ENABLED) {
 } else {
   logInfo("[API] Web-API deaktiviert (JWT_SECRET nicht gesetzt)");
 }
+
+// Graceful Shutdown
+async function shutdown(signal: string): Promise<void> {
+  logInfo(`${signal} empfangen — fahre herunter...`);
+  try { bot.stop(); } catch { /* ignore */ }
+  const { disconnectAll } = await import("./mcp.js");
+  try { await disconnectAll(); } catch { /* ignore */ }
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

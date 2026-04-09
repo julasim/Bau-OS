@@ -31,7 +31,9 @@ export function resolveNotePath(nameOrPath: string): string | null {
 
   function searchDir(dir: string): string | null {
     if (!fs.existsSync(dir)) return null;
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+    for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         const found = searchDir(full);

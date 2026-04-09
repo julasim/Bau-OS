@@ -33,7 +33,11 @@ function legacyTasksPath(project?: string): string {
 function loadTasks(project?: string): Task[] {
   const fp = tasksFilePath(project);
   if (fs.existsSync(fp)) {
-    return JSON.parse(fs.readFileSync(fp, "utf-8"));
+    try {
+      return JSON.parse(fs.readFileSync(fp, "utf-8"));
+    } catch {
+      return [];
+    }
   }
   // Migrate from legacy Markdown
   return migrateLegacy(project);

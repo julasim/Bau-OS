@@ -22,8 +22,11 @@ export interface JwtPayload {
 
 export function loadUsers(): User[] {
   if (!fs.existsSync(USERS_FILE)) return [];
-  const raw = fs.readFileSync(USERS_FILE, "utf-8");
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
+  } catch {
+    return [];
+  }
 }
 
 export function saveUsers(users: User[]): void {

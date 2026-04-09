@@ -5,7 +5,11 @@ const teamFilePath = path.join(process.cwd(), "data", "team.json");
 
 function loadTeam(): string[] {
   if (!fs.existsSync(teamFilePath)) return [];
-  return JSON.parse(fs.readFileSync(teamFilePath, "utf-8"));
+  try {
+    return JSON.parse(fs.readFileSync(teamFilePath, "utf-8"));
+  } catch {
+    return [];
+  }
 }
 
 function saveTeamFile(members: string[]): void {

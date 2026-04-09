@@ -20,12 +20,16 @@ export function listNotes(limit = 10): string[] {
   const inboxPath = path.join(vaultPath, VAULT_INBOX);
   if (!fs.existsSync(inboxPath)) return [];
 
-  return fs.readdirSync(inboxPath)
-    .filter(f => f.endsWith(".md"))
-    .sort()
-    .reverse()
-    .slice(0, limit)
-    .map(f => f.replace(".md", ""));
+  try {
+    return fs.readdirSync(inboxPath)
+      .filter(f => f.endsWith(".md"))
+      .sort()
+      .reverse()
+      .slice(0, limit)
+      .map(f => f.replace(".md", ""));
+  } catch {
+    return [];
+  }
 }
 
 export function readNote(nameOrPath: string): string | null {
