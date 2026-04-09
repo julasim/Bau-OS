@@ -6,7 +6,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "notiz_speichern",
-      description: "Speichert eine Notiz im Obsidian Vault.",
+      description: "Speichert eine freie Notiz im Vault (Inbox oder Projektordner). Nutze dieses Tool fuer Gedanken, Beobachtungen, Ideen und Informationen die keine konkrete Aufgabe oder Termin sind. Ohne Projekt landet die Notiz in der Inbox.",
       parameters: {
         type: "object",
         properties: {
@@ -21,7 +21,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "notizen_auflisten",
-      description: "Listet die letzten Notizen aus der Inbox auf.",
+      description: "Listet die letzten Notizen aus der Inbox auf, sortiert nach Datum. Nutze dieses Tool um einen Ueberblick ueber aktuelle Notizen zu bekommen oder eine bestimmte Notiz zu finden.",
       parameters: {
         type: "object",
         properties: {
@@ -35,7 +35,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "notiz_lesen",
-      description: "Liest den Inhalt einer bestimmten Notiz.",
+      description: "Liest den vollstaendigen Inhalt einer Notiz-Datei. Nutze notizen_auflisten um zuerst den genauen Dateinamen zu finden.",
       parameters: {
         type: "object",
         properties: {
@@ -49,7 +49,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "notiz_loeschen",
-      description: "Loescht eine Notiz dauerhaft aus dem Vault.",
+      description: "Loescht eine Notiz dauerhaft aus dem Vault. Achtung: nicht rueckgaengig machbar. Stelle sicher dass du den richtigen Dateinamen hast.",
       parameters: {
         type: "object",
         properties: {
@@ -63,7 +63,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "notiz_bearbeiten",
-      description: "Fuegt einer bestehenden Notiz einen Nachtrag hinzu.",
+      description: "Fuegt einer bestehenden Notiz am Ende einen Nachtrag hinzu (Append). Nicht fuer Ersetzen — dafuer datei_bearbeiten verwenden. Der Nachtrag wird mit Zeitstempel angehaengt.",
       parameters: {
         type: "object",
         properties: {
@@ -79,7 +79,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "aufgabe_speichern",
-      description: "Speichert eine neue Aufgabe / Todo.",
+      description: "Speichert eine neue Aufgabe (Todo) im Vault. Aufgaben immer mit konkretem Verb beginnen (z.B. 'Angebot fuer Fenster einholen'). Optional einem Projekt zuordnen. Nutze vault_suchen vorher um Duplikate zu vermeiden.",
       parameters: {
         type: "object",
         properties: {
@@ -94,7 +94,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "aufgaben_auflisten",
-      description: "Listet alle offenen Aufgaben auf.",
+      description: "Listet alle offenen (nicht erledigten) Aufgaben auf. Optional auf ein Projekt filterbar. Zeigt Aufgabentext, Verantwortlichen und Faelligkeitsdatum an.",
       parameters: {
         type: "object",
         properties: {
@@ -108,7 +108,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "aufgabe_erledigen",
-      description: "Markiert eine Aufgabe als erledigt.",
+      description: "Markiert eine Aufgabe als erledigt (done). Der Text muss exakt uebereinstimmen — nutze aufgaben_auflisten um den genauen Text zu finden.",
       parameters: {
         type: "object",
         properties: {
@@ -124,7 +124,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "termin_speichern",
-      description: "Speichert einen Termin oder Meeting.",
+      description: "Speichert einen neuen Termin, Meeting oder Deadline. Datum immer im Format TT.MM.JJJJ angeben. Relative Angaben wie 'morgen' oder 'naechsten Montag' muessen vorher in ein konkretes Datum umgerechnet werden.",
       parameters: {
         type: "object",
         properties: {
@@ -141,7 +141,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "termine_auflisten",
-      description: "Listet alle Termine auf.",
+      description: "Listet alle gespeicherten Termine auf, sortiert nach Datum. Zeigt Datum, Uhrzeit, Beschreibung und Ort an. Optional auf ein Projekt filterbar.",
       parameters: {
         type: "object",
         properties: {
@@ -155,7 +155,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "termin_loeschen",
-      description: "Loescht einen Termin aus der Terminliste.",
+      description: "Loescht einen Termin dauerhaft. Der Text muss exakt oder als Teiltext uebereinstimmen. Nutze termine_auflisten um den genauen Text zu finden.",
       parameters: {
         type: "object",
         properties: {
@@ -171,7 +171,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "datei_lesen",
-      description: "Liest eine beliebige Datei aus dem Vault (relativer Pfad).",
+      description: "Liest den vollstaendigen Inhalt einer beliebigen Datei im Vault. Pfad ist relativ zum Vault-Root. Nutze dateien_suchen oder ordner_auflisten um den Pfad zu finden wenn du ihn nicht kennst.",
       parameters: {
         type: "object",
         properties: {
@@ -185,7 +185,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "datei_erstellen",
-      description: "Erstellt eine neue Datei im Vault oder ueberschreibt eine bestehende.",
+      description: "Erstellt eine neue Datei im Vault oder ueberschreibt eine bestehende. Pfad ist relativ zum Vault-Root. Fehlende Ordner werden automatisch erstellt. Fuer Aenderungen an bestehenden Dateien besser datei_bearbeiten nutzen.",
       parameters: {
         type: "object",
         properties: {
@@ -200,7 +200,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "ordner_auflisten",
-      description: "Listet den Inhalt eines Ordners im Vault auf.",
+      description: "Listet den Inhalt eines Ordners im Vault auf (Dateien und Unterordner). Zeigt nur eine Ebene — nicht rekursiv. Fuer rekursive Suche dateien_suchen verwenden.",
       parameters: {
         type: "object",
         properties: {
@@ -215,7 +215,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "datei_bearbeiten",
-      description: "Sucht Text in einer Vault-Datei und ersetzt ihn. Fuer praezise Aenderungen an bestehenden Dateien (nicht fuer Notizen — dafuer notiz_bearbeiten nutzen).",
+      description: "Sucht Text in einer Vault-Datei und ersetzt ihn (Find-and-Replace). Fuer praezise Aenderungen an bestehenden Dateien. Unterstuetzt exakte Textsuche und Regex-Muster. Nicht fuer Notiz-Nachtraege — dafuer notiz_bearbeiten nutzen.",
       parameters: {
         type: "object",
         properties: {
@@ -249,7 +249,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "regex_suchen",
-      description: "Durchsucht Dateiinhalte im Vault mit Regex. Gibt Treffer mit Zeilennummern zurueck. Fuer praezises Suchen in allen Dateitypen.",
+      description: "Durchsucht Dateiinhalte im Vault mit Regex-Mustern (wie grep). Gibt Treffer mit Zeilennummern zurueck. Durchsucht alle Dateitypen, nicht nur .md. Fuer einfache Textsuche in Notizen ist vault_suchen schneller.",
       parameters: {
         type: "object",
         properties: {
@@ -268,7 +268,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "vault_suchen",
-      description: "Sucht nach einem Begriff in allen Notizen.",
+      description: "Schnelle Freitextsuche in allen .md-Dateien des Vaults. Gibt Dateiname und erste Trefferzeile zurueck (max 10 Ergebnisse). Fuer Regex oder alle Dateitypen regex_suchen verwenden.",
       parameters: {
         type: "object",
         properties: {
@@ -283,7 +283,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "projekte_auflisten",
-      description: "Listet alle vorhandenen Projekte auf.",
+      description: "Listet alle Projekte im Vault auf (Ordner unter Projekte/). Zeigt nur die Namen — fuer Details zu einem Projekt projekt_info verwenden.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -291,7 +291,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "projekt_info",
-      description: "Zeigt Informationen zu einem bestimmten Projekt.",
+      description: "Zeigt eine Uebersicht zu einem Projekt: Anzahl Notizen, offene Aufgaben und anstehende Termine. Nutze den exakten Projektnamen aus projekte_auflisten.",
       parameters: {
         type: "object",
         properties: {
@@ -321,7 +321,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "agent_verlauf",
-      description: "Liest den heutigen Gespraechsverlauf eines anderen Agenten.",
+      description: "Liest den heutigen Gespraechsverlauf eines Agenten (User-Nachrichten und Agent-Antworten). Zeigt die letzten 20 Eintraege. Nuetzlich um zu sehen was ein Sub-Agent heute bereits bearbeitet hat.",
       parameters: {
         type: "object",
         properties: {
@@ -335,7 +335,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "agent_aktiv",
-      description: "Listet alle Agenten auf die heute aktiv waren (einen Tageslog haben).",
+      description: "Listet alle Agenten auf die heute aktiv waren (mindestens einen Tageslog-Eintrag haben). Zeigt nur die Namen — fuer Details agent_verlauf verwenden.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -344,7 +344,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "agent_spawnen_async",
-      description: "Startet einen Sub-Agenten non-blocking im Hintergrund. Sofortige Rueckkehr – Ergebnis wird als separate Nachricht gepostet wenn fertig.",
+      description: "Startet einen Sub-Agenten non-blocking im Hintergrund. Du bekommst sofort eine Bestaetigung — das Ergebnis kommt als separate Telegram-Nachricht. Ideal fuer laengere Aufgaben (Recherche, Analyse). Der Sub-Agent hat eigenen Workspace aber die gleichen Tools.",
       parameters: {
         type: "object",
         properties: {
@@ -359,7 +359,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "agent_spawnen",
-      description: "Startet einen Sub-Agenten und wartet auf das Ergebnis (blocking). Fuer kurze Aufgaben.",
+      description: "Startet einen Sub-Agenten und wartet auf das Ergebnis (blocking). Das Ergebnis wird direkt zurueckgegeben. Fuer kurze Aufgaben die in wenigen Sekunden fertig sind. Fuer laengere Aufgaben agent_spawnen_async verwenden.",
       parameters: {
         type: "object",
         properties: {
@@ -374,7 +374,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "agent_erstellen",
-      description: "Erstellt einen neuen Sub-Agenten mit eigenem Workspace.",
+      description: "Erstellt einen neuen Sub-Agenten mit eigenem Workspace (SOUL.md, BOOT.md, TOOLS.md etc.). Die Beschreibung wird zu SOUL.md — definiere hier Rolle, Aufgabenbereich und Verhalten. Geschuetzte Agenten (z.B. Main) koennen nicht ueberschrieben werden.",
       parameters: {
         type: "object",
         properties: {
@@ -389,7 +389,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "agenten_auflisten",
-      description: "Listet alle verfuegbaren Sub-Agenten auf.",
+      description: "Listet alle verfuegbaren Agenten auf (Ordner unter Agents/). Zeigt sowohl geschuetzte Agenten (Main) als auch selbst erstellte Sub-Agenten.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -445,7 +445,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "web_suchen",
-      description: "Sucht im Internet nach Informationen. Gibt Suchergebnisse mit Titel, URL und Beschreibung zurueck.",
+      description: "Sucht im Internet via DuckDuckGo nach Informationen. Gibt Titel, URL und Kurzbeschreibung zurueck. Fuer Recherche, aktuelle Preise, Normen, Vorschriften etc. Fuer den vollstaendigen Inhalt einer gefundenen URL dann webseite_lesen verwenden.",
       parameters: {
         type: "object",
         properties: {
@@ -460,7 +460,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "webseite_lesen",
-      description: "Liest den Textinhalt einer Webseite. Gibt den bereinigten Text zurueck (ohne HTML-Tags).",
+      description: "Liest den Textinhalt einer Webseite und gibt bereinigten Text zurueck (HTML-Tags entfernt). Max 8000 Zeichen. Ideal in Kombination mit web_suchen: erst suchen, dann relevante URL lesen.",
       parameters: {
         type: "object",
         properties: {
@@ -496,7 +496,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "tools_auflisten",
-      description: "Listet alle verfuegbaren dynamischen Tools auf (aus dem tools/ Verzeichnis).",
+      description: "Listet alle selbst erstellten dynamischen Tools auf (aus dem tools/ Verzeichnis). Zeigt Name, Beschreibung und Parameter jedes Tools.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -504,7 +504,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "tool_loeschen",
-      description: "Loescht ein dynamisches Tool.",
+      description: "Loescht ein dynamisches Tool dauerhaft (gesamter Ordner). Nicht rueckgaengig machbar. Nutze tools_auflisten um den Ordnernamen zu finden.",
       parameters: {
         type: "object",
         properties: {
@@ -519,7 +519,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "agent_datei_lesen",
-      description: "Liest eine Konfigurationsdatei eines Agenten (z.B. SOUL.md, HEARTBEAT.md, TOOLS.md).",
+      description: "Liest eine Konfigurationsdatei eines Agenten (SOUL.md, BOOT.md, HEARTBEAT.md, TOOLS.md, MEMORY.md etc.). Damit kannst du die Konfiguration und Persoenlichkeit eines Agenten einsehen.",
       parameters: {
         type: "object",
         properties: {
@@ -534,7 +534,7 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
     type: "function",
     function: {
       name: "agent_datei_schreiben",
-      description: "Ueberschreibt eine Konfigurationsdatei eines Agenten. Erlaubte Dateien: SOUL.md, BOOT.md, AGENTS.md, TOOLS.md, HEARTBEAT.md, BOOTSTRAP.md, USER.md, IDENTITY.md, MEMORY.md.",
+      description: "Ueberschreibt eine Konfigurationsdatei eines Agenten vollstaendig. Erlaubte Dateien: SOUL.md, BOOT.md, AGENTS.md, TOOLS.md, HEARTBEAT.md, BOOTSTRAP.md, USER.md, IDENTITY.md, MEMORY.md. Bei HEARTBEAT.md wird der Cron-Job sofort aktualisiert — kein Neustart noetig.",
       parameters: {
         type: "object",
         properties: {

@@ -63,15 +63,15 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "notiz_lesen": {
         const content = readNote(String(args.dateiname));
-        return content ?? "Datei nicht gefunden.";
+        return content ?? `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;
       }
       case "notiz_loeschen": {
         const deleted = deleteNote(String(args.dateiname));
-        return deleted ? `Notiz geloescht: ${deleted}` : "Notiz nicht gefunden.";
+        return deleted ? `Notiz geloescht: ${deleted}` : `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;
       }
       case "notiz_bearbeiten": {
         const ok = appendToNote(String(args.dateiname), String(args.text));
-        return ok ? `Nachtrag gespeichert in: ${args.dateiname}` : "Notiz nicht gefunden.";
+        return ok ? `Nachtrag gespeichert in: ${args.dateiname}` : `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;
       }
       case "aufgabe_speichern": {
         saveTask(String(args.text), args.projekt ? String(args.projekt) : undefined);
@@ -86,7 +86,7 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "aufgabe_erledigen": {
         const ok = completeTask(String(args.text), args.projekt ? String(args.projekt) : undefined);
-        return ok ? `Erledigt: ${args.text}` : "Aufgabe nicht gefunden.";
+        return ok ? `Erledigt: ${args.text}` : `Aufgabe nicht gefunden: "${args.text}". Der Text muss exakt uebereinstimmen — nutze aufgaben_auflisten um den genauen Text zu sehen.`;
       }
       case "termin_speichern": {
         saveTermin(String(args.datum), String(args.text), args.uhrzeit ? String(args.uhrzeit) : undefined, args.projekt ? String(args.projekt) : undefined);
@@ -100,11 +100,11 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "termin_loeschen": {
         const ok = deleteTermin(String(args.text), args.projekt ? String(args.projekt) : undefined);
-        return ok ? `Termin geloescht: ${args.text}` : "Termin nicht gefunden.";
+        return ok ? `Termin geloescht: ${args.text}` : `Termin "${args.text}" nicht gefunden. Nutze termine_auflisten um den genauen Text zu sehen.`;
       }
       case "datei_lesen": {
         const content = readFile(String(args.pfad));
-        return content ?? `Datei nicht gefunden: ${args.pfad}`;
+        return content ?? `Datei nicht gefunden: ${args.pfad}. Nutze dateien_suchen oder ordner_auflisten um den richtigen Pfad zu finden.`;
       }
       case "datei_erstellen": {
         const fp = createFile(String(args.pfad), String(args.inhalt));
@@ -112,7 +112,7 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "ordner_auflisten": {
         const entries = listFolder(args.pfad ? String(args.pfad) : "");
-        return entries.length ? entries.join("\n") : "Ordner leer oder nicht gefunden.";
+        return entries.length ? entries.join("\n") : `Ordner "${args.pfad || '/'}" leer oder nicht gefunden. Nutze ordner_auflisten ohne Pfad fuer die Vault-Wurzel.`;
       }
       case "vault_suchen": {
         const results = searchVault(String(args.suchbegriff), args.projekt ? String(args.projekt) : undefined);
@@ -125,7 +125,7 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "projekt_info": {
         const info = getProjectInfo(String(args.name));
-        if (!info) return "Projekt nicht gefunden.";
+        if (!info) return `Projekt "${args.name}" nicht gefunden. Nutze projekte_auflisten um alle verfuegbaren Projektnamen zu sehen.`;
         return `Projekt: ${info.name}\n\nNotizen: ${info.notes}\nOffene Aufgaben: ${info.openTasks}\nTermine: ${info.termine}`;
       }
       case "memory_speichern": {
@@ -134,7 +134,7 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "agent_verlauf": {
         const history = loadAgentHistory(String(args.agent), 20);
-        if (!history.length) return `Kein Verlauf fuer Agent "${args.agent}" heute.`;
+        if (!history.length) return `Kein Verlauf fuer Agent "${args.agent}" heute. Nutze agenten_auflisten um aktive Agenten zu sehen, oder agent_aktiv fuer heute aktive.`;
         return history.map(h => `User: ${h.user}\n${args.agent}: ${h.assistant}`).join("\n\n---\n\n");
       }
       case "agent_aktiv": {
@@ -326,8 +326,8 @@ export async function executeTool(name: string, args: Record<string, string | nu
             all: String(args.alle) === "true",
           },
         );
-        if (!result) return `Datei nicht gefunden oder Pfad ungueltig: ${args.pfad}`;
-        if (result.count === 0) return `Kein Treffer fuer "${args.suchen}" in ${args.pfad}.`;
+        if (!result) return `Datei nicht gefunden oder Pfad ungueltig: ${args.pfad}. Nutze dateien_suchen um den richtigen Pfad zu finden.`;
+        if (result.count === 0) return `Kein Treffer fuer "${args.suchen}" in ${args.pfad}. Nutze datei_lesen um den aktuellen Inhalt zu pruefen, oder regex_suchen um den Text im Vault zu finden.`;
         return `${result.count} Ersetzung(en) in ${args.pfad}.\n${result.preview}`;
       }
       case "dateien_suchen": {
