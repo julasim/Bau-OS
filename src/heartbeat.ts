@@ -43,7 +43,7 @@ function parseHeartbeat(agentName: string): HeartbeatConfig | null {
 
   const cronExpression = cronMatch[1].trim();
   if (!cron.validate(cronExpression)) {
-    console.warn(`[Heartbeat] Ungueltige Cron-Expression fuer ${agentName}: "${cronExpression}"`);
+    logError(`Heartbeat/${agentName}`, `Ungueltige Cron-Expression: "${cronExpression}"`);
     return null;
   }
 
@@ -91,27 +91,46 @@ async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> 
 
 // ---- Scheduler ----
 
+// Agents die bereits einen Cron-Job haben (verhindert Duplikate)
+const _registeredAgents = new Set<string>();
+
+function registerAgentIfNeeded(agentName: string, replyFn: ReplyFn): boolean {
+  if (_registeredAgents.has(agentName)) return false;
+
+  const config = parseHeartbeat(agentName);
+  if (!config) {
+    logInfo(`[Heartbeat] ${agentName}: keine gueltige HEARTBEAT.md — uebersprungen`);
+    return false;
+  }
+
+  cron.schedule(config.cronExpression, () => {
+    runHeartbeat(agentName, replyFn).catch(err => logError(`Heartbeat/cron/${agentName}`, err));
+  }, { timezone: TIMEZONE });
+
+  _registeredAgents.add(agentName);
+  logInfo(`[Heartbeat] ${agentName} registriert: "${config.cronExpression}"`);
+  return true;
+}
+
 export function startHeartbeat(replyFn: ReplyFn): void {
-  const agents = listAgents();
-  let registered = 0;
-
-  for (const agentName of agents) {
-    const config = parseHeartbeat(agentName);
-    if (!config) continue;
-
-    cron.schedule(config.cronExpression, () => {
-      runHeartbeat(agentName, replyFn).catch(err => logError(`Heartbeat/cron/${agentName}`, err));
-    }, {
-      timezone: TIMEZONE,
-    });
-
-    logInfo(`[Heartbeat] ${agentName} registriert: "${config.cronExpression}"`);
-    registered++;
+  // Initial-Registrierung (Agents die beim Start schon existieren)
+  for (const agentName of listAgents()) {
+    registerAgentIfNeeded(agentName, replyFn);
   }
 
-  if (registered === 0) {
-    logInfo("[Heartbeat] Keine Agents mit Cron-Konfiguration.");
+  if (_registeredAgents.size === 0) {
+    logInfo("[Heartbeat] Keine Agents beim Start — Meta-Cron uebernimmt die Erkennung");
   } else {
-    logInfo(`[Heartbeat] ${registered} Cron-Job(s) registriert`);
+    logInfo(`[Heartbeat] ${_registeredAgents.size} Cron-Job(s) registriert`);
   }
+
+  // Meta-Cron: prueft jede Minute ob neue Agents hinzugekommen sind
+  // Noetig weil Agents erst nach dem Setup-Wizard erstellt werden
+  cron.schedule("* * * * *", () => {
+    let neu = 0;
+    for (const agentName of listAgents()) {
+      if (registerAgentIfNeeded(agentName, replyFn)) neu++;
+    }
+    if (neu > 0) logInfo(`[Heartbeat] ${neu} neue Cron-Job(s) nachregistriert`);
+  }, { timezone: TIMEZONE });
 }
