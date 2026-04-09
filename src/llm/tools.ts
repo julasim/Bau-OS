@@ -210,6 +210,59 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  // Erweiterte Dateioperationen
+  {
+    type: "function",
+    function: {
+      name: "datei_bearbeiten",
+      description: "Sucht Text in einer Vault-Datei und ersetzt ihn. Fuer praezise Aenderungen an bestehenden Dateien (nicht fuer Notizen — dafuer notiz_bearbeiten nutzen).",
+      parameters: {
+        type: "object",
+        properties: {
+          pfad:     { type: "string",  description: "Relativer Pfad im Vault (z.B. 'Projekte/Alpha/README.md')" },
+          suchen:   { type: "string",  description: "Text der gesucht wird (exakt oder Regex)" },
+          ersetzen: { type: "string",  description: "Ersetzungstext" },
+          regex:    { type: "boolean", description: "true = suchen ist ein Regex-Muster (Standard: false)" },
+          alle:     { type: "boolean", description: "true = alle Vorkommen ersetzen (Standard: false, nur erstes)" },
+        },
+        required: ["pfad", "suchen", "ersetzen"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "dateien_suchen",
+      description: "Sucht Dateien im Vault nach Name/Muster (Glob). Unterstuetzt * und ** Platzhalter. Beispiele: '**/*.md', 'Projekte/*/README.md', 'Inbox/*.md'.",
+      parameters: {
+        type: "object",
+        properties: {
+          muster:   { type: "string",  description: "Glob-Muster (z.B. '**/*.md', 'Projekte/*/*.md')" },
+          ordner:   { type: "string",  description: "Optional: Startordner (Standard: Vault-Wurzel)" },
+          limit:    { type: "number",  description: "Max. Ergebnisse (Standard: 50)" },
+        },
+        required: ["muster"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "regex_suchen",
+      description: "Durchsucht Dateiinhalte im Vault mit Regex. Gibt Treffer mit Zeilennummern zurueck. Fuer praezises Suchen in allen Dateitypen.",
+      parameters: {
+        type: "object",
+        properties: {
+          muster:      { type: "string",  description: "Regex-Suchmuster (z.B. 'OENORM.*B\\\\s?1801', 'TODO|FIXME')" },
+          ordner:      { type: "string",  description: "Optional: Unterordner (Standard: gesamter Vault)" },
+          kontext:     { type: "number",  description: "Zeilen Kontext vor/nach Treffer (Standard: 0)" },
+          dateifilter: { type: "string",  description: "Optional: Datei-Glob (z.B. '*.md', '*.json')" },
+          limit:       { type: "number",  description: "Max. Treffer gesamt (Standard: 20)" },
+        },
+        required: ["muster"],
+      },
+    },
+  },
   // Vault & Projekte
   {
     type: "function",

@@ -9,6 +9,7 @@ import {
   saveTermin, listTermine, deleteTermin,
   listProjects, getProjectInfo,
   readFile, createFile, listFolder,
+  editFile, globFiles, grepFiles,
   searchVault,
   loadAgentHistory, appendAgentMemory,
   createAgentWorkspace, listAgents, getAgentPath, isProtectedAgent,
@@ -314,6 +315,57 @@ export async function executeTool(name: string, args: Record<string, string | nu
         return deleteTool(String(args.ordner))
           ? `\u2705 Tool "tools/${args.ordner}/" geloescht.`
           : `Tool-Ordner "tools/${args.ordner}/" nicht gefunden.`;
+      }
+      case "datei_bearbeiten": {
+        const result = editFile(
+          String(args.pfad),
+          String(args.suchen),
+          String(args.ersetzen),
+          {
+            regex: String(args.regex) === "true",
+            all: String(args.alle) === "true",
+          },
+        );
+        if (!result) return `Datei nicht gefunden oder Pfad ungueltig: ${args.pfad}`;
+        if (result.count === 0) return `Kein Treffer fuer "${args.suchen}" in ${args.pfad}.`;
+        return `${result.count} Ersetzung(en) in ${args.pfad}.\n${result.preview}`;
+      }
+      case "dateien_suchen": {
+        const files = globFiles(String(args.muster), {
+          limit: Number(args.limit) || 50,
+          subdir: args.ordner ? String(args.ordner) : undefined,
+        });
+        if (!files.length) return `Keine Dateien gefunden fuer "${args.muster}".`;
+        return files.join("\n") + `\n\n[${files.length} Datei(en)]`;
+      }
+      case "regex_suchen": {
+        const result = grepFiles(String(args.muster), {
+          subdir: args.ordner ? String(args.ordner) : undefined,
+          context: Number(args.kontext) || 0,
+          maxMatches: Number(args.limit) || 20,
+          fileGlob: args.dateifilter ? String(args.dateifilter) : undefined,
+        });
+        if (!result.matches.length) return `Keine Treffer fuer "${args.muster}".`;
+
+        // Nach Datei gruppieren
+        const grouped = new Map<string, Array<{ line: number; text: string }>>();
+        for (const m of result.matches) {
+          const arr = grouped.get(m.file) || [];
+          arr.push({ line: m.line, text: m.text });
+          grouped.set(m.file, arr);
+        }
+
+        const parts: string[] = [];
+        for (const [file, matches] of grouped) {
+          const lines = matches.map(m => `${m.line}: ${m.text}`).join("\n");
+          parts.push(`=== ${file} ===\n${lines}`);
+        }
+
+        let output = parts.join("\n\n");
+        const summary = `[${result.matches.length} Treffer in ${result.totalFiles} Datei(en)]`;
+        output += result.truncated ? `\n\n${summary} (gekuerzt)` : `\n\n${summary}`;
+
+        return output.length > 6000 ? output.slice(0, 6000) + "\n[... gekuerzt]" : output;
       }
       default: {
         // Dynamische Tools pruefen
