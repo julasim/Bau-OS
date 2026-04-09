@@ -11,6 +11,11 @@
 
 set -e
 
+# UTF-8 für Umlaute (muss vor allem anderen gesetzt werden)
+export LANG=de_AT.UTF-8
+export LC_ALL=de_AT.UTF-8
+export LANGUAGE=de_AT.UTF-8
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Konfiguration
 # ─────────────────────────────────────────────────────────────────────────────
@@ -35,6 +40,20 @@ readonly NC='\033[0m'
 ok()    { echo -e "${GREEN}  ✓${NC} $1"; }
 warn()  { echo -e "${YELLOW}  !${NC} $1"; }
 err()   { echo -e "${RED}  ✗${NC} $1"; exit 1; }
+
+print_logo() {
+  echo -e "${BOLD}"
+  echo '  ██████╗  █████╗ ██╗   ██╗      ██████╗ ███████╗'
+  echo '  ██╔══██╗██╔══██╗██║   ██║     ██╔═══██╗██╔════╝'
+  echo '  ██████╔╝███████║██║   ██║     ██║   ██║███████╗'
+  echo '  ██╔══██╗██╔══██║██║   ██║     ██║   ██║╚════██║'
+  echo '  ██████╔╝██║  ██║╚██████╔╝     ╚██████╔╝███████║'
+  echo '  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝       ╚═════╝ ╚══════╝'
+  echo -e "${NC}"
+  echo -e "  ${DIM}KI-Assistent für die Baubranche${NC}"
+  echo -e "  ${DIM}────────────────────────────────────────────────${NC}"
+  echo ""
+}
 
 print_header() {
   echo ""
@@ -139,6 +158,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # Hauptprogramm
 # ─────────────────────────────────────────────────────────────────────────────
+print_logo
 print_header "Bau-OS Installation"
 
 echo "Dieses Script installiert Bau-OS vollautomatisch auf Ubuntu 24.04."
@@ -211,9 +231,14 @@ step "System aktualisieren..."
 apt-get update -y >/dev/null 2>&1 && apt-get upgrade -y >/dev/null 2>&1
 ok "System aktualisiert"
 
-step "Pakete installieren (git, curl)..."
-apt-get install -y git curl >/dev/null 2>&1
+step "Pakete installieren (git, curl, locales)..."
+apt-get install -y git curl locales >/dev/null 2>&1
 ok "Pakete installiert"
+
+step "Zeichensatz / Umlaute einrichten (UTF-8)..."
+locale-gen de_AT.UTF-8 >/dev/null 2>&1 || locale-gen en_US.UTF-8 >/dev/null 2>&1
+update-locale LANG=de_AT.UTF-8 LC_ALL=de_AT.UTF-8 2>/dev/null || true
+ok "UTF-8 Locale aktiv (Umlaute werden korrekt dargestellt)"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 3: Node.js 20
@@ -291,10 +316,35 @@ if [ "$LLM_MODE" = "cloud" ]; then
   info "Es wird ein Link angezeigt — öffne ihn im Browser/Handy."
   echo ""
 
-  # ollama signin als Service-User ausführen (Token muss für bauos zugänglich sein)
-  if ! su -s /bin/bash "$SERVICE_USER" -c "ollama signin" < /dev/tty; then
+  # Hilfsfunktion: Ollama Cloud-Verbindung testen
+  _test_ollama_cloud() {
+    su -s /bin/bash "$SERVICE_USER" -c "ollama ls" 2>/dev/null | grep -qi "cloud" && return 0
+    # Alternativ: einfacher API-Aufruf
+    su -s /bin/bash "$SERVICE_USER" -c "ollama ls" 2>/dev/null | grep -qv "Error" && return 0
+    return 1
+  }
+
+  # Hilfsfunktion: Login durchführen und auf Browser-Bestätigung warten
+  _do_ollama_signin() {
     echo ""
-    warn "Ollama Login fehlgeschlagen"
+    info "Es wird ein Link angezeigt — öffne ihn im Browser oder Handy."
+    info "Melde dich mit deinem Ollama-Konto an (ollama.com)."
+    echo ""
+    su -s /bin/bash "$SERVICE_USER" -c "ollama signin" < /dev/tty || true
+    echo ""
+    echo -e "  ${YELLOW}→${NC} Sobald du dich im Browser angemeldet hast, drücke Enter um fortzufahren."
+    read -r < /dev/tty
+  }
+
+  # ollama signin als Service-User ausführen (Token muss für bauos zugänglich sein)
+  _do_ollama_signin
+
+  # Verbindung verifizieren
+  if _test_ollama_cloud; then
+    ok "Cloud-Verbindung erfolgreich ($OLLAMA_MODEL)"
+  else
+    echo ""
+    warn "Ollama Cloud-Verbindung konnte nicht bestätigt werden"
     FAIL_CHOICE=$(select_option "Was möchtest du tun?" \
       "Auf lokales Modell umstellen (wird heruntergeladen)" \
       "Installation abbrechen" \
@@ -321,17 +371,16 @@ if [ "$LLM_MODE" = "cloud" ]; then
       3)
         echo ""
         info "Erneuter Login-Versuch..."
-        if su -s /bin/bash "$SERVICE_USER" -c "ollama signin" < /dev/tty; then
-          ok "Login erfolgreich"
+        _do_ollama_signin
+        if _test_ollama_cloud; then
+          ok "Cloud-Verbindung erfolgreich"
         else
-          warn "Login erneut fehlgeschlagen."
+          warn "Verbindung erneut fehlgeschlagen."
           info "Manuell nachholen: su -s /bin/bash $SERVICE_USER -c 'ollama signin'"
           info "Installation wird trotzdem fortgesetzt."
         fi
         ;;
     esac
-  else
-    ok "Cloud-Modus konfiguriert ($OLLAMA_MODEL)"
   fi
 else
   step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
