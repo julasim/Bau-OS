@@ -367,11 +367,37 @@ export async function executeTool(name: string, args: Record<string, string | nu
 
         return output.length > 6000 ? output.slice(0, 6000) + "\n[... gekuerzt]" : output;
       }
+      case "mcp_server_auflisten": {
+        const { listMcpServers } = await import("../mcp.js");
+        const servers = listMcpServers();
+        if (!servers.length) return "Keine MCP-Server konfiguriert. Erstelle eine mcp.json im Projekt-Root.";
+        return servers.map(s =>
+          `${s.connected ? "\u2705" : "\u274C"} **${s.name}** — ${s.connected ? `${s.tools.length} Tool(s): ${s.tools.join(", ")}` : "nicht verbunden"}`
+        ).join("\n");
+      }
+      case "mcp_server_verbinden": {
+        const { connectServer, loadMcpConfig } = await import("../mcp.js");
+        const config = loadMcpConfig();
+        const serverConfig = config?.mcpServers?.[String(args.name)];
+        if (!serverConfig) return `MCP-Server "${args.name}" nicht in mcp.json gefunden. Nutze mcp_server_auflisten um verfuegbare Server zu sehen.`;
+        const ok = await connectServer(String(args.name), serverConfig);
+        return ok ? `\u2705 MCP-Server "${args.name}" verbunden.` : `Fehler beim Verbinden von "${args.name}" — siehe Logs.`;
+      }
+      case "mcp_server_trennen": {
+        const { disconnectServer } = await import("../mcp.js");
+        const ok = await disconnectServer(String(args.name));
+        return ok ? `MCP-Server "${args.name}" getrennt.` : `MCP-Server "${args.name}" war nicht verbunden.`;
+      }
       default: {
         // Dynamische Tools pruefen
         const { isDynamicTool, executeDynamicTool } = await import("../tools.js");
         if (isDynamicTool(name)) {
           return await executeDynamicTool(name, args);
+        }
+        // MCP Tools pruefen
+        const { isMcpTool, executeMcpTool } = await import("../mcp.js");
+        if (isMcpTool(name)) {
+          return await executeMcpTool(name, args);
         }
         return `Unbekanntes Tool: ${name}`;
       }

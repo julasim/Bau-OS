@@ -514,6 +514,43 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  // MCP-Server (externe Konnektoren)
+  {
+    type: "function",
+    function: {
+      name: "mcp_server_auflisten",
+      description: "Listet alle konfigurierten MCP-Server auf mit Status (verbunden/getrennt) und verfuegbaren Tools. MCP-Server erweitern Bau-OS um externe Faehigkeiten (z.B. GitHub, Dateisystem, Datenbanken, APIs).",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "mcp_server_verbinden",
+      description: "Verbindet einen MCP-Server aus der mcp.json Konfiguration. Der Server wird als Kindprozess gestartet und seine Tools werden sofort verfuegbar. Nutze mcp_server_auflisten um verfuegbare Server zu sehen.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Name des MCP-Servers (z.B. 'github', 'filesystem')" },
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "mcp_server_trennen",
+      description: "Trennt die Verbindung zu einem laufenden MCP-Server und entfernt seine Tools. Der Server kann spaeter ueber mcp_server_verbinden wieder gestartet werden.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Name des MCP-Servers" },
+        },
+        required: ["name"],
+      },
+    },
+  },
   // Agent-Datei Editor
   {
     type: "function",

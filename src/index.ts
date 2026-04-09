@@ -21,6 +21,10 @@ startHeartbeat(async (chatId, text) => {
   }
 });
 
+// MCP-Server verbinden (wenn mcp.json vorhanden)
+import { initMcp } from "./mcp.js";
+await initMcp();
+
 bot.start();
 logInfo("Bau-OS gestartet");
 
