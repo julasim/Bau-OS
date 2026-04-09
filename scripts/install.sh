@@ -437,8 +437,9 @@ mkdir -p "$VAULT_DIR"
 chown -R "$SERVICE_USER:$SERVICE_USER" "$VAULT_DIR"
 info "Vault: $VAULT_DIR"
 
-# Logs-Ordner erstellen (VOR chown)
+# Logs + Tools Ordner erstellen (VOR chown)
 mkdir -p "$INSTALL_DIR/logs"
+mkdir -p "$INSTALL_DIR/tools"
 
 # Alle Berechtigungen setzen
 chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR"
