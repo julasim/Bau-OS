@@ -316,8 +316,9 @@ else
   fi
   cd "$INSTALL_DIR"
 fi
-npm install --omit=dev --loglevel=error
+npm install --loglevel=error
 npm run build:all
+npm prune --omit=dev --loglevel=error
 ok "Bau-OS gebaut (Backend + Web-Oberfläche)"
 
 # ═════════════════════════════════════════════════════════════════════════════

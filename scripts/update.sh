@@ -14,8 +14,9 @@ cd "$INSTALL_DIR"
 # git pull als Service-User (verhindert "dubious ownership" Fehler wenn root ausführt)
 su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git pull"
 
-npm install --omit=dev --loglevel=error
+npm install --loglevel=error
 npm run build:all
+npm prune --omit=dev --loglevel=error
 
 # CLI-Tool aktualisieren
 cp "$INSTALL_DIR/scripts/bau-os-cli.sh" /usr/local/bin/bau-os
