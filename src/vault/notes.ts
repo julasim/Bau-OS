@@ -44,6 +44,13 @@ export function appendToNote(nameOrPath: string, content: string): boolean {
   return true;
 }
 
+export function updateNote(nameOrPath: string, content: string): boolean {
+  const filepath = resolveNotePath(nameOrPath);
+  if (!filepath) return false;
+  fs.writeFileSync(filepath, content, "utf-8");
+  return true;
+}
+
 export function deleteNote(nameOrPath: string): string | null {
   const filepath = resolveNotePath(nameOrPath);
   if (!filepath) return null;

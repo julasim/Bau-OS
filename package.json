@@ -9,6 +9,8 @@
     "fresh": "tsx scripts/fresh.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
+    "build:all": "tsc && vite build --config web/vite.config.ts",
+    "dev:web": "vite dev --config web/vite.config.ts",
     "start": "node dist/index.js",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
@@ -17,16 +19,29 @@
   "author": "Julius Sima",
   "license": "MIT",
   "dependencies": {
+    "@hono/node-server": "^1.19.13",
     "@types/node": "^25.5.2",
     "@types/node-cron": "^3.0.11",
+    "bcrypt": "^6.0.0",
     "dotenv": "^17.4.0",
     "grammy": "^1.42.0",
+    "hono": "^4.12.12",
+    "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.2.1",
     "openai": "^6.33.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   },
   "devDependencies": {
-    "vitepress": "^1.6.4"
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/bcrypt": "^6.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@vitejs/plugin-vue": "^6.0.5",
+    "pinia": "^3.0.4",
+    "tailwindcss": "^4.2.2",
+    "vite": "^5.4.21",
+    "vitepress": "^1.6.4",
+    "vue": "^3.5.32",
+    "vue-router": "^5.0.4"
   }
 }

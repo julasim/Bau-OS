@@ -211,10 +211,34 @@ if ! validate_path "$VAULT_DIR"; then
   err "Ungültiger Vault-Pfad: $VAULT_DIR (nur a-z, 0-9, /, ., _, - erlaubt)"
 fi
 
+# ── Web-Oberfläche (Admin-Login) ──────────────────────────────────────────────
+echo -e "  ${BOLD}Web-Oberfläche (Vault-Editor)${NC}"
+info "Erstelle den ersten Admin-Benutzer für die Web-Oberfläche."
+echo ""
+WEB_USER=$(ask_default "Admin Benutzername" "admin")
+while true; do
+  read -rsp "  Admin Passwort: " WEB_PASS < /dev/tty
+  echo ""
+  if [ -n "$WEB_PASS" ]; then
+    read -rsp "  Passwort wiederholen: " WEB_PASS2 < /dev/tty
+    echo ""
+    if [ "$WEB_PASS" = "$WEB_PASS2" ]; then
+      break
+    fi
+    echo -e "  ${RED}Passwörter stimmen nicht überein. Erneut eingeben.${NC}"
+  else
+    echo -e "  ${RED}Passwort darf nicht leer sein.${NC}"
+  fi
+done
+echo ""
+API_PORT=$(ask_default "Web-Port" "3000")
+echo ""
+
 # ── Zusammenfassung ───────────────────────────────────────────────────────────
 print_section "Zusammenfassung"
 info "Bot Token:    ${BOT_TOKEN:0:8}...${BOT_TOKEN: -4}"
 info "LLM-Modus:    $LLM_MODE ($OLLAMA_MODEL)"
+info "Web-Admin:    $WEB_USER (Port $API_PORT)"
 info "Install-Pfad: $INSTALL_DIR"
 info "Vault-Pfad:   $VAULT_DIR"
 echo ""
@@ -293,8 +317,8 @@ else
   cd "$INSTALL_DIR"
 fi
 npm install --omit=dev --loglevel=error
-npm run build
-ok "Bau-OS gebaut"
+npm run build:all
+ok "Bau-OS gebaut (Backend + Web-Oberfläche)"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 6: Service-Benutzer (NACH git clone — kein -m Flag)
@@ -409,7 +433,27 @@ info "Installationsverzeichnis: $INSTALL_DIR"
 ok "Berechtigungen gesetzt"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 9: .env erstellen (immer BOT_TOKEN prüfen)
+# SCHRITT 9: Web-Admin + JWT vorbereiten
+# ═════════════════════════════════════════════════════════════════════════════
+step "Web-Admin einrichten..."
+
+# JWT Secret generieren
+JWT_SECRET=$(openssl rand -hex 32)
+
+# Passwort hashen (bcrypt via Node.js — Modul ist nach npm install verfügbar)
+PASS_HASH=$(node -e "const b=require('bcrypt'); b.hash(process.argv[1],10).then(h=>console.log(h))" "$WEB_PASS")
+
+# data/ Ordner + users.json
+mkdir -p "$INSTALL_DIR/data"
+cat > "$INSTALL_DIR/data/users.json" << USERSEOF
+[{"username":"$WEB_USER","passwordHash":"$PASS_HASH","role":"admin","createdAt":"$(date +%Y-%m-%d)"}]
+USERSEOF
+chown -R "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/data"
+chmod 600 "$INSTALL_DIR/data/users.json"
+ok "Admin-User '$WEB_USER' erstellt"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SCHRITT 10: .env erstellen (immer BOT_TOKEN prüfen)
 # ═════════════════════════════════════════════════════════════════════════════
 step ".env konfigurieren..."
 if [ -f "$INSTALL_DIR/.env" ]; then
@@ -417,14 +461,21 @@ if [ -f "$INSTALL_DIR/.env" ]; then
   EXISTING_TOKEN=$(grep -oP '^BOT_TOKEN=\K.+' "$INSTALL_DIR/.env" 2>/dev/null || true)
   if [ -z "$EXISTING_TOKEN" ]; then
     warn ".env existiert, aber BOT_TOKEN ist leer — wird aktualisiert"
-    # BOT_TOKEN ersetzen, Rest beibehalten
     sed -i "s|^BOT_TOKEN=.*|BOT_TOKEN=$BOT_TOKEN|" "$INSTALL_DIR/.env"
-    # Modell auch aktualisieren
     sed -i "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$OLLAMA_MODEL|" "$INSTALL_DIR/.env"
     ok ".env aktualisiert (Token + Modell)"
   else
     warn ".env bereits vorhanden mit Token — übersprungen"
     info "Modell manuell ändern: nano $INSTALL_DIR/.env"
+  fi
+  # JWT_SECRET immer setzen/aktualisieren
+  if grep -q '^JWT_SECRET=' "$INSTALL_DIR/.env"; then
+    sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" "$INSTALL_DIR/.env"
+  else
+    echo "JWT_SECRET=$JWT_SECRET" >> "$INSTALL_DIR/.env"
+  fi
+  if ! grep -q '^API_PORT=' "$INSTALL_DIR/.env"; then
+    echo "API_PORT=$API_PORT" >> "$INSTALL_DIR/.env"
   fi
 else
   cat > "$INSTALL_DIR/.env" << 'ENVHEADER'
@@ -435,6 +486,8 @@ BOT_TOKEN=$BOT_TOKEN
 VAULT_PATH=$VAULT_DIR
 OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=$OLLAMA_MODEL
+JWT_SECRET=$JWT_SECRET
+API_PORT=$API_PORT
 ENVEOF
   ok ".env erstellt"
 fi
@@ -443,7 +496,7 @@ chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/.env"
 chmod 600 "$INSTALL_DIR/.env"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 10: CLI-Tool installieren
+# SCHRITT 11: CLI-Tool installieren
 # ═════════════════════════════════════════════════════════════════════════════
 step "bau-os CLI installieren..."
 cp "$INSTALL_DIR/scripts/bau-os-cli.sh" /usr/local/bin/bau-os
@@ -457,7 +510,7 @@ sed -i "s|SERVICE_USER=\"bauos\"|SERVICE_USER=\"$SERVICE_USER\"|" /usr/local/bin
 ok "CLI verfügbar: 'bau-os' oder 'sudo bau-os'"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 11: systemd Service
+# SCHRITT 12: systemd Service
 # ═════════════════════════════════════════════════════════════════════════════
 step "systemd Service installieren..."
 
@@ -496,6 +549,9 @@ echo ""
 echo -e "  ${GREEN}▸${NC} Öffne deinen Telegram Bot und schreibe ${BOLD}'Hallo'${NC}"
 echo    "    Der Setup-Wizard führt dich durch die Einrichtung."
 echo ""
+echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>:${API_PORT}${NC}"
+echo    "    Login: ${WEB_USER} / (dein gewähltes Passwort)"
+echo ""
 echo -e "  ${BOLD}CLI-Befehle:${NC}"
 echo    "    bau-os                   → Interaktives Menü"
 echo    "    bau-os status            → Status"
@@ -503,4 +559,5 @@ echo    "    bau-os logs              → Logs anzeigen"
 echo    "    bau-os logs live         → Live-Logs"
 echo    "    sudo bau-os restart      → Neustart"
 echo    "    sudo bau-os update       → Update einspielen"
+echo    "    sudo bau-os user add     → Neuen Web-User anlegen"
 echo ""

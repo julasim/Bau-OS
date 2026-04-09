@@ -23,3 +23,12 @@ startHeartbeat(async (chatId, text) => {
 
 bot.start();
 logInfo("Bau-OS gestartet");
+
+// Web-API starten (nur wenn JWT_SECRET gesetzt)
+import { API_ENABLED, API_PORT } from "./config.js";
+if (API_ENABLED) {
+  const { startApi } = await import("./api/server.js");
+  startApi();
+} else {
+  logInfo("[API] Web-API deaktiviert (JWT_SECRET nicht gesetzt)");
+}

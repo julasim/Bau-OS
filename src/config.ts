@@ -40,3 +40,9 @@ export const LANGUAGE         = "Deutsch";
 export const CHAT_ID_FILE     = path.join(process.cwd(), ".chat_id");
 export const LOG_FILE         = path.join(process.cwd(), "logs", "bot.log");
 
+// ── Web-API ──────────────────────────────────────────────────────────────────
+export const API_PORT         = parseInt(process.env.API_PORT || "3000", 10);
+export const JWT_SECRET       = process.env.JWT_SECRET || "";
+export const USERS_FILE       = path.join(process.cwd(), "data", "users.json");
+export const API_ENABLED      = !!JWT_SECRET;
+

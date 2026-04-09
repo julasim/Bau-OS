@@ -145,6 +145,94 @@ cmd_ollama() {
   systemctl status ollama --no-pager -l
 }
 
+cmd_user() {
+  local subcmd="${1:-}"
+  local name="${2:-}"
+
+  case "$subcmd" in
+    add)
+      need_root user add
+      if [ -z "$name" ]; then
+        read -rp "  Benutzername: " name
+      fi
+      if [ -z "$name" ]; then
+        echo -e "  ${RED}Benutzername darf nicht leer sein${NC}"
+        return 1
+      fi
+      # Prüfen ob User existiert
+      if [ -f "$INSTALL_DIR/data/users.json" ]; then
+        if node -e "const u=JSON.parse(require('fs').readFileSync('$INSTALL_DIR/data/users.json','utf-8')); process.exit(u.some(x=>x.username==='$name')?0:1)" 2>/dev/null; then
+          echo -e "  ${RED}User '$name' existiert bereits${NC}"
+          return 1
+        fi
+      fi
+      read -rsp "  Passwort: " pass
+      echo ""
+      if [ -z "$pass" ]; then
+        echo -e "  ${RED}Passwort darf nicht leer sein${NC}"
+        return 1
+      fi
+      local hash
+      hash=$(cd "$INSTALL_DIR" && node -e "const b=require('bcrypt'); b.hash(process.argv[1],10).then(h=>console.log(h))" "$pass")
+      local today
+      today=$(date +%Y-%m-%d)
+      # User hinzufügen
+      mkdir -p "$INSTALL_DIR/data"
+      if [ -f "$INSTALL_DIR/data/users.json" ]; then
+        cd "$INSTALL_DIR" && node -e "
+          const fs=require('fs');
+          const u=JSON.parse(fs.readFileSync('data/users.json','utf-8'));
+          u.push({username:'$name',passwordHash:'$hash',role:'user',createdAt:'$today'});
+          fs.writeFileSync('data/users.json',JSON.stringify(u,null,2));"
+      else
+        echo "[{\"username\":\"$name\",\"passwordHash\":\"$hash\",\"role\":\"user\",\"createdAt\":\"$today\"}]" > "$INSTALL_DIR/data/users.json"
+      fi
+      chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/data/users.json"
+      echo -e "  ${GREEN}✓${NC} User '${BOLD}$name${NC}' erstellt"
+      ;;
+    list)
+      echo ""
+      echo -e "  ${BOLD}Web-Benutzer:${NC}"
+      echo ""
+      if [ -f "$INSTALL_DIR/data/users.json" ]; then
+        node -e "
+          const u=JSON.parse(require('fs').readFileSync('$INSTALL_DIR/data/users.json','utf-8'));
+          u.forEach(x=>console.log('  '+x.username.padEnd(20)+x.role.padEnd(10)+x.createdAt));"
+      else
+        echo -e "  ${DIM}Keine users.json gefunden${NC}"
+      fi
+      echo ""
+      ;;
+    delete|remove)
+      need_root user delete
+      if [ -z "$name" ]; then
+        read -rp "  Benutzername zum Löschen: " name
+      fi
+      if [ -z "$name" ] || [ ! -f "$INSTALL_DIR/data/users.json" ]; then
+        echo -e "  ${RED}User nicht gefunden${NC}"
+        return 1
+      fi
+      cd "$INSTALL_DIR" && node -e "
+        const fs=require('fs');
+        let u=JSON.parse(fs.readFileSync('data/users.json','utf-8'));
+        const before=u.length;
+        u=u.filter(x=>x.username!=='$name');
+        if(u.length===before){console.log('User nicht gefunden');process.exit(1);}
+        fs.writeFileSync('data/users.json',JSON.stringify(u,null,2));"
+      echo -e "  ${GREEN}✓${NC} User '${BOLD}$name${NC}' gelöscht"
+      ;;
+    *)
+      echo ""
+      echo -e "  ${BOLD}Verwendung:${NC}  bau-os user <befehl> [name]"
+      echo ""
+      echo -e "    ${BOLD}add${NC} [name]      Neuen User anlegen    ${DIM}(sudo)${NC}"
+      echo -e "    ${BOLD}list${NC}            Alle User auflisten"
+      echo -e "    ${BOLD}delete${NC} [name]   User löschen          ${DIM}(sudo)${NC}"
+      echo ""
+      ;;
+  esac
+}
+
 cmd_help() {
   echo ""
   echo -e "  ${BOLD}Verwendung:${NC}  bau-os [befehl] [optionen]"
@@ -157,6 +245,7 @@ cmd_help() {
   echo -e "    ${BOLD}start${NC}            Service starten       ${DIM}(sudo)${NC}"
   echo -e "    ${BOLD}stop${NC}             Service stoppen       ${DIM}(sudo)${NC}"
   echo -e "    ${BOLD}update${NC}           Update von GitHub einspielen ${DIM}(sudo)${NC}"
+  echo -e "    ${BOLD}user${NC} add|list|delete  Web-Benutzer verwalten"
   echo -e "    ${BOLD}env${NC}              .env Konfiguration anzeigen"
   echo -e "    ${BOLD}vault${NC}            Vault-Verzeichnis anzeigen"
   echo -e "    ${BOLD}ollama${NC}           Ollama Service Status"
@@ -187,6 +276,7 @@ cmd_menu() {
     echo -e "  ${CYAN}[8]${NC}  .env Konfiguration"
     echo -e "  ${CYAN}[9]${NC}  Vault anzeigen"
     echo -e "  ${CYAN}[10]${NC} Ollama Status"
+    echo -e "  ${CYAN}[11]${NC} Web-User verwalten"
     echo ""
     echo -e "  ${DIM}[0]  Beenden${NC}"
     echo ""
@@ -203,6 +293,7 @@ cmd_menu() {
       8) clear; cmd_env;     read -rp "  [Enter] zurück..." ;;
       9) clear; cmd_vault;   read -rp "  [Enter] zurück..." ;;
       10) clear; cmd_ollama; read -rp "  [Enter] zurück..." ;;
+      11) clear; cmd_user list; read -rp "  [Enter] zurück..." ;;
       0|q|Q) echo ""; break ;;
       *) echo -e "\n  ${RED}Ungültige Eingabe${NC}" ; sleep 1 ;;
     esac
@@ -223,6 +314,7 @@ case "${1:-}" in
   start)               cmd_start ;;
   stop)                cmd_stop ;;
   update)              cmd_update ;;
+  user)                cmd_user "${2:-}" "${3:-}" ;;
   env|config)          cmd_env ;;
   vault)               cmd_vault ;;
   ollama)              cmd_ollama ;;

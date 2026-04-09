@@ -15,7 +15,7 @@ cd "$INSTALL_DIR"
 su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git pull"
 
 npm install --omit=dev --loglevel=error
-npm run build
+npm run build:all
 
 # CLI-Tool aktualisieren
 cp "$INSTALL_DIR/scripts/bau-os-cli.sh" /usr/local/bin/bau-os

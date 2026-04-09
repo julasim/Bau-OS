@@ -1,5 +1,5 @@
 // Barrel re-export for all vault modules
-export { saveNote, listNotes, readNote, appendToNote, deleteNote } from "./notes.js";
+export { saveNote, listNotes, readNote, updateNote, appendToNote, deleteNote } from "./notes.js";
 export { saveTask, listTasks, completeTask } from "./tasks.js";
 export { saveTermin, listTermine, deleteTermin } from "./termine.js";
 export { listProjects, getProjectInfo } from "./projects.js";
