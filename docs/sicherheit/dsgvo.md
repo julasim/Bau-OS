@@ -100,7 +100,13 @@ Telegram übertraegt Nachrichten über seine Server. Die Telegram-API speichert 
 | Zutrittskontrolle | SSH-Key-basierter Zugang zum Server |
 | Zugangskontrolle | Bot reagiert nur auf gespeicherte Chat-ID |
 | Zugriffskontrolle | Agent-Datei-Editor mit Whitelist (nur bestimmte MD-Dateien) |
+| Rate Limiting | Login max. 5 Versuche pro IP in 15 Min (Brute-Force-Schutz) |
+| Path-Traversal-Schutz | Alle Datei-Operationen validieren Pfade gegen Vault-Grenze |
+| Shell-Allowlist | Nur ~40 definierte Befehle ausfuehrbar (kein rm, shutdown etc.) |
+| Sandbox-Haertung | Dynamische Tools ohne Netzwerkzugriff, gefilterte Umgebungsvariablen |
 | Trennungskontrolle | Jeder Kunde eigener VPS, eigener Vault, eigener Bot |
 | Pseudonymisierung | Chat-ID statt Klarnamen im System |
 | Verfügbarkeit | VPS mit Hetzner SLA, Bot-Neustart via `/restart` |
 | Belastbarkeit | Session-Queue verhindert Race Conditions |
+| Graceful Shutdown | Sauberes Herunterfahren bei SIGTERM/SIGINT, MCP-Cleanup |
+| Fehlerresilienz | JSON.parse Error-Handling verhindert Datenverlust bei korrupten Dateien |

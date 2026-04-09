@@ -138,6 +138,32 @@ vault/
 | `agentPath(name)` | `VAULT_PATH/Agents/<name>` |
 | `logsPath(name)` | `VAULT_PATH/Agents/<name>/MEMORY_LOGS` |
 
+## Web-API & Sicherheit
+
+| Konstante | Standardwert | `.env`-Variable | Beschreibung |
+|---|---|---|---|
+| `JWT_SECRET` | — | `JWT_SECRET` | Secret fuer JWT-Signierung. Wenn gesetzt, wird die Web-API aktiviert |
+| `API_PORT` | `3000` | `API_PORT` | Port der Web-API |
+| `API_ENABLED` | `false` | — | Automatisch `true` wenn `JWT_SECRET` gesetzt |
+| `CORS_ORIGINS` | `*` | `CORS_ORIGINS` | Erlaubte CORS-Origins (komma-getrennt) |
+
+### Rate Limiting
+
+| Parameter | Wert | Beschreibung |
+|---|---|---|
+| Max. Login-Versuche | `5` | Pro IP-Adresse |
+| Zeitfenster | `15 Minuten` | Nach Ablauf wird der Zaehler zurueckgesetzt |
+| HTTP-Antwort | `429` | "Zu viele Login-Versuche" |
+
+### Sandbox & Shell-Sicherheit
+
+| Einstellung | Beschreibung |
+|---|---|
+| Shell-Allowlist | ~40 erlaubte Befehle (ls, cat, grep, curl, git, npm, etc.) |
+| Env-Var-Filter | Shell-Scripts bekommen nur: PATH, HOME, USER, LANG, SHELL, TERM, VAULT_PATH |
+| Dynamic Tool Sandbox | Kein `fetch`, kein `require`, kein `process` — nur Math, Date, JSON, etc. |
+| Path-Traversal-Schutz | `safePath()` validiert alle Pfade gegen Vault-Grenze |
+
 ## System
 
 | Konstante | Wert | `.env`-Variable | Beschreibung |
@@ -147,6 +173,13 @@ vault/
 | `LANGUAGE` | `"Deutsch"` | — | Sprache des Assistenten |
 | `CHAT_ID_FILE` | `<cwd>/.chat_id` | — | Pfad zur Chat-ID-Datei |
 | `LOG_FILE` | `<cwd>/logs/bot.log` | — | Pfad zur Log-Datei |
+
+### Graceful Shutdown
+
+Bau-OS reagiert auf `SIGTERM` und `SIGINT` mit sauberem Herunterfahren:
+1. Telegram-Bot stoppen
+2. Alle MCP-Server trennen (`disconnectAll()`)
+3. Prozess beenden
 
 ### Interne Konstanten (vault/agents.ts)
 

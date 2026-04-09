@@ -1,43 +1,52 @@
 # Dateistruktur
 
-Vollständige Referenz aller Module im `src/`-Verzeichnis. Bau-OS besteht aus **23 TypeScript-Dateien** mit insgesamt **~2.150 Zeilen Code**.
+Vollständige Referenz aller Module im `src/`-Verzeichnis. Bau-OS besteht aus **30+ TypeScript-Dateien** mit insgesamt **~4.300 Zeilen Code**.
 
 ## Übersicht
 
 ```
 src/
-├── index.ts              # Einstiegspunkt
+├── index.ts              # Einstiegspunkt + Graceful Shutdown
 ├── bot.ts                # Telegram Bot (grammY)
 ├── config.ts             # Zentrale Konfiguration
 ├── queue.ts              # Session-Queue
 ├── format.ts             # Markdown → Telegram HTML
 ├── logger.ts             # Logging-Modul
 ├── heartbeat.ts          # Cron-basierter Heartbeat
+├── tools.ts              # Dynamisches Tool-System
+├── mcp.ts                # MCP-Client Manager
+├── web.ts                # Web-Suche & Seitenabruf
 ├── llm/
 │   ├── client.ts         # OpenAI-Client (Ollama)
 │   ├── tools.ts          # Tool-Definitionen (JSON Schema)
-│   ├── executor.ts       # Tool-Ausführung
+│   ├── executor.ts       # Tool-Ausführung (Shell-Allowlist)
 │   ├── runtime.ts        # Agent Runtime (Agentic Loop)
 │   ├── compaction.ts     # Tageslog-Komprimierung
 │   └── setup.ts          # Setup-Wizard
+├── api/
+│   ├── server.ts         # Web-API (Hono, Rate Limiting, CORS)
+│   ├── auth.ts           # JWT-Authentifizierung
+│   └── routes/           # API-Route-Handler
 └── vault/
     ├── index.ts          # Barrel Re-Export
     ├── helpers.ts        # Pfad-Utilities
     ├── notes.ts          # Notizen CRUD
-    ├── tasks.ts          # Aufgaben CRUD
-    ├── termine.ts        # Termine CRUD
-    ├── projects.ts       # Projekt-Verwaltung
-    ├── files.ts          # Datei-Operationen
+    ├── tasks.ts          # Aufgaben CRUD (JSON)
+    ├── termine.ts        # Termine CRUD (JSON)
+    ├── projects.ts       # Projekt-Verwaltung (Path-Schutz)
+    ├── files.ts          # Datei-Operationen (Path-Schutz)
+    ├── fileops.ts        # Edit, Glob, Grep
     ├── search.ts         # Vault-Suche
+    ├── team.ts           # Team-Verwaltung
     └── agents.ts         # Agent-Workspace-Verwaltung
 ```
 
 ## Kern-Module
 
 ### `src/index.ts` — Einstiegspunkt
-**25 Zeilen** | Exports: _keine (Hauptmodul)_
+**39 Zeilen** | Exports: _keine (Hauptmodul)_
 
-Startet den Bot und den Heartbeat-Scheduler. Liest `BOT_TOKEN` und `VAULT_PATH` aus der `.env`-Datei. Verbindet den Heartbeat-Callback mit der Telegram-API.
+Startet den Bot, den Heartbeat-Scheduler und optional die Web-API. Registriert Signal-Handler fuer Graceful Shutdown (SIGTERM/SIGINT): stoppt den Bot, trennt alle MCP-Server und beendet den Prozess sauber.
 
 ---
 
@@ -103,9 +112,9 @@ Array aller Tool-Definitionen im OpenAI Function Calling Format (JSON Schema). J
 ---
 
 ### `src/llm/executor.ts` — Tool-Ausführung
-**189 Zeilen** | Exports: `executeTool(name, args)`, `setReplyContext(fn)`, `getReplyFn()`, `setCurrentDepth(depth)`, `getCurrentDepth()`, `registerProcessAgent(fn)`
+**420 Zeilen** | Exports: `executeTool(name, args)`, `setReplyContext(fn)`, `getReplyFn()`, `setCurrentDepth(depth)`, `getCurrentDepth()`, `registerProcessAgent(fn)`
 
-Großer Switch-Case der alle Tools ausführt. Verwaltet den Reply-Context (für async Agents), die Spawn-Tiefe und die spaete Bindung von `processAgent` (um zirkulaere Imports zu vermeiden).
+Großer Switch-Case der alle Tools ausführt. Verwendet eine **Shell-Allowlist** (~40 erlaubte Befehle) statt einer Blocklist. Verwaltet den Reply-Context (für async Agents), die Spawn-Tiefe und die spaete Bindung von `processAgent` (um zirkulaere Imports zu vermeiden).
 
 ---
 
@@ -173,16 +182,16 @@ Verwaltet Termine in `Termine.md`. Format: `- DD.MM.YYYY [HH:MM] – Beschreibun
 ---
 
 ### `src/vault/projects.ts` — Projekt-Verwaltung
-**28 Zeilen** | Exports: `listProjects()`, `getProjectInfo(name)`
+**65 Zeilen** | Exports: `listProjects()`, `getProjectInfo(name)`, `listProjectNotes(name)`, `readProjectNote(project, noteName)`
 
-Listet Unterordner in `Projekte/` auf. Liest `README.md` oder `INFO.md` eines Projekts für Detailinfo.
+Listet Unterordner in `Projekte/` auf. Projektnamen werden ueber `safeProjectName()` validiert (nur `[\w\-. ]+`, kein `..`). Alle `fs.readdirSync`-Aufrufe sind mit try-catch abgesichert.
 
 ---
 
 ### `src/vault/files.ts` — Datei-Operationen
-**25 Zeilen** | Exports: `readFile(pfad)`, `createFile(pfad, inhalt)`, `listFolder(pfad?)`
+**36 Zeilen** | Exports: `readFile(pfad)`, `createFile(pfad, inhalt)`, `listFolder(pfad?)`
 
-Generische Dateioperationen innerhalb des Vaults. Relativer Pfad wird gegen `VAULT_PATH` aufgeloest.
+Generische Dateioperationen innerhalb des Vaults. Alle Pfade werden ueber `safePath()` validiert — Path-Traversal-Angriffe (z.B. `../../etc/passwd`) werden blockiert.
 
 ---
 

@@ -103,6 +103,63 @@ nano /home/bauos/bau-os/.env
 SSH-Zugang zum Server bedeutet **volle Kontrolle** über alle Daten. SSH-Keys sollten sicher aufbewahrt und regelmäßig rotiert werden.
 :::
 
+## Rate Limiting
+
+Der Login-Endpoint der Web-API ist gegen Brute-Force-Angriffe geschuetzt:
+
+| Parameter | Wert |
+|---|---|
+| Max. Versuche | 5 pro IP-Adresse |
+| Zeitfenster | 15 Minuten |
+| HTTP-Antwort | `429 Too Many Requests` |
+| Zaehler-Reset | Bei erfolgreichem Login |
+
+```typescript
+// src/api/server.ts
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten
+```
+
+Nach 5 fehlgeschlagenen Login-Versuchen von derselben IP wird der Zugang fuer 15 Minuten gesperrt. Ein erfolgreicher Login setzt den Zaehler zurueck.
+
+## Path-Traversal-Schutz
+
+Alle Datei-Operationen im Vault sind gegen Path-Traversal-Angriffe geschuetzt:
+
+| Modul | Schutz | Beschreibung |
+|---|---|---|
+| `vault/fileops.ts` | `safePath()` | Prueft ob der aufgeloeste Pfad innerhalb des Vaults liegt |
+| `vault/files.ts` | `safePath()` | Schuetzt `readFile`, `createFile`, `listFolder` |
+| `vault/projects.ts` | `safeProjectName()` | Validiert Projektnamen gegen `[\w\-. ]+`, blockiert `..` |
+
+```typescript
+// Beispiel: safePath() in files.ts
+function safePath(relativePath: string): string | null {
+  const resolved = path.resolve(vaultPath, relativePath);
+  if (!resolved.startsWith(vaultPath)) return null; // Blockiert!
+  return resolved;
+}
+```
+
+::: warning LLM-generierte Pfade
+Der LLM-Agent generiert Pfade basierend auf Nutzereingaben. Ohne `safePath()` koennten manipulierte Pfade wie `../../etc/passwd` den Vault verlassen. Alle Datei-Tools validieren Pfade bevor sie auf das Dateisystem zugreifen.
+:::
+
+## Shell-Allowlist
+
+Der `befehl_ausfuehren`-Tool verwendet eine **Allowlist** statt einer Blocklist:
+
+```typescript
+const ALLOWED_COMMANDS = [
+  "ls", "cat", "head", "tail", "grep", "find", "wc", "sort", "uniq",
+  "df", "du", "free", "uptime", "ps", "systemctl", "journalctl",
+  "curl", "wget", "ping", "dig", "git", "npm", "node", "ollama",
+  // ... ~40 Befehle insgesamt
+];
+```
+
+Nur Befehle in dieser Liste koennen ausgefuehrt werden. Alle anderen werden mit einer Fehlermeldung abgelehnt.
+
 ## Geplante Erweiterungen
 
 ### ALLOWED_USERS Liste
@@ -149,8 +206,15 @@ Geplant ist die Unterstuetzung von Telegram-Gruppen:
 | Agent-Datei-Whitelist | Implementiert |
 | PROTECTED_AGENTS | Implementiert |
 | Bot-Log mit Rotation (max. 500 Zeilen) | Implementiert |
+| Rate Limiting (Login-API) | Implementiert |
+| Path-Traversal-Schutz | Implementiert |
+| Shell-Allowlist | Implementiert |
+| JSON.parse Error-Handling | Implementiert |
+| Graceful Shutdown (SIGTERM/SIGINT) | Implementiert |
+| MCP-Cleanup bei Shutdown | Implementiert |
+| Sandbox-Haertung (kein fetch, gefilterte Env-Vars) | Implementiert |
+| CORS konfigurierbar | Implementiert |
 | ALLOWED_USERS Liste | Geplant |
 | Rollenbasierte Zugriffskontrolle | Geplant |
 | Gruppen-Modus | Geplant |
-| Rate Limiting | Geplant |
 | Audit-Log | Geplant |

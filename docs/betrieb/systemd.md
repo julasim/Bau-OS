@@ -120,6 +120,29 @@ sudo systemctl start bau-os
 ```
 :::
 
+## Graceful Shutdown
+
+Bau-OS faehrt bei `SIGTERM` und `SIGINT` sauber herunter:
+
+1. **Bot stoppen** — Telegram-Polling wird beendet
+2. **MCP-Server trennen** — Alle verbundenen MCP-Server-Prozesse werden sauber beendet
+3. **Prozess beenden** — `process.exit(0)`
+
+```typescript
+// src/index.ts
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
+```
+
+Das bedeutet:
+- `systemctl stop bau-os` beendet den Bot sauber (kein Datenverlust)
+- `systemctl restart bau-os` startet den Bot sauber neu
+- Keine verwaisten MCP-Server-Prozesse nach einem Neustart
+
+::: tip Kein KillSignal noetig
+Da der Bot auf SIGTERM reagiert, muss in der Service-Datei kein `KillSignal` oder `TimeoutStopSec` konfiguriert werden. systemd sendet standardmaessig SIGTERM und wartet 90 Sekunden.
+:::
+
 ## Service nach .env-Änderung neu laden
 
 Wenn du die `.env` Datei änderst, muss der Service neu gestartet werden:

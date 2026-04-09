@@ -295,6 +295,74 @@ sudo journalctl --vacuum-size=100M
 
 ---
 
+## Login-Sperre (Rate Limiting)
+
+Symptom: HTTP 429 "Zu viele Login-Versuche" bei der Web-API.
+
+**Ursache:** Nach 5 fehlgeschlagenen Login-Versuchen wird die IP fuer 15 Minuten gesperrt.
+
+**Loesung:** 15 Minuten warten, dann erneut versuchen. Alternativ den Bot neu starten (setzt den Zaehler zurueck):
+
+```bash
+sudo systemctl restart bau-os
+```
+
+---
+
+## Shell-Befehl nicht erlaubt
+
+Symptom: Agent meldet `Befehl "xyz" nicht erlaubt`.
+
+**Ursache:** Bau-OS verwendet eine **Allowlist** fuer Shell-Befehle. Nur ~40 definierte Befehle sind erlaubt.
+
+**Loesung:** Pruefen ob der Befehl in der Allowlist steht (`src/llm/executor.ts`). Falls ein zusaetzlicher Befehl benoetigt wird, diesen zur `ALLOWED_COMMANDS`-Liste hinzufuegen und neu builden:
+
+```bash
+cd /home/bauos/bau-os
+nano src/llm/executor.ts    # Befehl zur ALLOWED_COMMANDS-Liste hinzufuegen
+npm run build
+sudo systemctl restart bau-os
+```
+
+---
+
+## MCP-Server Verbindungsfehler
+
+Symptom: MCP-Tools nicht verfuegbar oder Fehlermeldung "nicht verbunden".
+
+```bash
+# MCP-Konfiguration pruefen
+cat /home/bauos/bau-os/mcp.json
+
+# Bot-Logs auf MCP-Fehler pruefen
+sudo journalctl -u bau-os --since today | grep -i mcp
+```
+
+**Loesung:** MCP-Server in Telegram neu verbinden:
+
+```
+Nutze mcp_server_verbinden mit name="filesystem"
+```
+
+::: tip Automatischer Reconnect
+MCP-Server werden beim Bot-Start automatisch verbunden. Bei Problemen reicht oft ein Neustart: `sudo systemctl restart bau-os`
+:::
+
+---
+
+## Path-Traversal blockiert
+
+Symptom: Datei-Operationen geben `null` oder "Pfad ungueltig" zurueck.
+
+**Ursache:** Der Path-Traversal-Schutz blockiert Pfade die ausserhalb des Vaults liegen (z.B. `../../etc/passwd`).
+
+**Loesung:** Nur relative Pfade innerhalb des Vaults verwenden:
+- Korrekt: `Projekte/Alpha/README.md`
+- Blockiert: `../../../etc/passwd`
+- Blockiert: `/absolute/pfade`
+
+---
+
 ## Schnelldiagnose
 
 Kopiere diesen Block und führe ihn auf dem Server aus:

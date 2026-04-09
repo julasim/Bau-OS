@@ -125,6 +125,36 @@ Konfiguration zentralisiert und VitePress-Dokumentation aufgebaut.
 
 ---
 
+## v0.8.0 — Sicherheit & Stabilitaet
+**09.04.2026**
+
+Umfassende Code-Haertung: Error-Handling, Path-Schutz, Sandbox-Haertung und Graceful Shutdown.
+
+### Sicherheit
+- **Shell-Allowlist** statt Blocklist: ~40 erlaubte Befehle (ls, cat, grep, curl, git, etc.)
+- **Rate Limiting**: Login-Endpoint max. 5 Versuche pro IP in 15 Minuten (HTTP 429)
+- **CORS konfigurierbar**: Neue Env-Variable `CORS_ORIGINS` (komma-getrennte Liste)
+- **Path-Traversal-Schutz**: `safePath()` in `files.ts`, `safeProjectName()` in `projects.ts`
+- **Sandbox gehaertet**: `fetch` aus dynamischen Tools entfernt
+- **Env-Vars gefiltert**: Shell-Scripts bekommen nur PATH, HOME, USER, LANG (keine Secrets)
+
+### Stabilitaet
+- **JSON.parse Error-Handling** an 6+ Stellen (runtime, setup, tasks, termine, team, auth)
+- **fs.readdirSync Error-Handling** an 7+ Stellen (agents, projects, files, notes, helpers, search)
+- **Graceful Shutdown**: SIGTERM/SIGINT-Handler stoppt Bot, trennt MCP-Server, beendet sauber
+- **MCP Cleanup**: `disconnectAll()` beendet alle MCP-Server-Prozesse bei Shutdown
+
+### Codequalitaet
+- Hardcoded `"MEMORY_LOGS"` durch `VAULT_LOGS_DIR`-Konstante ersetzt
+- Unused Import `estimateTokens` aus `commands/system.ts` entfernt
+- Login-Body JSON.parse abgesichert (HTTP 400 statt Crash)
+
+::: tip 18 Dateien geaendert
+Diese Version betrifft 18 Quelldateien quer durch die gesamte Codebasis — von der API-Schicht bis zur Vault-Ebene.
+:::
+
+---
+
 ## Roadmap
 
 Geplante Features für zukuenftige Versionen:
@@ -137,5 +167,4 @@ Geplante Features für zukuenftige Versionen:
 | ÖNORM-Kalkulations-Agent | Mittel | Geplant |
 | Telegram-Gruppen-Support | Mittel | Geplant |
 | Webhook-Modus (statt Long Polling) | Niedrig | Geplant |
-| Rate Limiting | Niedrig | Geplant |
 | Audit-Log | Niedrig | Geplant |

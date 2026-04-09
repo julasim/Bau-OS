@@ -1,6 +1,6 @@
 # LLM Tools Referenz
 
-Bau-OS stellt dem LLM **28 Tools** zur Verfügung, mit denen es eigenständig Daten im Vault verwalten kann. Alle Tools sind in `src/llm/tools.ts` definiert und in `src/llm/executor.ts` implementiert.
+Bau-OS stellt dem LLM **35+ Tools** zur Verfügung, mit denen es eigenständig Daten im Vault verwalten kann. Alle Tools sind in `src/llm/tools.ts` definiert und in `src/llm/executor.ts` implementiert.
 
 ## Notizen
 
@@ -426,7 +426,51 @@ Liest eine Konfigurationsdatei eines Agenten.
 Erlaubte Dateien: `SOUL.md`, `BOOT.md`, `AGENTS.md`, `TOOLS.md`, `HEARTBEAT.md`, `BOOTSTRAP.md`, `USER.md`, `IDENTITY.md`, `MEMORY.md`
 :::
 
-## System
+## System-Tools
+
+### `befehl_ausfuehren`
+
+Fuehrt einen Shell-Befehl auf dem Server aus. Nur Befehle aus der **Allowlist** sind erlaubt.
+
+| Parameter | Typ | Pflicht | Beschreibung |
+|---|---|---|---|
+| `befehl` | `string` | Ja | Der auszufuehrende Befehl |
+| `verzeichnis` | `string` | Nein | Arbeitsverzeichnis (Standard: Projektroot) |
+| `timeout` | `number` | Nein | Timeout in Sekunden (Standard: 15, max: 60) |
+
+**Erlaubte Befehle** (~40):
+`ls`, `cat`, `head`, `tail`, `grep`, `find`, `wc`, `sort`, `df`, `du`, `free`, `uptime`, `ps`, `systemctl`, `journalctl`, `curl`, `wget`, `ping`, `dig`, `pwd`, `git`, `npm`, `node`, `ollama`, `docker`, `cp`, `mv`, `mkdir`, `touch`, `chmod`, `tar`, `zip`, `unzip` u.a.
+
+::: warning Sicherheit
+Nicht erlaubte Befehle (rm, shutdown, reboot, sudo, etc.) werden mit einer Fehlermeldung abgelehnt. Die Allowlist ist in `src/llm/executor.ts` definiert.
+:::
+
+---
+
+### `code_ausfuehren`
+
+Fuehrt JavaScript-Code in einer **Sandbox** aus (kein Netzwerk, kein Dateisystem).
+
+| Parameter | Typ | Pflicht | Beschreibung |
+|---|---|---|---|
+| `code` | `string` | Ja | JavaScript-Code |
+
+Verfuegbar in der Sandbox: `Math`, `Date`, `JSON`, `String`, `Number`, `Array`, `Object`, `RegExp`, `Map`, `Set`. Timeout: 10 Sekunden.
+
+---
+
+### `http_anfrage`
+
+Sendet HTTP-Anfragen an externe APIs.
+
+| Parameter | Typ | Pflicht | Beschreibung |
+|---|---|---|---|
+| `url` | `string` | Ja | Ziel-URL |
+| `methode` | `string` | Nein | HTTP-Methode (Standard: GET) |
+| `headers` | `string` | Nein | JSON-String mit Headers |
+| `body` | `string` | Nein | Request-Body (fuer POST/PUT/PATCH) |
+
+---
 
 ### `heute_briefing`
 
@@ -454,4 +498,8 @@ Das Zurücksetzen des Gesprächskontexts erfolgt über den `/neu`-Command. Inter
 | Suche | `vault_suchen` | 1 |
 | Memory | `memory_speichern` | 1 |
 | Agent-Verwaltung | `agent_erstellen`, `agent_spawnen`, `agent_spawnen_async`, `agenten_auflisten`, `agent_verlauf`, `agent_aktiv`, `agent_datei_lesen`, `agent_datei_schreiben` | 8 |
-| **Gesamt** | | **26** |
+| System | `befehl_ausfuehren`, `code_ausfuehren`, `http_anfrage` | 3 |
+| Dateieditor | `datei_bearbeiten`, `dateien_suchen`, `regex_suchen` | 3 |
+| Dynamische Tools | `tool_erstellen`, `tools_auflisten`, `tool_loeschen` | 3 |
+| MCP | `mcp_server_auflisten`, `mcp_server_verbinden`, `mcp_server_trennen` | 3 |
+| **Gesamt** | | **35** |

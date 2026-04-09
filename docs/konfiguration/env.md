@@ -83,6 +83,41 @@ Das Modell, das für Sub-Agenten verwendet wird. Kann ein leichteres Modell sein
 OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
 ```
 
+## Web-API & Sicherheit
+
+| Variable | Pflicht | Standardwert | Beschreibung |
+|---|---|---|---|
+| `JWT_SECRET` | Nein | — | Secret fuer JWT-Token-Signierung. Wenn gesetzt, wird die Web-API aktiviert |
+| `API_PORT` | Nein | `3000` | Port der Web-API |
+| `CORS_ORIGINS` | Nein | `*` (alle) | Erlaubte CORS-Origins, komma-getrennt |
+
+### JWT_SECRET
+
+Aktiviert die Web-API mit JWT-Authentifizierung. Ohne diese Variable ist die Web-API deaktiviert.
+
+```bash
+# Sicheres Secret generieren:
+openssl rand -hex 32
+
+JWT_SECRET=dein_sicheres_secret_hier
+```
+
+### CORS_ORIGINS
+
+Beschraenkt Cross-Origin-Anfragen auf bestimmte Domains. Wenn nicht gesetzt, sind alle Origins erlaubt (`*`).
+
+```bash
+# Nur bestimmte Origins erlauben:
+CORS_ORIGINS=https://bauos.example.com,http://localhost:5173
+
+# Alle Origins erlauben (Standard, wenn nicht gesetzt):
+# CORS_ORIGINS wird weggelassen
+```
+
+::: warning Produktionsumgebung
+In der Produktion sollte `CORS_ORIGINS` auf die tatsaechliche Domain beschraenkt werden, um CSRF-Angriffe zu verhindern.
+:::
+
 ## Beispiel .env
 
 Eine vollständige `.env`-Datei sieht so aus:
@@ -97,6 +132,11 @@ OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=qwen2.5:7b
 OLLAMA_FAST_MODEL=qwen2.5:3b
 OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
+
+# Optional — Web-API
+JWT_SECRET=dein_sicheres_secret
+API_PORT=3000
+CORS_ORIGINS=https://bauos.example.com
 ```
 
 ## Fest konfigurierte Werte
@@ -114,6 +154,17 @@ Die folgenden Werte sind in `src/config.ts` definiert und nicht über Umgebungsv
 | `TIMEZONE` | `Europe/Vienna` | Zeitzone für alle Datums-Operationen |
 | `LOCALE` | `de-AT` | Locale für Formatierungen |
 | `LANGUAGE` | `Deutsch` | Sprache für LLM-Antworten |
+| `VAULT_LOGS_DIR` | `MEMORY_LOGS` | Ordnername fuer Tageslog-Dateien |
+
+### Sicherheits-Konstanten
+
+| Konstante | Wert | Beschreibung |
+|---|---|---|
+| Rate Limit (Login) | 5 Versuche / 15 Min | Brute-Force-Schutz fuer `/api/auth/login` |
+| Shell-Allowlist | ~40 Befehle | Nur erlaubte Befehle via `befehl_ausfuehren` |
+| Path-Traversal-Schutz | `safePath()` | Validiert Pfade gegen Vault-Grenze |
+| Sandbox (Dynamic Tools) | kein `fetch` | Netzwerkzugriff in dynamischen Tools deaktiviert |
+| Env-Var-Filter (Shell) | PATH, HOME, USER, LANG | Shell-Scripts bekommen keine Secrets |
 
 ::: tip Werte anpassen
 Um diese Werte zu ändern, bearbeite `src/config.ts` direkt und starte den Bot neu. Ein Rebuild ist nach Änderungen nötig (`npm run build`).

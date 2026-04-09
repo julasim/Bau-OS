@@ -205,6 +205,30 @@ Vault:           OK (vorhanden)
 === Ende ===
 ```
 
+## MCP-Server Status
+
+MCP-Server-Verbindungen koennen im Telegram-Chat geprueft werden:
+
+```
+Nutze mcp_server_auflisten
+```
+
+Oder in den Logs:
+
+```bash
+sudo journalctl -u bau-os --since today | grep -i mcp
+```
+
+Erwartete Log-Eintraege bei gesundem System:
+
+```
+[MCP] filesystem verbunden — 11 Tool(s): read_file, write_file, ...
+```
+
+::: tip Graceful Shutdown
+Bei `systemctl stop bau-os` werden alle MCP-Server sauber getrennt (`disconnectAll()`). Verwaiste MCP-Prozesse sind damit ausgeschlossen. Pruefen: `ps aux | grep mcp`
+:::
+
 ## Automatischer Health Check (optional)
 
 Fuege einen stündlichen Check zum Crontab hinzu:
