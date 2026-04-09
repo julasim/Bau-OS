@@ -37,6 +37,7 @@
     "@types/bcrypt": "^6.0.0",
     "@types/jsonwebtoken": "^9.0.10",
     "@vitejs/plugin-vue": "^6.0.5",
+    "marked": "^18.0.0",
     "pinia": "^3.0.4",
     "tailwindcss": "^4.2.2",
     "vite": "^5.4.21",

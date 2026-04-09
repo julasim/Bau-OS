@@ -2,7 +2,8 @@
 export { saveNote, listNotes, readNote, updateNote, appendToNote, deleteNote } from "./notes.js";
 export { saveTask, listTasks, completeTask } from "./tasks.js";
 export { saveTermin, listTermine, deleteTermin } from "./termine.js";
-export { listProjects, getProjectInfo } from "./projects.js";
+export { listProjects, getProjectInfo, listProjectNotes, readProjectNote } from "./projects.js";
+export type { ProjectInfo } from "./projects.js";
 export { readFile, createFile, listFolder } from "./files.js";
 export { searchVault } from "./search.js";
 export type { SearchResult } from "./search.js";

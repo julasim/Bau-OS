@@ -9,6 +9,7 @@ const links = [
   { to: "/notes", label: "Notizen", icon: "N" },
   { to: "/tasks", label: "Aufgaben", icon: "A" },
   { to: "/termine", label: "Termine", icon: "T" },
+  { to: "/projects", label: "Projekte", icon: "P" },
   { to: "/agents", label: "Agenten", icon: "G" },
   { to: "/search", label: "Suche", icon: "S" },
   { to: "/files", label: "Dateien", icon: "D" },

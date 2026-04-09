@@ -118,7 +118,8 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "projekt_info": {
         const info = getProjectInfo(String(args.name));
-        return info ?? "Projekt nicht gefunden.";
+        if (!info) return "Projekt nicht gefunden.";
+        return `Projekt: ${info.name}\n\nNotizen: ${info.notes}\nOffene Aufgaben: ${info.openTasks}\nTermine: ${info.termine}`;
       }
       case "memory_speichern": {
         appendAgentMemory("Main", String(args.eintrag));

@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, onMounted, computed } from "vue";
 import { api } from "../api";
+import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 
 const currentPath = ref("");
 const items = ref<string[]>([]);
 const fileContent = ref<string | null>(null);
 const fileName = ref("");
+
+const isMarkdown = computed(() => fileName.value.endsWith(".md"));
 
 async function loadFolder(p = "") {
   currentPath.value = p;
@@ -46,7 +49,10 @@ onMounted(() => loadFolder());
         <span class="font-mono text-sm font-medium">{{ fileName }}</span>
         <button @click="fileContent = null" class="text-sm text-blue-600 hover:underline">Schliessen</button>
       </div>
-      <pre class="bg-white p-4 rounded-xl border text-sm font-mono whitespace-pre-wrap overflow-auto max-h-[600px]">{{ fileContent }}</pre>
+      <div v-if="isMarkdown" class="bg-white p-6 rounded-xl border overflow-auto max-h-[600px]">
+        <MarkdownRenderer :content="fileContent" />
+      </div>
+      <pre v-else class="bg-white p-4 rounded-xl border text-sm font-mono whitespace-pre-wrap overflow-auto max-h-[600px]">{{ fileContent }}</pre>
     </div>
 
     <div v-else class="space-y-1">

@@ -4,6 +4,13 @@ import { vaultPath } from "./helpers.js";
 import { listTasks } from "./tasks.js";
 import { listTermine } from "./termine.js";
 
+export interface ProjectInfo {
+  name: string;
+  notes: number;
+  openTasks: number;
+  termine: number;
+}
+
 export function listProjects(): string[] {
   const projektePath = path.join(vaultPath, "Projekte");
   if (!fs.existsSync(projektePath)) return [];
@@ -13,7 +20,7 @@ export function listProjects(): string[] {
     .map(e => e.name);
 }
 
-export function getProjectInfo(name: string): string | null {
+export function getProjectInfo(name: string): ProjectInfo | null {
   const projectPath = path.join(vaultPath, "Projekte", name);
   if (!fs.existsSync(projectPath)) return null;
 
@@ -24,5 +31,22 @@ export function getProjectInfo(name: string): string | null {
     ? fs.readdirSync(notesDir).filter(f => f.endsWith(".md")).length
     : 0;
 
-  return `Projekt: ${name}\n\nNotizen: ${noteCount}\nOffene Aufgaben: ${openTasks}\nTermine: ${termine}`;
+  return { name, notes: noteCount, openTasks, termine };
+}
+
+export function listProjectNotes(name: string): string[] {
+  const notesDir = path.join(vaultPath, "Projekte", name, "Notizen");
+  if (!fs.existsSync(notesDir)) return [];
+
+  return fs.readdirSync(notesDir)
+    .filter(f => f.endsWith(".md"))
+    .sort()
+    .reverse()
+    .map(f => f.replace(".md", ""));
+}
+
+export function readProjectNote(project: string, noteName: string): string | null {
+  const filepath = path.join(vaultPath, "Projekte", project, "Notizen", noteName + ".md");
+  if (!fs.existsSync(filepath)) return null;
+  return fs.readFileSync(filepath, "utf-8");
 }
