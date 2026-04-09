@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import { client, buildDateLine } from "./client.js";
 import { TOOLS } from "./tools.js";
+import { getDynamicToolSchemas } from "../tools.js";
 import { executeTool, setCurrentDepth, registerProcessAgent } from "./executor.js";
 import { runCompaction } from "./compaction.js";
 import { loadAgentWorkspace, appendAgentConversation, loadAgentHistory, shouldCompact } from "../vault/index.js";
@@ -38,7 +39,7 @@ export async function processAgent(agentName: string, userMessage: string, mode:
     const response = await client.chat.completions.create({
       model: activeModel,
       messages,
-      tools: TOOLS,
+      tools: [...TOOLS, ...getDynamicToolSchemas()],
       tool_choice: "auto",
     });
 

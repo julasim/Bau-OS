@@ -282,8 +282,47 @@ export async function executeTool(name: string, args: Record<string, string | nu
 
         return `\u2705 ${args.agent}/${args.datei} gespeichert.`;
       }
-      default:
+      case "tool_erstellen": {
+        const { createTool } = await import("../tools.js");
+        let params: Record<string, { type: string; description: string }> = {};
+        if (args.parameter) {
+          try { params = JSON.parse(String(args.parameter)); } catch { return "Fehler: parameter ist kein gueltiges JSON."; }
+        }
+        const required = args.pflichtfelder ? String(args.pflichtfelder).split(",").map(s => s.trim()) : [];
+        let extraFiles: Record<string, string> | undefined;
+        if (args.zusatzdateien) {
+          try { extraFiles = JSON.parse(String(args.zusatzdateien)); } catch { return "Fehler: zusatzdateien ist kein gueltiges JSON."; }
+        }
+        const typ = (args.typ === "sh" ? "sh" : "js") as "js" | "sh";
+        const dir = createTool(
+          String(args.ordner),
+          { name: String(args.name), description: String(args.beschreibung), parameters: params, required },
+          String(args.code),
+          typ,
+          extraFiles,
+        );
+        return `\u2705 Tool "${args.name}" erstellt in ${dir}\nSofort verfuegbar — kein Neustart noetig.`;
+      }
+      case "tools_auflisten": {
+        const { listDynamicTools } = await import("../tools.js");
+        const tools = listDynamicTools();
+        if (!tools.length) return "Keine dynamischen Tools vorhanden. Erstelle eins mit tool_erstellen.";
+        return tools.map(t => `\u2022 **${t.name}** — ${t.description}\n  Parameter: ${Object.keys(t.parameters).join(", ") || "keine"}`).join("\n\n");
+      }
+      case "tool_loeschen": {
+        const { deleteTool } = await import("../tools.js");
+        return deleteTool(String(args.ordner))
+          ? `\u2705 Tool "tools/${args.ordner}/" geloescht.`
+          : `Tool-Ordner "tools/${args.ordner}/" nicht gefunden.`;
+      }
+      default: {
+        // Dynamische Tools pruefen
+        const { isDynamicTool, executeDynamicTool } = await import("../tools.js");
+        if (isDynamicTool(name)) {
+          return await executeDynamicTool(name, args);
+        }
         return `Unbekanntes Tool: ${name}`;
+      }
     }
   } catch (err) {
     return `Fehler bei ${name}: ${err}`;

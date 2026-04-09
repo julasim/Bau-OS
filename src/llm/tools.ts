@@ -417,6 +417,50 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
+  // Dynamische Tools (Meta)
+  {
+    type: "function",
+    function: {
+      name: "tool_erstellen",
+      description: "Erstellt ein neues wiederverwendbares Tool als Script. Das Tool wird sofort verfuegbar — kein Neustart noetig. Schreibe den Code so, dass er `args.paramName` nutzt und mit `return 'ergebnis'` das Resultat zurueckgibt. Fuer Templates: nutze `files()` um Zusatzdateien im Tool-Ordner zu lesen.",
+      parameters: {
+        type: "object",
+        properties: {
+          ordner: { type: "string", description: "Ordnername (z.B. 'kalkulation', 'bauprotokoll', 'preischeck')" },
+          name: { type: "string", description: "Tool-Name fuer LLM (z.B. 'kalkulation_berechnen')" },
+          beschreibung: { type: "string", description: "Was das Tool tut — wird dem LLM gezeigt" },
+          parameter: { type: "string", description: "Parameter als JSON: {\"flaeche\": {\"type\": \"number\", \"description\": \"m²\"}, ...}" },
+          pflichtfelder: { type: "string", description: "Komma-separierte Pflichtfelder (z.B. 'flaeche,typ')" },
+          code: { type: "string", description: "JavaScript-Code des Tools. Zugriff auf args.*, files(), Math, Date, JSON, fetch. Ergebnis via return." },
+          typ: { type: "string", description: "Script-Typ: 'js' (Standard) oder 'sh' (Shell)" },
+          zusatzdateien: { type: "string", description: "Optionale Zusatzdateien als JSON: {\"vorlage.md\": \"# Template\\n...\"}" },
+        },
+        required: ["ordner", "name", "beschreibung", "code"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "tools_auflisten",
+      description: "Listet alle verfuegbaren dynamischen Tools auf (aus dem tools/ Verzeichnis).",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "tool_loeschen",
+      description: "Loescht ein dynamisches Tool.",
+      parameters: {
+        type: "object",
+        properties: {
+          ordner: { type: "string", description: "Ordnername des Tools (z.B. 'kalkulation')" },
+        },
+        required: ["ordner"],
+      },
+    },
+  },
   // Agent-Datei Editor
   {
     type: "function",

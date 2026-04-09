@@ -40,6 +40,9 @@ export const LANGUAGE         = "Deutsch";
 export const CHAT_ID_FILE     = path.join(process.cwd(), ".chat_id");
 export const LOG_FILE         = path.join(process.cwd(), "logs", "bot.log");
 
+// ── Dynamische Tools ─────────────────────────────────────────────────────────
+export const TOOLS_DIR          = path.join(process.cwd(), "tools");
+
 // ── Web-API ──────────────────────────────────────────────────────────────────
 export const API_PORT         = parseInt(process.env.API_PORT || "3000", 10);
 export const JWT_SECRET       = process.env.JWT_SECRET || "";
