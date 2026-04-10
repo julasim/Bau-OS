@@ -177,6 +177,9 @@ export function finalizeMainWorkspace(answers: SetupAnswers): void {
   fs.writeFileSync(path.join(agentDir, "IDENTITY.md"), identity, "utf-8");
   fs.writeFileSync(path.join(agentDir, "SOUL.md"), soul, "utf-8");
   fs.writeFileSync(path.join(agentDir, "USER.md"), user, "utf-8");
+
+  // Fehlende Workspace-Dateien nachlegen (BOOT, TOOLS, AGENTS, HEARTBEAT, MEMORY)
+  createAgentWorkspace("Main", soul);
 }
 
 export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal" = "full"): WorkspaceFileInfo[] {
