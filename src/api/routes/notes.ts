@@ -1,16 +1,17 @@
 import { Hono } from "hono";
-import { saveNote, listNotes, readNote, appendToNote, deleteNote } from "../../vault/index.js";
+import { noteRepo } from "../../data/index.js";
+import { emit } from "../events.js";
 
 export const notesRoutes = new Hono();
 
-notesRoutes.get("/notes", (c) => {
-  const notes = listNotes();
+notesRoutes.get("/notes", async (c) => {
+  const notes = await noteRepo.list();
   return c.json(notes);
 });
 
-notesRoutes.get("/notes/:name", (c) => {
+notesRoutes.get("/notes/:name", async (c) => {
   const name = c.req.param("name");
-  const content = readNote(name);
+  const content = await noteRepo.read(name);
   if (content === null) return c.json({ error: "Notiz nicht gefunden" }, 404);
   return c.json({ name, content });
 });
@@ -18,21 +19,21 @@ notesRoutes.get("/notes/:name", (c) => {
 notesRoutes.post("/notes", async (c) => {
   const { content, project } = await c.req.json<{ content: string; project?: string }>();
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
-  const path = saveNote(content, project);
+  const path = await noteRepo.save(content, project);
+  emit({ type: "note", action: "created", project });
   return c.json({ path }, 201);
 });
 
 notesRoutes.put("/notes/:name", async (c) => {
   const name = c.req.param("name");
-  const existing = readNote(name);
+  const existing = await noteRepo.read(name);
   if (existing === null) return c.json({ error: "Notiz nicht gefunden" }, 404);
 
   const { content } = await c.req.json<{ content: string }>();
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
 
-  // updateNote: überschreibt die Datei komplett
-  const { updateNote } = await import("../../vault/notes.js");
-  const success = updateNote(name, content);
+  const success = await noteRepo.update(name, content);
+  if (success) emit({ type: "note", action: "updated", id: name });
   return c.json({ success });
 });
 
@@ -40,13 +41,15 @@ notesRoutes.patch("/notes/:name/append", async (c) => {
   const name = c.req.param("name");
   const { content } = await c.req.json<{ content: string }>();
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
-  appendToNote(name, content);
-  return c.json({ success: true });
+  const success = await noteRepo.append(name, content);
+  if (success) emit({ type: "note", action: "updated", id: name });
+  return c.json({ success });
 });
 
-notesRoutes.delete("/notes/:name", (c) => {
+notesRoutes.delete("/notes/:name", async (c) => {
   const name = c.req.param("name");
-  const deleted = deleteNote(name);
+  const deleted = await noteRepo.delete(name);
   if (!deleted) return c.json({ error: "Notiz nicht gefunden" }, 404);
+  emit({ type: "note", action: "deleted", id: name });
   return c.json({ deleted: name });
 });

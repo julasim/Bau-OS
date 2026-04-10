@@ -1,0 +1,15 @@
+# ============================================================
+# Bau-OS — Supabase Self-Hosted (Offizielles Setup)
+#
+# NICHT MANUELL BEARBEITEN — wird von setup-supabase.sh generiert.
+# Dieses File ist ein Stub. Das echte Setup liegt in docker/supabase/
+# und wird vom offiziellen supabase/supabase Repository geklont.
+#
+# Setup:   bash scripts/setup-supabase.sh
+# Starten: cd docker/supabase && docker compose up -d
+# Stoppen: cd docker/supabase && docker compose down
+# Studio:  http://localhost:8000 (Login mit DASHBOARD_USERNAME/PASSWORD)
+# DB:      postgres://postgres:DEIN_PASSWORT@localhost:5432/postgres
+# ============================================================
+#
+# Siehe scripts/setup-supabase.sh fuer automatisierte Einrichtung.

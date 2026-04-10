@@ -6,3 +6,7 @@ logs/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 mcp.json
+
+# Supabase Docker (wird von setup-supabase.sh geklont)
+docker/supabase/
+docker/.env

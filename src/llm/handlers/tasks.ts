@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import { saveTask, listTasks, completeTask } from "../../vault/index.js";
+import { taskRepo } from "../../data/index.js";
 import type { HandlerMap } from "./types.js";
 
 export const taskSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -52,12 +52,12 @@ export const taskSchemas: OpenAI.Chat.ChatCompletionTool[] = [
 
 export const taskHandlers: HandlerMap = {
   aufgabe_speichern: async (args) => {
-    saveTask(String(args.text), args.projekt ? String(args.projekt) : undefined);
+    await taskRepo.save(String(args.text), args.projekt ? String(args.projekt) : undefined);
     return `Aufgabe gespeichert: ${args.text}`;
   },
 
   aufgaben_auflisten: async (args) => {
-    const tasks = listTasks(args.projekt ? String(args.projekt) : undefined);
+    const tasks = await taskRepo.list(args.projekt ? String(args.projekt) : undefined);
     const open = tasks.filter((t) => t.status !== "done");
     return open.length
       ? open
@@ -67,7 +67,7 @@ export const taskHandlers: HandlerMap = {
   },
 
   aufgabe_erledigen: async (args) => {
-    const ok = completeTask(String(args.text), args.projekt ? String(args.projekt) : undefined);
+    const ok = await taskRepo.complete(String(args.text), args.projekt ? String(args.projekt) : undefined);
     return ok
       ? `Erledigt: ${args.text}`
       : `Aufgabe nicht gefunden: "${args.text}". Der Text muss exakt uebereinstimmen — nutze aufgaben_auflisten um den genauen Text zu sehen.`;

@@ -58,13 +58,25 @@ export function verifyToken(token: string): JwtPayload {
 // ── Hono Middleware ──────────────────────────────────────────────────────────
 
 export async function authMiddleware(c: Context, next: Next): Promise<Response | void> {
+  // 1. Authorization Header (Standard)
   const header = c.req.header("Authorization");
-  if (!header?.startsWith("Bearer ")) {
+  let token: string | undefined;
+
+  if (header?.startsWith("Bearer ")) {
+    token = header.slice(7);
+  }
+
+  // 2. Fallback: Query-Parameter ?token= (fuer EventSource/SSE)
+  if (!token) {
+    token = c.req.query("token") ?? undefined;
+  }
+
+  if (!token) {
     return c.json({ error: "Nicht autorisiert" }, 401);
   }
 
   try {
-    const payload = verifyToken(header.slice(7));
+    const payload = verifyToken(token);
     c.set("user", payload);
     await next();
   } catch {

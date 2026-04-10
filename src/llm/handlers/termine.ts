@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import { saveTermin, listTermine, deleteTermin } from "../../vault/index.js";
+import { terminRepo } from "../../data/index.js";
 import type { HandlerMap } from "./types.js";
 
 export const terminSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -54,7 +54,7 @@ export const terminSchemas: OpenAI.Chat.ChatCompletionTool[] = [
 
 export const terminHandlers: HandlerMap = {
   termin_speichern: async (args) => {
-    const result = saveTermin(
+    const result = await terminRepo.save(
       String(args.datum),
       String(args.text),
       args.uhrzeit ? String(args.uhrzeit) : undefined,
@@ -65,7 +65,7 @@ export const terminHandlers: HandlerMap = {
   },
 
   termine_auflisten: async (args) => {
-    const termine = listTermine(args.projekt ? String(args.projekt) : undefined);
+    const termine = await terminRepo.list(args.projekt ? String(args.projekt) : undefined);
     return termine.length
       ? termine
           .map(
@@ -77,7 +77,7 @@ export const terminHandlers: HandlerMap = {
   },
 
   termin_loeschen: async (args) => {
-    const ok = deleteTermin(String(args.text), args.projekt ? String(args.projekt) : undefined);
+    const ok = await terminRepo.delete(String(args.text), args.projekt ? String(args.projekt) : undefined);
     return ok
       ? `Termin geloescht: ${args.text}`
       : `Termin "${args.text}" nicht gefunden. Nutze termine_auflisten um den genauen Text zu sehen.`;

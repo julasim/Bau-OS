@@ -1,15 +1,16 @@
 import { Hono } from "hono";
-import { saveTask, listTasks, getTask, updateTask, completeTask, deleteTask } from "../../vault/index.js";
+import { taskRepo } from "../../data/index.js";
+import { emit } from "../events.js";
 
 export const tasksRoutes = new Hono();
 
-tasksRoutes.get("/tasks", (c) => {
+tasksRoutes.get("/tasks", async (c) => {
   const project = c.req.query("project");
-  return c.json(listTasks(project));
+  return c.json(await taskRepo.list(project));
 });
 
-tasksRoutes.get("/tasks/:id", (c) => {
-  const task = getTask(c.req.param("id"));
+tasksRoutes.get("/tasks/:id", async (c) => {
+  const task = await taskRepo.get(c.req.param("id"));
   if (!task) return c.json({ error: "Aufgabe nicht gefunden" }, 404);
   return c.json(task);
 });
@@ -23,10 +24,10 @@ tasksRoutes.post("/tasks", async (c) => {
     location?: string;
   }>();
   if (!body.text) return c.json({ error: "Text erforderlich" }, 400);
-  const task = saveTask(body.text, body.project);
+  const task = await taskRepo.save(body.text, body.project);
   // Apply optional fields
   if (body.assignee || body.date || body.location) {
-    const updated = updateTask(
+    const updated = await taskRepo.update(
       task.id,
       {
         assignee: body.assignee || null,
@@ -35,8 +36,10 @@ tasksRoutes.post("/tasks", async (c) => {
       },
       body.project,
     );
+    emit({ type: "task", action: "created", id: task.id, project: body.project });
     return c.json(updated, 201);
   }
+  emit({ type: "task", action: "created", id: task.id, project: body.project });
   return c.json(task, 201);
 });
 
@@ -51,13 +54,16 @@ tasksRoutes.put("/tasks/:id", async (c) => {
       location: string | null;
     }>
   >();
-  const task = updateTask(id, body);
+  const task = await taskRepo.update(id, body);
   if (!task) return c.json({ error: "Aufgabe nicht gefunden" }, 404);
+  emit({ type: "task", action: "updated", id });
   return c.json(task);
 });
 
-tasksRoutes.patch("/tasks/:id/complete", (c) => {
-  const ok = completeTask(c.req.param("id"));
+tasksRoutes.patch("/tasks/:id/complete", async (c) => {
+  const id = c.req.param("id");
+  const ok = await taskRepo.complete(id);
+  if (ok) emit({ type: "task", action: "completed", id });
   return c.json({ ok });
 });
 
@@ -65,11 +71,14 @@ tasksRoutes.patch("/tasks/:id/complete", (c) => {
 tasksRoutes.patch("/tasks/complete", async (c) => {
   const { text, project } = await c.req.json<{ text: string; project?: string }>();
   if (!text) return c.json({ error: "Text erforderlich" }, 400);
-  const ok = completeTask(text, project);
+  const ok = await taskRepo.complete(text, project);
+  if (ok) emit({ type: "task", action: "completed", project });
   return c.json({ success: ok });
 });
 
-tasksRoutes.delete("/tasks/:id", (c) => {
-  const ok = deleteTask(c.req.param("id"));
+tasksRoutes.delete("/tasks/:id", async (c) => {
+  const id = c.req.param("id");
+  const ok = await taskRepo.delete(id);
+  if (ok) emit({ type: "task", action: "deleted", id });
   return c.json({ ok });
 });

@@ -1,6 +1,6 @@
 import type OpenAI from "openai";
 import { readFile, createFile, listFolder, editFile, globFiles, grepFiles, searchVault } from "../../vault/index.js";
-import { HTTP_RESPONSE_MAX_CHARS } from "../../config.js";
+import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED } from "../../config.js";
 import type { HandlerMap } from "./types.js";
 
 export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -61,6 +61,27 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
           projekt: { type: "string", description: "Optional: Suche auf ein Projekt begrenzen" },
         },
         required: ["suchbegriff"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "semantisch_suchen",
+      description:
+        "Semantische Suche im Vault: findet Notizen und Dateien nach Bedeutung, nicht nur nach exaktem Text. Nutzt KI-Embeddings fuer bessere Ergebnisse bei komplexen Fragen. Nur verfuegbar wenn Datenbank aktiv ist — sonst vault_suchen verwenden.",
+      parameters: {
+        type: "object",
+        properties: {
+          frage: { type: "string", description: "Die Suchanfrage in natuerlicher Sprache" },
+          typ: {
+            type: "string",
+            enum: ["all", "note", "file"],
+            description: "Suchbereich: 'all' (Standard), 'note' (nur Notizen), 'file' (nur Dateien)",
+          },
+          limit: { type: "number", description: "Max. Ergebnisse (Standard: 5)" },
+        },
+        required: ["frage"],
       },
     },
   },
@@ -146,6 +167,24 @@ export const fileHandlers: HandlerMap = {
     const results = searchVault(String(args.suchbegriff), args.projekt ? String(args.projekt) : undefined);
     if (!results.length) return `Keine Treffer fuer "${args.suchbegriff}".`;
     return results.map((r) => `\u{1F4C4} ${r.file}\n   ${r.line}`).join("\n\n");
+  },
+
+  semantisch_suchen: async (args) => {
+    if (!DB_ENABLED)
+      return "Semantische Suche nicht verfuegbar (Datenbank nicht aktiv). Nutze vault_suchen stattdessen.";
+    const { semanticSearch } = await import("../../db/index.js");
+    const type = (args.typ as "all" | "note" | "file") || "all";
+    const limit = Number(args.limit) || 5;
+    const results = await semanticSearch(String(args.frage), { limit, type });
+    if (!results.length)
+      return `Keine semantischen Treffer fuer "${args.frage}". Versuche vault_suchen fuer exakte Textsuche.`;
+    return results
+      .map((r) => {
+        const icon = r.type === "note" ? "\u{1F4DD}" : "\u{1F4C4}";
+        const proj = r.project ? ` [${r.project}]` : "";
+        return `${icon} ${r.title}${proj} (Score: ${(r.score * 100).toFixed(0)}%)\n   ${r.snippet.replace(/\n/g, " ").slice(0, 120)}`;
+      })
+      .join("\n\n");
   },
 
   datei_bearbeiten: async (args) => {

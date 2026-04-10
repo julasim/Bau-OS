@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { api } from "../api";
+import { useEvents } from "../composables/useEvents";
 
 interface Termin {
   id: string;
@@ -75,6 +76,9 @@ function toggleAssignee(name: string) {
 }
 
 onMounted(load);
+
+// Live-Updates via SSE
+useEvents(["termin"], () => load());
 </script>
 
 <template>

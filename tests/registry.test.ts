@@ -78,11 +78,11 @@ describe("Handler-Registry Konsistenz", () => {
     expect(allNames.length, `Duplikate: ${allNames.filter((n, i) => allNames.indexOf(n) !== i)}`).toBe(unique.size);
   });
 
-  it("Gesamtzahl Handler = 41 (ohne antworten)", () => {
+  it("Gesamtzahl Handler = 42 (ohne antworten)", () => {
     let total = 0;
     for (const { handlers } of allHandlerMaps) {
       total += Object.keys(handlers).length;
     }
-    expect(total).toBe(41);
+    expect(total).toBe(42);
   });
 });

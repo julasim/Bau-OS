@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { api } from "../api";
+import { useEvents } from "../composables/useEvents";
 
 interface Task {
   id: string;
@@ -80,6 +81,9 @@ const statusColor: Record<string, string> = {
 };
 
 onMounted(load);
+
+// Live-Updates via SSE
+useEvents(["task"], () => load());
 </script>
 
 <template>

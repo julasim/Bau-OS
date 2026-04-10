@@ -2,6 +2,7 @@
 import { ref, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
+import { useEvents } from "../composables/useEvents";
 
 const router = useRouter();
 const notes = ref<string[]>([]);
@@ -25,6 +26,9 @@ async function remove(name: string) {
 }
 
 onMounted(load);
+
+// Live-Updates via SSE
+useEvents(["note"], () => load());
 </script>
 
 <template>

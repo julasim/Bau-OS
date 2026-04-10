@@ -90,3 +90,18 @@ export const API_PORT = parseInt(process.env.API_PORT || "3000", 10);
 export const JWT_SECRET = process.env.JWT_SECRET || "";
 export const USERS_FILE = path.join(process.cwd(), "data", "users.json");
 export const API_ENABLED = !!JWT_SECRET;
+
+// ── Datenbank (Supabase / PostgreSQL) ────────────────────────────────────────
+export const DATABASE_URL = process.env.DATABASE_URL || "";
+export const DB_ENABLED = !!DATABASE_URL;
+
+// ── Supabase Client ──────────────────────────────────────────────────────────
+export const SUPABASE_URL = process.env.SUPABASE_URL || "";
+export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
+export const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
+export const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+
+// ── Embeddings ───────────────────────────────────────────────────────────────
+export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "nomic-embed-text";
+export const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || "768", 10);
+export const EMBEDDING_BATCH_SIZE = 5; // Parallele Embedding-Anfragen

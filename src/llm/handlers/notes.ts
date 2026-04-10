@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import { saveNote, listNotes, readNote, appendToNote, deleteNote } from "../../vault/index.js";
+import { noteRepo } from "../../data/index.js";
 import type { HandlerMap } from "./types.js";
 
 export const noteSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -78,17 +78,17 @@ export const noteSchemas: OpenAI.Chat.ChatCompletionTool[] = [
 
 export const noteHandlers: HandlerMap = {
   notiz_speichern: async (args) => {
-    const filepath = saveNote(String(args.text), args.projekt ? String(args.projekt) : undefined);
+    const filepath = await noteRepo.save(String(args.text), args.projekt ? String(args.projekt) : undefined);
     return `Notiz gespeichert: ${filepath.split(/[\\/]/).pop()}`;
   },
 
   notizen_auflisten: async (args) => {
-    const notes = listNotes(Number(args.anzahl) || 5);
+    const notes = await noteRepo.list(Number(args.anzahl) || 5);
     return notes.length ? notes.join("\n") : "Keine Notizen gefunden.";
   },
 
   notiz_lesen: async (args) => {
-    const content = readNote(String(args.dateiname));
+    const content = await noteRepo.read(String(args.dateiname));
     return (
       content ??
       `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`
@@ -96,14 +96,14 @@ export const noteHandlers: HandlerMap = {
   },
 
   notiz_loeschen: async (args) => {
-    const deleted = deleteNote(String(args.dateiname));
+    const deleted = await noteRepo.delete(String(args.dateiname));
     return deleted
       ? `Notiz geloescht: ${deleted}`
       : `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;
   },
 
   notiz_bearbeiten: async (args) => {
-    const ok = appendToNote(String(args.dateiname), String(args.text));
+    const ok = await noteRepo.append(String(args.dateiname), String(args.text));
     return ok
       ? `Nachtrag gespeichert in: ${args.dateiname}`
       : `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;

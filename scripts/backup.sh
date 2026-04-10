@@ -42,8 +42,24 @@ fi
 
 BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
 
+# PostgreSQL Dump (wenn Docker laeuft)
+DB_DUMP_FILE="${BACKUP_DIR}/bau-os-db-${TIMESTAMP}.sql.gz"
+if command -v docker &>/dev/null && docker ps --format '{{.Names}}' 2>/dev/null | grep -q "bau-os-db"; then
+  echo "[$(date)] PostgreSQL Dump erstellen..."
+  docker exec bau-os-db pg_dump -U "${POSTGRES_USER:-bauos}" "${POSTGRES_DB:-bauos}" | gzip > "$DB_DUMP_FILE" 2>/dev/null
+  if [ -f "$DB_DUMP_FILE" ] && [ -s "$DB_DUMP_FILE" ]; then
+    DB_SIZE=$(du -h "$DB_DUMP_FILE" | cut -f1)
+    echo "[$(date)] DB-Dump erstellt: ${DB_DUMP_FILE} (${DB_SIZE})"
+  else
+    rm -f "$DB_DUMP_FILE"
+    echo "[$(date)] WARNUNG: DB-Dump fehlgeschlagen (Container laeuft nicht?)"
+  fi
+fi
+
 # Rotation: Backups aelter als RETENTION_DAYS loeschen
 DELETED=$(find "$BACKUP_DIR" -name "bau-os-backup-*.tar.gz" -mtime +${RETENTION_DAYS} -delete -print | wc -l)
+DELETED_DB=$(find "$BACKUP_DIR" -name "bau-os-db-*.sql.gz" -mtime +${RETENTION_DAYS} -delete -print 2>/dev/null | wc -l)
+DELETED=$((DELETED + DELETED_DB))
 
 echo "[$(date)] Backup erstellt: ${BACKUP_FILE} (${BACKUP_SIZE})"
 if [ "$DELETED" -gt 0 ]; then

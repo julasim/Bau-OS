@@ -15,6 +15,10 @@
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
+    "db:migrate": "tsx scripts/db-migrate.ts migrate",
+    "db:status": "tsx scripts/db-migrate.ts status",
+    "db:import": "tsx scripts/migrate-vault-to-db.ts",
+    "db:embed": "tsx scripts/embed-existing.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint src/ tests/",
@@ -28,6 +32,7 @@
   "dependencies": {
     "@hono/node-server": "^1.19.13",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@supabase/supabase-js": "^2.103.0",
     "@types/node": "^25.5.2",
     "@types/node-cron": "^3.0.11",
     "bcrypt": "^6.0.0",
@@ -37,6 +42,7 @@
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.2.1",
     "openai": "^6.33.0",
+    "postgres": "^3.4.7",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   },
