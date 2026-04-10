@@ -22,14 +22,19 @@ export function createFile(relativePath: string, content: string): string {
   return filepath;
 }
 
-export function listFolder(relativePath = ""): string[] {
+export interface FolderEntry {
+  name: string;
+  type: "folder" | "file";
+}
+
+export function listFolder(relativePath = ""): FolderEntry[] {
   const folderPath = relativePath ? safePath(relativePath) : vaultPath;
   if (!folderPath || !fs.existsSync(folderPath)) return [];
 
   try {
     return fs.readdirSync(folderPath, { withFileTypes: true })
-      .map(e => e.isDirectory() ? `\u{1F4C1} ${e.name}` : `\u{1F4C4} ${e.name}`)
-      .sort();
+      .map(e => ({ name: e.name, type: (e.isDirectory() ? "folder" : "file") as "folder" | "file" }))
+      .sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "folder" ? -1 : 1);
   } catch {
     return [];
   }

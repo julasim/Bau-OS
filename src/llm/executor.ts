@@ -112,7 +112,9 @@ export async function executeTool(name: string, args: Record<string, string | nu
       }
       case "ordner_auflisten": {
         const entries = listFolder(args.pfad ? String(args.pfad) : "");
-        return entries.length ? entries.join("\n") : `Ordner "${args.pfad || '/'}" leer oder nicht gefunden. Nutze ordner_auflisten ohne Pfad fuer die Vault-Wurzel.`;
+        return entries.length
+          ? entries.map(e => e.type === "folder" ? `\u{1F4C1} ${e.name}` : `\u{1F4C4} ${e.name}`).join("\n")
+          : `Ordner "${args.pfad || '/'}" leer oder nicht gefunden. Nutze ordner_auflisten ohne Pfad fuer die Vault-Wurzel.`;
       }
       case "vault_suchen": {
         const results = searchVault(String(args.suchbegriff), args.projekt ? String(args.projekt) : undefined);

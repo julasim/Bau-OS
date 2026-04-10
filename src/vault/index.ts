@@ -8,6 +8,7 @@ export { listTeam, addTeamMember, removeTeamMember } from "./team.js";
 export { listProjects, getProjectInfo, listProjectNotes, readProjectNote } from "./projects.js";
 export type { ProjectInfo } from "./projects.js";
 export { readFile, createFile, listFolder } from "./files.js";
+export type { FolderEntry } from "./files.js";
 export { editFile, globFiles, grepFiles } from "./fileops.js";
 export type { EditResult, GrepMatch, GrepResult } from "./fileops.js";
 export { searchVault } from "./search.js";
