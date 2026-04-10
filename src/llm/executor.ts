@@ -281,7 +281,7 @@ export async function executeTool(name: string, args: Record<string, string | nu
         const { newsSearch } = await import("../web.js");
         const results = await newsSearch(String(args.suchbegriff), Number(args.anzahl) || 5);
         if (!results.length) return `Keine Nachrichten gefunden fuer "${args.suchbegriff}". Versuche einen breiteren Suchbegriff oder nutze web_suchen fuer allgemeine Ergebnisse.`;
-        return results.map((r, i) => `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.source}${r.date ? ` — ${r.date}` : ""}\n   ${r.snippet}`).join("\n\n");
+        return results.map((r, i) => `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.source}${r.date ? ` — ${r.date}` : ""}${r.snippet ? `\n   ${r.snippet}` : ""}`).join("\n\n");
       }
       case "webseite_lesen": {
         const { fetchPage } = await import("../web.js");
