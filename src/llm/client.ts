@@ -9,9 +9,15 @@ export const client = new OpenAI({
 let MODEL = DEFAULT_MODEL;
 let _fastMode = false;
 
-export function getModel(): string { return MODEL; }
-export function getSubagentModel(): string { return SUBAGENT_MODEL; }
-export function isFastMode(): boolean { return _fastMode; }
+export function getModel(): string {
+  return MODEL;
+}
+export function getSubagentModel(): string {
+  return SUBAGENT_MODEL;
+}
+export function isFastMode(): boolean {
+  return _fastMode;
+}
 
 export function setModel(name: string): void {
   MODEL = name;

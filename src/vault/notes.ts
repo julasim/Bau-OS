@@ -4,9 +4,7 @@ import { VAULT_INBOX, LOCALE } from "../config.js";
 import { vaultPath, timestampFilename, frontmatter, ensureDir, resolveNotePath } from "./helpers.js";
 
 export function saveNote(content: string, project?: string): string {
-  const folder = project
-    ? path.join(vaultPath, "Projekte", project, "Notizen")
-    : path.join(vaultPath, VAULT_INBOX);
+  const folder = project ? path.join(vaultPath, "Projekte", project, "Notizen") : path.join(vaultPath, VAULT_INBOX);
 
   ensureDir(folder);
 
@@ -21,12 +19,13 @@ export function listNotes(limit = 10): string[] {
   if (!fs.existsSync(inboxPath)) return [];
 
   try {
-    return fs.readdirSync(inboxPath)
-      .filter(f => f.endsWith(".md"))
+    return fs
+      .readdirSync(inboxPath)
+      .filter((f) => f.endsWith(".md"))
       .sort()
       .reverse()
       .slice(0, limit)
-      .map(f => f.replace(".md", ""));
+      .map((f) => f.replace(".md", ""));
   } catch {
     return [];
   }

@@ -17,11 +17,22 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=bau-os
 
+# Resource Limits
+MemoryMax=512M
+MemoryHigh=384M
+CPUQuota=100%
+TasksMax=64
+
 # Sicherheit
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
 ReadWritePaths=/opt/bau-os/logs /opt/bau-os/.chat_id /opt/bau-os-vault /opt/bau-os/data /opt/bau-os/tools
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
 
 [Install]
 WantedBy=multi-user.target

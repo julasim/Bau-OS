@@ -74,16 +74,14 @@ export function listDynamicTools(): DynamicToolDef[] {
 
 /** Dynamische Tools als OpenAI Tool-Schema (fuer LLM) */
 export function getDynamicToolSchemas(): OpenAI.Chat.ChatCompletionTool[] {
-  return listDynamicTools().map(t => ({
+  return listDynamicTools().map((t) => ({
     type: "function" as const,
     function: {
       name: t.name,
       description: t.description,
       parameters: {
         type: "object",
-        properties: Object.fromEntries(
-          Object.entries(t.parameters).map(([key, val]) => [key, val])
-        ),
+        properties: Object.fromEntries(Object.entries(t.parameters).map(([key, val]) => [key, val])),
         required: t.required,
       },
     },
@@ -105,10 +103,7 @@ export function isDynamicTool(name: string): boolean {
 }
 
 /** Fuehrt ein dynamisches Tool aus */
-export async function executeDynamicTool(
-  name: string,
-  args: Record<string, string | number>
-): Promise<string> {
+export async function executeDynamicTool(name: string, args: Record<string, string | number>): Promise<string> {
   ensureToolsDir();
 
   // Tool-Ordner finden
@@ -119,7 +114,10 @@ export async function executeDynamicTool(
     if (!entry.isDirectory()) continue;
     const dir = path.join(TOOLS_DIR, entry.name);
     const def = loadToolDef(dir);
-    if (def?.name === name) { toolDir = dir; break; }
+    if (def?.name === name) {
+      toolDir = dir;
+      break;
+    }
   }
 
   if (!toolDir) return `Dynamisches Tool "${name}" nicht gefunden.`;
@@ -147,8 +145,20 @@ export async function executeDynamicTool(
       const sandbox = {
         args,
         files: toolFiles,
-        Math, Date, JSON, parseInt, parseFloat, String, Number, Boolean, Array, Object,
-        RegExp, Map, Set, Error,
+        Math,
+        Date,
+        JSON,
+        parseInt,
+        parseFloat,
+        String,
+        Number,
+        Boolean,
+        Array,
+        Object,
+        RegExp,
+        Map,
+        Set,
+        Error,
         console: { log: (...a: unknown[]) => logs.push(a.map(String).join(" ")) },
       };
 
@@ -166,7 +176,6 @@ export async function executeDynamicTool(
       return full.length > TOOL_OUTPUT_MAX_CHARS
         ? full.slice(0, TOOL_OUTPUT_MAX_CHARS) + `\n\n[... gekuerzt]`
         : full || "(kein Ergebnis)";
-
     } catch (err) {
       logError(`Tool/${name}`, err);
       return `Fehler in ${name}: ${err}`;
@@ -179,26 +188,41 @@ export async function executeDynamicTool(
       // Args als Umgebungsvariablen uebergeben (TOOL_ARG_name=wert)
       // Nur sichere Env-Vars weitergeben (keine Secrets)
       const { PATH, HOME, USER, LANG: _LANG, SHELL, TERM, VAULT_PATH: _VP } = process.env;
-      const env: Record<string, string> = { PATH: PATH ?? "", HOME: HOME ?? "", USER: USER ?? "", LANG: "de_AT.UTF-8", SHELL: SHELL ?? "", TERM: TERM ?? "" };
+      const env: Record<string, string> = {
+        PATH: PATH ?? "",
+        HOME: HOME ?? "",
+        USER: USER ?? "",
+        LANG: "de_AT.UTF-8",
+        SHELL: SHELL ?? "",
+        TERM: TERM ?? "",
+      };
       if (_VP) env.VAULT_PATH = _VP;
       for (const [key, val] of Object.entries(args)) {
         env[`TOOL_ARG_${key.toUpperCase()}`] = String(val);
       }
 
-      exec(`bash "${shPath}"`, {
-        timeout: DYNAMIC_TOOL_TIMEOUT_MS,
-        maxBuffer: COMMAND_BUFFER_SIZE,
-        cwd: toolDir!,
-        env,
-      }, (error, stdout, stderr) => {
-        if (error) {
-          if (error.killed) resolve(`Tool-Timeout nach 30s: ${name}`);
-          else resolve(`Fehler: ${stderr || error.message}`);
-          return;
-        }
-        const output = (stdout + (stderr ? `\n[stderr] ${stderr}` : "")).trim();
-        resolve(output.length > TOOL_OUTPUT_MAX_CHARS ? output.slice(0, TOOL_OUTPUT_MAX_CHARS) + "\n[... gekuerzt]" : output || "(kein Output)");
-      });
+      exec(
+        `bash "${shPath}"`,
+        {
+          timeout: DYNAMIC_TOOL_TIMEOUT_MS,
+          maxBuffer: COMMAND_BUFFER_SIZE,
+          cwd: toolDir!,
+          env,
+        },
+        (error, stdout, stderr) => {
+          if (error) {
+            if (error.killed) resolve(`Tool-Timeout nach 30s: ${name}`);
+            else resolve(`Fehler: ${stderr || error.message}`);
+            return;
+          }
+          const output = (stdout + (stderr ? `\n[stderr] ${stderr}` : "")).trim();
+          resolve(
+            output.length > TOOL_OUTPUT_MAX_CHARS
+              ? output.slice(0, TOOL_OUTPUT_MAX_CHARS) + "\n[... gekuerzt]"
+              : output || "(kein Output)",
+          );
+        },
+      );
     });
   }
 
@@ -213,7 +237,7 @@ export function createTool(
   toolJson: DynamicToolDef,
   runCode: string,
   type: "js" | "sh" = "js",
-  extraFiles?: Record<string, string>
+  extraFiles?: Record<string, string>,
 ): string {
   ensureToolsDir();
   const toolDir = path.join(TOOLS_DIR, folderName);

@@ -15,16 +15,26 @@ tasksRoutes.get("/tasks/:id", (c) => {
 });
 
 tasksRoutes.post("/tasks", async (c) => {
-  const body = await c.req.json<{ text: string; project?: string; assignee?: string; date?: string; location?: string }>();
+  const body = await c.req.json<{
+    text: string;
+    project?: string;
+    assignee?: string;
+    date?: string;
+    location?: string;
+  }>();
   if (!body.text) return c.json({ error: "Text erforderlich" }, 400);
   const task = saveTask(body.text, body.project);
   // Apply optional fields
   if (body.assignee || body.date || body.location) {
-    const updated = updateTask(task.id, {
-      assignee: body.assignee || null,
-      date: body.date || null,
-      location: body.location || null,
-    }, body.project);
+    const updated = updateTask(
+      task.id,
+      {
+        assignee: body.assignee || null,
+        date: body.date || null,
+        location: body.location || null,
+      },
+      body.project,
+    );
     return c.json(updated, 201);
   }
   return c.json(task, 201);
@@ -32,7 +42,15 @@ tasksRoutes.post("/tasks", async (c) => {
 
 tasksRoutes.put("/tasks/:id", async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json<Partial<{ text: string; status: "open" | "in_progress" | "done"; assignee: string | null; date: string | null; location: string | null }>>();
+  const body = await c.req.json<
+    Partial<{
+      text: string;
+      status: "open" | "in_progress" | "done";
+      assignee: string | null;
+      date: string | null;
+      location: string | null;
+    }>
+  >();
   const task = updateTask(id, body);
   if (!task) return c.json({ error: "Aufgabe nicht gefunden" }, 404);
   return c.json(task);

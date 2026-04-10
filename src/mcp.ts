@@ -63,7 +63,10 @@ export function loadMcpConfig(): McpConfig | null {
 
 // ---- Schema Conversion ----
 
-function mcpToolToOpenAI(serverName: string, tool: { name: string; description?: string; inputSchema?: unknown }): McpToolEntry {
+function mcpToolToOpenAI(
+  serverName: string,
+  tool: { name: string; description?: string; inputSchema?: unknown },
+): McpToolEntry {
   const prefixedName = `mcp_${serverName}_${tool.name}`;
   const inputSchema = (tool.inputSchema as Record<string, unknown>) ?? { type: "object", properties: {}, required: [] };
 
@@ -86,10 +89,10 @@ function mcpToolToOpenAI(serverName: string, tool: { name: string; description?:
 
 function isNameTaken(name: string): boolean {
   // Statische Tools
-  if (TOOLS.some(t => (t as { function: { name: string } }).function.name === name)) return true;
+  if (TOOLS.some((t) => (t as { function: { name: string } }).function.name === name)) return true;
   // Bereits registrierte MCP-Tools
   for (const server of _servers.values()) {
-    if (server.tools.some(t => t.prefixedName === name)) return true;
+    if (server.tools.some((t) => t.prefixedName === name)) return true;
   }
   return false;
 }
@@ -108,7 +111,7 @@ export async function connectServer(name: string, config: McpServerConfig): Prom
     const transport = new StdioClientTransport({
       command: config.command,
       args: config.args ?? [],
-      env: { ...process.env as Record<string, string>, ...(config.env ?? {}) },
+      env: { ...(process.env as Record<string, string>), ...(config.env ?? {}) },
     });
 
     await client.connect(transport);
@@ -127,7 +130,7 @@ export async function connectServer(name: string, config: McpServerConfig): Prom
     }
 
     _servers.set(name, { name, client, transport, tools: entries });
-    logInfo(`[MCP] ${name} verbunden — ${entries.length} Tool(s): ${entries.map(t => t.originalName).join(", ")}`);
+    logInfo(`[MCP] ${name} verbunden — ${entries.length} Tool(s): ${entries.map((t) => t.originalName).join(", ")}`);
     return true;
   } catch (err) {
     logError(`MCP/${name}`, err);
@@ -139,7 +142,11 @@ export async function disconnectServer(name: string): Promise<boolean> {
   const server = _servers.get(name);
   if (!server) return false;
 
-  try { await server.client.close(); } catch { /* ignore */ }
+  try {
+    await server.client.close();
+  } catch {
+    /* ignore */
+  }
   _servers.delete(name);
   logInfo(`[MCP] ${name} getrennt.`);
   return true;
@@ -193,7 +200,7 @@ export function getMcpToolSchemas(): OpenAI.Chat.ChatCompletionTool[] {
 export function isMcpTool(name: string): boolean {
   if (!name.startsWith("mcp_")) return false;
   for (const server of _servers.values()) {
-    if (server.tools.some(t => t.prefixedName === name)) return true;
+    if (server.tools.some((t) => t.prefixedName === name)) return true;
   }
   return false;
 }
@@ -201,7 +208,7 @@ export function isMcpTool(name: string): boolean {
 export async function executeMcpTool(name: string, args: Record<string, unknown>): Promise<string> {
   // Find the right server and tool
   for (const server of _servers.values()) {
-    const tool = server.tools.find(t => t.prefixedName === name);
+    const tool = server.tools.find((t) => t.prefixedName === name);
     if (!tool) continue;
 
     try {
@@ -216,8 +223,8 @@ export async function executeMcpTool(name: string, args: Record<string, unknown>
       }
 
       const text = (result.content as Array<{ type: string; text?: string }>)
-        .filter(c => c.type === "text" && c.text)
-        .map(c => c.text!)
+        .filter((c) => c.type === "text" && c.text)
+        .map((c) => c.text!)
         .join("\n");
 
       if (result.isError) {
@@ -250,18 +257,18 @@ export function listMcpServers(): Array<{ name: string; connected: boolean; tool
       result.push({
         name: `${name}${serverConfig.enabled === false ? " (deaktiviert)" : ""}`,
         connected: !!server,
-        tools: server?.tools.map(t => t.originalName) ?? [],
+        tools: server?.tools.map((t) => t.originalName) ?? [],
       });
     }
   }
 
   // Laufende Server die nicht mehr in Config sind (manuell verbunden)
   for (const [name, server] of _servers) {
-    if (!result.some(r => r.name === name || r.name.startsWith(name + " "))) {
+    if (!result.some((r) => r.name === name || r.name.startsWith(name + " "))) {
       result.push({
         name,
         connected: true,
-        tools: server.tools.map(t => t.originalName),
+        tools: server.tools.map((t) => t.originalName),
       });
     }
   }

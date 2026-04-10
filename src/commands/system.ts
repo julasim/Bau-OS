@@ -1,7 +1,21 @@
 import type { Context } from "grammy";
-import { vaultExists, getVaultPath, inspectAgentWorkspace, clearAgentToday, listAgents, getAgentPath, loadAgentHistory } from "../vault/index.js";
+import {
+  vaultExists,
+  getVaultPath,
+  inspectAgentWorkspace,
+  clearAgentToday,
+  listAgents,
+  getAgentPath,
+  loadAgentHistory,
+} from "../vault/index.js";
 import { readRecentLogs, logError } from "../logger.js";
-import { VAULT_LOGS_DIR, TYPING_INTERVAL_MS, LOG_DEFAULT_LINES, LOG_MAX_DISPLAY_LINES, LOG_DISPLAY_MAX_CHARS } from "../config.js";
+import {
+  VAULT_LOGS_DIR,
+  TYPING_INTERVAL_MS,
+  LOG_DEFAULT_LINES,
+  LOG_MAX_DISPLAY_LINES,
+  LOG_DISPLAY_MAX_CHARS,
+} from "../config.js";
 import fs from "fs";
 import path from "path";
 
@@ -44,12 +58,13 @@ export async function handleStatus(ctx: Context): Promise<void> {
     const tasksPath = `${vaultPath}/Aufgaben.md`;
 
     if (fs.existsSync(inboxPath)) {
-      inboxCount = fs.readdirSync(inboxPath).filter(f => f.endsWith(".md")).length;
+      inboxCount = fs.readdirSync(inboxPath).filter((f) => f.endsWith(".md")).length;
     }
     if (fs.existsSync(tasksPath)) {
-      taskCount = fs.readFileSync(tasksPath, "utf-8")
+      taskCount = fs
+        .readFileSync(tasksPath, "utf-8")
         .split("\n")
-        .filter(l => l.startsWith("- [ ]")).length;
+        .filter((l) => l.startsWith("- [ ]")).length;
     }
   }
 
@@ -76,17 +91,12 @@ export async function handleKontext(ctx: Context): Promise<void> {
     return;
   }
 
-  const totalInjected = files.filter(f => f.loaded).reduce((s, f) => s + f.injectedChars, 0);
-  const totalTokens = files.filter(f => f.loaded).reduce((s, f) => s + f.tokens, 0);
+  const totalInjected = files.filter((f) => f.loaded).reduce((s, f) => s + f.injectedChars, 0);
+  const totalTokens = files.filter((f) => f.loaded).reduce((s, f) => s + f.tokens, 0);
 
-  const lines = files.map(f => {
-    const size = f.rawChars >= 1000
-      ? `${(f.rawChars / 1000).toFixed(1)}k`
-      : `${f.rawChars}`;
-    const flags = [
-      !f.loaded   ? "SKIP" : "",
-      f.truncated ? "TRUNCATED" : "",
-    ].filter(Boolean).join(" ");
+  const lines = files.map((f) => {
+    const size = f.rawChars >= 1000 ? `${(f.rawChars / 1000).toFixed(1)}k` : `${f.rawChars}`;
+    const flags = [!f.loaded ? "SKIP" : "", f.truncated ? "TRUNCATED" : ""].filter(Boolean).join(" ");
     return `${f.name.padEnd(12)} ${size.padStart(5)} Z  (~${f.tokens} tok)${flags ? "  \u26A0 " + flags : ""}`;
   });
 
@@ -105,9 +115,10 @@ export async function handleKontext(ctx: Context): Promise<void> {
 
 export async function handleNeu(ctx: Context): Promise<void> {
   const cleared = clearAgentToday("Main");
-  await ctx.reply(cleared
-    ? "Gespraechskontext zurueckgesetzt. Ich starte frisch."
-    : "Kein heutiger Verlauf gefunden – bin bereits frisch."
+  await ctx.reply(
+    cleared
+      ? "Gespraechskontext zurueckgesetzt. Ich starte frisch."
+      : "Kein heutiger Verlauf gefunden – bin bereits frisch.",
   );
 }
 
@@ -159,7 +170,7 @@ export async function handleAgents(ctx: Context): Promise<void> {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const lines = agents.map(name => {
+  const lines = agents.map((name) => {
     const logPath = path.join(getAgentPath(name), VAULT_LOGS_DIR, `${today}.md`);
     const aktiv = fs.existsSync(logPath) ? "\u25CF aktiv" : "\u25CB";
     return `${aktiv} ${name}`;
@@ -176,7 +187,7 @@ export async function handleExportSession(ctx: Context): Promise<void> {
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const lines = history.map(h => `User: ${h.user}\nAgent: ${h.assistant}`).join("\n\n---\n\n");
+  const lines = history.map((h) => `User: ${h.user}\nAgent: ${h.assistant}`).join("\n\n---\n\n");
   const content = `# Session Export – ${today}\n\n${lines}\n`;
 
   const exportPath = path.join(getVaultPath(), "Exports", `session_${today}.md`);
@@ -193,7 +204,7 @@ export async function handleModel(ctx: Context, args: string): Promise<void> {
 
   if (!name) {
     await ctx.reply(
-      `Aktives Modell: ${getModel()}\nSub-Agent Modell: ${getSubagentModel()}\nFast-Modus: ${isFastMode() ? "an" : "aus"}\n\nWechseln: /model <modellname>`
+      `Aktives Modell: ${getModel()}\nSub-Agent Modell: ${getSubagentModel()}\nFast-Modus: ${isFastMode() ? "an" : "aus"}\n\nWechseln: /model <modellname>`,
     );
     return;
   }
@@ -208,7 +219,7 @@ export async function handleFast(ctx: Context): Promise<void> {
   await ctx.reply(
     isNowFast
       ? `\u26A1 Fast-Modus an — aktives Modell: ${getModel()}`
-      : `\u{1F422} Fast-Modus aus — aktives Modell: ${getModel()}`
+      : `\u{1F422} Fast-Modus aus — aktives Modell: ${getModel()}`,
   );
 }
 
@@ -230,7 +241,8 @@ export async function handleHeute(ctx: Context): Promise<void> {
   try {
     const { processAgent } = await import("../llm/runtime.js");
     const { fmt, stripMarkdown } = await import("../format.js");
-    const prompt = "Erstelle ein Tages-Briefing: (1) Heutige Termine, (2) Offene Aufgaben, (3) Relevantes aus MEMORY.md. Nur was heute relevant ist. Kurz und strukturiert.";
+    const prompt =
+      "Erstelle ein Tages-Briefing: (1) Heutige Termine, (2) Offene Aufgaben, (3) Relevantes aus MEMORY.md. Nur was heute relevant ist. Kurz und strukturiert.";
     const antwort = await processAgent("Main", prompt, "full");
     clearInterval(typing);
     try {

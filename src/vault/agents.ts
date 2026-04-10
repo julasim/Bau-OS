@@ -2,9 +2,13 @@ import fs from "fs";
 import path from "path";
 import {
   PROTECTED_AGENTS as _PROTECTED_AGENTS,
-  COMPACT_THRESHOLD, KEEP_RECENT_LOGS,
-  VAULT_AGENTS_DIR, VAULT_LOGS_DIR,
-  LOCALE, WS_MAX_FILE_CHARS, WS_MAX_TOTAL_CHARS,
+  COMPACT_THRESHOLD,
+  KEEP_RECENT_LOGS,
+  VAULT_AGENTS_DIR,
+  VAULT_LOGS_DIR,
+  LOCALE,
+  WS_MAX_FILE_CHARS,
+  WS_MAX_TOTAL_CHARS,
 } from "../config.js";
 import { vaultPath, ensureDir } from "./helpers.js";
 
@@ -13,8 +17,15 @@ import { vaultPath, ensureDir } from "./helpers.js";
 export const PROTECTED_AGENTS = _PROTECTED_AGENTS;
 
 const EDITABLE_AGENT_FILES = [
-  "SOUL.md", "BOOT.md", "AGENTS.md", "TOOLS.md",
-  "HEARTBEAT.md", "BOOTSTRAP.md", "USER.md", "IDENTITY.md", "MEMORY.md"
+  "SOUL.md",
+  "BOOT.md",
+  "AGENTS.md",
+  "TOOLS.md",
+  "HEARTBEAT.md",
+  "BOOTSTRAP.md",
+  "USER.md",
+  "IDENTITY.md",
+  "MEMORY.md",
 ];
 
 const MAX_FILE_CHARS = WS_MAX_FILE_CHARS;
@@ -63,9 +74,10 @@ export function listAgents(): string[] {
   const agentsRoot = path.join(vaultPath, VAULT_AGENTS_DIR);
   if (!fs.existsSync(agentsRoot)) return [];
   try {
-    return fs.readdirSync(agentsRoot, { withFileTypes: true })
-      .filter(e => e.isDirectory())
-      .map(e => e.name);
+    return fs
+      .readdirSync(agentsRoot, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
   } catch {
     return [];
   }
@@ -117,16 +129,20 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
   addFile(path.join(agentDir, "BOOT.md"), "BOOT.md");
 
   if (mode === "full") {
-    addFile(path.join(agentDir, "USER.md"),    "USER.md");
-    addFile(path.join(agentDir, "AGENTS.md"),  "AGENTS.md");
-    addFile(path.join(agentDir, "TOOLS.md"),   "TOOLS.md");
-    addFile(path.join(agentDir, "MEMORY.md"),  "MEMORY.md");
+    addFile(path.join(agentDir, "USER.md"), "USER.md");
+    addFile(path.join(agentDir, "AGENTS.md"), "AGENTS.md");
+    addFile(path.join(agentDir, "TOOLS.md"), "TOOLS.md");
+    addFile(path.join(agentDir, "MEMORY.md"), "MEMORY.md");
     addFile(path.join(agentDir, "HEARTBEAT.md"), "HEARTBEAT.md");
 
     const memDir = path.join(agentDir, VAULT_LOGS_DIR);
     let isFirstRun = !fs.existsSync(memDir);
     if (!isFirstRun) {
-      try { isFirstRun = fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0; } catch { isFirstRun = true; }
+      try {
+        isFirstRun = fs.readdirSync(memDir).filter((f) => f.endsWith(".md")).length === 0;
+      } catch {
+        isFirstRun = true;
+      }
     }
     if (isFirstRun) addFile(path.join(agentDir, "BOOTSTRAP.md"), "BOOTSTRAP.md");
 
@@ -145,15 +161,15 @@ export function createAgentWorkspace(agentName: string, soul: string, agentsMd =
   const agentsDefault = `# ${agentName} – Sub-Agents\n\nKeine Sub-Agents konfiguriert.\n`;
 
   const files: Record<string, string> = {
-    "IDENTITY.md":   `\u{1F916} ${agentName}`,
-    "SOUL.md":       soul,
-    "AGENTS.md":     agentsMd || agentsDefault,
-    "USER.md":       userMd || userDefault,
-    "TOOLS.md":      `# ${agentName} – Tool-Konventionen\n\n## Sprache\n- Antworte IMMER mit echten deutschen Umlauten: ä, ö, ü, ß\n- NIEMALS ae/oe/ue als Ersatz verwenden\n\n## Wann welches Tool\n- antworten → JEDE Antwort an den Benutzer (PFLICHT, immer als letztes Tool aufrufen)\n- notiz_speichern → freie Gedanken, Beobachtungen, Ideen\n- aufgabe_speichern → konkrete To-dos mit Verb am Anfang\n- termin_speichern → Meetings, Deadlines (immer mit Datum TT.MM.JJJJ)\n- memory_speichern → dauerhaft wichtige Fakten\n- vault_suchen → vor dem Erstellen erst suchen ob es schon existiert\n- agent_spawnen → für kurze Sub-Aufgaben\n- agent_spawnen_async → für längere Aufgaben\n- befehl_ausfuehren → Shell-Befehle auf dem Server (ls, df, systemctl, grep, curl, ps etc.)\n- code_ausfuehren → JavaScript-Code direkt ausführen (Berechnungen, JSON, Daten)\n- http_anfrage → REST APIs aufrufen (GET/POST/PUT/DELETE mit Headers und Body)\n- web_suchen → im Internet nach Informationen suchen (allgemeine Recherche)\n- nachrichten_suchen → aktuelle Nachrichten und Meldungen suchen (Preise, Förderungen, Vorschriften)\n- webseite_lesen → eine URL öffnen und den Hauptinhalt als Markdown lesen\n\n## Dynamische Tools\nDu kannst eigene Tools erstellen die sofort verfügbar sind — ohne Neustart!\n- tool_erstellen → neues Tool als Ordner mit tool.json + run.js/run.sh anlegen\n- tools_auflisten → alle dynamischen Tools anzeigen\n- tool_loeschen → ein dynamisches Tool entfernen\n\nJedes Tool hat: tool.json (Schema) + run.js (Node.js) oder run.sh (Shell-Script)\nrun.js bekommt: args (Parameter), files() (Zusatzdateien lesen), fetch, console.log\nrun.sh bekommt: TOOL_ARG_* Umgebungsvariablen\n\n## Cron-Jobs / Heartbeat\nDu hast ein echtes Cron-System! Die Datei HEARTBEAT.md steuert es:\n- Cron-Expression ändern: agent_datei_schreiben mit datei='HEARTBEAT.md'\n- Format: 'Cron: */5 * * * *' (alle 5 Minuten) oder 'Cron: 0 8 * * *' (täglich 8 Uhr)\n- Änderungen sind SOFORT aktiv — kein Neustart nötig\n- Du musst KEINEN eigenen Timer bauen — das System macht das automatisch\n\n## Zuordnungs-Regeln (WICHTIG)\n- Enthält die Nachricht ein DATUM oder UHRZEIT → termin_speichern (nicht notiz_speichern)\n- Enthält die Nachricht ein TODO/Verb ("machen", "erledigen", "prüfen") → aufgabe_speichern\n- Alles andere → notiz_speichern\n- Im Zweifel: nachfragen statt falsch einordnen\n\n## Regeln\n- Nie doppelt speichern — zuerst suchen\n- Aufgaben immer mit konkretem Verb beginnen\n- Termine immer mit Datum im Format TT.MM.JJJJ\n- Bei Unsicherheit nachfragen statt raten\n`,
-    "MEMORY.md":     `# Memory – ${agentName}\n\nNoch keine dauerhaften Erkenntnisse.\n`,
-    "BOOT.md":       `# ${agentName} – Boot\n\n## Bei jedem Gespräch\n- Antworte immer auf Deutsch mit echten Umlauten (ä, ö, ü, ß) — NIEMALS ae/oe/ue\n- Halte Antworten kurz und direkt — wir sind in Telegram, kein Fließtext\n- Bestätigungen kurz halten (z.B. "gespeichert", "erledigt")\n- Bei Unsicherheit nachfragen statt raten\n- Keine unnötige Höflichkeitsfloskeln\n\n## Antwort-System (PFLICHT)\n- Du kannst NICHT direkt Text ausgeben — JEDE Antwort MUSS über das Tool 'antworten' gesendet werden\n- Workflow: (1) Daten-Tools aufrufen falls nötig → (2) 'antworten' mit dem Ergebnis aufrufen\n- Bei Fragen zu externen Daten (Wetter, Preise, Fakten): ZUERST web_suchen oder http_anfrage, DANN antworten\n- Wenn kein passendes Tool vorhanden: über 'antworten' ehrlich sagen "Das weiß ich nicht"\n- NIEMALS Daten erfinden — nur Informationen verwenden die aus einem Tool-Aufruf stammen\n- Quellen immer angeben wenn du web_suchen nutzt\n`,
-    "HEARTBEAT.md":  `# ${agentName} – Heartbeat\n\nCron: */30 8-20 * * 1-6\n\n## Aufgaben\nPrüfe ob es etwas Relevantes zu melden gibt:\n1. Termine die HEUTE anstehen (nutze termine_auflisten)\n2. Offene Aufgaben die überfällig oder dringend sind (nutze aufgaben_auflisten)\n3. Wichtige Erinnerungen aus MEMORY.md\n\n## Regeln\n- NUR melden wenn es etwas Konkretes gibt (Termin heute, überfällige Aufgabe)\n- Wenn NICHTS relevant ist: antworte exakt mit [STILL] — keine Nachricht wird gesendet\n- Kurz und knapp — maximal 3-5 Zeilen\n- Keine Floskeln, kein "Guten Morgen", direkt zur Sache\n- Termine: Uhrzeit + was ansteht\n- Aufgaben: nur überfällige oder heute fällige\n`,
-    "BOOTSTRAP.md":  `# ${agentName} – Bootstrap\n\nErster Start. Stelle dich kurz vor und frage womit du helfen kannst.\n`,
+    "IDENTITY.md": `\u{1F916} ${agentName}`,
+    "SOUL.md": soul,
+    "AGENTS.md": agentsMd || agentsDefault,
+    "USER.md": userMd || userDefault,
+    "TOOLS.md": `# ${agentName} – Tool-Konventionen\n\n## Sprache\n- Antworte IMMER mit echten deutschen Umlauten: ä, ö, ü, ß\n- NIEMALS ae/oe/ue als Ersatz verwenden\n\n## Wann welches Tool\n- antworten → JEDE Antwort an den Benutzer (PFLICHT, immer als letztes Tool aufrufen)\n- notiz_speichern → freie Gedanken, Beobachtungen, Ideen\n- aufgabe_speichern → konkrete To-dos mit Verb am Anfang\n- termin_speichern → Meetings, Deadlines (immer mit Datum TT.MM.JJJJ)\n- memory_speichern → dauerhaft wichtige Fakten\n- vault_suchen → vor dem Erstellen erst suchen ob es schon existiert\n- agent_spawnen → für kurze Sub-Aufgaben\n- agent_spawnen_async → für längere Aufgaben\n- befehl_ausfuehren → Shell-Befehle auf dem Server (ls, df, systemctl, grep, curl, ps etc.)\n- code_ausfuehren → JavaScript-Code direkt ausführen (Berechnungen, JSON, Daten)\n- http_anfrage → REST APIs aufrufen (GET/POST/PUT/DELETE mit Headers und Body)\n- web_suchen → im Internet nach Informationen suchen (allgemeine Recherche)\n- nachrichten_suchen → aktuelle Nachrichten und Meldungen suchen (Preise, Förderungen, Vorschriften)\n- webseite_lesen → eine URL öffnen und den Hauptinhalt als Markdown lesen\n\n## Dynamische Tools\nDu kannst eigene Tools erstellen die sofort verfügbar sind — ohne Neustart!\n- tool_erstellen → neues Tool als Ordner mit tool.json + run.js/run.sh anlegen\n- tools_auflisten → alle dynamischen Tools anzeigen\n- tool_loeschen → ein dynamisches Tool entfernen\n\nJedes Tool hat: tool.json (Schema) + run.js (Node.js) oder run.sh (Shell-Script)\nrun.js bekommt: args (Parameter), files() (Zusatzdateien lesen), fetch, console.log\nrun.sh bekommt: TOOL_ARG_* Umgebungsvariablen\n\n## Cron-Jobs / Heartbeat\nDu hast ein echtes Cron-System! Die Datei HEARTBEAT.md steuert es:\n- Cron-Expression ändern: agent_datei_schreiben mit datei='HEARTBEAT.md'\n- Format: 'Cron: */5 * * * *' (alle 5 Minuten) oder 'Cron: 0 8 * * *' (täglich 8 Uhr)\n- Änderungen sind SOFORT aktiv — kein Neustart nötig\n- Du musst KEINEN eigenen Timer bauen — das System macht das automatisch\n\n## Zuordnungs-Regeln (WICHTIG)\n- Enthält die Nachricht ein DATUM oder UHRZEIT → termin_speichern (nicht notiz_speichern)\n- Enthält die Nachricht ein TODO/Verb ("machen", "erledigen", "prüfen") → aufgabe_speichern\n- Alles andere → notiz_speichern\n- Im Zweifel: nachfragen statt falsch einordnen\n\n## Regeln\n- Nie doppelt speichern — zuerst suchen\n- Aufgaben immer mit konkretem Verb beginnen\n- Termine immer mit Datum im Format TT.MM.JJJJ\n- Bei Unsicherheit nachfragen statt raten\n`,
+    "MEMORY.md": `# Memory – ${agentName}\n\nNoch keine dauerhaften Erkenntnisse.\n`,
+    "BOOT.md": `# ${agentName} – Boot\n\n## Bei jedem Gespräch\n- Antworte immer auf Deutsch mit echten Umlauten (ä, ö, ü, ß) — NIEMALS ae/oe/ue\n- Halte Antworten kurz und direkt — wir sind in Telegram, kein Fließtext\n- Bestätigungen kurz halten (z.B. "gespeichert", "erledigt")\n- Bei Unsicherheit nachfragen statt raten\n- Keine unnötige Höflichkeitsfloskeln\n\n## Antwort-System (PFLICHT)\n- Du kannst NICHT direkt Text ausgeben — JEDE Antwort MUSS über das Tool 'antworten' gesendet werden\n- Workflow: (1) Daten-Tools aufrufen falls nötig → (2) 'antworten' mit dem Ergebnis aufrufen\n- Bei Fragen zu externen Daten (Wetter, Preise, Fakten): ZUERST web_suchen oder http_anfrage, DANN antworten\n- Wenn kein passendes Tool vorhanden: über 'antworten' ehrlich sagen "Das weiß ich nicht"\n- NIEMALS Daten erfinden — nur Informationen verwenden die aus einem Tool-Aufruf stammen\n- Quellen immer angeben wenn du web_suchen nutzt\n`,
+    "HEARTBEAT.md": `# ${agentName} – Heartbeat\n\nCron: */30 8-20 * * 1-6\n\n## Aufgaben\nPrüfe ob es etwas Relevantes zu melden gibt:\n1. Termine die HEUTE anstehen (nutze termine_auflisten)\n2. Offene Aufgaben die überfällig oder dringend sind (nutze aufgaben_auflisten)\n3. Wichtige Erinnerungen aus MEMORY.md\n\n## Regeln\n- NUR melden wenn es etwas Konkretes gibt (Termin heute, überfällige Aufgabe)\n- Wenn NICHTS relevant ist: antworte exakt mit [STILL] — keine Nachricht wird gesendet\n- Kurz und knapp — maximal 3-5 Zeilen\n- Keine Floskeln, kein "Guten Morgen", direkt zur Sache\n- Termine: Uhrzeit + was ansteht\n- Aufgaben: nur überfällige oder heute fällige\n`,
+    "BOOTSTRAP.md": `# ${agentName} – Bootstrap\n\nErster Start. Stelle dich kurz vor und frage womit du helfen kannst.\n`,
   };
 
   for (const [filename, content] of Object.entries(files)) {
@@ -192,22 +208,28 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
   const memDir = path.join(agentDir, VAULT_LOGS_DIR);
   let isFirstRun = !fs.existsSync(memDir);
   if (!isFirstRun) {
-    try { isFirstRun = fs.readdirSync(memDir).filter(f => f.endsWith(".md")).length === 0; } catch { isFirstRun = true; }
+    try {
+      isFirstRun = fs.readdirSync(memDir).filter((f) => f.endsWith(".md")).length === 0;
+    } catch {
+      isFirstRun = true;
+    }
   }
 
   const candidates: { name: string; filepath: string }[] = [
-    { name: "IDENTITY.md",   filepath: path.join(agentDir, "IDENTITY.md") },
-    { name: "SOUL.md",       filepath: path.join(agentDir, "SOUL.md") },
-    { name: "BOOT.md",       filepath: path.join(agentDir, "BOOT.md") },
-    ...(mode === "full" ? [
-      { name: "USER.md",       filepath: path.join(agentDir, "USER.md") },
-      { name: "AGENTS.md",     filepath: path.join(agentDir, "AGENTS.md") },
-      { name: "TOOLS.md",      filepath: path.join(agentDir, "TOOLS.md") },
-      { name: "MEMORY.md",     filepath: path.join(agentDir, "MEMORY.md") },
-      { name: "HEARTBEAT.md",  filepath: path.join(agentDir, "HEARTBEAT.md") },
-      ...(isFirstRun ? [{ name: "BOOTSTRAP.md", filepath: path.join(agentDir, "BOOTSTRAP.md") }] : []),
-      { name: "Tageslog",      filepath: path.join(agentDir, VAULT_LOGS_DIR, `${today}.md`) },
-    ] : []),
+    { name: "IDENTITY.md", filepath: path.join(agentDir, "IDENTITY.md") },
+    { name: "SOUL.md", filepath: path.join(agentDir, "SOUL.md") },
+    { name: "BOOT.md", filepath: path.join(agentDir, "BOOT.md") },
+    ...(mode === "full"
+      ? [
+          { name: "USER.md", filepath: path.join(agentDir, "USER.md") },
+          { name: "AGENTS.md", filepath: path.join(agentDir, "AGENTS.md") },
+          { name: "TOOLS.md", filepath: path.join(agentDir, "TOOLS.md") },
+          { name: "MEMORY.md", filepath: path.join(agentDir, "MEMORY.md") },
+          { name: "HEARTBEAT.md", filepath: path.join(agentDir, "HEARTBEAT.md") },
+          ...(isFirstRun ? [{ name: "BOOTSTRAP.md", filepath: path.join(agentDir, "BOOTSTRAP.md") }] : []),
+          { name: "Tageslog", filepath: path.join(agentDir, VAULT_LOGS_DIR, `${today}.md`) },
+        ]
+      : []),
   ];
 
   const result: WorkspaceFileInfo[] = [];
@@ -357,9 +379,5 @@ export function writeCompactedLog(agentName: string, summary: string): void {
   const toKeep = entries.slice(-KEEP_RECENT_LOGS);
   const time = new Date().toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
 
-  fs.writeFileSync(
-    filepath,
-    `${header}## Zusammenfassung (${time})\n${summary}\n\n${toKeep.join("\n")}`,
-    "utf-8"
-  );
+  fs.writeFileSync(filepath, `${header}## Zusammenfassung (${time})\n${summary}\n\n${toKeep.join("\n")}`, "utf-8");
 }

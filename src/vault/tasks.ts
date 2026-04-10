@@ -25,9 +25,7 @@ function tasksFilePath(project?: string): string {
 }
 
 function legacyTasksPath(project?: string): string {
-  return project
-    ? path.join(vaultPath, "Projekte", project, "Aufgaben.md")
-    : path.join(vaultPath, "Aufgaben.md");
+  return project ? path.join(vaultPath, "Projekte", project, "Aufgaben.md") : path.join(vaultPath, "Aufgaben.md");
 }
 
 function loadTasks(project?: string): Task[] {
@@ -103,16 +101,20 @@ export function listTasks(project?: string): Task[] {
 }
 
 export function listOpenTasks(project?: string): Task[] {
-  return loadTasks(project).filter(t => t.status !== "done");
+  return loadTasks(project).filter((t) => t.status !== "done");
 }
 
 export function getTask(id: string, project?: string): Task | null {
-  return loadTasks(project).find(t => t.id === id) || null;
+  return loadTasks(project).find((t) => t.id === id) || null;
 }
 
-export function updateTask(id: string, updates: Partial<Omit<Task, "id" | "createdAt">>, project?: string): Task | null {
+export function updateTask(
+  id: string,
+  updates: Partial<Omit<Task, "id" | "createdAt">>,
+  project?: string,
+): Task | null {
   const tasks = loadTasks(project);
-  const idx = tasks.findIndex(t => t.id === id);
+  const idx = tasks.findIndex((t) => t.id === id);
   if (idx === -1) return null;
 
   tasks[idx] = { ...tasks[idx], ...updates, updatedAt: new Date().toISOString() };
@@ -122,7 +124,7 @@ export function updateTask(id: string, updates: Partial<Omit<Task, "id" | "creat
 
 export function completeTask(textOrId: string, project?: string): boolean {
   const tasks = loadTasks(project);
-  const idx = tasks.findIndex(t => t.id === textOrId || t.text === textOrId);
+  const idx = tasks.findIndex((t) => t.id === textOrId || t.text === textOrId);
   if (idx === -1) return false;
 
   tasks[idx].status = "done";
@@ -133,7 +135,7 @@ export function completeTask(textOrId: string, project?: string): boolean {
 
 export function deleteTask(id: string, project?: string): boolean {
   const tasks = loadTasks(project);
-  const filtered = tasks.filter(t => t.id !== id);
+  const filtered = tasks.filter((t) => t.id !== id);
   if (filtered.length === tasks.length) return false;
   saveTasks(filtered, project);
   return true;

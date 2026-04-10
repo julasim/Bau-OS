@@ -11,14 +11,16 @@ export interface SearchResult {
 export function searchVault(query: string, limitTo?: string): SearchResult[] {
   const results: SearchResult[] = [];
   const lowerQuery = query.toLowerCase();
-  const searchRoot = limitTo
-    ? path.join(vaultPath, "Projekte", limitTo)
-    : vaultPath;
+  const searchRoot = limitTo ? path.join(vaultPath, "Projekte", limitTo) : vaultPath;
 
   function searchDir(dir: string): void {
     if (!fs.existsSync(dir)) return;
     let entries: fs.Dirent[];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {

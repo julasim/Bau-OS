@@ -16,18 +16,27 @@ termineRoutes.get("/termine/:id", (c) => {
 
 termineRoutes.post("/termine", async (c) => {
   const body = await c.req.json<{
-    datum: string; text: string; uhrzeit?: string; endzeit?: string;
-    location?: string; assignees?: string[]; project?: string;
+    datum: string;
+    text: string;
+    uhrzeit?: string;
+    endzeit?: string;
+    location?: string;
+    assignees?: string[];
+    project?: string;
   }>();
   if (!body.datum || !body.text) return c.json({ error: "Datum und Text erforderlich" }, 400);
   const termin = saveTermin(body.datum, body.text, body.uhrzeit, body.project);
   if (typeof termin === "string") return c.json({ error: termin }, 400);
   if (body.endzeit || body.location || body.assignees?.length) {
-    const updated = updateTermin(termin.id, {
-      endzeit: body.endzeit || null,
-      location: body.location || null,
-      assignees: body.assignees || [],
-    }, body.project);
+    const updated = updateTermin(
+      termin.id,
+      {
+        endzeit: body.endzeit || null,
+        location: body.location || null,
+        assignees: body.assignees || [],
+      },
+      body.project,
+    );
     return c.json(updated, 201);
   }
   return c.json(termin, 201);
@@ -35,10 +44,16 @@ termineRoutes.post("/termine", async (c) => {
 
 termineRoutes.put("/termine/:id", async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json<Partial<{
-    text: string; datum: string; uhrzeit: string | null; endzeit: string | null;
-    location: string | null; assignees: string[];
-  }>>();
+  const body = await c.req.json<
+    Partial<{
+      text: string;
+      datum: string;
+      uhrzeit: string | null;
+      endzeit: string | null;
+      location: string | null;
+      assignees: string[];
+    }>
+  >();
   const termin = updateTermin(id, body);
   if (!termin) return c.json({ error: "Termin nicht gefunden" }, 404);
   return c.json(termin);

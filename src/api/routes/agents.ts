@@ -2,8 +2,15 @@ import { Hono } from "hono";
 import { listAgents, inspectAgentWorkspace, readAgentFile, writeAgentFile } from "../../vault/index.js";
 
 const EDITABLE_FILES = [
-  "SOUL.md", "BOOT.md", "AGENTS.md", "TOOLS.md",
-  "HEARTBEAT.md", "BOOTSTRAP.md", "USER.md", "IDENTITY.md", "MEMORY.md",
+  "SOUL.md",
+  "BOOT.md",
+  "AGENTS.md",
+  "TOOLS.md",
+  "HEARTBEAT.md",
+  "BOOTSTRAP.md",
+  "USER.md",
+  "IDENTITY.md",
+  "MEMORY.md",
 ];
 
 export const agentsRoutes = new Hono();

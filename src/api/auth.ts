@@ -34,7 +34,7 @@ export function saveUsers(users: User[]): void {
 }
 
 export function findUser(username: string): User | undefined {
-  return loadUsers().find(u => u.username === username);
+  return loadUsers().find((u) => u.username === username);
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────

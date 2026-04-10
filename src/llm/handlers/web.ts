@@ -3,10 +3,77 @@ import { HTTP_REQUEST_TIMEOUT_MS, HTTP_RESPONSE_MAX_CHARS } from "../../config.j
 import type { HandlerMap } from "./types.js";
 
 export const webSchemas: OpenAI.Chat.ChatCompletionTool[] = [
-  { type: "function", function: { name: "http_anfrage", description: "Sendet eine HTTP-Anfrage an eine beliebige URL. Fuer: REST APIs aufrufen, Webhooks triggern, Daten von externen Diensten abrufen, JSON APIs abfragen.", parameters: { type: "object", properties: { url: { type: "string", description: "Die Ziel-URL (z.B. 'https://api.example.com/data')" }, methode: { type: "string", description: "HTTP-Methode: GET, POST, PUT, PATCH, DELETE (Standard: GET)" }, body: { type: "string", description: "Request-Body als JSON-String (fuer POST/PUT/PATCH)" }, headers: { type: "string", description: "Zusaetzliche Headers als JSON-String (z.B. '{\"Authorization\": \"Bearer xxx\"}')" } }, required: ["url"] } } },
-  { type: "function", function: { name: "web_suchen", description: "Sucht im Internet via DuckDuckGo nach Informationen. Gibt Titel, URL und Kurzbeschreibung zurueck. Fuer Recherche, aktuelle Preise, Normen, Vorschriften etc. Fuer den vollstaendigen Inhalt einer gefundenen URL dann webseite_lesen verwenden.", parameters: { type: "object", properties: { suchbegriff: { type: "string", description: "Der Suchbegriff (z.B. 'OENORM B 1801 Kalkulation')" }, anzahl: { type: "number", description: "Anzahl Ergebnisse (Standard: 5, max 10)" } }, required: ["suchbegriff"] } } },
-  { type: "function", function: { name: "nachrichten_suchen", description: "Sucht aktuelle Nachrichten und Meldungen im Internet (Google News, Region Oesterreich). Gibt Titel, URL, Quelle und Datum zurueck. Ideal fuer: aktuelle Bauvorschriften, Foerderungen, Marktpreise, Branchen-News, lokale Nachrichten. Fuer allgemeine Recherche web_suchen verwenden.", parameters: { type: "object", properties: { suchbegriff: { type: "string", description: "Der Suchbegriff (z.B. 'Baukosten Oesterreich 2026', 'Foerderung Sanierung Steiermark')" }, anzahl: { type: "number", description: "Anzahl Ergebnisse (Standard: 5, max 10)" } }, required: ["suchbegriff"] } } },
-  { type: "function", function: { name: "webseite_lesen", description: "Liest den Hauptinhalt einer Webseite und gibt ihn als strukturiertes Markdown zurueck (Navigation, Footer, Werbung werden entfernt). Max 10.000 Zeichen. Ideal in Kombination mit web_suchen oder nachrichten_suchen: erst suchen, dann relevante URL lesen.", parameters: { type: "object", properties: { url: { type: "string", description: "Die URL der Webseite (z.B. 'https://example.com/artikel')" } }, required: ["url"] } } },
+  {
+    type: "function",
+    function: {
+      name: "http_anfrage",
+      description:
+        "Sendet eine HTTP-Anfrage an eine beliebige URL. Fuer: REST APIs aufrufen, Webhooks triggern, Daten von externen Diensten abrufen, JSON APIs abfragen.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Die Ziel-URL (z.B. 'https://api.example.com/data')" },
+          methode: { type: "string", description: "HTTP-Methode: GET, POST, PUT, PATCH, DELETE (Standard: GET)" },
+          body: { type: "string", description: "Request-Body als JSON-String (fuer POST/PUT/PATCH)" },
+          headers: {
+            type: "string",
+            description: 'Zusaetzliche Headers als JSON-String (z.B. \'{"Authorization": "Bearer xxx"}\')',
+          },
+        },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "web_suchen",
+      description:
+        "Sucht im Internet via DuckDuckGo nach Informationen. Gibt Titel, URL und Kurzbeschreibung zurueck. Fuer Recherche, aktuelle Preise, Normen, Vorschriften etc. Fuer den vollstaendigen Inhalt einer gefundenen URL dann webseite_lesen verwenden.",
+      parameters: {
+        type: "object",
+        properties: {
+          suchbegriff: { type: "string", description: "Der Suchbegriff (z.B. 'OENORM B 1801 Kalkulation')" },
+          anzahl: { type: "number", description: "Anzahl Ergebnisse (Standard: 5, max 10)" },
+        },
+        required: ["suchbegriff"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "nachrichten_suchen",
+      description:
+        "Sucht aktuelle Nachrichten und Meldungen im Internet (Google News, Region Oesterreich). Gibt Titel, URL, Quelle und Datum zurueck. Ideal fuer: aktuelle Bauvorschriften, Foerderungen, Marktpreise, Branchen-News, lokale Nachrichten. Fuer allgemeine Recherche web_suchen verwenden.",
+      parameters: {
+        type: "object",
+        properties: {
+          suchbegriff: {
+            type: "string",
+            description: "Der Suchbegriff (z.B. 'Baukosten Oesterreich 2026', 'Foerderung Sanierung Steiermark')",
+          },
+          anzahl: { type: "number", description: "Anzahl Ergebnisse (Standard: 5, max 10)" },
+        },
+        required: ["suchbegriff"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "webseite_lesen",
+      description:
+        "Liest den Hauptinhalt einer Webseite und gibt ihn als strukturiertes Markdown zurueck (Navigation, Footer, Werbung werden entfernt). Max 10.000 Zeichen. Ideal in Kombination mit web_suchen oder nachrichten_suchen: erst suchen, dann relevante URL lesen.",
+      parameters: {
+        type: "object",
+        properties: {
+          url: { type: "string", description: "Die URL der Webseite (z.B. 'https://example.com/artikel')" },
+        },
+        required: ["url"],
+      },
+    },
+  },
 ];
 
 export const webHandlers: HandlerMap = {
@@ -21,8 +88,11 @@ export const webHandlers: HandlerMap = {
     };
 
     if (args.headers) {
-      try { Object.assign(options.headers!, JSON.parse(String(args.headers))); }
-      catch { return "Fehler: headers ist kein gueltiges JSON."; }
+      try {
+        Object.assign(options.headers!, JSON.parse(String(args.headers)));
+      } catch {
+        return "Fehler: headers ist kein gueltiges JSON.";
+      }
     }
 
     if (args.body && ["POST", "PUT", "PATCH"].includes(method)) {
@@ -54,8 +124,14 @@ export const webHandlers: HandlerMap = {
   nachrichten_suchen: async (args) => {
     const { newsSearch } = await import("../../web.js");
     const results = await newsSearch(String(args.suchbegriff), Number(args.anzahl) || 5);
-    if (!results.length) return `Keine Nachrichten gefunden fuer "${args.suchbegriff}". Versuche einen breiteren Suchbegriff oder nutze web_suchen fuer allgemeine Ergebnisse.`;
-    return results.map((r, i) => `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.source}${r.date ? ` — ${r.date}` : ""}${r.snippet ? `\n   ${r.snippet}` : ""}`).join("\n\n");
+    if (!results.length)
+      return `Keine Nachrichten gefunden fuer "${args.suchbegriff}". Versuche einen breiteren Suchbegriff oder nutze web_suchen fuer allgemeine Ergebnisse.`;
+    return results
+      .map(
+        (r, i) =>
+          `${i + 1}. **${r.title}**\n   ${r.url}\n   ${r.source}${r.date ? ` — ${r.date}` : ""}${r.snippet ? `\n   ${r.snippet}` : ""}`,
+      )
+      .join("\n\n");
   },
 
   webseite_lesen: async (args) => {

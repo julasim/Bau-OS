@@ -25,15 +25,16 @@ import { teamRoutes } from "./routes/team.js";
 const app = new Hono<AppEnv>();
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
-const allowedOrigins = process.env.CORS_ORIGINS
-  ? process.env.CORS_ORIGINS.split(",").map(s => s.trim())
-  : undefined;
+const allowedOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim()) : undefined;
 
-app.use("/api/*", cors({
-  origin: allowedOrigins ?? "*",
-  allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
-  allowHeaders: ["Content-Type", "Authorization"],
-}));
+app.use(
+  "/api/*",
+  cors({
+    origin: allowedOrigins ?? "*",
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    allowHeaders: ["Content-Type", "Authorization"],
+  }),
+);
 
 // ── Rate Limiting (Login) ────────────────────────────────────────────────────
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -59,13 +60,19 @@ app.post("/api/auth/login", async (c) => {
 
   const user = findUser(body.username);
   if (!user) {
-    loginAttempts.set(ip, { count: (entry && now < entry.resetAt ? entry.count : 0) + 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    loginAttempts.set(ip, {
+      count: (entry && now < entry.resetAt ? entry.count : 0) + 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    });
     return c.json({ error: "Benutzername oder Passwort falsch" }, 401);
   }
 
   const valid = await verifyPassword(body.password, user.passwordHash);
   if (!valid) {
-    loginAttempts.set(ip, { count: (entry && now < entry.resetAt ? entry.count : 0) + 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    loginAttempts.set(ip, {
+      count: (entry && now < entry.resetAt ? entry.count : 0) + 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    });
     return c.json({ error: "Benutzername oder Passwort falsch" }, 401);
   }
 

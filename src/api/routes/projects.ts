@@ -1,8 +1,15 @@
 import { Hono } from "hono";
 import {
-  listProjects, getProjectInfo, listProjectNotes, readProjectNote,
-  listTasks, saveTask, completeTask,
-  listTermine, saveTermin, deleteTermin,
+  listProjects,
+  getProjectInfo,
+  listProjectNotes,
+  readProjectNote,
+  listTasks,
+  saveTask,
+  completeTask,
+  listTermine,
+  saveTermin,
+  deleteTermin,
 } from "../../vault/index.js";
 
 export const projectsRoutes = new Hono();

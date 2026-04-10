@@ -40,9 +40,17 @@ if (API_ENABLED) {
 // Graceful Shutdown
 async function shutdown(signal: string): Promise<void> {
   logInfo(`${signal} empfangen — fahre herunter...`);
-  try { bot.stop(); } catch { /* ignore */ }
+  try {
+    bot.stop();
+  } catch {
+    /* ignore */
+  }
   const { disconnectAll } = await import("./mcp.js");
-  try { await disconnectAll(); } catch { /* ignore */ }
+  try {
+    await disconnectAll();
+  } catch {
+    /* ignore */
+  }
   process.exit(0);
 }
 

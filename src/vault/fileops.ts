@@ -33,7 +33,11 @@ function isBinary(filepath: string): boolean {
 function walkDir(dir: string, collected: string[], limit: number): void {
   if (collected.length >= limit) return;
   let entries: fs.Dirent[];
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
 
   for (const entry of entries) {
     if (collected.length >= limit) return;
@@ -71,9 +75,7 @@ export function editFile(
 
   let pattern: RegExp;
   try {
-    pattern = useRegex
-      ? new RegExp(search, flags)
-      : new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), flags);
+    pattern = useRegex ? new RegExp(search, flags) : new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), flags);
   } catch (err) {
     return { count: 0, preview: `Regex-Fehler: ${err}` };
   }
@@ -102,18 +104,15 @@ export function editFile(
 function globToRegex(pattern: string): RegExp {
   const normalized = pattern.replace(/\\/g, "/");
   const regex = normalized
-    .replace(/[.+^${}()|[\]\\]/g, "\\$&")   // Sonderzeichen escapen (ohne * und ?)
-    .replace(/\*\*/g, "<<<GLOBSTAR>>>")       // ** temporaer ersetzen
-    .replace(/\*/g, "[^/]*")                  // * = alles ausser /
-    .replace(/\?/g, "[^/]")                   // ? = ein Zeichen ausser /
-    .replace(/<<<GLOBSTAR>>>/g, ".*");        // ** = alles inkl. /
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&") // Sonderzeichen escapen (ohne * und ?)
+    .replace(/\*\*/g, "<<<GLOBSTAR>>>") // ** temporaer ersetzen
+    .replace(/\*/g, "[^/]*") // * = alles ausser /
+    .replace(/\?/g, "[^/]") // ? = ein Zeichen ausser /
+    .replace(/<<<GLOBSTAR>>>/g, ".*"); // ** = alles inkl. /
   return new RegExp(`^${regex}$`, "i");
 }
 
-export function globFiles(
-  pattern: string,
-  options?: { limit?: number; subdir?: string },
-): string[] {
+export function globFiles(pattern: string, options?: { limit?: number; subdir?: string }): string[] {
   const limit = Math.min(options?.limit ?? 50, 100);
   const root = options?.subdir ? safePath(options.subdir) : vaultPath;
   if (!root || !fs.existsSync(root)) return [];
@@ -184,7 +183,10 @@ export function grepFiles(
   let truncated = false;
 
   for (const filepath of allFiles) {
-    if (matches.length >= maxMatches) { truncated = true; break; }
+    if (matches.length >= maxMatches) {
+      truncated = true;
+      break;
+    }
 
     const relative = path.relative(vaultPath, filepath).replace(/\\/g, "/");
 
@@ -192,12 +194,19 @@ export function grepFiles(
     if (isBinary(filepath)) continue;
 
     let content: string;
-    try { content = fs.readFileSync(filepath, "utf-8"); } catch { continue; }
+    try {
+      content = fs.readFileSync(filepath, "utf-8");
+    } catch {
+      continue;
+    }
 
     const lines = content.split("\n");
 
     for (let i = 0; i < lines.length; i++) {
-      if (matches.length >= maxMatches) { truncated = true; break; }
+      if (matches.length >= maxMatches) {
+        truncated = true;
+        break;
+      }
       if (!regex.test(lines[i])) continue;
 
       filesWithMatches.add(relative);

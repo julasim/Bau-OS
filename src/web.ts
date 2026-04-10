@@ -3,10 +3,7 @@
  * Kein externer API-Key noetig — nutzt DuckDuckGo HTML.
  */
 
-import {
-  FETCH_TIMEOUT_MS, WEB_MAX_RETRIES, MAX_RESPONSE_BYTES,
-  WEB_CACHE_TTL_MS, WEB_CACHE_MAX,
-} from "./config.js";
+import { FETCH_TIMEOUT_MS, WEB_MAX_RETRIES, MAX_RESPONSE_BYTES, WEB_CACHE_TTL_MS, WEB_CACHE_MAX } from "./config.js";
 
 // Realistischer Browser User-Agent — DuckDuckGo blockt Bot-UAs
 const USER_AGENT =
@@ -65,10 +62,10 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
     ...options,
     headers: {
       "User-Agent": USER_AGENT,
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "Accept-Language": "de-AT,de;q=0.9,en;q=0.5",
-      "Accept-Encoding": "identity",  // Kein gzip — einfacher zu verarbeiten
-      "DNT": "1",
+      "Accept-Encoding": "identity", // Kein gzip — einfacher zu verarbeiten
+      DNT: "1",
       "Sec-Fetch-Dest": "document",
       "Sec-Fetch-Mode": "navigate",
       "Sec-Fetch-Site": "none",
@@ -84,14 +81,14 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
       if (resp.ok) return resp;
       // Bei 429 (Rate Limit) oder 503 warten und retry
       if ((resp.status === 429 || resp.status === 503) && attempt < retries) {
-        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+        await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
         continue;
       }
       throw new Error(`HTTP ${resp.status} ${resp.statusText}`);
     } catch (err) {
       if (attempt >= retries) throw err;
       // Timeout oder Netzwerkfehler → retry mit Backoff
-      await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
     }
   }
   throw new Error("Fetch fehlgeschlagen nach Retries");
@@ -101,22 +98,24 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
 
 /** Entfernt nicht-inhaltliche HTML-Elemente */
 function removeNonContent(html: string): string {
-  return html
-    // Script, Style, SVG komplett entfernen
-    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-    .replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, "")
-    .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "")
-    .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, "")
-    // Navigation, Header, Footer, Sidebar entfernen
-    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
-    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
-    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
-    .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, "")
-    .replace(/<form[^>]*>[\s\S]*?<\/form>/gi, "")
-    // Versteckte Elemente
-    .replace(/<[^>]+hidden[^>]*>[\s\S]*?<\/[^>]+>/gi, "")
-    .replace(/<[^>]+display:\s*none[^>]*>[\s\S]*?<\/[^>]+>/gi, "");
+  return (
+    html
+      // Script, Style, SVG komplett entfernen
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+      .replace(/<svg[^>]*>[\s\S]*?<\/svg>/gi, "")
+      .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, "")
+      .replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, "")
+      // Navigation, Header, Footer, Sidebar entfernen
+      .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, "")
+      .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, "")
+      .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, "")
+      .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, "")
+      .replace(/<form[^>]*>[\s\S]*?<\/form>/gi, "")
+      // Versteckte Elemente
+      .replace(/<[^>]+hidden[^>]*>[\s\S]*?<\/[^>]+>/gi, "")
+      .replace(/<[^>]+display:\s*none[^>]*>[\s\S]*?<\/[^>]+>/gi, "")
+  );
 }
 
 /** Dekodiert HTML-Entities */
@@ -128,17 +127,23 @@ function decodeEntities(text: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&auml;/g, "ä").replace(/&Auml;/g, "Ä")
-    .replace(/&ouml;/g, "ö").replace(/&Ouml;/g, "Ö")
-    .replace(/&uuml;/g, "ü").replace(/&Uuml;/g, "Ü")
+    .replace(/&auml;/g, "ä")
+    .replace(/&Auml;/g, "Ä")
+    .replace(/&ouml;/g, "ö")
+    .replace(/&Ouml;/g, "Ö")
+    .replace(/&uuml;/g, "ü")
+    .replace(/&Uuml;/g, "Ü")
     .replace(/&szlig;/g, "ß")
     .replace(/&euro;/g, "€")
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
     .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCharCode(parseInt(h, 16)))
-    .replace(/&mdash;/g, "—").replace(/&ndash;/g, "–")
+    .replace(/&mdash;/g, "—")
+    .replace(/&ndash;/g, "–")
     .replace(/&hellip;/g, "…")
-    .replace(/&laquo;/g, "«").replace(/&raquo;/g, "»")
-    .replace(/&copy;/g, "©").replace(/&reg;/g, "®")
+    .replace(/&laquo;/g, "«")
+    .replace(/&raquo;/g, "»")
+    .replace(/&copy;/g, "©")
+    .replace(/&reg;/g, "®")
     .replace(/&trade;/g, "™");
 }
 
@@ -192,11 +197,11 @@ function htmlToMarkdown(html: string): string {
 
   // Whitespace bereinigen
   text = text
-    .replace(/[ \t]+/g, " ")          // Mehrfach-Spaces → ein Space
-    .replace(/\n[ \t]+/g, "\n")       // Einrueckung nach Newline entfernen
-    .replace(/\n{4,}/g, "\n\n\n")     // Max 2 Leerzeilen
-    .replace(/^\n+/, "")              // Fuehrende Leerzeilen
-    .replace(/\n+$/, "")              // Trailing Leerzeilen
+    .replace(/[ \t]+/g, " ") // Mehrfach-Spaces → ein Space
+    .replace(/\n[ \t]+/g, "\n") // Einrueckung nach Newline entfernen
+    .replace(/\n{4,}/g, "\n\n\n") // Max 2 Leerzeilen
+    .replace(/^\n+/, "") // Fuehrende Leerzeilen
+    .replace(/\n+$/, "") // Trailing Leerzeilen
     .trim();
 
   return text;
@@ -204,7 +209,12 @@ function htmlToMarkdown(html: string): string {
 
 /** Einfaches HTML-Stripping (fuer Snippets etc.) */
 function stripHtml(html: string): string {
-  return decodeEntities(html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
+  return decodeEntities(
+    html
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
 }
 
 // ── Content-Extraktion ─────────────────────────────────────────────────────
@@ -242,14 +252,30 @@ function extractMainContent(html: string): string {
   const roleMatch = cleaned.match(/<[^>]+role="main"[^>]*>([\s\S]*?)<\/\w+>/i);
   if (roleMatch && roleMatch[1].length > 100) return htmlToMarkdown(roleMatch[1]);
 
-  const idPatterns = ["content", "main-content", "article", "post", "entry-content", "post-content", "article-body", "story-body"];
+  const idPatterns = [
+    "content",
+    "main-content",
+    "article",
+    "post",
+    "entry-content",
+    "post-content",
+    "article-body",
+    "story-body",
+  ];
   for (const id of idPatterns) {
     const idMatch = cleaned.match(new RegExp(`<[^>]+id="${id}"[^>]*>([\\s\\S]*?)<\\/\\w+>`, "i"));
     if (idMatch && idMatch[1].length > 100) return htmlToMarkdown(idMatch[1]);
   }
 
   // 4. class-basierte Suche
-  const classPatterns = ["article-content", "post-content", "entry-content", "story-body", "article-body", "content-body"];
+  const classPatterns = [
+    "article-content",
+    "post-content",
+    "entry-content",
+    "story-body",
+    "article-body",
+    "content-body",
+  ];
   for (const cls of classPatterns) {
     const clsMatch = cleaned.match(new RegExp(`<[^>]+class="[^"]*${cls}[^"]*"[^>]*>([\\s\\S]*?)<\\/\\w+>`, "i"));
     if (clsMatch && clsMatch[1].length > 100) return htmlToMarkdown(clsMatch[1]);
@@ -363,7 +389,9 @@ function parseGoogleNewsRss(xml: string, maxResults: number): NewsResult[] {
         if (!isNaN(d.getTime())) {
           date = d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     if (title && url) {
@@ -407,13 +435,23 @@ export async function fetchPage(url: string, maxChars = 12000): Promise<string> 
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname;
-    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" ||
-        hostname.startsWith("192.168.") || hostname.startsWith("10.") ||
-        hostname.startsWith("172.16.") || hostname.startsWith("172.17.") ||
-        hostname.startsWith("172.18.") || hostname.startsWith("172.19.") ||
-        hostname.startsWith("172.2") || hostname.startsWith("172.30.") ||
-        hostname.startsWith("172.31.") || hostname === "::1" ||
-        hostname.endsWith(".local") || hostname.endsWith(".internal")) {
+    if (
+      hostname === "localhost" ||
+      hostname === "127.0.0.1" ||
+      hostname === "0.0.0.0" ||
+      hostname.startsWith("192.168.") ||
+      hostname.startsWith("10.") ||
+      hostname.startsWith("172.16.") ||
+      hostname.startsWith("172.17.") ||
+      hostname.startsWith("172.18.") ||
+      hostname.startsWith("172.19.") ||
+      hostname.startsWith("172.2") ||
+      hostname.startsWith("172.30.") ||
+      hostname.startsWith("172.31.") ||
+      hostname === "::1" ||
+      hostname.endsWith(".local") ||
+      hostname.endsWith(".internal")
+    ) {
       return "[Fehler: Zugriff auf interne/private Adressen nicht erlaubt]";
     }
   } catch {
@@ -429,7 +467,11 @@ export async function fetchPage(url: string, maxChars = 12000): Promise<string> 
   }
 
   const contentType = resp.headers.get("content-type") || "";
-  if (!contentType.includes("text/html") && !contentType.includes("text/plain") && !contentType.includes("application/xhtml")) {
+  if (
+    !contentType.includes("text/html") &&
+    !contentType.includes("text/plain") &&
+    !contentType.includes("application/xhtml")
+  ) {
     return `[Kein Text-Inhalt: ${contentType}]`;
   }
 
@@ -443,9 +485,10 @@ export async function fetchPage(url: string, maxChars = 12000): Promise<string> 
   // Bei Plain-Text direkt zurueckgeben
   if (contentType.includes("text/plain")) {
     const text = html.trim();
-    const output = text.length > maxChars
-      ? text.slice(0, maxChars) + `\n\n[... gekürzt, ${text.length - maxChars} Zeichen entfernt]`
-      : text;
+    const output =
+      text.length > maxChars
+        ? text.slice(0, maxChars) + `\n\n[... gekürzt, ${text.length - maxChars} Zeichen entfernt]`
+        : text;
     setCache(pageCache, cacheKey, output);
     return output;
   }
@@ -470,9 +513,10 @@ export async function fetchPage(url: string, maxChars = 12000): Promise<string> 
     output = title ? `# ${title}\n\n${content}` : content;
   }
 
-  const result = output.length > maxChars
-    ? output.slice(0, maxChars) + `\n\n[... gekürzt, ${output.length - maxChars} Zeichen entfernt]`
-    : output;
+  const result =
+    output.length > maxChars
+      ? output.slice(0, maxChars) + `\n\n[... gekürzt, ${output.length - maxChars} Zeichen entfernt]`
+      : output;
 
   setCache(pageCache, cacheKey, result);
   return result;

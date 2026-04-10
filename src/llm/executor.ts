@@ -1,15 +1,25 @@
 import {
-  noteHandlers, taskHandlers, terminHandlers,
-  fileHandlers, projectHandlers, agentHandlers,
-  systemHandlers, webHandlers, dyntoolHandlers, mcpHandlers,
+  noteHandlers,
+  taskHandlers,
+  terminHandlers,
+  fileHandlers,
+  projectHandlers,
+  agentHandlers,
+  systemHandlers,
+  webHandlers,
+  dyntoolHandlers,
+  mcpHandlers,
 } from "./handlers/index.js";
 import type { ToolHandler } from "./handlers/index.js";
 
 // Re-export context functions (consumer-facing API bleibt gleich)
 export {
-  setReplyContext, getReplyFn,
-  setCurrentDepth, getCurrentDepth,
-  registerProcessAgent, getProcessAgentFn,
+  setReplyContext,
+  getReplyFn,
+  setCurrentDepth,
+  getCurrentDepth,
+  registerProcessAgent,
+  getProcessAgentFn,
 } from "./context.js";
 
 // ---- Handler Registry ----
@@ -17,9 +27,16 @@ export {
 const registry = new Map<string, ToolHandler>();
 
 for (const map of [
-  noteHandlers, taskHandlers, terminHandlers,
-  fileHandlers, projectHandlers, agentHandlers,
-  systemHandlers, webHandlers, dyntoolHandlers, mcpHandlers,
+  noteHandlers,
+  taskHandlers,
+  terminHandlers,
+  fileHandlers,
+  projectHandlers,
+  agentHandlers,
+  systemHandlers,
+  webHandlers,
+  dyntoolHandlers,
+  mcpHandlers,
 ]) {
   for (const [name, handler] of Object.entries(map)) {
     registry.set(name, handler);

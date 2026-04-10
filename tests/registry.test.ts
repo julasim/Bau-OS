@@ -1,11 +1,25 @@
 import { describe, it, expect } from "vitest";
 import {
-  noteHandlers, taskHandlers, terminHandlers,
-  fileHandlers, projectHandlers, agentHandlers,
-  systemHandlers, webHandlers, dyntoolHandlers, mcpHandlers,
-  noteSchemas, taskSchemas, terminSchemas,
-  fileSchemas, projectSchemas, agentSchemas,
-  systemSchemas, webSchemas, dyntoolSchemas, mcpSchemas,
+  noteHandlers,
+  taskHandlers,
+  terminHandlers,
+  fileHandlers,
+  projectHandlers,
+  agentHandlers,
+  systemHandlers,
+  webHandlers,
+  dyntoolHandlers,
+  mcpHandlers,
+  noteSchemas,
+  taskSchemas,
+  terminSchemas,
+  fileSchemas,
+  projectSchemas,
+  agentSchemas,
+  systemSchemas,
+  webSchemas,
+  dyntoolSchemas,
+  mcpSchemas,
 } from "../src/llm/handlers/index.js";
 
 const allHandlerMaps = [
@@ -25,7 +39,7 @@ describe("Handler-Registry Konsistenz", () => {
   for (const { name, handlers, schemas } of allHandlerMaps) {
     describe(`${name}`, () => {
       it("jeder Handler hat ein passendes Schema", () => {
-        const schemaNames = schemas.map(s => s.function.name);
+        const schemaNames = schemas.map((s) => s.function.name);
         for (const handlerName of Object.keys(handlers)) {
           expect(schemaNames, `Handler "${handlerName}" fehlt im Schema`).toContain(handlerName);
         }

@@ -25,9 +25,7 @@ function termineFilePath(project?: string): string {
 }
 
 function legacyTerminePath(project?: string): string {
-  return project
-    ? path.join(vaultPath, "Projekte", project, "Termine.md")
-    : path.join(vaultPath, "Termine.md");
+  return project ? path.join(vaultPath, "Projekte", project, "Termine.md") : path.join(vaultPath, "Termine.md");
 }
 
 function loadTermine(project?: string): Termin[] {
@@ -60,7 +58,7 @@ function migrateLegacy(project?: string): Termin[] {
     const match = line.match(/^- \[ \] (.+)$/);
     if (!match) continue;
 
-    const parts = match[1].split("|").map(s => s.trim());
+    const parts = match[1].split("|").map((s) => s.trim());
     const datum = parts[0] || "";
     let uhrzeit: string | null = null;
     let text = "";
@@ -145,12 +143,16 @@ export function listTermine(project?: string): Termin[] {
 }
 
 export function getTermin(id: string, project?: string): Termin | null {
-  return loadTermine(project).find(t => t.id === id) || null;
+  return loadTermine(project).find((t) => t.id === id) || null;
 }
 
-export function updateTermin(id: string, updates: Partial<Omit<Termin, "id" | "createdAt">>, project?: string): Termin | null {
+export function updateTermin(
+  id: string,
+  updates: Partial<Omit<Termin, "id" | "createdAt">>,
+  project?: string,
+): Termin | null {
   const termine = loadTermine(project);
-  const idx = termine.findIndex(t => t.id === id);
+  const idx = termine.findIndex((t) => t.id === id);
   if (idx === -1) return null;
 
   termine[idx] = { ...termine[idx], ...updates };
@@ -160,7 +162,7 @@ export function updateTermin(id: string, updates: Partial<Omit<Termin, "id" | "c
 
 export function deleteTermin(textOrId: string, project?: string): boolean {
   const termine = loadTermine(project);
-  const filtered = termine.filter(t => t.id !== textOrId && !t.text.includes(textOrId));
+  const filtered = termine.filter((t) => t.id !== textOrId && !t.text.includes(textOrId));
   if (filtered.length === termine.length) return false;
   saveTermine(filtered, project);
   return true;

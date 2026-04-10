@@ -7,11 +7,11 @@ let lineCount = -1; // -1 = noch nicht initialisiert
 // ── Structured Log Format ────────────────────────────────────────────────────
 
 export interface LogEntry {
-  ts: string;       // ISO 8601
+  ts: string; // ISO 8601
   level: "info" | "error" | "warn";
-  ctx?: string;     // Kontext (Agent-Name, Modul etc.)
+  ctx?: string; // Kontext (Agent-Name, Modul etc.)
   msg: string;
-  err?: string;     // Error-Message bei Fehlern
+  err?: string; // Error-Message bei Fehlern
 }
 
 function isoNow(): string {
@@ -57,7 +57,9 @@ function trimLog(): void {
     const trimmed = lines.slice(-MAX_LOG_LINES);
     fs.writeFileSync(LOG_FILE, trimmed.join("\n") + "\n", "utf-8");
     lineCount = trimmed.length;
-  } catch { /* Fehler beim Trimmen ist nicht kritisch */ }
+  } catch {
+    /* Fehler beim Trimmen ist nicht kritisch */
+  }
 }
 
 // ── JSONL-Log (maschinenlesbar) ──────────────────────────────────────────────
@@ -68,7 +70,9 @@ function appendJsonl(entry: LogEntry): void {
   try {
     ensureLogDir();
     fs.appendFileSync(jsonlPath, JSON.stringify(entry) + "\n", "utf-8");
-  } catch { /* JSONL-Fehler ist nicht kritisch */ }
+  } catch {
+    /* JSONL-Fehler ist nicht kritisch */
+  }
 }
 
 // ── Public API ───────────────────────────────────────────────────────────────
@@ -92,7 +96,13 @@ export function logError(context: string, err: unknown): void {
   const humanLine = `[${humanTimestamp()}] ERROR [${context}] ${errMsg}`;
   console.error(humanLine);
   append(humanLine);
-  appendJsonl({ ts: isoNow(), level: "error", ctx: context, msg: errMsg, err: err instanceof Error ? err.stack : undefined });
+  appendJsonl({
+    ts: isoNow(),
+    level: "error",
+    ctx: context,
+    msg: errMsg,
+    err: err instanceof Error ? err.stack : undefined,
+  });
 }
 
 export function readRecentLogs(n = 20): string {

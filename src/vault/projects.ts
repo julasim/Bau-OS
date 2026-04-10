@@ -20,9 +20,10 @@ export function listProjects(): string[] {
   if (!fs.existsSync(projektePath)) return [];
 
   try {
-    return fs.readdirSync(projektePath, { withFileTypes: true })
-      .filter(e => e.isDirectory())
-      .map(e => e.name);
+    return fs
+      .readdirSync(projektePath, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
   } catch {
     return [];
   }
@@ -33,15 +34,17 @@ export function getProjectInfo(name: string): ProjectInfo | null {
   const projectPath = path.join(vaultPath, "Projekte", name);
   if (!fs.existsSync(projectPath)) return null;
 
-  const openTasks = listTasks(name).filter(t => t.status !== "done").length;
+  const openTasks = listTasks(name).filter((t) => t.status !== "done").length;
   const termine = listTermine(name).length;
   const notesDir = path.join(projectPath, "Notizen");
   let noteCount = 0;
   try {
     if (fs.existsSync(notesDir)) {
-      noteCount = fs.readdirSync(notesDir).filter(f => f.endsWith(".md")).length;
+      noteCount = fs.readdirSync(notesDir).filter((f) => f.endsWith(".md")).length;
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   return { name, notes: noteCount, openTasks, termine };
 }
@@ -52,11 +55,12 @@ export function listProjectNotes(name: string): string[] {
   if (!fs.existsSync(notesDir)) return [];
 
   try {
-    return fs.readdirSync(notesDir)
-      .filter(f => f.endsWith(".md"))
+    return fs
+      .readdirSync(notesDir)
+      .filter((f) => f.endsWith(".md"))
       .sort()
       .reverse()
-      .map(f => f.replace(".md", ""));
+      .map((f) => f.replace(".md", ""));
   } catch {
     return [];
   }

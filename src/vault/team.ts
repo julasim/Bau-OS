@@ -33,7 +33,7 @@ export function addTeamMember(name: string): boolean {
 
 export function removeTeamMember(name: string): boolean {
   const team = loadTeam();
-  const filtered = team.filter(m => m !== name);
+  const filtered = team.filter((m) => m !== name);
   if (filtered.length === team.length) return false;
   saveTeamFile(filtered);
   return true;

@@ -26,7 +26,11 @@ export function atomicWriteSync(filepath: string, data: string): void {
     fs.writeFileSync(tmp, data, "utf-8");
     fs.renameSync(tmp, filepath);
   } catch (err) {
-    try { fs.unlinkSync(tmp); } catch { /* tmp existiert nicht — OK */ }
+    try {
+      fs.unlinkSync(tmp);
+    } catch {
+      /* tmp existiert nicht — OK */
+    }
     throw err;
   }
 }
@@ -37,24 +41,27 @@ export function safePath(relativePath: string): string | null {
   if (!resolved.startsWith(vaultPath)) return null;
   try {
     if (fs.existsSync(resolved) && fs.lstatSync(resolved).isSymbolicLink()) return null;
-  } catch { /* nicht existent = OK */ }
+  } catch {
+    /* nicht existent = OK */
+  }
   return resolved;
 }
 
 export function resolveNotePath(nameOrPath: string): string | null {
   const withExt = nameOrPath.endsWith(".md") ? nameOrPath : nameOrPath + ".md";
 
-  for (const candidate of [
-    path.join(vaultPath, withExt),
-    path.join(vaultPath, VAULT_INBOX, withExt),
-  ]) {
+  for (const candidate of [path.join(vaultPath, withExt), path.join(vaultPath, VAULT_INBOX, withExt)]) {
     if (fs.existsSync(candidate)) return candidate;
   }
 
   function searchDir(dir: string): string | null {
     if (!fs.existsSync(dir)) return null;
     let entries: fs.Dirent[];
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return null; }
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return null;
+    }
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {

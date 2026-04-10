@@ -26,9 +26,10 @@ export function listFolder(relativePath = ""): FolderEntry[] {
   if (!folderPath || !fs.existsSync(folderPath)) return [];
 
   try {
-    return fs.readdirSync(folderPath, { withFileTypes: true })
-      .map(e => ({ name: e.name, type: (e.isDirectory() ? "folder" : "file") as "folder" | "file" }))
-      .sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === "folder" ? -1 : 1);
+    return fs
+      .readdirSync(folderPath, { withFileTypes: true })
+      .map((e) => ({ name: e.name, type: (e.isDirectory() ? "folder" : "file") as "folder" | "file" }))
+      .sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === "folder" ? -1 : 1));
   } catch {
     return [];
   }

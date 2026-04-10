@@ -8,17 +8,20 @@ import { loadAgentWorkspace, finalizeMainWorkspace } from "../vault/index.js";
 
 let _active = false;
 
-export function isSetupActive(): boolean { return _active; }
-export function activateSetup(): void { _active = true; }
-export function deactivateSetup(): void { _active = false; }
+export function isSetupActive(): boolean {
+  return _active;
+}
+export function activateSetup(): void {
+  _active = true;
+}
+export function deactivateSetup(): void {
+  _active = false;
+}
 
 // ---- Bootstrap Prompt ----
 
 function loadBootstrapPrompt(): string {
-  const bootstrapPath = path.join(
-    process.env.VAULT_PATH!,
-    "Agents", "Main", "BOOTSTRAP.md"
-  );
+  const bootstrapPath = path.join(process.env.VAULT_PATH!, "Agents", "Main", "BOOTSTRAP.md");
   if (fs.existsSync(bootstrapPath)) {
     return fs.readFileSync(bootstrapPath, "utf-8").trim();
   }
@@ -35,11 +38,11 @@ const SETUP_TOOL: OpenAI.Chat.ChatCompletionTool = {
     parameters: {
       type: "object",
       properties: {
-        name:        { type: "string", description: "Name des Assistenten" },
-        emoji:       { type: "string", description: "Emoji des Assistenten" },
-        vibe:        { type: "string", description: "Charakter/Vibe des Assistenten" },
-        context:     { type: "string", description: "Beschreibung des Unternehmens" },
-        userName:    { type: "string", description: "Name des Benutzers" },
+        name: { type: "string", description: "Name des Assistenten" },
+        emoji: { type: "string", description: "Emoji des Assistenten" },
+        vibe: { type: "string", description: "Charakter/Vibe des Assistenten" },
+        context: { type: "string", description: "Beschreibung des Unternehmens" },
+        userName: { type: "string", description: "Name des Benutzers" },
         userCompany: { type: "string", description: "Name des Unternehmens" },
       },
       required: ["name", "emoji", "vibe", "context", "userName", "userCompany"],

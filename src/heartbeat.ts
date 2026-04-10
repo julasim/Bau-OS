@@ -20,7 +20,10 @@ export function loadChatId(): number | null {
   if (fs.existsSync(CHAT_ID_FILE)) {
     const raw = fs.readFileSync(CHAT_ID_FILE, "utf-8").trim();
     const id = parseInt(raw);
-    if (!isNaN(id)) { _chatId = id; return id; }
+    if (!isNaN(id)) {
+      _chatId = id;
+      return id;
+    }
   }
   return null;
 }
@@ -48,9 +51,7 @@ function parseHeartbeat(agentName: string): HeartbeatConfig | null {
   }
 
   const aufgabenMatch = content.match(/##\s*Aufgaben[^\n]*\n([\s\S]+?)(?=##|$)/i);
-  const prompt = aufgabenMatch
-    ? aufgabenMatch[1].trim()
-    : "Fuehre deinen Standard-Heartbeat durch.";
+  const prompt = aufgabenMatch ? aufgabenMatch[1].trim() : "Fuehre deinen Standard-Heartbeat durch.";
 
   return { cronExpression, prompt };
 }
@@ -105,9 +106,13 @@ function registerAgentIfNeeded(agentName: string, replyFn: ReplyFn): boolean {
     return false;
   }
 
-  const task = cron.schedule(config.cronExpression, () => {
-    runHeartbeat(agentName, replyFn).catch(err => logError(`Heartbeat/cron/${agentName}`, err));
-  }, { timezone: TIMEZONE });
+  const task = cron.schedule(
+    config.cronExpression,
+    () => {
+      runHeartbeat(agentName, replyFn).catch((err) => logError(`Heartbeat/cron/${agentName}`, err));
+    },
+    { timezone: TIMEZONE },
+  );
 
   _cronTasks.set(agentName, task);
   _registeredAgents.add(agentName);
@@ -135,9 +140,13 @@ export function reloadHeartbeat(agentName: string): string {
     return `Heartbeat fuer ${agentName} deaktiviert (keine gueltige Cron-Expression).`;
   }
 
-  const task = cron.schedule(config.cronExpression, () => {
-    runHeartbeat(agentName, replyFn).catch(err => logError(`Heartbeat/cron/${agentName}`, err));
-  }, { timezone: TIMEZONE });
+  const task = cron.schedule(
+    config.cronExpression,
+    () => {
+      runHeartbeat(agentName, replyFn).catch((err) => logError(`Heartbeat/cron/${agentName}`, err));
+    },
+    { timezone: TIMEZONE },
+  );
 
   _cronTasks.set(agentName, task);
   _registeredAgents.add(agentName);
@@ -161,11 +170,15 @@ export function startHeartbeat(replyFn: ReplyFn): void {
 
   // Meta-Cron: prueft jede Minute ob neue Agents hinzugekommen sind
   // Noetig weil Agents erst nach dem Setup-Wizard erstellt werden
-  cron.schedule("* * * * *", () => {
-    let neu = 0;
-    for (const agentName of listAgents()) {
-      if (registerAgentIfNeeded(agentName, replyFn)) neu++;
-    }
-    if (neu > 0) logInfo(`[Heartbeat] ${neu} neue Cron-Job(s) nachregistriert`);
-  }, { timezone: TIMEZONE });
+  cron.schedule(
+    "* * * * *",
+    () => {
+      let neu = 0;
+      for (const agentName of listAgents()) {
+        if (registerAgentIfNeeded(agentName, replyFn)) neu++;
+      }
+      if (neu > 0) logInfo(`[Heartbeat] ${neu} neue Cron-Job(s) nachregistriert`);
+    },
+    { timezone: TIMEZONE },
+  );
 }
