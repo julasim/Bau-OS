@@ -1,5 +1,6 @@
 import fs from "fs";
 import path from "path";
+import { atomicWriteSync } from "./helpers.js";
 
 const teamFilePath = path.join(process.cwd(), "data", "team.json");
 
@@ -15,7 +16,7 @@ function loadTeam(): string[] {
 function saveTeamFile(members: string[]): void {
   const dir = path.dirname(teamFilePath);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(teamFilePath, JSON.stringify(members, null, 2), "utf-8");
+  atomicWriteSync(teamFilePath, JSON.stringify(members, null, 2));
 }
 
 export function listTeam(): string[] {

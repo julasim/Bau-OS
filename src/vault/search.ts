@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { vaultPath } from "./helpers.js";
+import { SEARCH_MAX_RESULTS, SEARCH_LINE_MAX } from "../config.js";
 
 export interface SearchResult {
   file: string;
@@ -26,7 +27,7 @@ export function searchVault(query: string, limitTo?: string): SearchResult[] {
         const lines = fs.readFileSync(full, "utf-8").split("\n");
         for (const line of lines) {
           if (line.toLowerCase().includes(lowerQuery) && line.trim()) {
-            results.push({ file: path.relative(vaultPath, full), line: line.trim().slice(0, 100) });
+            results.push({ file: path.relative(vaultPath, full), line: line.trim().slice(0, SEARCH_LINE_MAX) });
             break;
           }
         }
@@ -35,5 +36,5 @@ export function searchVault(query: string, limitTo?: string): SearchResult[] {
   }
 
   searchDir(searchRoot);
-  return results.slice(0, 10);
+  return results.slice(0, SEARCH_MAX_RESULTS);
 }

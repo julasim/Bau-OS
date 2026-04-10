@@ -1,7 +1,7 @@
 import type { Context } from "grammy";
 import { vaultExists, getVaultPath, inspectAgentWorkspace, clearAgentToday, listAgents, getAgentPath, loadAgentHistory } from "../vault/index.js";
 import { readRecentLogs, logError } from "../logger.js";
-import { VAULT_LOGS_DIR } from "../config.js";
+import { VAULT_LOGS_DIR, TYPING_INTERVAL_MS, LOG_DEFAULT_LINES, LOG_MAX_DISPLAY_LINES, LOG_DISPLAY_MAX_CHARS } from "../config.js";
 import fs from "fs";
 import path from "path";
 
@@ -225,7 +225,7 @@ export async function handleSprache(ctx: Context, args: string): Promise<void> {
 }
 
 export async function handleHeute(ctx: Context): Promise<void> {
-  const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), 4000);
+  const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), TYPING_INTERVAL_MS);
   await ctx.replyWithChatAction("typing");
   try {
     const { processAgent } = await import("../llm/runtime.js");
@@ -251,9 +251,9 @@ export async function handleRestart(ctx: Context): Promise<void> {
 }
 
 export async function handleLogs(ctx: Context, args: string): Promise<void> {
-  const n = Math.min(parseInt(args?.trim()) || 20, 50);
+  const n = Math.min(parseInt(args?.trim()) || LOG_DEFAULT_LINES, LOG_MAX_DISPLAY_LINES);
   const logs = readRecentLogs(n);
-  const out = logs.length > 3800 ? "...(gekuerzt)\n" + logs.slice(-3800) : logs;
+  const out = logs.length > LOG_DISPLAY_MAX_CHARS ? "...(gekuerzt)\n" + logs.slice(-LOG_DISPLAY_MAX_CHARS) : logs;
   await ctx.reply(`Letzte ${n} Log-Eintraege:\n\n${out}`);
 }
 

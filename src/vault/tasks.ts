@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { vaultPath, ensureDir } from "./helpers.js";
+import { vaultPath, ensureDir, atomicWriteSync } from "./helpers.js";
 
 export interface Task {
   id: string;
@@ -46,7 +46,7 @@ function loadTasks(project?: string): Task[] {
 function saveTasks(tasks: Task[], project?: string): void {
   const fp = tasksFilePath(project);
   ensureDir(path.dirname(fp));
-  fs.writeFileSync(fp, JSON.stringify(tasks, null, 2), "utf-8");
+  atomicWriteSync(fp, JSON.stringify(tasks, null, 2));
 }
 
 function migrateLegacy(project?: string): Task[] {

@@ -6,7 +6,7 @@ import { getMcpToolSchemas } from "../mcp.js";
 import { executeTool, setCurrentDepth, registerProcessAgent } from "./executor.js";
 import { runCompaction } from "./compaction.js";
 import { loadAgentWorkspace, appendAgentConversation, loadAgentHistory, shouldCompact } from "../vault/index.js";
-import { MAX_HISTORY_CHARS, MAX_TOOL_ROUNDS, MAX_SPAWN_DEPTH, SUBAGENT_MODEL, getAgentModel } from "../config.js";
+import { MAX_HISTORY_CHARS, MAX_TOOL_ROUNDS, MAX_SPAWN_DEPTH, SUBAGENT_MODEL, getAgentModel, MESSAGE_PREVIEW_LENGTH, KEPT_TOOL_MESSAGES, HISTORY_LOAD_LIMIT } from "../config.js";
 import { logInfo, logError } from "../logger.js";
 
 // ---- Agent Runtime ----
@@ -14,7 +14,7 @@ import { logInfo, logError } from "../logger.js";
 export async function processAgent(agentName: string, userMessage: string, mode: "full" | "minimal" = "full", depth = 0): Promise<string> {
   if (depth > MAX_SPAWN_DEPTH) return `[${agentName}] Maximale Spawn-Tiefe erreicht (depth=${depth}).`;
   setCurrentDepth(depth);
-  const preview = userMessage.length > 80 ? userMessage.slice(0, 80) + "\u2026" : userMessage;
+  const preview = userMessage.length > MESSAGE_PREVIEW_LENGTH ? userMessage.slice(0, MESSAGE_PREVIEW_LENGTH) + "\u2026" : userMessage;
   logInfo(`[${agentName}] Start — "${preview}"`);
 
   const workspaceContext = loadAgentWorkspace(agentName, mode);
@@ -23,7 +23,7 @@ export async function processAgent(agentName: string, userMessage: string, mode:
     ? `${dateLine}\n\n${workspaceContext}`
     : dateLine;
 
-  const history = mode === "full" ? loadAgentHistory(agentName, 10) : [];
+  const history = mode === "full" ? loadAgentHistory(agentName, HISTORY_LOAD_LIMIT) : [];
 
   const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: "system", content: systemPrompt },
@@ -101,7 +101,7 @@ export async function processAgent(agentName: string, userMessage: string, mode:
       const systemMsg = messages[0];
       const toolMsgs = messages.filter(m => m.role === "tool");
       const nonToolMsgs = messages.filter(m => m.role !== "tool");
-      const keptTools = toolMsgs.slice(-3);
+      const keptTools = toolMsgs.slice(-KEPT_TOOL_MESSAGES);
       messages.splice(0, messages.length,
         systemMsg,
         ...nonToolMsgs.slice(1),

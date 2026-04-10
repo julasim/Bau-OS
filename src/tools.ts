@@ -16,7 +16,7 @@ import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
 import { runInNewContext } from "vm";
-import { TOOLS_DIR } from "./config.js";
+import { TOOLS_DIR, DYNAMIC_TOOL_TIMEOUT_MS, COMMAND_BUFFER_SIZE, TOOL_OUTPUT_MAX_CHARS } from "./config.js";
 import { logInfo, logError } from "./logger.js";
 import type OpenAI from "openai";
 
@@ -156,15 +156,15 @@ export async function executeDynamicTool(
 
       // Async-Wrapper damit await im Script funktioniert
       const wrappedCode = `(async () => { ${code} })()`;
-      const result = await runInNewContext(wrappedCode, sandbox, { timeout: 30_000 });
+      const result = await runInNewContext(wrappedCode, sandbox, { timeout: DYNAMIC_TOOL_TIMEOUT_MS });
 
       const output = logs.length ? logs.join("\n") + "\n" : "";
       const resultStr = result !== undefined ? String(result) : "";
       const full = (output + resultStr).trim();
 
       logInfo(`[Tool] ${name} ausgefuehrt`);
-      return full.length > 8000
-        ? full.slice(0, 8000) + `\n\n[... gekuerzt]`
+      return full.length > TOOL_OUTPUT_MAX_CHARS
+        ? full.slice(0, TOOL_OUTPUT_MAX_CHARS) + `\n\n[... gekuerzt]`
         : full || "(kein Ergebnis)";
 
     } catch (err) {
@@ -186,8 +186,8 @@ export async function executeDynamicTool(
       }
 
       exec(`bash "${shPath}"`, {
-        timeout: 30_000,
-        maxBuffer: 1024 * 1024,
+        timeout: DYNAMIC_TOOL_TIMEOUT_MS,
+        maxBuffer: COMMAND_BUFFER_SIZE,
         cwd: toolDir!,
         env,
       }, (error, stdout, stderr) => {
@@ -197,7 +197,7 @@ export async function executeDynamicTool(
           return;
         }
         const output = (stdout + (stderr ? `\n[stderr] ${stderr}` : "")).trim();
-        resolve(output.length > 8000 ? output.slice(0, 8000) + "\n[... gekuerzt]" : output || "(kein Output)");
+        resolve(output.length > TOOL_OUTPUT_MAX_CHARS ? output.slice(0, TOOL_OUTPUT_MAX_CHARS) + "\n[... gekuerzt]" : output || "(kein Output)");
       });
     });
   }

@@ -3,14 +3,14 @@
  * Kein externer API-Key noetig — nutzt DuckDuckGo HTML.
  */
 
+import {
+  FETCH_TIMEOUT_MS, WEB_MAX_RETRIES, MAX_RESPONSE_BYTES,
+  WEB_CACHE_TTL_MS, WEB_CACHE_MAX,
+} from "./config.js";
+
 // Realistischer Browser User-Agent — DuckDuckGo blockt Bot-UAs
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36";
-
-const FETCH_TIMEOUT = 30_000;      // 30s statt 12s — viele Seiten sind langsam
-const MAX_RETRIES = 2;
-const MAX_RESPONSE_BYTES = 5_000_000; // 5 MB Limit
-const CACHE_TTL = 15 * 60 * 1000;    // 15 Minuten Cache
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -51,16 +51,16 @@ function getCached<T>(cache: Map<string, CacheEntry<T>>, key: string): T | null 
 
 function setCache<T>(cache: Map<string, CacheEntry<T>>, key: string, data: T): void {
   // Limit Cache-Groesse
-  if (cache.size > 200) {
+  if (cache.size > WEB_CACHE_MAX) {
     const oldest = cache.keys().next().value;
     if (oldest !== undefined) cache.delete(oldest);
   }
-  cache.set(key, { data, expires: Date.now() + CACHE_TTL });
+  cache.set(key, { data, expires: Date.now() + WEB_CACHE_TTL_MS });
 }
 
 // ── Retry-Fetch ────────────────────────────────────────────────────────────
 
-async function fetchWithRetry(url: string, options: RequestInit = {}, retries = MAX_RETRIES): Promise<Response> {
+async function fetchWithRetry(url: string, options: RequestInit = {}, retries = WEB_MAX_RETRIES): Promise<Response> {
   const opts: RequestInit = {
     ...options,
     headers: {
@@ -74,7 +74,7 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
       "Sec-Fetch-Site": "none",
       ...(options.headers as Record<string, string>),
     },
-    signal: AbortSignal.timeout(FETCH_TIMEOUT),
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     redirect: "follow",
   };
 

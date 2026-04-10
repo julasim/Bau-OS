@@ -4,7 +4,7 @@ import {
   PROTECTED_AGENTS as _PROTECTED_AGENTS,
   COMPACT_THRESHOLD, KEEP_RECENT_LOGS,
   VAULT_AGENTS_DIR, VAULT_LOGS_DIR,
-  LOCALE,
+  LOCALE, WS_MAX_FILE_CHARS, WS_MAX_TOTAL_CHARS,
 } from "../config.js";
 import { vaultPath, ensureDir } from "./helpers.js";
 
@@ -17,8 +17,8 @@ const EDITABLE_AGENT_FILES = [
   "HEARTBEAT.md", "BOOTSTRAP.md", "USER.md", "IDENTITY.md", "MEMORY.md"
 ];
 
-const MAX_FILE_CHARS = 20_000;
-const MAX_TOTAL_CHARS = 150_000;
+const MAX_FILE_CHARS = WS_MAX_FILE_CHARS;
+const MAX_TOTAL_CHARS = WS_MAX_TOTAL_CHARS;
 
 // ---- Types ----
 

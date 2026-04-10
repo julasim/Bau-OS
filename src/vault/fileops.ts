@@ -4,18 +4,12 @@
 
 import fs from "fs";
 import path from "path";
-import { vaultPath } from "./helpers.js";
+import { vaultPath, safePath } from "./helpers.js";
+import { MAX_FILE_SCAN } from "../config.js";
 
 // ---- Path Safety ----
 
 const SKIP_DIRS = new Set([".obsidian", ".git", ".trash", "node_modules", ".DS_Store"]);
-const MAX_FILE_SCAN = 1000;
-
-function safePath(relativePath: string): string | null {
-  const resolved = path.resolve(vaultPath, relativePath);
-  if (!resolved.startsWith(vaultPath)) return null;
-  return resolved;
-}
 
 function isBinary(filepath: string): boolean {
   try {

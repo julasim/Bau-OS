@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { vaultPath, ensureDir } from "./helpers.js";
+import { vaultPath, ensureDir, atomicWriteSync } from "./helpers.js";
 
 export interface Termin {
   id: string;
@@ -45,7 +45,7 @@ function loadTermine(project?: string): Termin[] {
 function saveTermine(termine: Termin[], project?: string): void {
   const fp = termineFilePath(project);
   ensureDir(path.dirname(fp));
-  fs.writeFileSync(fp, JSON.stringify(termine, null, 2), "utf-8");
+  atomicWriteSync(fp, JSON.stringify(termine, null, 2));
 }
 
 function migrateLegacy(project?: string): Termin[] {
@@ -91,7 +91,37 @@ function migrateLegacy(project?: string): Termin[] {
   return termine;
 }
 
-export function saveTermin(datum: string, text: string, uhrzeit?: string, project?: string): Termin {
+/** Prueft Datum im Format TT.MM.JJJJ — gibt Fehlermeldung oder null bei Erfolg */
+export function validateDatum(datum: string): string | null {
+  if (!/^\d{2}\.\d{2}\.\d{4}$/.test(datum)) {
+    return `Ungueltiges Datumsformat "${datum}" — erwartet: TT.MM.JJJJ (z.B. 15.04.2026)`;
+  }
+  const [tag, monat, jahr] = datum.split(".").map(Number);
+  if (monat < 1 || monat > 12) return `Ungueltiger Monat ${monat} in "${datum}"`;
+  if (tag < 1 || tag > 31) return `Ungueltiger Tag ${tag} in "${datum}"`;
+  if (jahr < 2020 || jahr > 2099) return `Ungueltiges Jahr ${jahr} in "${datum}"`;
+  return null;
+}
+
+/** Prueft Uhrzeit im Format HH:MM — gibt Fehlermeldung oder null bei Erfolg */
+export function validateUhrzeit(uhrzeit: string): string | null {
+  if (!/^\d{2}:\d{2}$/.test(uhrzeit)) {
+    return `Ungueltiges Uhrzeitformat "${uhrzeit}" — erwartet: HH:MM (z.B. 14:30)`;
+  }
+  const [h, m] = uhrzeit.split(":").map(Number);
+  if (h < 0 || h > 23) return `Ungueltige Stunde ${h} in "${uhrzeit}"`;
+  if (m < 0 || m > 59) return `Ungueltige Minute ${m} in "${uhrzeit}"`;
+  return null;
+}
+
+export function saveTermin(datum: string, text: string, uhrzeit?: string, project?: string): Termin | string {
+  const datumErr = validateDatum(datum);
+  if (datumErr) return datumErr;
+  if (uhrzeit) {
+    const uhrzeitErr = validateUhrzeit(uhrzeit);
+    if (uhrzeitErr) return uhrzeitErr;
+  }
+
   const termine = loadTermine(project);
   const now = new Date().toISOString();
   const termin: Termin = {

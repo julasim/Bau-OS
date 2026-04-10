@@ -7,6 +7,7 @@ import { logError } from "./logger.js";
 import { enqueue } from "./queue.js";
 import { fmt, stripMarkdown } from "./format.js";
 import { saveChatId } from "./heartbeat.js";
+import { TYPING_INTERVAL_MS } from "./config.js";
 import { handleHilfe, handleStatus, handleSprache, handleKontext, handleKompakt, handleNeu, handleCommands, handleWhoami, handleAgents, handleExportSession, handleModel, handleFast, handleHeute, handleConfig, handleRestart, handleLogs } from "./commands/system.js";
 
 // Sendet mit HTML-Formatting, faellt bei Telegram-Fehler auf Plaintext zurueck
@@ -49,7 +50,7 @@ export function createBot(token: string): Bot {
       // Setup-Wizard (Erster Start)
       if (!isMainWorkspaceConfigured() || isSetupActive()) {
         if (!isSetupActive()) activateSetup();
-        const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), 4000);
+        const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), TYPING_INTERVAL_MS);
         await ctx.replyWithChatAction("typing");
         try {
           const antwort = await processSetup(raw);
@@ -66,7 +67,7 @@ export function createBot(token: string): Bot {
       // /btw Direktive
       const btwMatch = raw.match(/^\/btw\s+(.+)/is);
       if (btwMatch) {
-        const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), 4000);
+        const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), TYPING_INTERVAL_MS);
         await ctx.replyWithChatAction("typing");
         try {
           const antwort = await processBtw(btwMatch[1].trim());

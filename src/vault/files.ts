@@ -1,12 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { vaultPath, ensureDir } from "./helpers.js";
-
-function safePath(relativePath: string): string | null {
-  const resolved = path.resolve(vaultPath, relativePath);
-  if (!resolved.startsWith(vaultPath)) return null;
-  return resolved;
-}
+import { vaultPath, ensureDir, safePath } from "./helpers.js";
 
 export function readFile(relativePath: string): string | null {
   const filepath = safePath(relativePath);

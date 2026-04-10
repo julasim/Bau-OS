@@ -43,6 +43,48 @@ export const LOG_FILE         = path.join(process.cwd(), "logs", "bot.log");
 // ── Dynamische Tools ─────────────────────────────────────────────────────────
 export const TOOLS_DIR          = path.join(process.cwd(), "tools");
 
+// ── Timeouts (ms) ────────────────────────────────────────────────────────────
+export const TYPING_INTERVAL_MS      = 4_000;   // Telegram-Typing-Indikator
+export const FETCH_TIMEOUT_MS        = 30_000;  // Web-Fetch Timeout
+export const VM_TIMEOUT_MS           = 10_000;  // code_ausfuehren Sandbox
+export const HTTP_REQUEST_TIMEOUT_MS = 15_000;  // http_anfrage Tool
+export const DYNAMIC_TOOL_TIMEOUT_MS = 30_000;  // Dynamische Tools (run.js/run.sh)
+export const COMMAND_TIMEOUT_SEC     = 15;      // befehl_ausfuehren Default
+export const COMMAND_TIMEOUT_MAX_SEC = 60;      // befehl_ausfuehren Maximum
+
+// ── Output-Limits (Zeichen) ──────────────────────────────────────────────────
+export const TOOL_OUTPUT_MAX_CHARS   = 8_000;   // Tool-Output Truncation (executor, tools, mcp)
+export const HTTP_RESPONSE_MAX_CHARS = 6_000;   // http_anfrage Truncation
+export const CODE_OUTPUT_MAX_CHARS   = 4_000;   // code_ausfuehren Truncation
+export const MESSAGE_PREVIEW_LENGTH  = 80;      // Log-Preview von User-Nachrichten
+export const COMMAND_BUFFER_SIZE     = 1024 * 1024; // exec() maxBuffer (1 MB)
+
+// ── Web-Suche ────────────────────────────────────────────────────────────────
+export const MAX_RESPONSE_BYTES  = 5_000_000;   // fetchPage max Download
+export const WEB_CACHE_TTL_MS    = 15 * 60 * 1000; // 15 Minuten
+export const WEB_CACHE_MAX       = 200;         // Max Cache-Eintraege
+export const WEB_MAX_RETRIES     = 2;
+
+// ── Datei-Suche ──────────────────────────────────────────────────────────────
+export const MAX_FILE_SCAN       = 1_000;       // Max Dateien bei walkDir
+export const SEARCH_MAX_RESULTS  = 10;          // searchVault Ergebnisse
+export const SEARCH_LINE_MAX     = 100;         // searchVault Zeilen-Laenge
+
+// ── Agent-Workspace ──────────────────────────────────────────────────────────
+export const WS_MAX_FILE_CHARS   = 20_000;      // Max Zeichen pro Workspace-Datei
+export const WS_MAX_TOTAL_CHARS  = 150_000;     // Max Zeichen gesamt
+export const KEPT_TOOL_MESSAGES  = 3;           // Tool-Messages beim Pruning behalten
+
+// ── Logging ──────────────────────────────────────────────────────────────────
+export const MAX_LOG_LINES           = 500;     // bot.log Zeilen-Limit
+export const LOG_DEFAULT_LINES       = 20;      // /logs Standard-Anzahl
+export const LOG_MAX_DISPLAY_LINES   = 50;      // /logs Maximum
+export const LOG_DISPLAY_MAX_CHARS   = 3_800;   // /logs Output-Limit
+
+// ── Rate-Limiting ────────────────────────────────────────────────────────────
+export const RATE_LIMIT_ATTEMPTS   = 5;
+export const RATE_LIMIT_WINDOW_MS  = 15 * 60 * 1000;
+
 // ── Web-API ──────────────────────────────────────────────────────────────────
 export const API_PORT         = parseInt(process.env.API_PORT || "3000", 10);
 export const JWT_SECRET       = process.env.JWT_SECRET || "";

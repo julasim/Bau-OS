@@ -21,6 +21,7 @@ termineRoutes.post("/termine", async (c) => {
   }>();
   if (!body.datum || !body.text) return c.json({ error: "Datum und Text erforderlich" }, 400);
   const termin = saveTermin(body.datum, body.text, body.uhrzeit, body.project);
+  if (typeof termin === "string") return c.json({ error: termin }, 400);
   if (body.endzeit || body.location || body.assignees?.length) {
     const updated = updateTermin(termin.id, {
       endzeit: body.endzeit || null,

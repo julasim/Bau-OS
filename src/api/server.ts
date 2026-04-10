@@ -7,7 +7,7 @@ import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import path from "path";
-import { API_PORT } from "../config.js";
+import { API_PORT, RATE_LIMIT_ATTEMPTS, RATE_LIMIT_WINDOW_MS } from "../config.js";
 import { logInfo } from "../logger.js";
 import { authMiddleware, findUser, verifyPassword, createToken } from "./auth.js";
 
@@ -37,15 +37,13 @@ app.use("/api/*", cors({
 
 // ── Rate Limiting (Login) ────────────────────────────────────────────────────
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT = 5;
-const RATE_WINDOW_MS = 15 * 60 * 1000; // 15 Minuten
 
 // ── Login (ohne Auth) ────────────────────────────────────────────────────────
 app.post("/api/auth/login", async (c) => {
   const ip = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "unknown";
   const now = Date.now();
   const entry = loginAttempts.get(ip);
-  if (entry && now < entry.resetAt && entry.count >= RATE_LIMIT) {
+  if (entry && now < entry.resetAt && entry.count >= RATE_LIMIT_ATTEMPTS) {
     return c.json({ error: "Zu viele Login-Versuche. Bitte spaeter erneut versuchen." }, 429);
   }
 
@@ -61,13 +59,13 @@ app.post("/api/auth/login", async (c) => {
 
   const user = findUser(body.username);
   if (!user) {
-    loginAttempts.set(ip, { count: (entry && now < entry.resetAt ? entry.count : 0) + 1, resetAt: now + RATE_WINDOW_MS });
+    loginAttempts.set(ip, { count: (entry && now < entry.resetAt ? entry.count : 0) + 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return c.json({ error: "Benutzername oder Passwort falsch" }, 401);
   }
 
   const valid = await verifyPassword(body.password, user.passwordHash);
   if (!valid) {
-    loginAttempts.set(ip, { count: (entry && now < entry.resetAt ? entry.count : 0) + 1, resetAt: now + RATE_WINDOW_MS });
+    loginAttempts.set(ip, { count: (entry && now < entry.resetAt ? entry.count : 0) + 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
     return c.json({ error: "Benutzername oder Passwort falsch" }, 401);
   }
 

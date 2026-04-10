@@ -8,6 +8,7 @@
 
 import fs from "fs";
 import path from "path";
+import { TOOL_OUTPUT_MAX_CHARS } from "./config.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type OpenAI from "openai";
@@ -224,8 +225,8 @@ export async function executeMcpTool(name: string, args: Record<string, unknown>
       }
 
       // Truncate
-      if (text.length > 8000) {
-        return text.slice(0, 8000) + "\n[... gekuerzt]";
+      if (text.length > TOOL_OUTPUT_MAX_CHARS) {
+        return text.slice(0, TOOL_OUTPUT_MAX_CHARS) + "\n[... gekuerzt]";
       }
       return text || "(kein Ergebnis)";
     } catch (err) {
