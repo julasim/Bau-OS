@@ -474,8 +474,23 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
+      name: "nachrichten_suchen",
+      description: "Sucht aktuelle Nachrichten und Meldungen im Internet (DuckDuckGo News, Region Oesterreich). Gibt Titel, URL, Quelle und Datum zurueck. Ideal fuer: aktuelle Bauvorschriften, Foerderungen, Marktpreise, Branchen-News, lokale Nachrichten. Fuer allgemeine Recherche web_suchen verwenden.",
+      parameters: {
+        type: "object",
+        properties: {
+          suchbegriff: { type: "string", description: "Der Suchbegriff (z.B. 'Baukosten Oesterreich 2026', 'Foerderung Sanierung Steiermark')" },
+          anzahl: { type: "number", description: "Anzahl Ergebnisse (Standard: 5, max 10)" },
+        },
+        required: ["suchbegriff"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "webseite_lesen",
-      description: "Liest den Textinhalt einer Webseite und gibt bereinigten Text zurueck (HTML-Tags entfernt). Max 8000 Zeichen. Ideal in Kombination mit web_suchen: erst suchen, dann relevante URL lesen.",
+      description: "Liest den Hauptinhalt einer Webseite und gibt ihn als strukturiertes Markdown zurueck (Navigation, Footer, Werbung werden entfernt). Max 10.000 Zeichen. Ideal in Kombination mit web_suchen oder nachrichten_suchen: erst suchen, dann relevante URL lesen.",
       parameters: {
         type: "object",
         properties: {
