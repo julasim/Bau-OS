@@ -41,25 +41,32 @@ export async function processAgent(agentName: string, userMessage: string, mode:
       model: activeModel,
       messages,
       tools: [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()],
-      tool_choice: "auto",
+      tool_choice: "required",
     });
 
     const reply = response.choices[0].message;
     messages.push(reply);
 
+    // Fallback: Modell hat keinen Tool-Call gemacht (sollte bei "required" nicht passieren)
     if (!reply.tool_calls || reply.tool_calls.length === 0) {
       const antwort = reply.content ?? "Erledigt.";
       appendAgentConversation(agentName, userMessage, antwort);
-      logInfo(`[${agentName}] Antwort (Runde ${i + 1}, ${antwort.length} Z)`);
+      logInfo(`[${agentName}] Antwort ohne Tool (Runde ${i + 1}, ${antwort.length} Z)`);
       if (shouldCompact(agentName)) runCompaction(agentName).catch(err => logError("Compaction", err));
       return antwort;
     }
 
-    const toolNames = reply.tool_calls.map(tc => (tc as { function: { name: string } }).function.name).join(", ");
+    const allCalls = reply.tool_calls.map(tc => tc as { id: string; function: { name: string; arguments: string } });
+    const toolNames = allCalls.map(tc => tc.function.name).join(", ");
     logInfo(`[${agentName}] Tools (Runde ${i + 1}): ${toolNames}`);
+
+    // Pruefen ob "antworten" dabei ist
+    const antwortCall = allCalls.find(tc => tc.function.name === "antworten");
+    const otherCalls = allCalls.filter(tc => tc.function.name !== "antworten");
+
+    // Zuerst alle anderen Tools ausfuehren (Seiteneffekte wie Speichern)
     const toolResults = await Promise.all(
-      reply.tool_calls.map(async (toolCall) => {
-        const tc = toolCall as { id: string; function: { name: string; arguments: string } };
+      otherCalls.map(async (tc) => {
         let args: Record<string, string | number>;
         try {
           args = JSON.parse(tc.function.arguments) as Record<string, string | number>;
@@ -70,6 +77,21 @@ export async function processAgent(agentName: string, userMessage: string, mode:
         return { role: "tool" as const, tool_call_id: tc.id, content: result };
       })
     );
+
+    // Wenn "antworten" aufgerufen wurde → finale Antwort zurueckgeben
+    if (antwortCall) {
+      let antwortText = "Erledigt.";
+      try {
+        const antwortArgs = JSON.parse(antwortCall.function.arguments) as Record<string, string>;
+        antwortText = antwortArgs.text || "Erledigt.";
+      } catch {
+        // Fallback bei fehlerhaften Argumenten
+      }
+      appendAgentConversation(agentName, userMessage, antwortText);
+      logInfo(`[${agentName}] Antwort via antworten-Tool (Runde ${i + 1}, ${antwortText.length} Z)`);
+      if (shouldCompact(agentName)) runCompaction(agentName).catch(err => logError("Compaction", err));
+      return antwortText;
+    }
 
     messages.push(...toolResults);
 
