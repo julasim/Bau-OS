@@ -9,6 +9,9 @@ interface FolderEntry {
   size: number;
   modified: string;
   extension: string;
+  id?: string;
+  project?: string;
+  analyzed?: boolean;
 }
 
 const currentPath = ref("");
@@ -66,10 +69,16 @@ async function loadFolder(p = "") {
 }
 
 async function openItem(entry: FolderEntry) {
-  const fullPath = currentPath.value ? `${currentPath.value}/${entry.name}` : entry.name;
   if (entry.type === "folder") {
+    const fullPath = currentPath.value ? `${currentPath.value}/${entry.name}` : entry.name;
     await loadFolder(fullPath);
+  } else if (entry.id) {
+    // DB-Datei: ueber ID lesen
+    const file = await api.get<{ path: string; content: string; filename: string }>(`/files/read?id=${entry.id}`);
+    fileContent.value = file.content;
+    fileName.value = file.filename || entry.name;
   } else {
+    const fullPath = currentPath.value ? `${currentPath.value}/${entry.name}` : entry.name;
     const file = await api.get<{ path: string; content: string }>(`/files/read?path=${encodeURIComponent(fullPath)}`);
     fileContent.value = file.content;
     fileName.value = entry.name;
@@ -86,10 +95,14 @@ async function createFolder() {
 }
 
 async function deleteItem(entry: FolderEntry) {
-  const fullPath = currentPath.value ? `${currentPath.value}/${entry.name}` : entry.name;
   const label = entry.type === "folder" ? `Ordner "${entry.name}" und alle Inhalte` : `"${entry.name}"`;
   if (!confirm(`${label} wirklich loeschen?`)) return;
-  await api.delete("/files", { path: fullPath });
+  if (entry.id) {
+    await api.delete("/files", { id: entry.id });
+  } else {
+    const fullPath = currentPath.value ? `${currentPath.value}/${entry.name}` : entry.name;
+    await api.delete("/files", { path: fullPath });
+  }
   await loadFolder(currentPath.value);
 }
 

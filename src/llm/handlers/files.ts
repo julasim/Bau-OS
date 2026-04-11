@@ -10,6 +10,7 @@ import {
   searchWorkspace,
 } from "../../workspace/index.js";
 import { safePath } from "../../workspace/helpers.js";
+import { fileRepo } from "../../data/index.js";
 import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED, TOOL_OUTPUT_MAX_CHARS } from "../../config.js";
 import type { HandlerMap } from "./types.js";
 
@@ -121,7 +122,7 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "dateien_suchen",
       description:
-        "Sucht Dateien im Vault nach Name/Muster (Glob). Unterstuetzt * und ** Platzhalter. Beispiele: '**/*.md', 'Projekte/*/README.md', 'Inbox/*.md'.",
+        "Sucht Dateien nach Name oder Muster. Bei aktiver Datenbank werden alle hochgeladenen Dateien (PDF, DOCX, Bilder etc.) durchsucht — auch nach Inhalt. Unterstuetzt Glob-Platzhalter: '**/*.pdf', '*deutsch*'. Gibt Dateinamen und Pfade zurueck.",
       parameters: {
         type: "object",
         properties: {
@@ -157,29 +158,55 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
 export const fileHandlers: HandlerMap = {
   datei_lesen: async (args) => {
     const pfad = String(args.pfad);
-    const ext = path.extname(pfad).slice(1).toLowerCase();
 
-    // PDF/DOCX: Extractor verwenden statt readFile
+    // 1. DB: Datei ueber Name/Pfad/ID suchen
+    if (DB_ENABLED && fileRepo) {
+      const file = await fileRepo.get(pfad);
+      if (file) {
+        // Extrahierter Text vorhanden → direkt zurueckgeben
+        if (file.contentText) {
+          return file.contentText.slice(0, TOOL_OUTPUT_MAX_CHARS);
+        }
+        // Kein Text → vom Filesystem lesen/extrahieren
+        const ext = path.extname(file.filepath).slice(1).toLowerCase();
+        if (DOCUMENT_EXTS.has(ext)) {
+          try {
+            const resolved = safePath(file.filepath);
+            if (!resolved) return `Datei ${file.filename} gefunden aber Pfad ungueltig.`;
+            const { extractDocument } = await import("../../workspace/extractor.js");
+            const result = await extractDocument(resolved, "");
+            if (result.text) {
+              // Text in DB speichern fuer naechstes Mal
+              await fileRepo.updateContent(file.id, result.text);
+              return result.text.slice(0, TOOL_OUTPUT_MAX_CHARS);
+            }
+          } catch (err) {
+            return `Fehler beim Lesen von ${file.filename}: ${err instanceof Error ? err.message : String(err)}`;
+          }
+        }
+        // Textdatei vom Filesystem
+        const content = readFile(file.filepath);
+        return content ?? `Datei ${file.filename} in DB aber nicht auf Dateisystem gefunden.`;
+      }
+    }
+
+    // 2. Filesystem-Fallback (Agent-Dateien, nicht-DB-Dateien)
+    const ext = path.extname(pfad).slice(1).toLowerCase();
     if (DOCUMENT_EXTS.has(ext)) {
       const resolved = safePath(pfad);
-      if (!resolved)
-        return `Datei nicht gefunden: ${pfad}. Nutze dateien_suchen oder ordner_auflisten um den richtigen Pfad zu finden.`;
+      if (!resolved) return `Datei nicht gefunden: ${pfad}. Nutze dateien_suchen um den richtigen Pfad zu finden.`;
       try {
         const { extractDocument } = await import("../../workspace/extractor.js");
         const result = await extractDocument(resolved, "");
         if (result.format === "unsupported") return `Dateiformat .${ext} wird nicht unterstuetzt.`;
-        const text = result.text.slice(0, TOOL_OUTPUT_MAX_CHARS);
-        return text || `Datei ${pfad} konnte nicht gelesen werden (leer oder geschuetzt).`;
+        return result.text.slice(0, TOOL_OUTPUT_MAX_CHARS) || `Datei ${pfad} konnte nicht gelesen werden.`;
       } catch (err) {
         return `Fehler beim Lesen von ${pfad}: ${err instanceof Error ? err.message : String(err)}`;
       }
     }
 
     const content = readFile(pfad);
-    return (
-      content ??
-      `Datei nicht gefunden: ${pfad}. Nutze dateien_suchen oder ordner_auflisten um den richtigen Pfad zu finden.`
-    );
+    return content ?? `Datei nicht gefunden: ${pfad}. Nutze dateien_suchen um den richtigen Pfad zu finden.`;
   },
 
   datei_erstellen: async (args) => {
@@ -231,11 +258,33 @@ export const fileHandlers: HandlerMap = {
   },
 
   dateien_suchen: async (args) => {
-    const files = globFiles(String(args.muster), {
-      limit: Number(args.limit) || 50,
+    const muster = String(args.muster);
+    const limit = Number(args.limit) || 50;
+
+    // DB: hochgeladene Dateien durchsuchen (Name, Pfad, Inhalt)
+    if (DB_ENABLED && fileRepo) {
+      // Suchbegriff aus Glob-Muster extrahieren (Wildcards entfernen, laengstes Segment nehmen)
+      const terms = muster
+        .replace(/\*+/g, "")
+        .split(/[/\\]/)
+        .filter((s) => s.length > 0);
+      const searchTerm = terms.reduce((best, t) => (t.length > best.length ? t : best), "");
+
+      const dbFiles = searchTerm
+        ? await fileRepo.search(searchTerm, limit)
+        : await fileRepo.list(args.ordner ? String(args.ordner) : undefined, limit);
+
+      if (dbFiles.length) {
+        return dbFiles.map((f) => f.filepath).join("\n") + `\n\n[${dbFiles.length} Datei(en)]`;
+      }
+    }
+
+    // Filesystem-Fallback (Agent-Dateien, kein DB-Modus)
+    const files = globFiles(muster, {
+      limit,
       subdir: args.ordner ? String(args.ordner) : undefined,
     });
-    if (!files.length) return `Keine Dateien gefunden fuer "${args.muster}".`;
+    if (!files.length) return `Keine Dateien gefunden fuer "${muster}".`;
     return files.join("\n") + `\n\n[${files.length} Datei(en)]`;
   },
 

@@ -75,6 +75,22 @@ export interface TeamMember {
   updatedAt: string;
 }
 
+export interface FileEntry {
+  id: string;
+  filename: string;
+  filepath: string;
+  filetype: string | null;
+  filesize: number;
+  mimeType: string | null;
+  contentText: string | null;
+  summary: string | null;
+  project: string | null;
+  tags: string[];
+  analyzed: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AgentLog {
   id?: string;
   sessionId: string;
@@ -141,6 +157,23 @@ export interface TeamRepository {
   add(member: Omit<TeamMember, "id" | "createdAt" | "updatedAt">): Promise<TeamMember>;
   update(id: string, updates: Partial<TeamMember>): Promise<TeamMember | null>;
   remove(nameOrId: string): Promise<boolean>;
+}
+
+export interface FileRepository {
+  save(file: {
+    filename: string;
+    filepath: string;
+    filetype?: string;
+    filesize: number;
+    mimeType?: string;
+    contentText?: string;
+    project?: string;
+  }): Promise<FileEntry>;
+  list(project?: string, limit?: number): Promise<FileEntry[]>;
+  get(id: string): Promise<FileEntry | null>;
+  search(query: string, limit?: number): Promise<FileEntry[]>;
+  delete(id: string): Promise<boolean>;
+  updateContent(id: string, contentText: string): Promise<boolean>;
 }
 
 export interface AgentLogRepository {

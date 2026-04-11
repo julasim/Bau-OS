@@ -67,18 +67,12 @@ chatRoutes.post("/chat", (c) => {
             model: activeModel,
             messages,
             tools: allTools,
-            tool_choice: "required",
+            tool_choice: "auto",
           });
-        } catch (toolErr) {
-          // Fallback: ohne Tools versuchen (Modell unterstuetzt evtl. keine Tools)
-          logInfo(`[Chat] Tool-Call fehlgeschlagen, Fallback ohne Tools: ${toolErr}`);
-          const fallbackResp = await client.chat.completions.create({
-            model: activeModel,
-            messages,
-          });
-          const text = fallbackResp.choices[0].message.content ?? "Erledigt.";
-          appendAgentConversation(agentName, userMessage, text);
-          await stream.writeSSE({ event: "response", data: JSON.stringify({ text }) });
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : String(err);
+          logError("[Chat] LLM-Aufruf fehlgeschlagen", err);
+          await stream.writeSSE({ event: "error", data: JSON.stringify({ error: `LLM-Fehler: ${errMsg}` }) });
           return;
         }
 
