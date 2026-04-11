@@ -1,4 +1,5 @@
 import type OpenAI from "openai";
+import path from "path";
 import {
   readFile,
   createFile,
@@ -8,8 +9,12 @@ import {
   grepFiles,
   searchWorkspace,
 } from "../../workspace/index.js";
-import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED } from "../../config.js";
+import { extractDocument } from "../../workspace/extractor.js";
+import { safePath } from "../../workspace/helpers.js";
+import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED, TOOL_OUTPUT_MAX_CHARS } from "../../config.js";
 import type { HandlerMap } from "./types.js";
+
+const DOCUMENT_EXTS = new Set(["pdf", "docx", "doc"]);
 
 export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
   {
@@ -17,7 +22,7 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "datei_lesen",
       description:
-        "Liest den vollstaendigen Inhalt einer beliebigen Datei im Vault. Pfad ist relativ zum Vault-Root. Nutze dateien_suchen oder ordner_auflisten um den Pfad zu finden wenn du ihn nicht kennst.",
+        "Liest den Inhalt einer Datei im Workspace. Unterstuetzt Textdateien (.md, .txt, .json etc.) UND Dokumente (.pdf, .docx). PDF- und Word-Dateien werden automatisch extrahiert. Pfad relativ zum Workspace-Root. Nutze dateien_suchen oder ordner_auflisten um den Pfad zu finden.",
       parameters: {
         type: "object",
         properties: {
@@ -152,10 +157,28 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
 
 export const fileHandlers: HandlerMap = {
   datei_lesen: async (args) => {
-    const content = readFile(String(args.pfad));
+    const pfad = String(args.pfad);
+    const ext = path.extname(pfad).slice(1).toLowerCase();
+
+    // PDF/DOCX: Extractor verwenden statt readFile
+    if (DOCUMENT_EXTS.has(ext)) {
+      const resolved = safePath(pfad);
+      if (!resolved)
+        return `Datei nicht gefunden: ${pfad}. Nutze dateien_suchen oder ordner_auflisten um den richtigen Pfad zu finden.`;
+      try {
+        const result = await extractDocument(resolved, "");
+        if (result.format === "unsupported") return `Dateiformat .${ext} wird nicht unterstuetzt.`;
+        const text = result.text.slice(0, TOOL_OUTPUT_MAX_CHARS);
+        return text || `Datei ${pfad} konnte nicht gelesen werden (leer oder geschuetzt).`;
+      } catch (err) {
+        return `Fehler beim Lesen von ${pfad}: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    const content = readFile(pfad);
     return (
       content ??
-      `Datei nicht gefunden: ${args.pfad}. Nutze dateien_suchen oder ordner_auflisten um den richtigen Pfad zu finden.`
+      `Datei nicht gefunden: ${pfad}. Nutze dateien_suchen oder ordner_auflisten um den richtigen Pfad zu finden.`
     );
   },
 

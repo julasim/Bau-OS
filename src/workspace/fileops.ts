@@ -105,10 +105,10 @@ function globToRegex(pattern: string): RegExp {
   const normalized = pattern.replace(/\\/g, "/");
   const regex = normalized
     .replace(/[.+^${}()|[\]\\]/g, "\\$&") // Sonderzeichen escapen (ohne * und ?)
-    .replace(/\*\*/g, "<<<GLOBSTAR>>>") // ** temporaer ersetzen
+    .replace(/\*\*\//g, "(.*\\/)?") // **/ = optionaler Verzeichnis-Prefix (matched auch Root)
+    .replace(/\*\*/g, ".*") // ** allein = alles inkl. /
     .replace(/\*/g, "[^/]*") // * = alles ausser /
-    .replace(/\?/g, "[^/]") // ? = ein Zeichen ausser /
-    .replace(/<<<GLOBSTAR>>>/g, ".*"); // ** = alles inkl. /
+    .replace(/\?/g, "[^/]"); // ? = ein Zeichen ausser /
   return new RegExp(`^${regex}$`, "i");
 }
 
