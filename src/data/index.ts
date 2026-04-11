@@ -13,6 +13,7 @@ import type {
   TeamRepository,
   AgentLogRepository,
   FileRepository,
+  ChatRepository,
 } from "./types.js";
 
 // Statische Imports — DB-Module verbinden sich erst beim ersten Aufruf (lazy)
@@ -26,6 +27,7 @@ import { dbNotes } from "./db-notes.js";
 import { dbProjects } from "./db-projects.js";
 import { dbAgentLogs } from "./db-agent-logs.js";
 import { dbFiles } from "./db-files.js";
+import { dbChat } from "./db-chat.js";
 import { fsTeam } from "./fs-team.js";
 import { dbTeam } from "./db-team.js";
 
@@ -37,6 +39,7 @@ export const noteRepo: NoteRepository = DB_ENABLED ? dbNotes : fsNotes;
 export const projectRepo: ProjectRepository = DB_ENABLED ? dbProjects : fsProjects;
 export const teamRepo: TeamRepository = DB_ENABLED ? dbTeam : fsTeam;
 export const fileRepo: FileRepository | null = DB_ENABLED ? dbFiles : null;
+export const chatRepo: ChatRepository | null = DB_ENABLED ? dbChat : null;
 export const agentLogRepo: AgentLogRepository | null = DB_ENABLED ? dbAgentLogs : null;
 
 /** Gibt den aktuellen Modus zurueck */
@@ -45,7 +48,7 @@ export function dataMode(): "database" | "filesystem" {
 }
 
 // Re-export types
-export type { Task, Termin, Note, Project, TeamMember, AgentLog } from "./types.js";
+export type { Task, Termin, Note, Project, TeamMember, AgentLog, ChatSession, ChatMessage } from "./types.js";
 export type {
   TaskRepository,
   TerminRepository,
@@ -53,4 +56,5 @@ export type {
   ProjectRepository,
   TeamRepository,
   AgentLogRepository,
+  ChatRepository,
 } from "./types.js";

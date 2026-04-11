@@ -6,18 +6,13 @@ import { TOOLS } from "../../llm/tools.js";
 import { getDynamicToolSchemas } from "../../tools.js";
 import { getMcpToolSchemas } from "../../mcp.js";
 import { executeTool } from "../../llm/executor.js";
-import {
-  loadAgentWorkspace,
-  appendAgentConversation,
-  loadAgentHistory,
-  loadAgentHistoryByDate,
-  listAgentSessions,
-  shouldCompact,
-} from "../../workspace/index.js";
+import { loadAgentWorkspace, shouldCompact } from "../../workspace/index.js";
 import { runCompaction } from "../../llm/compaction.js";
+import { chatRepo } from "../../data/index.js";
 import {
   MAX_HISTORY_CHARS,
   MAX_TOOL_ROUNDS,
+  DB_ENABLED,
   KEPT_TOOL_MESSAGES,
   HISTORY_LOAD_LIMIT,
   getAgentModel,
@@ -26,26 +21,42 @@ import { logInfo, logError } from "../../logger.js";
 
 export const chatRoutes = new Hono();
 
-// ── Chat-Sessions auflisten ──────────────────────────────────────────────────
-chatRoutes.get("/chat/sessions", (c) => {
-  const sessions = listAgentSessions("Main");
+// ── Sessions auflisten ──────────────────────────────────────────────────────
+chatRoutes.get("/chat/sessions", async (c) => {
+  if (!DB_ENABLED || !chatRepo) return c.json([]);
+  const sessions = await chatRepo.listSessions("Main");
   return c.json(sessions);
 });
 
-// ── Chatverlauf laden ────────────────────────────────────────────────────────
-chatRoutes.get("/chat/history", (c) => {
-  const date = c.req.query("date");
-  if (date) {
-    return c.json(loadAgentHistoryByDate("Main", date));
-  }
-  return c.json(loadAgentHistory("Main", HISTORY_LOAD_LIMIT));
+// ── Neue Session erstellen ──────────────────────────────────────────────────
+chatRoutes.post("/chat/sessions", async (c) => {
+  if (!DB_ENABLED || !chatRepo) return c.json({ error: "DB nicht aktiv" }, 500);
+  const session = await chatRepo.createSession("Main");
+  return c.json(session);
 });
 
+// ── Session loeschen ────────────────────────────────────────────────────────
+chatRoutes.delete("/chat/sessions/:id", async (c) => {
+  if (!DB_ENABLED || !chatRepo) return c.json({ error: "DB nicht aktiv" }, 500);
+  const id = c.req.param("id");
+  await chatRepo.deleteSession(id);
+  return c.json({ success: true });
+});
+
+// ── Nachrichten einer Session laden ─────────────────────────────────────────
+chatRoutes.get("/chat/sessions/:id/messages", async (c) => {
+  if (!DB_ENABLED || !chatRepo) return c.json([]);
+  const id = c.req.param("id");
+  const messages = await chatRepo.getMessages(id);
+  return c.json(messages);
+});
+
+// ── Chat-Nachricht senden ───────────────────────────────────────────────────
 chatRoutes.post("/chat", (c) => {
   return streamSSE(c, async (stream) => {
-    let body: { message: string };
+    let body: { message: string; sessionId?: string };
     try {
-      body = await c.req.json<{ message: string }>();
+      body = await c.req.json<{ message: string; sessionId?: string }>();
     } catch {
       await stream.writeSSE({ event: "error", data: JSON.stringify({ error: "Ungueltiger Request" }) });
       return;
@@ -61,10 +72,28 @@ chatRoutes.post("/chat", (c) => {
 
     logInfo(`[Chat] ${userMessage.slice(0, 80)}`);
 
+    // Session bestimmen: explizit uebergeben oder neue erstellen
+    let sessionId = body.sessionId;
+    if (DB_ENABLED && chatRepo) {
+      if (!sessionId) {
+        const session = await chatRepo.createSession(agentName);
+        sessionId = session.id;
+      }
+      // User-Nachricht in DB speichern
+      await chatRepo.addMessage(sessionId, "user", userMessage);
+      // Session-ID an Client senden
+      await stream.writeSSE({ event: "session", data: JSON.stringify({ sessionId }) });
+    }
+
     const workspaceContext = loadAgentWorkspace(agentName, "full");
     const dateLine = buildDateLine();
     const systemPrompt = workspaceContext ? `${dateLine}\n\n${workspaceContext}` : dateLine;
-    const history = loadAgentHistory(agentName, HISTORY_LOAD_LIMIT);
+
+    // History aus DB oder leer
+    let history: { user: string; assistant: string }[] = [];
+    if (DB_ENABLED && chatRepo) {
+      history = await chatRepo.getRecentHistory(agentName, HISTORY_LOAD_LIMIT);
+    }
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
@@ -76,8 +105,9 @@ chatRoutes.post("/chat", (c) => {
     ];
 
     const activeModel = getAgentModel(agentName);
-
     await stream.writeSSE({ event: "status", data: JSON.stringify({ status: "thinking" }) });
+
+    const collectedTools: string[] = [];
 
     try {
       const allTools = [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()];
@@ -103,7 +133,10 @@ chatRoutes.post("/chat", (c) => {
 
         if (!reply.tool_calls || reply.tool_calls.length === 0) {
           const antwort = reply.content ?? "Erledigt.";
-          appendAgentConversation(agentName, userMessage, antwort);
+          // In DB speichern
+          if (DB_ENABLED && chatRepo && sessionId) {
+            await chatRepo.addMessage(sessionId, "assistant", antwort, collectedTools);
+          }
           await stream.writeSSE({ event: "response", data: JSON.stringify({ text: antwort }) });
           if (shouldCompact(agentName)) runCompaction(agentName).catch((err) => logError("Compaction", err));
           return;
@@ -115,8 +148,8 @@ chatRoutes.post("/chat", (c) => {
         const antwortCall = allCalls.find((tc) => tc.function.name === "antworten");
         const otherCalls = allCalls.filter((tc) => tc.function.name !== "antworten");
 
-        // Tool-Calls an Client senden
         for (const tc of otherCalls) {
+          collectedTools.push(tc.function.name);
           await stream.writeSSE({
             event: "tool_call",
             data: JSON.stringify({ tool: tc.function.name, args: tc.function.arguments }),
@@ -148,7 +181,10 @@ chatRoutes.post("/chat", (c) => {
           } catch {
             // Fallback
           }
-          appendAgentConversation(agentName, userMessage, antwortText);
+          // In DB speichern
+          if (DB_ENABLED && chatRepo && sessionId) {
+            await chatRepo.addMessage(sessionId, "assistant", antwortText, collectedTools);
+          }
           await stream.writeSSE({ event: "response", data: JSON.stringify({ text: antwortText }) });
           if (shouldCompact(agentName)) runCompaction(agentName).catch((err) => logError("Compaction", err));
           return;
@@ -170,7 +206,9 @@ chatRoutes.post("/chat", (c) => {
       }
 
       const fallback = "Ich konnte deine Anfrage nicht vollstaendig bearbeiten.";
-      appendAgentConversation(agentName, userMessage, fallback);
+      if (DB_ENABLED && chatRepo && sessionId) {
+        await chatRepo.addMessage(sessionId, "assistant", fallback, collectedTools);
+      }
       await stream.writeSSE({ event: "response", data: JSON.stringify({ text: fallback }) });
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);

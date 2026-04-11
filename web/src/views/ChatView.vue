@@ -10,9 +10,13 @@ interface ChatMessage {
 }
 
 interface SessionInfo {
-  date: string;
+  id: string;
   title: string;
-  count: number;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount?: number;
+  lastMessage?: string;
 }
 
 const messages = ref<ChatMessage[]>([]);
@@ -21,10 +25,8 @@ const loading = ref(false);
 const toolCalls = ref<string[]>([]);
 const chatContainer = ref<HTMLElement | null>(null);
 const sessions = ref<SessionInfo[]>([]);
-const activeDate = ref<string | null>(null);
+const activeSessionId = ref<string | null>(null);
 const sidebarOpen = ref(true);
-
-const today = new Date().toISOString().slice(0, 10);
 
 // ── Sessions gruppieren ──────────────────────────────────────────────────────
 const groupedSessions = computed(() => {
@@ -35,17 +37,18 @@ const groupedSessions = computed(() => {
   const olderGroup: SessionInfo[] = [];
 
   const now = new Date();
-  const yesterdayDate = new Date(now);
-  yesterdayDate.setDate(now.getDate() - 1);
-  const yesterdayStr = yesterdayDate.toISOString().slice(0, 10);
+  const todayStr = now.toISOString().slice(0, 10);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().slice(0, 10);
   const weekAgo = new Date(now);
   weekAgo.setDate(now.getDate() - 7);
-  const weekStr = weekAgo.toISOString().slice(0, 10);
 
   for (const s of sessions.value) {
-    if (s.date === today) todayGroup.push(s);
-    else if (s.date === yesterdayStr) yesterdayGroup.push(s);
-    else if (s.date >= weekStr) weekGroup.push(s);
+    const d = s.updatedAt.slice(0, 10);
+    if (d === todayStr) todayGroup.push(s);
+    else if (d === yesterdayStr) yesterdayGroup.push(s);
+    else if (new Date(s.updatedAt) >= weekAgo) weekGroup.push(s);
     else olderGroup.push(s);
   }
 
@@ -74,43 +77,52 @@ async function loadSessions() {
   }
 }
 
-async function selectSession(date: string) {
-  activeDate.value = date;
+async function selectSession(id: string) {
+  activeSessionId.value = id;
   messages.value = [];
   try {
-    const history = await api.get<{ user: string; assistant: string }[]>(
-      `/chat/history?date=${date}`,
+    const msgs = await api.get<{ role: string; content: string; tools: string[] }[]>(
+      `/chat/sessions/${id}/messages`,
     );
-    for (const entry of history) {
-      messages.value.push({ role: "user", text: entry.user });
-      messages.value.push({ role: "assistant", text: entry.assistant });
+    for (const m of msgs) {
+      if (m.role === "user" || m.role === "assistant") {
+        messages.value.push({
+          role: m.role,
+          text: m.content,
+          tools: m.tools?.length ? m.tools : undefined,
+        });
+      }
     }
     scrollToBottom();
   } catch {
-    // Verlauf nicht verfuegbar
+    // Laden fehlgeschlagen
   }
 }
 
-function newChat() {
-  activeDate.value = today;
+async function newChat() {
+  activeSessionId.value = null;
   messages.value = [];
   input.value = "";
 }
 
-function formatSessionDate(date: string) {
-  const d = new Date(date + "T12:00:00");
-  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit" });
+async function deleteSession(id: string) {
+  if (!confirm("Chat wirklich loeschen?")) return;
+  try {
+    await api.delete(`/chat/sessions/${id}`);
+    if (activeSessionId.value === id) {
+      activeSessionId.value = null;
+      messages.value = [];
+    }
+    await loadSessions();
+  } catch {
+    // Loeschen fehlgeschlagen
+  }
 }
 
 // ── Nachricht senden ─────────────────────────────────────────────────────────
 async function send() {
   const text = input.value.trim();
   if (!text || loading.value) return;
-
-  // Sicherstellen dass wir auf "heute" sind
-  if (activeDate.value !== today) {
-    activeDate.value = today;
-  }
 
   messages.value.push({ role: "user", text });
   input.value = "";
@@ -127,7 +139,10 @@ async function send() {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({
+        message: text,
+        sessionId: activeSessionId.value || undefined,
+      }),
     });
 
     if (!res.ok || !res.body) {
@@ -155,7 +170,10 @@ async function send() {
           const raw = line.slice(6);
           try {
             const data = JSON.parse(raw);
-            if (data.status) {
+            if (data.sessionId) {
+              // Session-ID vom Server erhalten (bei neuer Session)
+              activeSessionId.value = data.sessionId;
+            } else if (data.status) {
               // thinking
             } else if (data.tool) {
               collectedTools.push(data.tool);
@@ -178,7 +196,7 @@ async function send() {
       }
     }
 
-    // Sessions-Liste aktualisieren (neue Nachricht koennte Session erstellt haben)
+    // Sessions-Liste aktualisieren
     await loadSessions();
   } catch {
     messages.value.push({ role: "assistant", text: "Verbindung zum Server verloren." });
@@ -199,11 +217,9 @@ function onKeydown(e: KeyboardEvent) {
 // ── Init ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
   await loadSessions();
-  // Heutigen Chat laden falls vorhanden
-  activeDate.value = today;
-  const todaySession = sessions.value.find((s) => s.date === today);
-  if (todaySession) {
-    await selectSession(today);
+  // Neueste Session oeffnen falls vorhanden
+  if (sessions.value.length > 0) {
+    await selectSession(sessions.value[0].id);
   }
 });
 </script>
@@ -234,21 +250,27 @@ onMounted(async () => {
           <p class="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
             {{ group.label }}
           </p>
-          <button
+          <div
             v-for="session in group.items"
-            :key="session.date"
-            @click="selectSession(session.date)"
+            :key="session.id"
+            @click="selectSession(session.id)"
             :class="[
-              'w-full text-left px-3 py-2 rounded text-sm truncate transition',
-              activeDate === session.date
-                ? 'bg-gray-100 text-gray-900 font-medium'
+              'flex items-center gap-1 px-3 py-2 rounded text-sm cursor-pointer transition group',
+              activeSessionId === session.id
+                ? 'bg-gray-100 text-gray-900'
                 : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
             ]"
-            :title="session.title"
           >
-            <span class="block truncate">{{ session.title }}</span>
-            <span class="text-[10px] text-gray-400">{{ formatSessionDate(session.date) }} &middot; {{ session.count }} Nachrichten</span>
-          </button>
+            <span class="flex-1 truncate" :title="session.lastMessage || session.title">
+              {{ session.lastMessage || session.title }}
+            </span>
+            <button
+              @click.stop="deleteSession(session.id)"
+              class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition flex-shrink-0"
+            >
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
         </div>
         <div v-if="sessions.length === 0" class="px-3 py-4 text-xs text-gray-400 text-center">
           Noch keine Chats
@@ -263,17 +285,12 @@ onMounted(async () => {
         <button
           @click="sidebarOpen = !sidebarOpen"
           class="p-1.5 rounded hover:bg-gray-100 transition text-gray-400 hover:text-gray-600"
-          :title="sidebarOpen ? 'Sidebar schliessen' : 'Sidebar oeffnen'"
         >
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
             <path d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-        <span class="text-sm text-gray-500">
-          <template v-if="activeDate === today">Heute</template>
-          <template v-else-if="activeDate">{{ new Date(activeDate + 'T12:00:00').toLocaleDateString('de-AT', { weekday: 'long', day: '2-digit', month: 'long' }) }}</template>
-          <template v-else>Chat</template>
-        </span>
+        <span class="text-sm text-gray-500">Chat</span>
       </div>
 
       <!-- Messages -->
@@ -296,7 +313,6 @@ onMounted(async () => {
                   : 'bg-gray-50 border border-gray-100 text-gray-800',
               ]"
             >
-              <!-- Tool-Calls Badge -->
               <div v-if="msg.tools && msg.tools.length > 0" class="flex flex-wrap gap-1 mb-2">
                 <span
                   v-for="tool in msg.tools"
@@ -306,7 +322,6 @@ onMounted(async () => {
                   {{ tool }}
                 </span>
               </div>
-
               <div v-if="msg.role === 'assistant'">
                 <MarkdownRenderer :content="msg.text" />
               </div>
@@ -314,7 +329,7 @@ onMounted(async () => {
             </div>
           </div>
 
-          <!-- Loading indicator -->
+          <!-- Loading -->
           <div v-if="loading" class="flex justify-start">
             <div class="bg-gray-50 border border-gray-100 rounded-lg px-4 py-3 text-sm text-gray-500">
               <div class="flex items-center gap-2">

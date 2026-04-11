@@ -176,6 +176,39 @@ export interface FileRepository {
   updateContent(id: string, contentText: string): Promise<boolean>;
 }
 
+// ── Chat ────────────────────────────────────────────────────────────────────
+
+export interface ChatSession {
+  id: string;
+  agent: string;
+  title: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount?: number;
+  lastMessage?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  sessionId: string;
+  role: string;
+  content: string;
+  tools: string[];
+  source: string;
+  createdAt: string;
+}
+
+export interface ChatRepository {
+  createSession(agent?: string, title?: string, source?: string): Promise<ChatSession>;
+  listSessions(agent?: string, limit?: number): Promise<ChatSession[]>;
+  deleteSession(id: string): Promise<boolean>;
+  addMessage(sessionId: string, role: string, content: string, tools?: string[], source?: string): Promise<ChatMessage>;
+  getMessages(sessionId: string, limit?: number): Promise<ChatMessage[]>;
+  getRecentHistory(agent?: string, limit?: number): Promise<{ user: string; assistant: string }[]>;
+  getOrCreateTodaySession(agent: string, source?: string): Promise<string>;
+}
+
 export interface AgentLogRepository {
   create(log: Omit<AgentLog, "id" | "createdAt">): Promise<AgentLog>;
   listBySession(sessionId: string, limit?: number): Promise<AgentLog[]>;

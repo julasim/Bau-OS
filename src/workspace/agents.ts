@@ -262,6 +262,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
 // ---- Conversation Logging ----
 
 export function appendAgentConversation(agentName: string, userMsg: string, botReply: string): void {
+  // 1. Filesystem-Log (Fallback, immer geschrieben)
   const today = new Date().toISOString().slice(0, 10);
   const memDir = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR);
   const filepath = path.join(memDir, `${today}.md`);
@@ -279,6 +280,17 @@ export function appendAgentConversation(agentName: string, userMsg: string, botR
 
   const bootstrapPath = path.join(getAgentPath(agentName), "BOOTSTRAP.md");
   if (fs.existsSync(bootstrapPath)) fs.unlinkSync(bootstrapPath);
+
+  // 2. DB (fire-and-forget — Telegram-Chats auch in DB speichern)
+  _saveConversationToDB(agentName, userMsg, botReply).catch(() => {});
+}
+
+async function _saveConversationToDB(agentName: string, userMsg: string, botReply: string): Promise<void> {
+  const { chatRepo } = await import("../data/index.js");
+  if (!chatRepo) return;
+  const sessionId = await chatRepo.getOrCreateTodaySession(agentName, "telegram");
+  await chatRepo.addMessage(sessionId, "user", userMsg, [], "telegram");
+  await chatRepo.addMessage(sessionId, "assistant", botReply, [], "telegram");
 }
 
 export function loadAgentHistory(agentName: string, limit = 10): ConversationEntry[] {
