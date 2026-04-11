@@ -209,7 +209,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-0px)]">
+  <div class="flex h-full">
     <!-- Sidebar -->
     <aside
       v-if="sidebarOpen"
