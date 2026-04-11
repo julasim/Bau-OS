@@ -307,6 +307,49 @@ export function loadAgentHistory(agentName: string, limit = 10): ConversationEnt
   return results.slice(-limit);
 }
 
+export interface SessionInfo {
+  date: string;
+  title: string;
+  count: number;
+}
+
+export function listAgentSessions(agentName: string): SessionInfo[] {
+  const logsDir = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR);
+  if (!fs.existsSync(logsDir)) return [];
+
+  return fs
+    .readdirSync(logsDir)
+    .filter((f) => f.endsWith(".md") && /^\d{4}-\d{2}-\d{2}\.md$/.test(f))
+    .sort()
+    .reverse()
+    .map((f) => {
+      const date = f.replace(".md", "");
+      const content = fs.readFileSync(path.join(logsDir, f), "utf-8");
+      const blocks = content.split(/^## \d{2}:\d{2}/m).slice(1);
+      const firstUser = blocks[0]?.match(/\*\*User:\*\* (.+)/)?.[1] || "Chat";
+      return { date, title: firstUser.slice(0, 60), count: blocks.length };
+    });
+}
+
+export function loadAgentHistoryByDate(agentName: string, date: string): ConversationEntry[] {
+  const filepath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${date}.md`);
+  if (!fs.existsSync(filepath)) return [];
+
+  const content = fs.readFileSync(filepath, "utf-8");
+  const blocks = content.split(/^## \d{2}:\d{2}/m).slice(1);
+  const results: ConversationEntry[] = [];
+
+  for (const block of blocks) {
+    const userMatch = block.match(/\*\*User:\*\* (.+)/);
+    const botMatch = block.match(/\*\*[^*]+:\*\* ([\s\S]+?)(?=\n\n|\n##|$)/);
+    if (userMatch && botMatch) {
+      results.push({ user: userMatch[1].trim(), assistant: botMatch[1].trim() });
+    }
+  }
+
+  return results;
+}
+
 export function clearAgentToday(agentName: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
   const filepath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${today}.md`);

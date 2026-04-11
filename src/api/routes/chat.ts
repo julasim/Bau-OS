@@ -6,7 +6,14 @@ import { TOOLS } from "../../llm/tools.js";
 import { getDynamicToolSchemas } from "../../tools.js";
 import { getMcpToolSchemas } from "../../mcp.js";
 import { executeTool } from "../../llm/executor.js";
-import { loadAgentWorkspace, appendAgentConversation, loadAgentHistory, shouldCompact } from "../../workspace/index.js";
+import {
+  loadAgentWorkspace,
+  appendAgentConversation,
+  loadAgentHistory,
+  loadAgentHistoryByDate,
+  listAgentSessions,
+  shouldCompact,
+} from "../../workspace/index.js";
 import { runCompaction } from "../../llm/compaction.js";
 import {
   MAX_HISTORY_CHARS,
@@ -19,10 +26,19 @@ import { logInfo, logError } from "../../logger.js";
 
 export const chatRoutes = new Hono();
 
+// ── Chat-Sessions auflisten ──────────────────────────────────────────────────
+chatRoutes.get("/chat/sessions", (c) => {
+  const sessions = listAgentSessions("Main");
+  return c.json(sessions);
+});
+
 // ── Chatverlauf laden ────────────────────────────────────────────────────────
 chatRoutes.get("/chat/history", (c) => {
-  const history = loadAgentHistory("Main", HISTORY_LOAD_LIMIT);
-  return c.json(history);
+  const date = c.req.query("date");
+  if (date) {
+    return c.json(loadAgentHistoryByDate("Main", date));
+  }
+  return c.json(loadAgentHistory("Main", HISTORY_LOAD_LIMIT));
 });
 
 chatRoutes.post("/chat", (c) => {

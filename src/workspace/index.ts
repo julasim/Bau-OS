@@ -28,6 +28,8 @@ export {
   inspectAgentWorkspace,
   appendAgentConversation,
   loadAgentHistory,
+  loadAgentHistoryByDate,
+  listAgentSessions,
   clearAgentToday,
   appendAgentMemory,
   readAgentFile,
@@ -36,4 +38,4 @@ export {
   getLogForCompaction,
   writeCompactedLog,
 } from "./agents.js";
-export type { ConversationEntry, SetupAnswers, WorkspaceFileInfo } from "./agents.js";
+export type { ConversationEntry, SessionInfo, SetupAnswers, WorkspaceFileInfo } from "./agents.js";
