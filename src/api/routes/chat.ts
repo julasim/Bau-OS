@@ -58,13 +58,29 @@ chatRoutes.post("/chat", (c) => {
     await stream.writeSSE({ event: "status", data: JSON.stringify({ status: "thinking" }) });
 
     try {
+      const allTools = [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()];
+
       for (let i = 0; i < MAX_TOOL_ROUNDS; i++) {
-        const response = await client.chat.completions.create({
-          model: activeModel,
-          messages,
-          tools: [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()],
-          tool_choice: "required",
-        });
+        let response: Awaited<ReturnType<typeof client.chat.completions.create>>;
+        try {
+          response = await client.chat.completions.create({
+            model: activeModel,
+            messages,
+            tools: allTools,
+            tool_choice: "required",
+          });
+        } catch (toolErr) {
+          // Fallback: ohne Tools versuchen (Modell unterstuetzt evtl. keine Tools)
+          logInfo(`[Chat] Tool-Call fehlgeschlagen, Fallback ohne Tools: ${toolErr}`);
+          const fallbackResp = await client.chat.completions.create({
+            model: activeModel,
+            messages,
+          });
+          const text = fallbackResp.choices[0].message.content ?? "Erledigt.";
+          appendAgentConversation(agentName, userMessage, text);
+          await stream.writeSSE({ event: "response", data: JSON.stringify({ text }) });
+          return;
+        }
 
         const reply = response.choices[0].message;
         messages.push(reply);
@@ -141,8 +157,9 @@ chatRoutes.post("/chat", (c) => {
       appendAgentConversation(agentName, userMessage, fallback);
       await stream.writeSSE({ event: "response", data: JSON.stringify({ text: fallback }) });
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
       logError("[Chat] Error", err);
-      await stream.writeSSE({ event: "error", data: JSON.stringify({ error: "LLM-Fehler aufgetreten" }) });
+      await stream.writeSSE({ event: "error", data: JSON.stringify({ error: `LLM-Fehler: ${errMsg}` }) });
     }
   });
 });
