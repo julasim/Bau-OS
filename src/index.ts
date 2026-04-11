@@ -38,8 +38,8 @@ if (DB_ENABLED) {
 
 const bot = createBot(token) as Bot;
 
+const { fmt } = await import("./format.js");
 startHeartbeat(async (chatId, text) => {
-  const { fmt } = await import("./format.js");
   try {
     await bot.api.sendMessage(chatId, fmt(text), { parse_mode: "HTML" });
   } catch {

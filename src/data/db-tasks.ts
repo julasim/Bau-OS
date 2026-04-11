@@ -86,12 +86,12 @@ export const dbTasks: TaskRepository = {
     const [current] = await db`SELECT * FROM tasks WHERE id = ${id}`;
     if (!current) return null;
 
-    const text = "text" in updates ? (updates.text ?? null) : current.text;
-    const status = "status" in updates ? (updates.status ?? null) : current.status;
-    const assignee = "assignee" in updates ? (updates.assignee ?? null) : current.assignee;
-    const date = "date" in updates ? (updates.date ?? null) : current.date;
-    const location = "location" in updates ? (updates.location ?? null) : current.location;
-    const priority = "priority" in updates ? (updates.priority ?? null) : current.priority;
+    const text = "text" in updates ? updates.text : current.text;
+    const status = "status" in updates ? updates.status : current.status;
+    const assignee = "assignee" in updates ? updates.assignee : current.assignee;
+    const date = "date" in updates ? updates.date : current.date;
+    const location = "location" in updates ? updates.location : current.location;
+    const priority = "priority" in updates ? updates.priority : current.priority;
 
     const [row] = await db`
       UPDATE tasks SET

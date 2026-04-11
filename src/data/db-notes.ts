@@ -2,6 +2,7 @@
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { embedNote } from "../db/embeddings.js";
+import { logError } from "../logger.js";
 import type { NoteRepository } from "./types.js";
 
 export const dbNotes: NoteRepository = {
@@ -27,7 +28,7 @@ export const dbNotes: NoteRepository = {
     `;
 
     // Auto-Embed im Hintergrund (fire-and-forget)
-    embedNote(id, content).catch(() => {});
+    embedNote(id, content).catch((err) => logError("[Embedding]", err));
 
     return id;
   },
@@ -96,7 +97,7 @@ export const dbNotes: NoteRepository = {
     `;
     if (row) {
       // Re-embed mit neuem Content (fire-and-forget)
-      embedNote(String(row.id), content).catch(() => {});
+      embedNote(String(row.id), content).catch((err) => logError("[Embedding]", err));
     }
     return !!row;
   },

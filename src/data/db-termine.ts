@@ -85,12 +85,12 @@ export const dbTermine: TerminRepository = {
     const [current] = await db`SELECT * FROM termine WHERE id = ${id}`;
     if (!current) return null;
 
-    const text = "text" in updates ? (updates.text ?? null) : current.text;
-    const datum = "datum" in updates ? (updates.datum ?? null) : current.datum;
-    const uhrzeit = "uhrzeit" in updates ? (updates.uhrzeit ?? null) : current.uhrzeit;
-    const endzeit = "endzeit" in updates ? (updates.endzeit ?? null) : current.endzeit;
-    const location = "location" in updates ? (updates.location ?? null) : current.location;
-    const assignees = "assignees" in updates ? (updates.assignees ?? null) : current.assignees;
+    const text = "text" in updates ? updates.text : current.text;
+    const datum = "datum" in updates ? updates.datum : current.datum;
+    const uhrzeit = "uhrzeit" in updates ? updates.uhrzeit : current.uhrzeit;
+    const endzeit = "endzeit" in updates ? updates.endzeit : current.endzeit;
+    const location = "location" in updates ? updates.location : current.location;
+    const assignees = "assignees" in updates ? updates.assignees : current.assignees;
 
     const [row] = await db`
       UPDATE termine SET

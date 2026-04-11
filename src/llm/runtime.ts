@@ -112,8 +112,9 @@ export async function processAgent(
 
     messages.push(...toolResults);
 
-    // Pruning
-    const totalChars = messages.reduce((s, m) => s + JSON.stringify(m).length, 0);
+    // Pruning — inkrementelle Berechnung statt O(n²) JSON.stringify pro Iteration
+    let totalChars = 0;
+    for (const m of messages) totalChars += typeof m.content === "string" ? m.content.length : 200;
     if (totalChars > MAX_HISTORY_CHARS) {
       const systemMsg = messages[0];
       const toolMsgs = messages.filter((m) => m.role === "tool");

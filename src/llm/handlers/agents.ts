@@ -217,8 +217,23 @@ export const agentHandlers: HandlerMap = {
   },
 
   agent_datei_schreiben: async (args) => {
-    const ok = writeAgentFile(String(args.agent), String(args.datei), String(args.inhalt));
-    if (!ok) return `Fehler: "${args.datei}" nicht erlaubt oder Agent-Ordner nicht vorhanden.`;
+    const WRITABLE_FILES = [
+      "SOUL.md",
+      "BOOT.md",
+      "AGENTS.md",
+      "TOOLS.md",
+      "HEARTBEAT.md",
+      "BOOTSTRAP.md",
+      "USER.md",
+      "IDENTITY.md",
+      "MEMORY.md",
+    ];
+    const datei = String(args.datei);
+    if (!WRITABLE_FILES.some((f) => f.toUpperCase() === datei.toUpperCase())) {
+      return `Datei "${datei}" nicht erlaubt. Erlaubt: ${WRITABLE_FILES.join(", ")}`;
+    }
+    const ok = writeAgentFile(String(args.agent), datei, String(args.inhalt));
+    if (!ok) return `Fehler: Agent-Ordner nicht vorhanden.`;
 
     if (String(args.datei).toUpperCase() === "HEARTBEAT.MD") {
       const { reloadHeartbeat } = await import("../../heartbeat.js");

@@ -54,12 +54,12 @@ export const dbTeam: TeamRepository = {
     const [current] = await db`SELECT * FROM team_members WHERE id = ${id}`;
     if (!current) return null;
 
-    const name = "name" in updates ? (updates.name ?? null) : current.name;
-    const role = "role" in updates ? (updates.role ?? null) : current.role;
-    const email = "email" in updates ? (updates.email ?? null) : current.email;
-    const phone = "phone" in updates ? (updates.phone ?? null) : current.phone;
-    const company = "company" in updates ? (updates.company ?? null) : current.company;
-    const projectId = "projectId" in updates ? (updates.projectId ?? null) : current.project_id;
+    const name = "name" in updates ? updates.name : current.name;
+    const role = "role" in updates ? updates.role : current.role;
+    const email = "email" in updates ? updates.email : current.email;
+    const phone = "phone" in updates ? updates.phone : current.phone;
+    const company = "company" in updates ? updates.company : current.company;
+    const projectId = "projectId" in updates ? updates.projectId : current.project_id;
 
     const [row] = await db`
       UPDATE team_members SET

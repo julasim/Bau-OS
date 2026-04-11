@@ -65,10 +65,13 @@ export const dbChat: ChatRepository = {
 
   async deleteSession(id) {
     const db = getDb();
-    // Messages loeschen, dann Session
-    await db`DELETE FROM chat_messages WHERE session_id = ${id}`;
-    const result = await db`DELETE FROM chat_sessions WHERE id = ${id}`;
-    return result.count > 0;
+    let deleted = false;
+    await db.begin(async (tx) => {
+      await tx`DELETE FROM chat_messages WHERE session_id = ${id}`;
+      const result = await tx`DELETE FROM chat_sessions WHERE id = ${id}`;
+      deleted = result.count > 0;
+    });
+    return deleted;
   },
 
   async addMessage(sessionId, role, content, tools, source = "web") {

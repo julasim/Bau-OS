@@ -21,6 +21,10 @@ export function useEvents(types: EventType[], onEvent: (event: DataEvent) => voi
   const connected = ref(false);
   let source: EventSource | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let reconnectDelay = 3000;
+  let reconnectAttempts = 0;
+  const MAX_RECONNECT_ATTEMPTS = 10;
+  const MAX_RECONNECT_DELAY = 60_000;
 
   function connect() {
     const token = localStorage.getItem("bau-os-token");
@@ -33,6 +37,8 @@ export function useEvents(types: EventType[], onEvent: (event: DataEvent) => voi
 
     source.addEventListener("connected", () => {
       connected.value = true;
+      reconnectDelay = 3000;
+      reconnectAttempts = 0;
     });
 
     for (const type of types) {
@@ -50,8 +56,10 @@ export function useEvents(types: EventType[], onEvent: (event: DataEvent) => voi
       connected.value = false;
       source?.close();
       source = null;
-      // Reconnect nach 3 Sekunden
-      reconnectTimer = setTimeout(connect, 3000);
+      reconnectAttempts++;
+      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
+      reconnectTimer = setTimeout(connect, reconnectDelay);
+      reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
     };
   }
 

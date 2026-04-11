@@ -126,9 +126,14 @@ const ALLOWED_COMMANDS = [
 export const systemHandlers: HandlerMap = {
   befehl_ausfuehren: async (args) => {
     const cmd = String(args.befehl).trim();
-    const baseCmd = cmd.split(/[\s|;&]/)[0].replace(/^.*\//, "");
-    if (!ALLOWED_COMMANDS.includes(baseCmd))
-      return `Befehl "${baseCmd}" nicht erlaubt. Erlaubte Befehle: ${ALLOWED_COMMANDS.slice(0, 15).join(", ")}...`;
+    // Jeden Befehl nach |, ;, &&, || einzeln validieren
+    const cmdTokens = cmd
+      .split(/\s*(?:\|{1,2}|;|&&)\s*/)
+      .map((part) => part.trim().split(/\s/)[0].replace(/^.*\//, ""))
+      .filter(Boolean);
+    const blocked = cmdTokens.filter((t) => !ALLOWED_COMMANDS.includes(t));
+    if (blocked.length > 0)
+      return `Befehl nicht erlaubt: ${blocked.join(", ")}. Erlaubte Befehle: ${ALLOWED_COMMANDS.slice(0, 15).join(", ")}...`;
 
     const cwd = args.verzeichnis ? String(args.verzeichnis) : process.cwd();
     const timeoutMs = Math.min(Number(args.timeout) || COMMAND_TIMEOUT_SEC, COMMAND_TIMEOUT_MAX_SEC) * 1000;

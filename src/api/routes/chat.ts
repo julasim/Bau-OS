@@ -80,7 +80,11 @@ chatRoutes.post("/chat", (c) => {
         sessionId = session.id;
       }
       // User-Nachricht in DB speichern
-      await chatRepo.addMessage(sessionId, "user", userMessage);
+      try {
+        await chatRepo.addMessage(sessionId, "user", userMessage);
+      } catch (e) {
+        logError("[Chat DB]", e);
+      }
       // Session-ID an Client senden
       await stream.writeSSE({ event: "session", data: JSON.stringify({ sessionId }) });
     }
@@ -135,7 +139,11 @@ chatRoutes.post("/chat", (c) => {
           const antwort = reply.content ?? "Erledigt.";
           // In DB speichern
           if (DB_ENABLED && chatRepo && sessionId) {
-            await chatRepo.addMessage(sessionId, "assistant", antwort, collectedTools);
+            try {
+              await chatRepo.addMessage(sessionId, "assistant", antwort, collectedTools);
+            } catch (e) {
+              logError("[Chat DB]", e);
+            }
           }
           await stream.writeSSE({ event: "response", data: JSON.stringify({ text: antwort }) });
           if (shouldCompact(agentName)) runCompaction(agentName).catch((err) => logError("Compaction", err));
@@ -183,7 +191,11 @@ chatRoutes.post("/chat", (c) => {
           }
           // In DB speichern
           if (DB_ENABLED && chatRepo && sessionId) {
-            await chatRepo.addMessage(sessionId, "assistant", antwortText, collectedTools);
+            try {
+              await chatRepo.addMessage(sessionId, "assistant", antwortText, collectedTools);
+            } catch (e) {
+              logError("[Chat DB]", e);
+            }
           }
           await stream.writeSSE({ event: "response", data: JSON.stringify({ text: antwortText }) });
           if (shouldCompact(agentName)) runCompaction(agentName).catch((err) => logError("Compaction", err));
@@ -207,7 +219,11 @@ chatRoutes.post("/chat", (c) => {
 
       const fallback = "Ich konnte deine Anfrage nicht vollstaendig bearbeiten.";
       if (DB_ENABLED && chatRepo && sessionId) {
-        await chatRepo.addMessage(sessionId, "assistant", fallback, collectedTools);
+        try {
+          await chatRepo.addMessage(sessionId, "assistant", fallback, collectedTools);
+        } catch (e) {
+          logError("[Chat DB]", e);
+        }
       }
       await stream.writeSSE({ event: "response", data: JSON.stringify({ text: fallback }) });
     } catch (err) {

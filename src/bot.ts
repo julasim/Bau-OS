@@ -39,6 +39,13 @@ async function safeReply(
   }
 }
 
+// Typing-Indicator starten — gibt clearInterval-Funktion zurueck
+function startTyping(ctx: { replyWithChatAction: (action: "typing") => Promise<unknown> }): () => void {
+  ctx.replyWithChatAction("typing").catch(() => {});
+  const timer = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), TYPING_INTERVAL_MS);
+  return () => clearInterval(timer);
+}
+
 export function createBot(token: string): Bot {
   const bot = new Bot(token);
 
@@ -70,14 +77,13 @@ export function createBot(token: string): Bot {
       // Setup-Wizard (Erster Start)
       if (!isMainWorkspaceConfigured() || isSetupActive()) {
         if (!isSetupActive()) activateSetup();
-        const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), TYPING_INTERVAL_MS);
-        await ctx.replyWithChatAction("typing");
+        const stopTyping = startTyping(ctx);
         try {
           const antwort = await processSetup(raw);
-          clearInterval(typing);
+          stopTyping();
           await safeReply(ctx, antwort);
         } catch (err) {
-          clearInterval(typing);
+          stopTyping();
           logError("Setup", err);
           await ctx.reply("Fehler beim Setup – ist das LLM gestartet?");
         }
@@ -87,32 +93,28 @@ export function createBot(token: string): Bot {
       // /btw Direktive
       const btwMatch = raw.match(/^\/btw\s+(.+)/is);
       if (btwMatch) {
-        const typing = setInterval(() => ctx.replyWithChatAction("typing").catch(() => {}), TYPING_INTERVAL_MS);
-        await ctx.replyWithChatAction("typing");
+        const stopTyping = startTyping(ctx);
         try {
           const antwort = await processBtw(btwMatch[1].trim());
-          clearInterval(typing);
+          stopTyping();
           await safeReply(ctx, antwort);
         } catch {
-          clearInterval(typing);
+          stopTyping();
           await ctx.reply("Fehler bei /btw – ist Ollama gestartet?");
         }
         return;
       }
 
       const text = raw;
-      const typing = setInterval(() => {
-        ctx.replyWithChatAction("typing").catch(() => {});
-      }, 4000);
-      await ctx.replyWithChatAction("typing");
+      const stopTyping = startTyping(ctx);
 
       try {
         setReplyContext((msg) => safeReply(ctx, msg).then(() => {}));
         const antwort = await processMessage(text);
-        clearInterval(typing);
+        stopTyping();
         await safeReply(ctx, antwort);
       } catch (err: unknown) {
-        clearInterval(typing);
+        stopTyping();
         logError("LLM", err);
         try {
           const filepath = saveNote(text);

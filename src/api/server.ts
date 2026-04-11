@@ -32,7 +32,7 @@ const allowedOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split
 app.use(
   "/api/*",
   cors({
-    origin: allowedOrigins ?? "*",
+    origin: allowedOrigins ?? `http://localhost:${API_PORT}`,
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     allowHeaders: ["Content-Type", "Authorization"],
   }),

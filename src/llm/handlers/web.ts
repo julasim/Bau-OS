@@ -76,9 +76,25 @@ export const webSchemas: OpenAI.Chat.ChatCompletionTool[] = [
   },
 ];
 
+function isPrivateUrl(urlStr: string): boolean {
+  try {
+    const host = new URL(urlStr).hostname;
+    if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0") return true;
+    const parts = host.split(".").map(Number);
+    if (parts[0] === 10) return true;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+    if (parts[0] === 192 && parts[1] === 168) return true;
+    if (parts[0] === 169 && parts[1] === 254) return true;
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 export const webHandlers: HandlerMap = {
   http_anfrage: async (args) => {
     const url = String(args.url);
+    if (isPrivateUrl(url)) return "Zugriff auf interne/private Adressen nicht erlaubt.";
     const method = (args.methode ? String(args.methode) : "GET").toUpperCase();
 
     const options: RequestInit = {

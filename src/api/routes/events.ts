@@ -28,6 +28,7 @@ eventsRoutes.get("/events", (c) => {
         await stream.writeSSE({ event: "ping", data: "", id: String(eventId++) });
       } catch {
         clearInterval(heartbeat);
+        unsubscribe();
       }
     }, 30_000);
 
