@@ -1,14 +1,14 @@
 import { Hono } from "hono";
 import path from "path";
-import { VAULT_PATH } from "../../config.js";
-import { readFile, listFolder } from "../../vault/index.js";
+import { WORKSPACE_PATH } from "../../config.js";
+import { readFile, listFolder } from "../../workspace/index.js";
 
 export const filesRoutes = new Hono();
 
 // Path-Traversal-Schutz
 function safePath(userPath: string): string | null {
-  const resolved = path.resolve(VAULT_PATH, userPath);
-  if (!resolved.startsWith(VAULT_PATH)) return null;
+  const resolved = path.resolve(WORKSPACE_PATH, userPath);
+  if (!resolved.startsWith(WORKSPACE_PATH)) return null;
   return userPath;
 }
 

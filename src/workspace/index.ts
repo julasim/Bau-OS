@@ -1,4 +1,4 @@
-// Barrel re-export for all vault modules
+// Barrel re-export for all workspace modules
 export { saveNote, listNotes, readNote, updateNote, appendToNote, deleteNote } from "./notes.js";
 export { saveTask, listTasks, listOpenTasks, getTask, updateTask, completeTask, deleteTask } from "./tasks.js";
 export type { Task } from "./tasks.js";
@@ -11,7 +11,7 @@ export { readFile, createFile, listFolder } from "./files.js";
 export type { FolderEntry } from "./files.js";
 export { editFile, globFiles, grepFiles } from "./fileops.js";
 export type { EditResult, GrepMatch, GrepResult } from "./fileops.js";
-export { searchVault } from "./search.js";
+export { searchWorkspace } from "./search.js";
 export type { SearchResult } from "./search.js";
 export {
   PROTECTED_AGENTS,
@@ -19,8 +19,8 @@ export {
   getAgentPath,
   isProtectedAgent,
   listAgents,
-  vaultExists,
-  getVaultPath,
+  workspaceExists,
+  getWorkspacePath,
   isMainWorkspaceConfigured,
   finalizeMainWorkspace,
   loadAgentWorkspace,

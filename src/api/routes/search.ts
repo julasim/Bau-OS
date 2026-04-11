@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { searchVault } from "../../vault/index.js";
+import { searchWorkspace } from "../../workspace/index.js";
 import { DB_ENABLED } from "../../config.js";
 
 export const searchRoutes = new Hono();
@@ -25,7 +25,7 @@ searchRoutes.get("/search", async (c) => {
   }
 
   // Vault-Textsuche (Fallback oder explizit)
-  const results = searchVault(q, project);
+  const results = searchWorkspace(q, project);
   return c.json({ mode: "text", results });
 });
 

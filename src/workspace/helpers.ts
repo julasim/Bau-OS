@@ -1,8 +1,8 @@
 import fs from "fs";
 import path from "path";
-import { VAULT_PATH, VAULT_INBOX, LOCALE } from "../config.js";
+import { WORKSPACE_PATH, WORKSPACE_INBOX, LOCALE } from "../config.js";
 
-export const vaultPath = VAULT_PATH;
+export const workspacePath = WORKSPACE_PATH;
 
 export function timestampFilename(): string {
   return new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
@@ -37,8 +37,8 @@ export function atomicWriteSync(filepath: string, data: string): void {
 
 /** Sicherer Pfad innerhalb des Vaults — blockiert Traversal und Symlinks */
 export function safePath(relativePath: string): string | null {
-  const resolved = path.resolve(vaultPath, relativePath);
-  if (!resolved.startsWith(vaultPath)) return null;
+  const resolved = path.resolve(workspacePath, relativePath);
+  if (!resolved.startsWith(workspacePath)) return null;
   try {
     if (fs.existsSync(resolved) && fs.lstatSync(resolved).isSymbolicLink()) return null;
   } catch {
@@ -50,7 +50,7 @@ export function safePath(relativePath: string): string | null {
 export function resolveNotePath(nameOrPath: string): string | null {
   const withExt = nameOrPath.endsWith(".md") ? nameOrPath : nameOrPath + ".md";
 
-  for (const candidate of [path.join(vaultPath, withExt), path.join(vaultPath, VAULT_INBOX, withExt)]) {
+  for (const candidate of [path.join(workspacePath, withExt), path.join(workspacePath, WORKSPACE_INBOX, withExt)]) {
     if (fs.existsSync(candidate)) return candidate;
   }
 
@@ -74,5 +74,5 @@ export function resolveNotePath(nameOrPath: string): string | null {
     return null;
   }
 
-  return searchDir(vaultPath);
+  return searchDir(workspacePath);
 }

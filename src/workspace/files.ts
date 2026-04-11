@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { vaultPath, ensureDir, safePath } from "./helpers.js";
+import { workspacePath, ensureDir, safePath } from "./helpers.js";
 
 export function readFile(relativePath: string): string | null {
   const filepath = safePath(relativePath);
@@ -22,7 +22,7 @@ export interface FolderEntry {
 }
 
 export function listFolder(relativePath = ""): FolderEntry[] {
-  const folderPath = relativePath ? safePath(relativePath) : vaultPath;
+  const folderPath = relativePath ? safePath(relativePath) : workspacePath;
   if (!folderPath || !fs.existsSync(folderPath)) return [];
 
   try {

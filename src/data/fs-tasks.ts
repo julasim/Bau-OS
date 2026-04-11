@@ -1,5 +1,5 @@
 // Filesystem-Implementation: wrapped bestehende vault/tasks.ts
-import * as vault from "../vault/tasks.js";
+import * as vault from "../workspace/tasks.js";
 import type { Task, TaskRepository } from "./types.js";
 
 export const fsTasks: TaskRepository = {

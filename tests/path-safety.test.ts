@@ -7,7 +7,7 @@ const tmpDir = path.join(os.tmpdir(), "bau-os-path-test-" + Date.now());
 
 beforeEach(() => {
   fs.mkdirSync(tmpDir, { recursive: true });
-  process.env.VAULT_PATH = tmpDir;
+  process.env.WORKSPACE_PATH = tmpDir;
 });
 
 afterEach(() => {
@@ -19,7 +19,7 @@ describe("safeProjectName — indirekt via getProjectInfo", () => {
   let listProjectNotes: (name: string) => string[];
 
   beforeEach(async () => {
-    const mod = await import("../src/vault/projects.js");
+    const mod = await import("../src/workspace/projects.js");
     getProjectInfo = mod.getProjectInfo;
     listProjectNotes = mod.listProjectNotes;
   });

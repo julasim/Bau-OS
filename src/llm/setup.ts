@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import type OpenAI from "openai";
 import { client, getModel } from "./client.js";
-import { loadAgentWorkspace, finalizeMainWorkspace } from "../vault/index.js";
+import { loadAgentWorkspace, finalizeMainWorkspace } from "../workspace/index.js";
 
 // ---- Setup State (replaces src/setup.ts) ----
 
@@ -21,7 +21,12 @@ export function deactivateSetup(): void {
 // ---- Bootstrap Prompt ----
 
 function loadBootstrapPrompt(): string {
-  const bootstrapPath = path.join(process.env.VAULT_PATH!, "Agents", "Main", "BOOTSTRAP.md");
+  const bootstrapPath = path.join(
+    process.env.WORKSPACE_PATH ?? process.env.VAULT_PATH!,
+    "Agents",
+    "Main",
+    "BOOTSTRAP.md",
+  );
   if (fs.existsSync(bootstrapPath)) {
     return fs.readFileSync(bootstrapPath, "utf-8").trim();
   }

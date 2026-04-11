@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { vaultPath } from "./helpers.js";
+import { workspacePath } from "./helpers.js";
 import { listTasks } from "./tasks.js";
 import { listTermine } from "./termine.js";
 
@@ -16,7 +16,7 @@ function safeProjectName(name: string): boolean {
 }
 
 export function listProjects(): string[] {
-  const projektePath = path.join(vaultPath, "Projekte");
+  const projektePath = path.join(workspacePath, "Projekte");
   if (!fs.existsSync(projektePath)) return [];
 
   try {
@@ -31,7 +31,7 @@ export function listProjects(): string[] {
 
 export function getProjectInfo(name: string): ProjectInfo | null {
   if (!safeProjectName(name)) return null;
-  const projectPath = path.join(vaultPath, "Projekte", name);
+  const projectPath = path.join(workspacePath, "Projekte", name);
   if (!fs.existsSync(projectPath)) return null;
 
   const openTasks = listTasks(name).filter((t) => t.status !== "done").length;
@@ -51,7 +51,7 @@ export function getProjectInfo(name: string): ProjectInfo | null {
 
 export function listProjectNotes(name: string): string[] {
   if (!safeProjectName(name)) return [];
-  const notesDir = path.join(vaultPath, "Projekte", name, "Notizen");
+  const notesDir = path.join(workspacePath, "Projekte", name, "Notizen");
   if (!fs.existsSync(notesDir)) return [];
 
   try {
@@ -68,7 +68,7 @@ export function listProjectNotes(name: string): string[] {
 
 export function readProjectNote(project: string, noteName: string): string | null {
   if (!safeProjectName(project)) return null;
-  const filepath = path.join(vaultPath, "Projekte", project, "Notizen", noteName + ".md");
+  const filepath = path.join(workspacePath, "Projekte", project, "Notizen", noteName + ".md");
   if (!fs.existsSync(filepath)) return null;
   return fs.readFileSync(filepath, "utf-8");
 }

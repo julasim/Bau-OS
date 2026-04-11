@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import cron from "node-cron";
-import { getAgentPath, listAgents } from "./vault/index.js";
+import { getAgentPath, listAgents } from "./workspace/index.js";
 import { TIMEZONE, CHAT_ID_FILE } from "./config.js";
 import { logInfo, logError } from "./logger.js";
 

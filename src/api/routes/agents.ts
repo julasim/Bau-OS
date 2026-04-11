@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { listAgents, inspectAgentWorkspace, readAgentFile, writeAgentFile } from "../../vault/index.js";
+import { listAgents, inspectAgentWorkspace, readAgentFile, writeAgentFile } from "../../workspace/index.js";
 
 const EDITABLE_FILES = [
   "SOUL.md",

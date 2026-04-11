@@ -10,6 +10,7 @@ import type {
   TerminRepository,
   NoteRepository,
   ProjectRepository,
+  TeamRepository,
   AgentLogRepository,
 } from "./types.js";
 
@@ -23,6 +24,8 @@ import { dbTermine } from "./db-termine.js";
 import { dbNotes } from "./db-notes.js";
 import { dbProjects } from "./db-projects.js";
 import { dbAgentLogs } from "./db-agent-logs.js";
+import { fsTeam } from "./fs-team.js";
+import { dbTeam } from "./db-team.js";
 
 // ── Repos basierend auf Config wählen ────────────────────────
 
@@ -30,6 +33,7 @@ export const taskRepo: TaskRepository = DB_ENABLED ? dbTasks : fsTasks;
 export const terminRepo: TerminRepository = DB_ENABLED ? dbTermine : fsTermine;
 export const noteRepo: NoteRepository = DB_ENABLED ? dbNotes : fsNotes;
 export const projectRepo: ProjectRepository = DB_ENABLED ? dbProjects : fsProjects;
+export const teamRepo: TeamRepository = DB_ENABLED ? dbTeam : fsTeam;
 export const agentLogRepo: AgentLogRepository | null = DB_ENABLED ? dbAgentLogs : null;
 
 /** Gibt den aktuellen Modus zurueck */
@@ -38,11 +42,12 @@ export function dataMode(): "database" | "filesystem" {
 }
 
 // Re-export types
-export type { Task, Termin, Note, Project, AgentLog } from "./types.js";
+export type { Task, Termin, Note, Project, TeamMember, AgentLog } from "./types.js";
 export type {
   TaskRepository,
   TerminRepository,
   NoteRepository,
   ProjectRepository,
+  TeamRepository,
   AgentLogRepository,
 } from "./types.js";

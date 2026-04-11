@@ -1,16 +1,16 @@
 import type { Context } from "grammy";
 import {
-  vaultExists,
-  getVaultPath,
+  workspaceExists,
+  getWorkspacePath,
   inspectAgentWorkspace,
   clearAgentToday,
   listAgents,
   getAgentPath,
   loadAgentHistory,
-} from "../vault/index.js";
+} from "../workspace/index.js";
 import { readRecentLogs, logError } from "../logger.js";
 import {
-  VAULT_LOGS_DIR,
+  WORKSPACE_LOGS_DIR,
   TYPING_INTERVAL_MS,
   LOG_DEFAULT_LINES,
   LOG_MAX_DISPLAY_LINES,
@@ -45,8 +45,8 @@ export async function handleHilfe(ctx: Context): Promise<void> {
 }
 
 export async function handleStatus(ctx: Context): Promise<void> {
-  const vault = vaultExists();
-  const vaultPath = getVaultPath();
+  const vault = workspaceExists();
+  const workspacePath = getWorkspacePath();
   const whisperLang = process.env.WHISPER_LANG ?? "de";
   const pythonPath = process.env.PYTHON_PATH ?? "python";
 
@@ -54,8 +54,8 @@ export async function handleStatus(ctx: Context): Promise<void> {
   let taskCount = 0;
 
   if (vault) {
-    const inboxPath = `${vaultPath}/Inbox`;
-    const tasksPath = `${vaultPath}/Aufgaben.md`;
+    const inboxPath = `${workspacePath}/Inbox`;
+    const tasksPath = `${workspacePath}/Aufgaben.md`;
 
     if (fs.existsSync(inboxPath)) {
       inboxCount = fs.readdirSync(inboxPath).filter((f) => f.endsWith(".md")).length;
@@ -72,7 +72,7 @@ export async function handleStatus(ctx: Context): Promise<void> {
 Bau-OS Status
 
 Vault: ${vault ? "\u2713 erreichbar" : "\u2717 nicht gefunden"}
-Pfad: ${vaultPath}
+Pfad: ${workspacePath}
 Notizen in Inbox: ${inboxCount}
 Offene Aufgaben: ${taskCount}
 
@@ -171,7 +171,7 @@ export async function handleAgents(ctx: Context): Promise<void> {
 
   const today = new Date().toISOString().slice(0, 10);
   const lines = agents.map((name) => {
-    const logPath = path.join(getAgentPath(name), VAULT_LOGS_DIR, `${today}.md`);
+    const logPath = path.join(getAgentPath(name), WORKSPACE_LOGS_DIR, `${today}.md`);
     const aktiv = fs.existsSync(logPath) ? "\u25CF aktiv" : "\u25CB";
     return `${aktiv} ${name}`;
   });
@@ -190,7 +190,7 @@ export async function handleExportSession(ctx: Context): Promise<void> {
   const lines = history.map((h) => `User: ${h.user}\nAgent: ${h.assistant}`).join("\n\n---\n\n");
   const content = `# Session Export – ${today}\n\n${lines}\n`;
 
-  const exportPath = path.join(getVaultPath(), "Exports", `session_${today}.md`);
+  const exportPath = path.join(getWorkspacePath(), "Exports", `session_${today}.md`);
   const exportDir = path.dirname(exportPath);
   if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
   fs.writeFileSync(exportPath, content, "utf-8");
@@ -277,7 +277,7 @@ export async function handleConfig(ctx: Context): Promise<void> {
     "Bau-OS Konfiguration",
     "",
     `BOT_TOKEN:  ${masked}`,
-    `VAULT_PATH: ${process.env.VAULT_PATH ?? "\u2013"}`,
+    `WORKSPACE_PATH: ${process.env.WORKSPACE_PATH ?? "\u2013"}`,
     `OLLAMA_URL: ${process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1"}`,
     `MODELL:     ${process.env.OLLAMA_MODEL ?? "qwen2.5:7b"}`,
   ].join("\n");

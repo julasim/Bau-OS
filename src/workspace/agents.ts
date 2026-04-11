@@ -4,13 +4,13 @@ import {
   PROTECTED_AGENTS as _PROTECTED_AGENTS,
   COMPACT_THRESHOLD,
   KEEP_RECENT_LOGS,
-  VAULT_AGENTS_DIR,
-  VAULT_LOGS_DIR,
+  WORKSPACE_AGENTS_DIR,
+  WORKSPACE_LOGS_DIR,
   LOCALE,
   WS_MAX_FILE_CHARS,
   WS_MAX_TOTAL_CHARS,
 } from "../config.js";
-import { vaultPath, ensureDir } from "./helpers.js";
+import { workspacePath, ensureDir } from "./helpers.js";
 
 // ---- Constants ----
 
@@ -63,7 +63,7 @@ export function estimateTokens(text: string): number {
 }
 
 export function getAgentPath(agentName: string): string {
-  return path.join(vaultPath, VAULT_AGENTS_DIR, agentName);
+  return path.join(workspacePath, WORKSPACE_AGENTS_DIR, agentName);
 }
 
 export function isProtectedAgent(agentName: string): boolean {
@@ -71,7 +71,7 @@ export function isProtectedAgent(agentName: string): boolean {
 }
 
 export function listAgents(): string[] {
-  const agentsRoot = path.join(vaultPath, VAULT_AGENTS_DIR);
+  const agentsRoot = path.join(workspacePath, WORKSPACE_AGENTS_DIR);
   if (!fs.existsSync(agentsRoot)) return [];
   try {
     return fs
@@ -83,12 +83,12 @@ export function listAgents(): string[] {
   }
 }
 
-export function vaultExists(): boolean {
-  return fs.existsSync(vaultPath);
+export function workspaceExists(): boolean {
+  return fs.existsSync(workspacePath);
 }
 
-export function getVaultPath(): string {
-  return vaultPath;
+export function getWorkspacePath(): string {
+  return workspacePath;
 }
 
 // ---- Workspace ----
@@ -100,7 +100,7 @@ function truncateFile(content: string, filename: string): string {
 }
 
 export function isMainWorkspaceConfigured(): boolean {
-  const identityPath = path.join(vaultPath, VAULT_AGENTS_DIR, "Main", "IDENTITY.md");
+  const identityPath = path.join(workspacePath, WORKSPACE_AGENTS_DIR, "Main", "IDENTITY.md");
   if (!fs.existsSync(identityPath)) return false;
   return fs.readFileSync(identityPath, "utf-8").includes("## Name:");
 }
@@ -135,7 +135,7 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
     addFile(path.join(agentDir, "MEMORY.md"), "MEMORY.md");
     addFile(path.join(agentDir, "HEARTBEAT.md"), "HEARTBEAT.md");
 
-    const memDir = path.join(agentDir, VAULT_LOGS_DIR);
+    const memDir = path.join(agentDir, WORKSPACE_LOGS_DIR);
     let isFirstRun = !fs.existsSync(memDir);
     if (!isFirstRun) {
       try {
@@ -147,7 +147,7 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
     if (isFirstRun) addFile(path.join(agentDir, "BOOTSTRAP.md"), "BOOTSTRAP.md");
 
     const today = new Date().toISOString().slice(0, 10);
-    addFile(path.join(agentDir, VAULT_LOGS_DIR, `${today}.md`), "Tageslog");
+    addFile(path.join(agentDir, WORKSPACE_LOGS_DIR, `${today}.md`), "Tageslog");
   }
 
   return context.trim();
@@ -155,7 +155,7 @@ export function loadAgentWorkspace(agentName: string, mode: "full" | "minimal" =
 
 export function createAgentWorkspace(agentName: string, soul: string, agentsMd = "", userMd = ""): string {
   const agentDir = getAgentPath(agentName);
-  ensureDir(path.join(agentDir, VAULT_LOGS_DIR));
+  ensureDir(path.join(agentDir, WORKSPACE_LOGS_DIR));
 
   const userDefault = `# User\n\nJulius Sima – Architekt, Wien.\nSprache: Deutsch. Kurze, direkte Antworten bevorzugt.\n`;
   const agentsDefault = `# ${agentName} – Sub-Agents\n\nKeine Sub-Agents konfiguriert.\n`;
@@ -182,8 +182,8 @@ export function createAgentWorkspace(agentName: string, soul: string, agentsMd =
 
 export function finalizeMainWorkspace(answers: SetupAnswers): void {
   const agentName = answers.name || "Main";
-  const agentDir = path.join(vaultPath, VAULT_AGENTS_DIR, "Main");
-  ensureDir(path.join(agentDir, VAULT_LOGS_DIR));
+  const agentDir = path.join(workspacePath, WORKSPACE_AGENTS_DIR, "Main");
+  ensureDir(path.join(agentDir, WORKSPACE_LOGS_DIR));
 
   const files: Record<string, string> = {
     "IDENTITY.md": `# Identity\n\n## Name: ${answers.name}\n## Emoji: ${answers.emoji}\n## Vibe: ${answers.vibe}\n## Kontext: ${answers.context}\n`,
@@ -205,7 +205,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
   const agentDir = getAgentPath(agentName);
   const today = new Date().toISOString().slice(0, 10);
 
-  const memDir = path.join(agentDir, VAULT_LOGS_DIR);
+  const memDir = path.join(agentDir, WORKSPACE_LOGS_DIR);
   let isFirstRun = !fs.existsSync(memDir);
   if (!isFirstRun) {
     try {
@@ -227,7 +227,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
           { name: "MEMORY.md", filepath: path.join(agentDir, "MEMORY.md") },
           { name: "HEARTBEAT.md", filepath: path.join(agentDir, "HEARTBEAT.md") },
           ...(isFirstRun ? [{ name: "BOOTSTRAP.md", filepath: path.join(agentDir, "BOOTSTRAP.md") }] : []),
-          { name: "Tageslog", filepath: path.join(agentDir, VAULT_LOGS_DIR, `${today}.md`) },
+          { name: "Tageslog", filepath: path.join(agentDir, WORKSPACE_LOGS_DIR, `${today}.md`) },
         ]
       : []),
   ];
@@ -263,7 +263,7 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
 
 export function appendAgentConversation(agentName: string, userMsg: string, botReply: string): void {
   const today = new Date().toISOString().slice(0, 10);
-  const memDir = path.join(getAgentPath(agentName), VAULT_LOGS_DIR);
+  const memDir = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR);
   const filepath = path.join(memDir, `${today}.md`);
   ensureDir(memDir);
 
@@ -289,7 +289,7 @@ export function loadAgentHistory(agentName: string, limit = 10): ConversationEnt
 
   for (const date of [yesterday, today]) {
     const iso = date.toISOString().slice(0, 10);
-    const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${iso}.md`);
+    const filepath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${iso}.md`);
     if (!fs.existsSync(filepath)) continue;
 
     const content = fs.readFileSync(filepath, "utf-8");
@@ -309,7 +309,7 @@ export function loadAgentHistory(agentName: string, limit = 10): ConversationEnt
 
 export function clearAgentToday(agentName: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${today}.md`);
   if (!fs.existsSync(filepath)) return false;
   fs.unlinkSync(filepath);
   return true;
@@ -332,14 +332,14 @@ export function appendAgentMemory(agentName: string, entry: string): void {
 // ---- Agent File Editor ----
 
 export function readAgentFile(agentName: string, filename: string): string | null {
-  const filepath = path.join(vaultPath, VAULT_AGENTS_DIR, agentName, filename);
+  const filepath = path.join(workspacePath, WORKSPACE_AGENTS_DIR, agentName, filename);
   if (!fs.existsSync(filepath)) return null;
   return fs.readFileSync(filepath, "utf-8");
 }
 
 export function writeAgentFile(agentName: string, filename: string, content: string): boolean {
   if (!EDITABLE_AGENT_FILES.includes(filename)) return false;
-  const filepath = path.join(vaultPath, VAULT_AGENTS_DIR, agentName, filename);
+  const filepath = path.join(workspacePath, WORKSPACE_AGENTS_DIR, agentName, filename);
   if (!fs.existsSync(path.dirname(filepath))) return false;
   fs.writeFileSync(filepath, content, "utf-8");
   return true;
@@ -349,14 +349,14 @@ export function writeAgentFile(agentName: string, filename: string, content: str
 
 export function shouldCompact(agentName: string): boolean {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${today}.md`);
   if (!fs.existsSync(filepath)) return false;
   return fs.statSync(filepath).size >= COMPACT_THRESHOLD;
 }
 
 export function getLogForCompaction(agentName: string): string | null {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${today}.md`);
   if (!fs.existsSync(filepath)) return null;
 
   const content = fs.readFileSync(filepath, "utf-8");
@@ -368,7 +368,7 @@ export function getLogForCompaction(agentName: string): string | null {
 
 export function writeCompactedLog(agentName: string, summary: string): void {
   const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
+  const filepath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${today}.md`);
   if (!fs.existsSync(filepath)) return;
 
   const content = fs.readFileSync(filepath, "utf-8");

@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { vaultPath, ensureDir, atomicWriteSync } from "./helpers.js";
+import { workspacePath, ensureDir, atomicWriteSync } from "./helpers.js";
 
 export interface Termin {
   id: string;
@@ -17,7 +17,7 @@ export interface Termin {
 
 function termineFilePath(project?: string): string {
   if (project) {
-    const dir = path.join(vaultPath, "Projekte", project);
+    const dir = path.join(workspacePath, "Projekte", project);
     ensureDir(dir);
     return path.join(dir, "termine.json");
   }
@@ -25,7 +25,7 @@ function termineFilePath(project?: string): string {
 }
 
 function legacyTerminePath(project?: string): string {
-  return project ? path.join(vaultPath, "Projekte", project, "Termine.md") : path.join(vaultPath, "Termine.md");
+  return project ? path.join(workspacePath, "Projekte", project, "Termine.md") : path.join(workspacePath, "Termine.md");
 }
 
 function loadTermine(project?: string): Termin[] {

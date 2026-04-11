@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { vaultPath } from "./helpers.js";
+import { workspacePath } from "./helpers.js";
 import { SEARCH_MAX_RESULTS, SEARCH_LINE_MAX } from "../config.js";
 
 export interface SearchResult {
@@ -8,10 +8,10 @@ export interface SearchResult {
   line: string;
 }
 
-export function searchVault(query: string, limitTo?: string): SearchResult[] {
+export function searchWorkspace(query: string, limitTo?: string): SearchResult[] {
   const results: SearchResult[] = [];
   const lowerQuery = query.toLowerCase();
-  const searchRoot = limitTo ? path.join(vaultPath, "Projekte", limitTo) : vaultPath;
+  const searchRoot = limitTo ? path.join(workspacePath, "Projekte", limitTo) : workspacePath;
 
   function searchDir(dir: string): void {
     if (!fs.existsSync(dir)) return;
@@ -29,7 +29,7 @@ export function searchVault(query: string, limitTo?: string): SearchResult[] {
         const lines = fs.readFileSync(full, "utf-8").split("\n");
         for (const line of lines) {
           if (line.toLowerCase().includes(lowerQuery) && line.trim()) {
-            results.push({ file: path.relative(vaultPath, full), line: line.trim().slice(0, SEARCH_LINE_MAX) });
+            results.push({ file: path.relative(workspacePath, full), line: line.trim().slice(0, SEARCH_LINE_MAX) });
             break;
           }
         }

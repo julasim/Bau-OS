@@ -1,10 +1,12 @@
 import fs from "fs";
 import path from "path";
-import { VAULT_INBOX, LOCALE } from "../config.js";
-import { vaultPath, timestampFilename, frontmatter, ensureDir, resolveNotePath } from "./helpers.js";
+import { WORKSPACE_INBOX, LOCALE } from "../config.js";
+import { workspacePath, timestampFilename, frontmatter, ensureDir, resolveNotePath } from "./helpers.js";
 
 export function saveNote(content: string, project?: string): string {
-  const folder = project ? path.join(vaultPath, "Projekte", project, "Notizen") : path.join(vaultPath, VAULT_INBOX);
+  const folder = project
+    ? path.join(workspacePath, "Projekte", project, "Notizen")
+    : path.join(workspacePath, WORKSPACE_INBOX);
 
   ensureDir(folder);
 
@@ -15,7 +17,7 @@ export function saveNote(content: string, project?: string): string {
 }
 
 export function listNotes(limit = 10): string[] {
-  const inboxPath = path.join(vaultPath, VAULT_INBOX);
+  const inboxPath = path.join(workspacePath, WORKSPACE_INBOX);
   if (!fs.existsSync(inboxPath)) return [];
 
   try {

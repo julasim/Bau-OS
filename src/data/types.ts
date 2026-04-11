@@ -61,6 +61,18 @@ export interface Project {
   termine: number;
 }
 
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  projectId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface AgentLog {
   id?: string;
   sessionId: string;
@@ -110,6 +122,14 @@ export interface ProjectRepository {
   getInfo(name: string): Promise<Project | null>;
   listNotes(name: string): Promise<string[]>;
   readNote(project: string, noteName: string): Promise<string | null>;
+}
+
+export interface TeamRepository {
+  list(): Promise<TeamMember[]>;
+  get(id: string): Promise<TeamMember | null>;
+  add(member: Omit<TeamMember, "id" | "createdAt" | "updatedAt">): Promise<TeamMember>;
+  update(id: string, updates: Partial<TeamMember>): Promise<TeamMember | null>;
+  remove(nameOrId: string): Promise<boolean>;
 }
 
 export interface AgentLogRepository {

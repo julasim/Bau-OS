@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { listAgents } from "../../vault/index.js";
+import { listAgents } from "../../workspace/index.js";
 import { noteRepo, taskRepo, terminRepo, projectRepo } from "../../data/index.js";
 import { DB_ENABLED } from "../../config.js";
 

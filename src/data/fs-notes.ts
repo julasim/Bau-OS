@@ -1,5 +1,5 @@
 // Filesystem-Implementation: wrapped bestehende vault/notes.ts
-import * as vault from "../vault/notes.js";
+import * as vault from "../workspace/notes.js";
 import type { NoteRepository } from "./types.js";
 
 export const fsNotes: NoteRepository = {

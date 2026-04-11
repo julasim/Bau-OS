@@ -1,5 +1,5 @@
 import { client, getModel } from "./client.js";
-import { shouldCompact, getLogForCompaction, writeCompactedLog } from "../vault/index.js";
+import { shouldCompact, getLogForCompaction, writeCompactedLog } from "../workspace/index.js";
 import { logInfo, logError } from "../logger.js";
 
 export async function runCompaction(agentName: string): Promise<void> {

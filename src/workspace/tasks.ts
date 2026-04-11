@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { vaultPath, ensureDir, atomicWriteSync } from "./helpers.js";
+import { workspacePath, ensureDir, atomicWriteSync } from "./helpers.js";
 
 export interface Task {
   id: string;
@@ -17,7 +17,7 @@ export interface Task {
 
 function tasksFilePath(project?: string): string {
   if (project) {
-    const dir = path.join(vaultPath, "Projekte", project);
+    const dir = path.join(workspacePath, "Projekte", project);
     ensureDir(dir);
     return path.join(dir, "tasks.json");
   }
@@ -25,7 +25,9 @@ function tasksFilePath(project?: string): string {
 }
 
 function legacyTasksPath(project?: string): string {
-  return project ? path.join(vaultPath, "Projekte", project, "Aufgaben.md") : path.join(vaultPath, "Aufgaben.md");
+  return project
+    ? path.join(workspacePath, "Projekte", project, "Aufgaben.md")
+    : path.join(workspacePath, "Aufgaben.md");
 }
 
 function loadTasks(project?: string): Task[] {

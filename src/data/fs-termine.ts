@@ -1,5 +1,5 @@
 // Filesystem-Implementation: wrapped bestehende vault/termine.ts
-import * as vault from "../vault/termine.js";
+import * as vault from "../workspace/termine.js";
 import type { Termin, TerminRepository } from "./types.js";
 
 export const fsTermine: TerminRepository = {

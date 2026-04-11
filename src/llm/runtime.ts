@@ -5,7 +5,7 @@ import { getDynamicToolSchemas } from "../tools.js";
 import { getMcpToolSchemas } from "../mcp.js";
 import { executeTool, setCurrentDepth, registerProcessAgent } from "./executor.js";
 import { runCompaction } from "./compaction.js";
-import { loadAgentWorkspace, appendAgentConversation, loadAgentHistory, shouldCompact } from "../vault/index.js";
+import { loadAgentWorkspace, appendAgentConversation, loadAgentHistory, shouldCompact } from "../workspace/index.js";
 import {
   MAX_HISTORY_CHARS,
   MAX_TOOL_ROUNDS,

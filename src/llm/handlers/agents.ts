@@ -10,8 +10,8 @@ import {
   isProtectedAgent,
   readAgentFile,
   writeAgentFile,
-} from "../../vault/index.js";
-import { VAULT_LOGS_DIR } from "../../config.js";
+} from "../../workspace/index.js";
+import { WORKSPACE_LOGS_DIR } from "../../config.js";
 import { getReplyFn, getCurrentDepth, getProcessAgentFn } from "../context.js";
 import type { HandlerMap } from "./types.js";
 
@@ -164,7 +164,7 @@ export const agentHandlers: HandlerMap = {
   agent_aktiv: async () => {
     const today = new Date().toISOString().slice(0, 10);
     const active = listAgents().filter((agentName) => {
-      const logPath = path.join(getAgentPath(agentName), VAULT_LOGS_DIR, `${today}.md`);
+      const logPath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${today}.md`);
       return fs.existsSync(logPath);
     });
     return active.length

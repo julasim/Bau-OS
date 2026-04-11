@@ -174,7 +174,7 @@ export async function searchHybrid(query: string, limit = 10): Promise<SemanticR
 
 /**
  * Universelle Suche: nutzt Hybrid wenn DB aktiv, sonst leeres Array.
- * Consumer sollten bei !DB_ENABLED auf vault searchVault() zurueckfallen.
+ * Consumer sollten bei !DB_ENABLED auf searchWorkspace() zurueckfallen.
  */
 export async function semanticSearch(
   query: string,

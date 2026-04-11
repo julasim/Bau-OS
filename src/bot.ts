@@ -1,5 +1,5 @@
 import { Bot } from "grammy";
-import { saveNote, isMainWorkspaceConfigured } from "./vault/index.js";
+import { saveNote, isMainWorkspaceConfigured } from "./workspace/index.js";
 import { processMessage, processBtw, processAgent } from "./llm/runtime.js";
 import { processSetup, isSetupActive, activateSetup } from "./llm/setup.js";
 import { setReplyContext } from "./llm/executor.js";

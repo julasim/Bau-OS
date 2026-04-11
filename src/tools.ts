@@ -187,7 +187,7 @@ export async function executeDynamicTool(name: string, args: Record<string, stri
     return new Promise<string>((resolve) => {
       // Args als Umgebungsvariablen uebergeben (TOOL_ARG_name=wert)
       // Nur sichere Env-Vars weitergeben (keine Secrets)
-      const { PATH, HOME, USER, LANG: _LANG, SHELL, TERM, VAULT_PATH: _VP } = process.env;
+      const { PATH, HOME, USER, LANG: _LANG, SHELL, TERM, WORKSPACE_PATH: _WP, VAULT_PATH: _VP } = process.env;
       const env: Record<string, string> = {
         PATH: PATH ?? "",
         HOME: HOME ?? "",
@@ -196,7 +196,8 @@ export async function executeDynamicTool(name: string, args: Record<string, stri
         SHELL: SHELL ?? "",
         TERM: TERM ?? "",
       };
-      if (_VP) env.VAULT_PATH = _VP;
+      const wsPath = _WP ?? _VP;
+      if (wsPath) env.WORKSPACE_PATH = wsPath;
       for (const [key, val] of Object.entries(args)) {
         env[`TOOL_ARG_${key.toUpperCase()}`] = String(val);
       }

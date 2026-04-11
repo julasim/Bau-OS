@@ -1,5 +1,5 @@
 // Filesystem-Implementation: wrapped bestehende vault/projects.ts
-import * as vault from "../vault/projects.js";
+import * as vault from "../workspace/projects.js";
 import type { ProjectRepository } from "./types.js";
 
 export const fsProjects: ProjectRepository = {

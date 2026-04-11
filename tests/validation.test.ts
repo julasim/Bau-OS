@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateDatum, validateUhrzeit } from "../src/vault/termine.js";
+import { validateDatum, validateUhrzeit } from "../src/workspace/termine.js";
 
 describe("validateDatum", () => {
   it("akzeptiert gueltiges Datum TT.MM.JJJJ", () => {

@@ -1,5 +1,13 @@
 import type OpenAI from "openai";
-import { readFile, createFile, listFolder, editFile, globFiles, grepFiles, searchVault } from "../../vault/index.js";
+import {
+  readFile,
+  createFile,
+  listFolder,
+  editFile,
+  globFiles,
+  grepFiles,
+  searchWorkspace,
+} from "../../workspace/index.js";
 import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED } from "../../config.js";
 import type { HandlerMap } from "./types.js";
 
@@ -164,7 +172,7 @@ export const fileHandlers: HandlerMap = {
   },
 
   vault_suchen: async (args) => {
-    const results = searchVault(String(args.suchbegriff), args.projekt ? String(args.projekt) : undefined);
+    const results = searchWorkspace(String(args.suchbegriff), args.projekt ? String(args.projekt) : undefined);
     if (!results.length) return `Keine Treffer fuer "${args.suchbegriff}".`;
     return results.map((r) => `\u{1F4C4} ${r.file}\n   ${r.line}`).join("\n\n");
   },

@@ -24,14 +24,14 @@ export const COMPACT_THRESHOLD = 8_000; // Tageslog: ab hier wird komprimiert
 export const KEEP_RECENT_LOGS = 5; // Letzte N Log-Einträge bleiben immer erhalten
 export const HISTORY_LOAD_LIMIT = 10; // Gesprächseinträge die beim Start geladen werden
 
-// ── Vault / Obsidian ──────────────────────────────────────────────────────────
-export const VAULT_PATH = process.env.VAULT_PATH!;
-export const VAULT_INBOX = "Inbox";
-export const VAULT_AGENTS_DIR = "Agents";
-export const VAULT_LOGS_DIR = "MEMORY_LOGS";
-export const agentsPath = () => path.join(VAULT_PATH, VAULT_AGENTS_DIR);
+// ── Workspace ────────────────────────────────────────────────────────────────
+export const WORKSPACE_PATH = (process.env.WORKSPACE_PATH ?? process.env.VAULT_PATH)!;
+export const WORKSPACE_INBOX = "Inbox";
+export const WORKSPACE_AGENTS_DIR = "Agents";
+export const WORKSPACE_LOGS_DIR = "MEMORY_LOGS";
+export const agentsPath = () => path.join(WORKSPACE_PATH, WORKSPACE_AGENTS_DIR);
 export const agentPath = (name: string) => path.join(agentsPath(), name);
-export const logsPath = (name: string) => path.join(agentPath(name), VAULT_LOGS_DIR);
+export const logsPath = (name: string) => path.join(agentPath(name), WORKSPACE_LOGS_DIR);
 
 // ── System ────────────────────────────────────────────────────────────────────
 export const TIMEZONE = "Europe/Vienna";
@@ -67,8 +67,8 @@ export const WEB_MAX_RETRIES = 2;
 
 // ── Datei-Suche ──────────────────────────────────────────────────────────────
 export const MAX_FILE_SCAN = 1_000; // Max Dateien bei walkDir
-export const SEARCH_MAX_RESULTS = 10; // searchVault Ergebnisse
-export const SEARCH_LINE_MAX = 100; // searchVault Zeilen-Laenge
+export const SEARCH_MAX_RESULTS = 10; // searchWorkspace Ergebnisse
+export const SEARCH_LINE_MAX = 100; // searchWorkspace Zeilen-Laenge
 
 // ── Agent-Workspace ──────────────────────────────────────────────────────────
 export const WS_MAX_FILE_CHARS = 20_000; // Max Zeichen pro Workspace-Datei

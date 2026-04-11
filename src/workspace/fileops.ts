@@ -4,7 +4,7 @@
 
 import fs from "fs";
 import path from "path";
-import { vaultPath, safePath } from "./helpers.js";
+import { workspacePath, safePath } from "./helpers.js";
 import { MAX_FILE_SCAN } from "../config.js";
 
 // ---- Path Safety ----
@@ -114,7 +114,7 @@ function globToRegex(pattern: string): RegExp {
 
 export function globFiles(pattern: string, options?: { limit?: number; subdir?: string }): string[] {
   const limit = Math.min(options?.limit ?? 50, 100);
-  const root = options?.subdir ? safePath(options.subdir) : vaultPath;
+  const root = options?.subdir ? safePath(options.subdir) : workspacePath;
   if (!root || !fs.existsSync(root)) return [];
 
   const allFiles: string[] = [];
@@ -125,7 +125,7 @@ export function globFiles(pattern: string, options?: { limit?: number; subdir?: 
 
   for (const filepath of allFiles) {
     if (matches.length >= limit) break;
-    const relative = path.relative(vaultPath, filepath).replace(/\\/g, "/");
+    const relative = path.relative(workspacePath, filepath).replace(/\\/g, "/");
     if (regex.test(relative)) {
       matches.push(relative);
     }
@@ -159,7 +159,7 @@ export function grepFiles(
 ): GrepResult {
   const maxMatches = Math.min(options?.maxMatches ?? 20, 50);
   const context = options?.context ?? 0;
-  const root = options?.subdir ? safePath(options.subdir) : vaultPath;
+  const root = options?.subdir ? safePath(options.subdir) : workspacePath;
   if (!root || !fs.existsSync(root)) return { matches: [], totalFiles: 0, truncated: false };
 
   let regex: RegExp;
@@ -188,7 +188,7 @@ export function grepFiles(
       break;
     }
 
-    const relative = path.relative(vaultPath, filepath).replace(/\\/g, "/");
+    const relative = path.relative(workspacePath, filepath).replace(/\\/g, "/");
 
     if (fileRegex && !fileRegex.test(relative)) continue;
     if (isBinary(filepath)) continue;

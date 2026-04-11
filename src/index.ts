@@ -6,10 +6,10 @@ import { Bot } from "grammy";
 import { DB_ENABLED } from "./config.js";
 
 const token = process.env.BOT_TOKEN;
-const vaultPath = process.env.VAULT_PATH;
+const workspacePath = process.env.WORKSPACE_PATH ?? process.env.VAULT_PATH;
 
 if (!token) throw new Error("BOT_TOKEN fehlt in .env");
-if (!vaultPath) throw new Error("VAULT_PATH fehlt in .env");
+if (!workspacePath) throw new Error("WORKSPACE_PATH fehlt in .env");
 
 // ── Datenbank initialisieren (wenn DATABASE_URL gesetzt) ─────────────────────
 if (DB_ENABLED) {
