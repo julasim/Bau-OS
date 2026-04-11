@@ -31,7 +31,7 @@ async function login() {
   <div class="min-h-screen flex items-center justify-center">
     <div class="w-full max-w-xs">
       <h1 class="text-xl font-semibold text-center mb-1">Bau-OS</h1>
-      <p class="text-gray-400 text-center text-sm mb-8">Vault-Editor</p>
+      <p class="text-gray-400 text-center text-sm mb-8">Workspace</p>
 
       <form @submit.prevent="login" class="space-y-4">
         <div>

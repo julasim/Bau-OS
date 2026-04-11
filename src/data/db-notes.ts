@@ -42,6 +42,24 @@ export const dbNotes: NoteRepository = {
     return rows.map((r) => String(r.title));
   },
 
+  async listDetailed(limit = 50) {
+    const db = getDb();
+    const rows = await db`
+      SELECT n.title, p.name as project_name, n.created_at, n.updated_at, length(n.content) as size
+      FROM notes n
+      LEFT JOIN projects p ON n.project_id = p.id
+      ORDER BY n.updated_at DESC
+      LIMIT ${limit}
+    `;
+    return rows.map((r) => ({
+      title: String(r.title),
+      project: r.project_name ? String(r.project_name) : null,
+      createdAt: String(r.created_at),
+      updatedAt: String(r.updated_at),
+      size: Number(r.size || 0),
+    }));
+  },
+
   async read(nameOrPath) {
     const db = getDb();
     // Versuche ID, dann Titel

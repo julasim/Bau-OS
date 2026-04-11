@@ -5,6 +5,11 @@ import { emit } from "../events.js";
 export const notesRoutes = new Hono();
 
 notesRoutes.get("/notes", async (c) => {
+  const detailed = c.req.query("detailed");
+  if (detailed === "1" && noteRepo.listDetailed) {
+    const notes = await noteRepo.listDetailed(50);
+    return c.json(notes);
+  }
   const notes = await noteRepo.list();
   return c.json(notes);
 });

@@ -21,6 +21,7 @@ const router = createRouter({
         { path: "agents/:name/:filename", name: "agent-editor", component: () => import("./views/AgentEditorView.vue") },
         { path: "search", name: "search", component: () => import("./views/SearchView.vue") },
         { path: "files", name: "files", component: () => import("./views/FileBrowserView.vue") },
+        { path: "chat", name: "chat", component: () => import("./views/ChatView.vue") },
       ],
     },
   ],

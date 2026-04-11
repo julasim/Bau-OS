@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
 
@@ -17,17 +17,51 @@ interface Termin {
 const termine = ref<Termin[]>([]);
 const team = ref<string[]>([]);
 const editing = ref<Termin | null>(null);
+const showCreate = ref(false);
 
-// New termin form
 const newDatum = ref("");
 const newUhrzeit = ref("");
 const newText = ref("");
 
+// Group by date
+const grouped = computed(() => {
+  const groups: { date: string; label: string; items: Termin[] }[] = [];
+  const map = new Map<string, Termin[]>();
+
+  for (const t of termine.value) {
+    const key = t.datum;
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(t);
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+
+  for (const [date, items] of map) {
+    const iso = date.includes(".") ? date.split(".").reverse().join("-") : date;
+    let label = formatDateLong(date);
+    if (iso === today) label = "Heute — " + label;
+    groups.push({ date: iso, label, items });
+  }
+
+  groups.sort((a, b) => a.date.localeCompare(b.date));
+  return groups;
+});
+
+function formatDateLong(d: string) {
+  try {
+    const iso = d.includes(".") ? d.split(".").reverse().join("-") : d;
+    return new Date(iso + "T00:00:00").toLocaleDateString("de-AT", {
+      weekday: "short",
+      day: "numeric",
+      month: "long",
+    });
+  } catch {
+    return d;
+  }
+}
+
 async function load() {
-  [termine.value, team.value] = await Promise.all([
-    api.get<Termin[]>("/termine"),
-    api.get<string[]>("/team"),
-  ]);
+  [termine.value, team.value] = await Promise.all([api.get<Termin[]>("/termine"), api.get<string[]>("/team")]);
 }
 
 async function create() {
@@ -40,6 +74,7 @@ async function create() {
   newDatum.value = "";
   newUhrzeit.value = "";
   newText.value = "";
+  showCreate.value = false;
   await load();
 }
 
@@ -68,33 +103,47 @@ async function remove(id: string) {
 function toggleAssignee(name: string) {
   if (!editing.value) return;
   const idx = editing.value.assignees.indexOf(name);
-  if (idx >= 0) {
-    editing.value.assignees.splice(idx, 1);
-  } else {
-    editing.value.assignees.push(name);
-  }
+  if (idx >= 0) editing.value.assignees.splice(idx, 1);
+  else editing.value.assignees.push(name);
 }
 
 onMounted(load);
-
-// Live-Updates via SSE
 useEvents(["termin"], () => load());
 </script>
 
 <template>
   <div>
-    <h2 class="text-lg font-semibold mb-6">Termine</h2>
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-xl font-semibold">Termine</h2>
+      <button
+        @click="showCreate = !showCreate"
+        class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition"
+      >
+        {{ showCreate ? "Abbrechen" : "Neuer Termin" }}
+      </button>
+    </div>
 
-    <!-- Neuer Termin -->
-    <div class="flex gap-2 mb-6">
-      <input v-model="newDatum" type="date" class="px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400 w-40" />
-      <input v-model="newUhrzeit" type="time" class="px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400 w-28" />
-      <input v-model="newText" placeholder="Beschreibung..." @keyup.enter="create" class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
+    <!-- Create Form -->
+    <div v-if="showCreate" class="border border-gray-200 rounded-lg p-5 mb-6 space-y-3">
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Datum</label>
+          <input v-model="newDatum" type="date" class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Uhrzeit</label>
+          <input v-model="newUhrzeit" type="time" class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
+        </div>
+        <div>
+          <label class="block text-xs text-gray-400 mb-1">Beschreibung</label>
+          <input v-model="newText" placeholder="Termin..." @keyup.enter="create" class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
+        </div>
+      </div>
       <button @click="create" class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">Erstellen</button>
     </div>
 
     <!-- Edit Form -->
-    <div v-if="editing" class="border border-gray-200 rounded p-5 mb-6 space-y-3">
+    <div v-if="editing" class="border border-gray-200 rounded-lg p-5 mb-6 space-y-3">
       <div>
         <label class="block text-xs text-gray-400 mb-1">Beschreibung</label>
         <input v-model="editing.text" class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
@@ -129,7 +178,7 @@ useEvents(["termin"], () => load());
           >
             {{ m }}
           </button>
-          <span v-if="team.length === 0" class="text-xs text-gray-400">Keine Team-Mitglieder. Erstelle welche unter Einstellungen.</span>
+          <span v-if="team.length === 0" class="text-xs text-gray-400">Keine Team-Mitglieder vorhanden.</span>
         </div>
       </div>
       <div class="flex gap-2 pt-1">
@@ -138,28 +187,30 @@ useEvents(["termin"], () => load());
       </div>
     </div>
 
-    <!-- Termine List -->
-    <div class="divide-y divide-gray-100">
-      <div
-        v-for="t in termine"
-        :key="t.id"
-        class="flex items-start justify-between py-3 group"
-      >
-        <div>
-          <p class="text-sm text-gray-700">{{ t.text }}</p>
-          <div class="flex gap-3 mt-0.5 text-xs text-gray-400">
-            <span>{{ t.datum }}</span>
-            <span v-if="t.uhrzeit">{{ t.uhrzeit }}{{ t.endzeit ? ` – ${t.endzeit}` : '' }}</span>
-            <span v-if="t.location">{{ t.location }}</span>
-            <span v-if="t.assignees.length">{{ t.assignees.join(', ') }}</span>
+    <!-- Grouped Termine -->
+    <div v-for="group in grouped" :key="group.date" class="mb-6">
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-gray-400 mb-2">{{ group.label }}</h3>
+      <div class="divide-y divide-gray-100">
+        <div v-for="t in group.items" :key="t.id" class="flex items-start justify-between py-3 group">
+          <div class="flex items-start gap-3">
+            <span v-if="t.uhrzeit" class="text-sm font-mono text-gray-500 w-12 flex-shrink-0 pt-0.5">{{ t.uhrzeit }}</span>
+            <span v-else class="text-sm font-mono text-gray-300 w-12 flex-shrink-0 pt-0.5">--:--</span>
+            <div>
+              <p class="text-sm text-gray-700">{{ t.text }}</p>
+              <div class="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-[11px] text-gray-400">
+                <span v-if="t.endzeit">bis {{ t.endzeit }}</span>
+                <span v-if="t.location">{{ t.location }}</span>
+                <span v-if="t.assignees.length">{{ t.assignees.join(", ") }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition flex-shrink-0">
+            <button @click="edit(t)" class="text-xs text-gray-400 hover:text-gray-600">Bearbeiten</button>
+            <button @click="remove(t.id)" class="text-xs text-gray-400 hover:text-red-500">Loeschen</button>
           </div>
         </div>
-        <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-          <button @click="edit(t)" class="text-xs text-gray-400 hover:text-gray-600">Bearbeiten</button>
-          <button @click="remove(t.id)" class="text-xs text-gray-400 hover:text-red-500">Loeschen</button>
-        </div>
       </div>
-      <p v-if="termine.length === 0" class="text-gray-400 text-sm py-4">Keine Termine vorhanden.</p>
     </div>
+    <p v-if="termine.length === 0" class="text-gray-400 text-sm py-6 text-center">Keine Termine vorhanden.</p>
   </div>
 </template>

@@ -22,6 +22,7 @@ import { searchRoutes } from "./routes/search.js";
 import { filesRoutes } from "./routes/files.js";
 import { teamRoutes } from "./routes/team.js";
 import { eventsRoutes } from "./routes/events.js";
+import { chatRoutes } from "./routes/chat.js";
 
 const app = new Hono<AppEnv>();
 
@@ -102,6 +103,7 @@ app.route("/api", searchRoutes);
 app.route("/api", filesRoutes);
 app.route("/api", teamRoutes);
 app.route("/api", eventsRoutes);
+app.route("/api", chatRoutes);
 
 // ── Statische Dateien (Vue SPA in Production) ────────────────────────────────
 app.use("/*", serveStatic({ root: "./dist/web" }));

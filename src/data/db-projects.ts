@@ -13,7 +13,7 @@ export const dbProjects: ProjectRepository = {
     const db = getDb();
     const [row] = await db`
       SELECT
-        p.id, p.name, p.description, p.status, p.color,
+        p.id, p.name, p.description, p.status, p.color, p.created_at, p.updated_at,
         (SELECT count(*) FROM notes n WHERE n.project_id = p.id) as notes,
         (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done') as open_tasks,
         (SELECT count(*) FROM termine te WHERE te.project_id = p.id) as termine
@@ -31,6 +31,8 @@ export const dbProjects: ProjectRepository = {
       notes: Number(row.notes),
       openTasks: Number(row.open_tasks),
       termine: Number(row.termine),
+      createdAt: row.created_at ? String(row.created_at) : undefined,
+      updatedAt: row.updated_at ? String(row.updated_at) : undefined,
     };
   },
 

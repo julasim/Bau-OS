@@ -6,6 +6,18 @@
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vitepress", "dev", "docs", "--port", "5173"],
       "port": 5173
+    },
+    {
+      "name": "app",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsx", "src/index.ts"],
+      "port": 3000
+    },
+    {
+      "name": "web",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["vite", "--config", "web/vite.config.ts", "--port", "5174"],
+      "port": 5174
     }
   ]
 }

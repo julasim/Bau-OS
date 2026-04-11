@@ -59,6 +59,8 @@ export interface Project {
   notes: number;
   openTasks: number;
   termine: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface TeamMember {
@@ -108,9 +110,18 @@ export interface TerminRepository {
   delete(textOrId: string, project?: string): Promise<boolean>;
 }
 
+export interface NoteSummary {
+  title: string;
+  project: string | null;
+  createdAt: string;
+  updatedAt: string;
+  size: number;
+}
+
 export interface NoteRepository {
   save(content: string, project?: string): Promise<string>;
   list(limit?: number): Promise<string[]>;
+  listDetailed?(limit?: number): Promise<NoteSummary[]>;
   read(nameOrPath: string): Promise<string | null>;
   append(nameOrPath: string, content: string): Promise<boolean>;
   update(nameOrPath: string, content: string): Promise<boolean>;
