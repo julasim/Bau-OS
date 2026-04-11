@@ -10,3 +10,6 @@ mcp.json
 # Supabase Docker (wird von setup-supabase.sh geklont)
 docker/supabase/
 docker/.env
+
+# Lokale Daten (Secrets)
+data/users.json
