@@ -1,10 +1,18 @@
 import OpenAI from "openai";
-import { OLLAMA_BASE_URL, DEFAULT_MODEL, FAST_MODEL, SUBAGENT_MODEL, LOCALE } from "../config.js";
+import {
+  OLLAMA_BASE_URL,
+  OPENAI_API_KEY,
+  OPENAI_ENABLED,
+  DEFAULT_MODEL,
+  FAST_MODEL,
+  SUBAGENT_MODEL,
+  LOCALE,
+} from "../config.js";
 
-export const client = new OpenAI({
-  baseURL: OLLAMA_BASE_URL,
-  apiKey: "ollama",
-});
+// OpenAI direkt wenn OPENAI_API_KEY gesetzt, sonst Ollama-kompatibel
+export const client = OPENAI_ENABLED
+  ? new OpenAI({ apiKey: OPENAI_API_KEY })
+  : new OpenAI({ baseURL: OLLAMA_BASE_URL, apiKey: "ollama" });
 
 let MODEL = DEFAULT_MODEL;
 let _fastMode = false;

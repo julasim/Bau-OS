@@ -2,10 +2,16 @@ import "dotenv/config";
 import path from "path";
 
 // ── LLM ──────────────────────────────────────────────────────────────────────
+export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+export const OPENAI_ENABLED = !!OPENAI_API_KEY;
+
+// Falls OPENAI_API_KEY gesetzt: direkt OpenAI, sonst Ollama
 export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1";
-export const DEFAULT_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:7b";
+const _defaultModel = OPENAI_ENABLED ? "gpt-4o-mini" : "qwen2.5:7b";
+export const DEFAULT_MODEL = process.env.OLLAMA_MODEL || _defaultModel;
 export const FAST_MODEL = process.env.OLLAMA_FAST_MODEL || DEFAULT_MODEL;
 export const SUBAGENT_MODEL = process.env.OLLAMA_SUBAGENT_MODEL || DEFAULT_MODEL;
+export const VISION_MODEL = process.env.VISION_MODEL || (OPENAI_ENABLED ? "gpt-4o" : DEFAULT_MODEL);
 export const MAX_TOOL_ROUNDS = 5; // Max. Iterationen im Agentic Loop
 
 // ── Agenten ───────────────────────────────────────────────────────────────────
@@ -102,6 +108,14 @@ export const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
 export const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 // ── Embeddings ───────────────────────────────────────────────────────────────
-export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || "nomic-embed-text";
-export const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || "768", 10);
+const _defaultEmbeddingModel = OPENAI_ENABLED ? "text-embedding-3-small" : "nomic-embed-text";
+const _defaultEmbeddingDims = OPENAI_ENABLED ? "1536" : "768";
+export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || _defaultEmbeddingModel;
+export const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || _defaultEmbeddingDims, 10);
 export const EMBEDDING_BATCH_SIZE = 5; // Parallele Embedding-Anfragen
+
+// ── Dokument-Extraktion ──────────────────────────────────────────────────────
+export const DAILY_NOTES_DIR = process.env.DAILY_NOTES_DIR || "Daily";
+export const TEMPLATES_DIR = process.env.TEMPLATES_DIR || "Templates";
+export const ATTACHMENTS_DIR = process.env.ATTACHMENTS_DIR || "Attachments";
+export const EXTRACT_MAX_CHARS = 50_000; // Max Zeichen bei Dokument-Extraktion
