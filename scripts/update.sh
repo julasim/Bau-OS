@@ -84,32 +84,86 @@ done
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. Dependencies + Build
+# 5. .env Migration (VAULT_PATH → WORKSPACE_PATH)
+# ─────────────────────────────────────────────────────────────────────────────
+
+if [ -f "$INSTALL_DIR/.env" ]; then
+  if grep -q '^VAULT_PATH=' "$INSTALL_DIR/.env" && ! grep -q '^WORKSPACE_PATH=' "$INSTALL_DIR/.env"; then
+    echo -e "  ${YELLOW}▶ .env Migration: VAULT_PATH → WORKSPACE_PATH${NC}"
+    VAULT_VAL=$(grep -oP '^VAULT_PATH=\K.*' "$INSTALL_DIR/.env")
+    echo "WORKSPACE_PATH=$VAULT_VAL" >> "$INSTALL_DIR/.env"
+    echo -e "    ${GREEN}✓${NC} WORKSPACE_PATH=$VAULT_VAL hinzugefügt"
+  fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6. Dependencies + Build
 # ─────────────────────────────────────────────────────────────────────────────
 
 echo -e "  ${GREEN}▶ npm install ...${NC}"
 npm install --loglevel=error 2>&1 | tail -3
 
-echo -e "  ${GREEN}▶ npm run build ...${NC}"
-npm run build 2>&1 | tail -3
+echo -e "  ${GREEN}▶ npm run build:all ...${NC}"
+npm run build:all 2>&1 | tail -5
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. tools/ Ordner sicherstellen (für systemd ReadWritePaths)
+# 7. Datenbank-Migration (optional)
+# ─────────────────────────────────────────────────────────────────────────────
+
+if [ -f "$INSTALL_DIR/.env" ] && grep -q '^DATABASE_URL=' "$INSTALL_DIR/.env"; then
+  DB_URL=$(grep -oP '^DATABASE_URL=\K.+' "$INSTALL_DIR/.env")
+  if [ -n "$DB_URL" ]; then
+    echo -e "  ${GREEN}▶ Datenbank-Migration ...${NC}"
+    npm run db:migrate 2>&1 | tail -3 || echo -e "    ${YELLOW}!${NC} Migration übersprungen"
+  fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 8. tools/ Ordner sicherstellen (für systemd ReadWritePaths)
 # ─────────────────────────────────────────────────────────────────────────────
 
 mkdir -p "$INSTALL_DIR/tools"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. CLI aktualisieren (falls vorhanden)
+# 9. CLI aktualisieren (falls vorhanden)
 # ─────────────────────────────────────────────────────────────────────────────
 
 if [ -f "$INSTALL_DIR/scripts/bau-os-cli.sh" ]; then
   cp "$INSTALL_DIR/scripts/bau-os-cli.sh" /usr/local/bin/bau-os 2>/dev/null || true
   chmod +x /usr/local/bin/bau-os 2>/dev/null || true
+
+  # Pfade im CLI anpassen (falls nicht Standard)
+  if [ "$INSTALL_DIR" != "/opt/bau-os" ]; then
+    sed -i "s|INSTALL_DIR=\"/opt/bau-os\"|INSTALL_DIR=\"$INSTALL_DIR\"|" /usr/local/bin/bau-os 2>/dev/null || true
+  fi
+  # Workspace-Pfad aus .env lesen und im CLI setzen
+  if [ -f "$INSTALL_DIR/.env" ]; then
+    WS_PATH=$(grep -oP '^WORKSPACE_PATH=\K.*' "$INSTALL_DIR/.env" 2>/dev/null || grep -oP '^VAULT_PATH=\K.*' "$INSTALL_DIR/.env" 2>/dev/null || true)
+    if [ -n "$WS_PATH" ] && [ "$WS_PATH" != "/opt/bau-os-workspace" ]; then
+      sed -i "s|WORKSPACE_DIR=\"/opt/bau-os-workspace\"|WORKSPACE_DIR=\"$WS_PATH\"|" /usr/local/bin/bau-os 2>/dev/null || true
+    fi
+  fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 8. Service neustarten
+# 10. systemd Service aktualisieren
+# ─────────────────────────────────────────────────────────────────────────────
+
+if [ -f "$INSTALL_DIR/bau-os.service" ] && [ -f "/etc/systemd/system/bau-os.service" ]; then
+  CURRENT_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/bau-os.service 2>/dev/null || echo "bauos")
+  WS_PATH=${WS_PATH:-/opt/bau-os-workspace}
+
+  sed \
+    "s|/opt/bau-os-workspace|$WS_PATH|g; \
+     s|/opt/bau-os|$INSTALL_DIR|g; \
+     s|User=bauos|User=$CURRENT_USER|g" \
+    "$INSTALL_DIR/bau-os.service" > /etc/systemd/system/bau-os.service
+
+  systemctl daemon-reload
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 11. Service neustarten
 # ─────────────────────────────────────────────────────────────────────────────
 
 echo -e "  ${GREEN}▶ Service neustarten ...${NC}"

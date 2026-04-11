@@ -20,7 +20,7 @@ export LANGUAGE=de_AT.UTF-8
 # Konfiguration
 # ─────────────────────────────────────────────────────────────────────────────
 readonly INSTALL_DIR_DEFAULT="/opt/bau-os"
-readonly VAULT_DIR_DEFAULT="/opt/bau-os-vault"
+readonly WORKSPACE_DIR_DEFAULT="/opt/bau-os-workspace"
 readonly SERVICE_USER="bauos"
 readonly REPO_URL="https://github.com/julasim/Bau-OS.git"
 
@@ -214,18 +214,18 @@ echo ""
 
 # ── Installationspfade ────────────────────────────────────────────────────────
 INSTALL_DIR=$(ask_default "Installationsverzeichnis" "$INSTALL_DIR_DEFAULT")
-VAULT_DIR=$(ask_default "Vault-Verzeichnis" "$VAULT_DIR_DEFAULT")
+WORKSPACE_DIR=$(ask_default "Workspace-Verzeichnis" "$WORKSPACE_DIR_DEFAULT")
 
 # Pfade validieren
 if ! validate_path "$INSTALL_DIR"; then
   err "Ungültiger Installationspfad: $INSTALL_DIR (nur a-z, 0-9, /, ., _, - erlaubt)"
 fi
-if ! validate_path "$VAULT_DIR"; then
-  err "Ungültiger Vault-Pfad: $VAULT_DIR (nur a-z, 0-9, /, ., _, - erlaubt)"
+if ! validate_path "$WORKSPACE_DIR"; then
+  err "Ungültiger Workspace-Pfad: $WORKSPACE_DIR (nur a-z, 0-9, /, ., _, - erlaubt)"
 fi
 
 # ── Web-Oberfläche (Admin-Login) ──────────────────────────────────────────────
-echo -e "  ${BOLD}Web-Oberfläche (Vault-Editor)${NC}"
+echo -e "  ${BOLD}Web-Oberfläche${NC}"
 info "Erstelle den ersten Admin-Benutzer für die Web-Oberfläche."
 echo ""
 WEB_USER=$(ask_default "Admin Benutzername" "admin")
@@ -253,7 +253,7 @@ info "Bot Token:    ${BOT_TOKEN:0:8}...${BOT_TOKEN: -4}"
 info "LLM-Modus:    $LLM_MODE ($OLLAMA_MODEL)"
 info "Web-Admin:    $WEB_USER (Port $API_PORT)"
 info "Install-Pfad: $INSTALL_DIR"
-info "Vault-Pfad:   $VAULT_DIR"
+info "Workspace:    $WORKSPACE_DIR"
 echo ""
 read -rp "  Installation starten? [j/N]: " CONFIRM < /dev/tty
 if [[ ! "$CONFIRM" =~ ^[jJ]$ ]]; then
@@ -432,10 +432,10 @@ fi
 # ═════════════════════════════════════════════════════════════════════════════
 step "Verzeichnisse anlegen und Berechtigungen setzen..."
 
-# Vault-Verzeichnis
-mkdir -p "$VAULT_DIR"
-chown -R "$SERVICE_USER:$SERVICE_USER" "$VAULT_DIR"
-info "Vault: $VAULT_DIR"
+# Workspace-Verzeichnis
+mkdir -p "$WORKSPACE_DIR"
+chown -R "$SERVICE_USER:$SERVICE_USER" "$WORKSPACE_DIR"
+info "Workspace: $WORKSPACE_DIR"
 
 # Logs + Tools Ordner erstellen (VOR chown)
 mkdir -p "$INSTALL_DIR/logs"
@@ -498,7 +498,7 @@ else
 ENVHEADER
   cat >> "$INSTALL_DIR/.env" << ENVEOF
 BOT_TOKEN=$BOT_TOKEN
-VAULT_PATH=$VAULT_DIR
+WORKSPACE_PATH=$WORKSPACE_DIR
 OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=$OLLAMA_MODEL
 JWT_SECRET=$JWT_SECRET
@@ -519,7 +519,7 @@ chmod +x /usr/local/bin/bau-os
 
 # Pfade im CLI auf tatsächliche Installationspfade anpassen
 sed -i "s|INSTALL_DIR=\"/opt/bau-os\"|INSTALL_DIR=\"$INSTALL_DIR\"|" /usr/local/bin/bau-os
-sed -i "s|VAULT_DIR=\"/opt/bau-os-vault\"|VAULT_DIR=\"$VAULT_DIR\"|" /usr/local/bin/bau-os
+sed -i "s|WORKSPACE_DIR=\"/opt/bau-os-workspace\"|WORKSPACE_DIR=\"$WORKSPACE_DIR\"|" /usr/local/bin/bau-os
 sed -i "s|SERVICE_USER=\"bauos\"|SERVICE_USER=\"$SERVICE_USER\"|" /usr/local/bin/bau-os
 
 ok "CLI verfügbar: 'bau-os' oder 'sudo bau-os'"
@@ -529,9 +529,9 @@ ok "CLI verfügbar: 'bau-os' oder 'sudo bau-os'"
 # ═════════════════════════════════════════════════════════════════════════════
 step "systemd Service installieren..."
 
-# Pfade in der Service-Datei anpassen (Vault-Pfad ZUERST, da er den kürzeren enthält)
+# Pfade in der Service-Datei anpassen (Workspace-Pfad ZUERST, da er den kürzeren enthält)
 sed \
-  "s|/opt/bau-os-vault|$VAULT_DIR|g; \
+  "s|/opt/bau-os-workspace|$WORKSPACE_DIR|g; \
    s|/opt/bau-os|$INSTALL_DIR|g; \
    s|User=bauos|User=$SERVICE_USER|g" \
   "$INSTALL_DIR/bau-os.service" > /etc/systemd/system/bau-os.service

@@ -5,7 +5,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 INSTALL_DIR="/opt/bau-os"
-VAULT_DIR="/opt/bau-os-vault"
+WORKSPACE_DIR="/opt/bau-os-workspace"
 SERVICE="bau-os"
 SERVICE_USER="bauos"
 
@@ -180,14 +180,14 @@ cmd_env() {
   echo ""
 }
 
-cmd_vault() {
+cmd_workspace() {
   echo ""
-  echo -e "  ${BOLD}Vault-Verzeichnis ($VAULT_DIR):${NC}"
+  echo -e "  ${BOLD}Workspace ($WORKSPACE_DIR):${NC}"
   echo ""
-  if [ -d "$VAULT_DIR" ]; then
-    ls -la "$VAULT_DIR"
+  if [ -d "$WORKSPACE_DIR" ]; then
+    ls -la "$WORKSPACE_DIR"
   else
-    echo -e "  ${RED}  Vault nicht gefunden${NC}"
+    echo -e "  ${RED}  Workspace nicht gefunden${NC}"
   fi
   echo ""
 }
@@ -302,7 +302,7 @@ cmd_help() {
   echo -e "    ${BOLD}check-update${NC}     Auf Updates prüfen"
   echo -e "    ${BOLD}user${NC} add|list|delete  Web-Benutzer verwalten"
   echo -e "    ${BOLD}env${NC}              .env Konfiguration anzeigen"
-  echo -e "    ${BOLD}vault${NC}            Vault-Verzeichnis anzeigen"
+  echo -e "    ${BOLD}workspace${NC}        Workspace-Verzeichnis anzeigen"
   echo -e "    ${BOLD}ollama${NC}           Ollama Service Status"
   echo ""
   echo -e "  ${DIM}Ohne Befehl: Interaktives Menü${NC}"
@@ -329,7 +329,7 @@ cmd_menu() {
     echo -e "  ${CYAN}[6]${NC}  Service stoppen"
     echo -e "  ${CYAN}[7]${NC}  Auf Updates prüfen"
     echo -e "  ${CYAN}[8]${NC}  .env Konfiguration"
-    echo -e "  ${CYAN}[9]${NC}  Vault anzeigen"
+    echo -e "  ${CYAN}[9]${NC}  Workspace anzeigen"
     echo -e "  ${CYAN}[10]${NC} Ollama Status"
     echo -e "  ${CYAN}[11]${NC} Web-User verwalten"
     echo ""
@@ -338,16 +338,16 @@ cmd_menu() {
     read -rp "  Auswahl: " choice
 
     case "$choice" in
-      1) clear; cmd_status;  read -rp "  [Enter] zurück..." ;;
-      2) clear; cmd_logs 50; read -rp "  [Enter] zurück..." ;;
+      1) clear; cmd_status;    read -rp "  [Enter] zurück..." ;;
+      2) clear; cmd_logs 50;   read -rp "  [Enter] zurück..." ;;
       3) clear; cmd_logs_live ;;
-      4) clear; cmd_restart; read -rp "  [Enter] zurück..." ;;
-      5) clear; cmd_start;   read -rp "  [Enter] zurück..." ;;
-      6) clear; cmd_stop;    read -rp "  [Enter] zurück..." ;;
+      4) clear; cmd_restart;   read -rp "  [Enter] zurück..." ;;
+      5) clear; cmd_start;     read -rp "  [Enter] zurück..." ;;
+      6) clear; cmd_stop;      read -rp "  [Enter] zurück..." ;;
       7) clear; cmd_check_update; read -rp "  [Enter] zurück..." ;;
-      8) clear; cmd_env;     read -rp "  [Enter] zurück..." ;;
-      9) clear; cmd_vault;   read -rp "  [Enter] zurück..." ;;
-      10) clear; cmd_ollama; read -rp "  [Enter] zurück..." ;;
+      8) clear; cmd_env;       read -rp "  [Enter] zurück..." ;;
+      9) clear; cmd_workspace; read -rp "  [Enter] zurück..." ;;
+      10) clear; cmd_ollama;   read -rp "  [Enter] zurück..." ;;
       11) clear; cmd_user list; read -rp "  [Enter] zurück..." ;;
       0|q|Q) echo ""; break ;;
       *) echo -e "\n  ${RED}Ungültige Eingabe${NC}" ; sleep 1 ;;
@@ -372,7 +372,7 @@ case "${1:-}" in
   check-update|check)  cmd_check_update ;;
   user)                cmd_user "${2:-}" "${3:-}" ;;
   env|config)          cmd_env ;;
-  vault)               cmd_vault ;;
+  workspace)           cmd_workspace ;;
   ollama)              cmd_ollama ;;
   help|--help|-h)      print_logo; cmd_help ;;
   "")                  cmd_menu ;;
