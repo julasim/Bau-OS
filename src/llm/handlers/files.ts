@@ -9,7 +9,6 @@ import {
   grepFiles,
   searchWorkspace,
 } from "../../workspace/index.js";
-import { extractDocument } from "../../workspace/extractor.js";
 import { safePath } from "../../workspace/helpers.js";
 import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED, TOOL_OUTPUT_MAX_CHARS } from "../../config.js";
 import type { HandlerMap } from "./types.js";
@@ -166,6 +165,7 @@ export const fileHandlers: HandlerMap = {
       if (!resolved)
         return `Datei nicht gefunden: ${pfad}. Nutze dateien_suchen oder ordner_auflisten um den richtigen Pfad zu finden.`;
       try {
+        const { extractDocument } = await import("../../workspace/extractor.js");
         const result = await extractDocument(resolved, "");
         if (result.format === "unsupported") return `Dateiformat .${ext} wird nicht unterstuetzt.`;
         const text = result.text.slice(0, TOOL_OUTPUT_MAX_CHARS);
