@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, nextTick } from "vue";
+import { ref, nextTick, onMounted } from "vue";
+import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 
 interface ChatMessage {
@@ -111,6 +112,19 @@ function onKeydown(e: KeyboardEvent) {
     send();
   }
 }
+
+onMounted(async () => {
+  try {
+    const history = await api.get<{ user: string; assistant: string }[]>("/chat/history");
+    for (const entry of history) {
+      messages.value.push({ role: "user", text: entry.user });
+      messages.value.push({ role: "assistant", text: entry.assistant });
+    }
+    scrollToBottom();
+  } catch {
+    // Verlauf nicht verfuegbar — leerer Chat
+  }
+});
 </script>
 
 <template>

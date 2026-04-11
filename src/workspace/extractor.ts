@@ -8,16 +8,21 @@ export interface ExtractionResult {
 }
 
 export async function extractPdf(filePath: string): Promise<string> {
-  const pdfModule = await import("pdf-parse");
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const pdfParse = ((pdfModule as any).default ?? pdfModule) as (buf: Buffer) => Promise<{ text: string }>;
-  const buffer = fs.readFileSync(filePath);
-  const parsed = await pdfParse(buffer);
-  const text = parsed.text.trim();
-  if (text.length > EXTRACT_MAX_CHARS) {
-    return text.slice(0, EXTRACT_MAX_CHARS) + `\n\n[... gekürzt – ${text.length - EXTRACT_MAX_CHARS} Zeichen entfernt]`;
+  const { PDFParse } = await import("pdf-parse");
+  const data = fs.readFileSync(filePath);
+  const parser = new PDFParse({ data, verbosity: 0 });
+  try {
+    const result = await parser.getText();
+    const text = result.text.trim();
+    if (text.length > EXTRACT_MAX_CHARS) {
+      return (
+        text.slice(0, EXTRACT_MAX_CHARS) + `\n\n[... gekürzt – ${text.length - EXTRACT_MAX_CHARS} Zeichen entfernt]`
+      );
+    }
+    return text;
+  } finally {
+    await parser.destroy();
   }
-  return text;
 }
 
 export async function extractDocx(filePath: string): Promise<string> {

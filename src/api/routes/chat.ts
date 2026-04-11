@@ -19,6 +19,12 @@ import { logInfo, logError } from "../../logger.js";
 
 export const chatRoutes = new Hono();
 
+// ── Chatverlauf laden ────────────────────────────────────────────────────────
+chatRoutes.get("/chat/history", (c) => {
+  const history = loadAgentHistory("Main", HISTORY_LOAD_LIMIT);
+  return c.json(history);
+});
+
 chatRoutes.post("/chat", (c) => {
   return streamSSE(c, async (stream) => {
     let body: { message: string };
