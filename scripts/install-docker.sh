@@ -20,7 +20,7 @@ export LANGUAGE=de_AT.UTF-8
 # ─────────────────────────────────────────────────────────────────────────────
 readonly INSTALL_DIR_DEFAULT="/opt/bau-os"
 readonly WORKSPACE_DIR_DEFAULT="/opt/bau-os-workspace"
-readonly REPO_URL="https://github.com/julasim/Obsidian-OS.git"
+readonly REPO_URL="https://github.com/julasim/Bau-OS.git"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Farben & Formatierung
