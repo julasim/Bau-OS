@@ -1,0 +1,51 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Bau-OS Docker Compose
+# Alles in einem Container: Node.js (Bau-OS) + Ollama
+#
+# Start:  docker compose up -d
+# Logs:   docker compose logs -f
+# Stop:   docker compose down
+# Update: docker compose up -d --build
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: bau-os
+
+services:
+  bau-os:
+    build: .
+    container_name: bau-os
+    restart: always
+    env_file: .env
+    environment:
+      # Workspace-Pfad innerhalb des Containers (→ wird als Volume gemountet)
+      - WORKSPACE_PATH=/workspace
+      # Ollama läuft im gleichen Container → localhost
+      - OLLAMA_BASE_URL=http://localhost:11434/v1
+    ports:
+      # Host-Port aus .env (API_PORT), Standard 3000
+      - "${API_PORT:-3000}:${API_PORT:-3000}"
+    volumes:
+      # Benutzerdaten — WORKSPACE_HOST_DIR aus .env (Standard: ./workspace)
+      - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
+      # Bot-Logs
+      - ./logs:/opt/bau-os/logs
+      # Web-UI Benutzer (users.json)
+      - ./data:/opt/bau-os/data
+      # Dynamische Tool-Skripte
+      - ./tools:/opt/bau-os/tools
+      # Telegram Chat-ID (Datei muss auf Host existieren: touch .chat_id)
+      - ./.chat_id:/opt/bau-os/.chat_id
+      # Ollama-Modelle persistent (kein erneutes Download nach Neustart)
+      - ollama_models:/root/.ollama
+    # GPU-Support für lokale Modelle (optional, benötigt nvidia-container-toolkit):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+volumes:
+  # Ollama-Modelle werden zwischen Container-Neustarts gespeichert
+  ollama_models:

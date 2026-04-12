@@ -1,0 +1,27 @@
+# Abhängigkeiten (werden im Container neu installiert)
+node_modules/
+
+# Build-Artefakte (werden im Container gebaut)
+dist/
+
+# Laufzeit-Daten (werden als Volumes gemountet)
+.env
+logs/
+workspace/
+data/
+tools/
+.chat_id
+
+# Git
+.git/
+.gitignore
+
+# Entwicklung
+*.log
+*.jsonl
+.DS_Store
+Thumbs.db
+
+# Dokumentation
+docs/.vitepress/dist/
+docs/.vitepress/cache/
