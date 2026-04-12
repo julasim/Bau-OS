@@ -19,6 +19,7 @@ RUN apt-get update && apt-get install -y \
     python3 \
     make \
     g++ \
+    zstd \
     && locale-gen de_AT.UTF-8 2>/dev/null || locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
 
