@@ -11,6 +11,7 @@ import {
   WS_MAX_TOTAL_CHARS,
 } from "../config.js";
 import { workspacePath, ensureDir } from "./helpers.js";
+import { logError } from "../logger.js";
 
 // ---- Constants ----
 
@@ -282,7 +283,7 @@ export function appendAgentConversation(agentName: string, userMsg: string, botR
   if (fs.existsSync(bootstrapPath)) fs.unlinkSync(bootstrapPath);
 
   // 2. DB (fire-and-forget — Telegram-Chats auch in DB speichern)
-  _saveConversationToDB(agentName, userMsg, botReply).catch(() => {});
+  _saveConversationToDB(agentName, userMsg, botReply).catch((err) => logError("[ChatDB]", err));
 }
 
 async function _saveConversationToDB(agentName: string, userMsg: string, botReply: string): Promise<void> {

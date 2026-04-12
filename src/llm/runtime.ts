@@ -14,6 +14,7 @@ import {
   getAgentModel,
   MESSAGE_PREVIEW_LENGTH,
   KEPT_TOOL_MESSAGES,
+  TOOL_PRUNE_MAX_CHARS,
   HISTORY_LOAD_LIMIT,
 } from "../config.js";
 import { logInfo, logError } from "../logger.js";
@@ -116,6 +117,13 @@ export async function processAgent(
     let totalChars = 0;
     for (const m of messages) totalChars += typeof m.content === "string" ? m.content.length : 200;
     if (totalChars > MAX_HISTORY_CHARS) {
+      // 1. Große Tool-Ergebnisse kuerzen (behalten aber Kontext)
+      for (const m of messages) {
+        if (m.role === "tool" && typeof m.content === "string" && m.content.length > TOOL_PRUNE_MAX_CHARS) {
+          m.content = m.content.slice(0, TOOL_PRUNE_MAX_CHARS) + "\n[... gekuerzt]";
+        }
+      }
+      // 2. Wenn immer noch zu groß: aelteste Tool-Messages entfernen
       const systemMsg = messages[0];
       const toolMsgs = messages.filter((m) => m.role === "tool");
       const nonToolMsgs = messages.filter((m) => m.role !== "tool");

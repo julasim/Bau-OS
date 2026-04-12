@@ -79,7 +79,8 @@ export const SEARCH_LINE_MAX = 100; // searchWorkspace Zeilen-Laenge
 // ── Agent-Workspace ──────────────────────────────────────────────────────────
 export const WS_MAX_FILE_CHARS = 20_000; // Max Zeichen pro Workspace-Datei
 export const WS_MAX_TOTAL_CHARS = 150_000; // Max Zeichen gesamt
-export const KEPT_TOOL_MESSAGES = 3; // Tool-Messages beim Pruning behalten
+export const KEPT_TOOL_MESSAGES = 8; // Tool-Messages beim Pruning behalten
+export const TOOL_PRUNE_MAX_CHARS = 4_000; // Tool-Ergebnisse beim Pruning kuerzen
 
 // ── Logging ──────────────────────────────────────────────────────────────────
 export const MAX_LOG_LINES = 500; // bot.log Zeilen-Limit

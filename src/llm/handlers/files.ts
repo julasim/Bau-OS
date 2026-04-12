@@ -278,8 +278,12 @@ export const fileHandlers: HandlerMap = {
   },
 
   semantisch_suchen: async (args) => {
-    if (!DB_ENABLED)
-      return "Semantische Suche nicht verfuegbar (Datenbank nicht aktiv). Nutze vault_suchen stattdessen.";
+    if (!DB_ENABLED) {
+      // Fallback: vault_suchen ausfuehren statt Fehler zurueckgeben
+      const results = searchWorkspace(String(args.frage));
+      if (!results.length) return `Keine Treffer fuer "${args.frage}" (Textsuche, DB nicht aktiv).`;
+      return results.map((r) => `\u{1F4C4} ${r.file}\n   ${r.line}`).join("\n\n") + "\n\n[Textsuche — DB nicht aktiv]";
+    }
     const { semanticSearch } = await import("../../db/index.js");
     const type = (args.typ as "all" | "note" | "file") || "all";
     const limit = Number(args.limit) || 5;

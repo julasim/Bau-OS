@@ -12,5 +12,5 @@ docker/supabase/
 docker/.env
 
 # Lokale Daten (Secrets)
-data/
+/data/
 .claude/settings.local.json

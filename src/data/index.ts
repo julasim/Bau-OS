@@ -11,7 +11,6 @@ import type {
   NoteRepository,
   ProjectRepository,
   TeamRepository,
-  AgentLogRepository,
   FileRepository,
   ChatRepository,
 } from "./types.js";
@@ -25,7 +24,6 @@ import { dbTasks } from "./db-tasks.js";
 import { dbTermine } from "./db-termine.js";
 import { dbNotes } from "./db-notes.js";
 import { dbProjects } from "./db-projects.js";
-import { dbAgentLogs } from "./db-agent-logs.js";
 import { dbFiles } from "./db-files.js";
 import { dbChat } from "./db-chat.js";
 import { fsTeam } from "./fs-team.js";
@@ -40,7 +38,6 @@ export const projectRepo: ProjectRepository = DB_ENABLED ? dbProjects : fsProjec
 export const teamRepo: TeamRepository = DB_ENABLED ? dbTeam : fsTeam;
 export const fileRepo: FileRepository | null = DB_ENABLED ? dbFiles : null;
 export const chatRepo: ChatRepository | null = DB_ENABLED ? dbChat : null;
-export const agentLogRepo: AgentLogRepository | null = DB_ENABLED ? dbAgentLogs : null;
 
 /** Gibt den aktuellen Modus zurueck */
 export function dataMode(): "database" | "filesystem" {
@@ -48,13 +45,12 @@ export function dataMode(): "database" | "filesystem" {
 }
 
 // Re-export types
-export type { Task, Termin, Note, Project, TeamMember, AgentLog, ChatSession, ChatMessage } from "./types.js";
+export type { Task, Termin, Note, Project, TeamMember, ChatSession, ChatMessage } from "./types.js";
 export type {
   TaskRepository,
   TerminRepository,
   NoteRepository,
   ProjectRepository,
   TeamRepository,
-  AgentLogRepository,
   ChatRepository,
 } from "./types.js";
