@@ -27,6 +27,18 @@ export function getCurrentDepth(): number {
   return _currentDepth;
 }
 
+// ---- Send-File Context (set by bot.ts before each processMessage) ----
+
+let _sendFileFn: ((absolutePath: string) => Promise<void>) | null = null;
+
+export function setSendFileContext(fn: (absolutePath: string) => Promise<void>): void {
+  _sendFileFn = fn;
+}
+
+export async function sendFile(absolutePath: string): Promise<void> {
+  if (_sendFileFn) await _sendFileFn(absolutePath);
+}
+
 // ---- Late-bound processAgent (avoids circular import with runtime) ----
 
 type ProcessAgentFn = (name: string, msg: string, mode: "full" | "minimal", depth: number) => Promise<string>;

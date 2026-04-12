@@ -20,6 +20,8 @@ export {
   getCurrentDepth,
   registerProcessAgent,
   getProcessAgentFn,
+  setSendFileContext,
+  sendFile,
 } from "./context.js";
 
 // ---- Handler Registry ----

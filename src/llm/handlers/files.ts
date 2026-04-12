@@ -11,7 +11,8 @@ import {
 } from "../../workspace/index.js";
 import { safePath } from "../../workspace/helpers.js";
 import { fileRepo } from "../../data/index.js";
-import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED, TOOL_OUTPUT_MAX_CHARS } from "../../config.js";
+import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED, TOOL_OUTPUT_MAX_CHARS, WORKSPACE_PATH } from "../../config.js";
+import { sendFile } from "../context.js";
 import type { HandlerMap } from "./types.js";
 
 const DOCUMENT_EXTS = new Set(["pdf", "docx", "doc"]);
@@ -150,6 +151,55 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
           limit: { type: "number", description: "Max. Treffer gesamt (Standard: 20)" },
         },
         required: ["muster"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "pdf_erstellen",
+      description:
+        "Erstellt eine PDF-Datei mit Titel und Textinhalt. Ideal fuer Berichte, Protokolle, Kostenaufstellungen, Zusammenfassungen. Speichert die PDF im Workspace unter Exports/. Danach datei_senden aufrufen um sie an den Nutzer zu schicken.",
+      parameters: {
+        type: "object",
+        properties: {
+          titel: { type: "string", description: "Titel der PDF (erscheint als Ueberschrift)" },
+          inhalt: { type: "string", description: "Textinhalt der PDF (Zeilenumbrueche erlaubt)" },
+          dateiname: { type: "string", description: "Dateiname, z.B. 'Bericht_April.pdf' (ohne Pfad)" },
+        },
+        required: ["titel", "inhalt", "dateiname"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "datei_senden",
+      description:
+        "Sendet eine Datei aus dem Workspace als Telegram-Dokument an den Nutzer. Relativer Pfad zum Workspace-Root, z.B. 'Exports/Bericht.pdf'. Nach pdf_erstellen oder docx_erstellen verwenden um die generierte Datei zuzustellen.",
+      parameters: {
+        type: "object",
+        properties: {
+          pfad: { type: "string", description: "Relativer Pfad im Workspace (z.B. 'Exports/Bericht.pdf')" },
+        },
+        required: ["pfad"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "docx_erstellen",
+      description:
+        "Erstellt eine Word-Datei (.docx) mit Titel und Textinhalt. Ideal wenn der Nutzer ein bearbeitbares Dokument braucht (Angebot, Vertrag, Protokoll, Bericht). Speichert die Datei im Workspace unter Exports/. Danach datei_senden aufrufen um sie an den Nutzer zu schicken.",
+      parameters: {
+        type: "object",
+        properties: {
+          titel: { type: "string", description: "Titel des Dokuments (erscheint als Ueberschrift)" },
+          inhalt: { type: "string", description: "Textinhalt des Dokuments (Zeilenumbrueche erlaubt)" },
+          dateiname: { type: "string", description: "Dateiname, z.B. 'Angebot_Muster.docx' (ohne Pfad)" },
+        },
+        required: ["titel", "inhalt", "dateiname"],
       },
     },
   },
@@ -317,5 +367,78 @@ export const fileHandlers: HandlerMap = {
     return output.length > HTTP_RESPONSE_MAX_CHARS
       ? output.slice(0, HTTP_RESPONSE_MAX_CHARS) + "\n[... gekuerzt]"
       : output;
+  },
+
+  pdf_erstellen: async (args) => {
+    try {
+      const { createPdf } = await import("../../workspace/pdf.js");
+      const relativePath = await createPdf({
+        titel: String(args.titel),
+        inhalt: String(args.inhalt),
+        dateiname: String(args.dateiname),
+      });
+
+      // In DB speichern → automatisches Embedding
+      if (DB_ENABLED && fileRepo) {
+        const safeName = path.basename(relativePath);
+        fileRepo
+          .save({
+            filename: safeName,
+            filepath: relativePath,
+            filesize: 0,
+            mimeType: "application/pdf",
+            contentText: `${String(args.titel)}\n\n${String(args.inhalt)}`,
+          })
+          .catch(() => {});
+      }
+
+      return `PDF erstellt: ${relativePath}\n\nJetzt datei_senden aufrufen um sie an den Nutzer zu schicken.`;
+    } catch (err) {
+      return `Fehler beim PDF-Erstellen: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  },
+
+  datei_senden: async (args) => {
+    const pfad = String(args.pfad);
+    const absPath = path.resolve(WORKSPACE_PATH, pfad);
+    // Path-Traversal-Schutz
+    if (!absPath.startsWith(WORKSPACE_PATH)) {
+      return "Zugriff verweigert: Pfad liegt ausserhalb des Workspace.";
+    }
+    try {
+      await sendFile(absPath);
+      return `Datei gesendet: ${path.basename(pfad)}`;
+    } catch (err) {
+      return `Fehler beim Senden: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  },
+
+  docx_erstellen: async (args) => {
+    try {
+      const { createDocx } = await import("../../workspace/docx.js");
+      const relativePath = await createDocx({
+        titel: String(args.titel),
+        inhalt: String(args.inhalt),
+        dateiname: String(args.dateiname),
+      });
+
+      // In DB speichern → automatisches Embedding
+      if (DB_ENABLED && fileRepo) {
+        const safeName = path.basename(relativePath);
+        fileRepo
+          .save({
+            filename: safeName,
+            filepath: relativePath,
+            filesize: 0,
+            mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            contentText: `${String(args.titel)}\n\n${String(args.inhalt)}`,
+          })
+          .catch(() => {});
+      }
+
+      return `Word-Dokument erstellt: ${relativePath}\n\nJetzt datei_senden aufrufen um es an den Nutzer zu schicken.`;
+    } catch (err) {
+      return `Fehler beim DOCX-Erstellen: ${err instanceof Error ? err.message : String(err)}`;
+    }
   },
 };

@@ -1,13 +1,16 @@
-import { Bot } from "grammy";
+import fs from "fs";
+import path from "path";
+import { Bot, InputFile } from "grammy";
 import { saveNote, isMainWorkspaceConfigured } from "./workspace/index.js";
 import { processMessage, processBtw, processAgent } from "./llm/runtime.js";
 import { processSetup, isSetupActive, activateSetup } from "./llm/setup.js";
-import { setReplyContext } from "./llm/executor.js";
+import { setReplyContext, setSendFileContext } from "./llm/executor.js";
 import { logError } from "./logger.js";
 import { enqueue } from "./queue.js";
 import { fmt, stripMarkdown } from "./format.js";
 import { saveChatId } from "./heartbeat.js";
-import { TYPING_INTERVAL_MS } from "./config.js";
+import { TYPING_INTERVAL_MS, WORKSPACE_PATH, DB_ENABLED } from "./config.js";
+import { fileRepo } from "./data/index.js";
 import {
   handleHilfe,
   handleStatus,
@@ -110,6 +113,9 @@ export function createBot(token: string): Bot {
 
       try {
         setReplyContext((msg) => safeReply(ctx, msg).then(() => {}));
+        setSendFileContext(async (absPath) => {
+          await ctx.replyWithDocument(new InputFile(absPath), { caption: path.basename(absPath) });
+        });
         const antwort = await processMessage(text);
         stopTyping();
         await safeReply(ctx, antwort);
@@ -129,6 +135,74 @@ export function createBot(token: string): Bot {
 
   bot.on("message:voice", (ctx) => {
     ctx.reply("\u{1F3A4} Sprachnachrichten werden derzeit nicht unterstuetzt. Bitte als Text schreiben.");
+  });
+
+  // --- Dokumente / PDFs ---
+  bot.on("message:document", (ctx) => {
+    enqueue(ctx.chat.id, async () => {
+      saveChatId(ctx.chat.id);
+      const doc = ctx.message.document;
+      const stopTyping = startTyping(ctx);
+
+      try {
+        // Datei von Telegram herunterladen
+        const fileInfo = await ctx.getFile();
+        if (!fileInfo.file_path) throw new Error("Telegram lieferte keinen Dateipfad.");
+        const fileUrl = `https://api.telegram.org/file/bot${token}/${fileInfo.file_path}`;
+        const res = await fetch(fileUrl);
+        if (!res.ok) throw new Error(`Telegram-Download fehlgeschlagen: ${res.status}`);
+        const buffer = Buffer.from(await res.arrayBuffer());
+
+        // Im Workspace speichern
+        const safeName = (doc.file_name || `upload_${Date.now()}`).replace(/[<>:"|?*]/g, "_");
+        const destDir = path.join(WORKSPACE_PATH, "Uploads");
+        fs.mkdirSync(destDir, { recursive: true });
+        const destPath = path.join(destDir, safeName);
+        fs.writeFileSync(destPath, buffer);
+        const relativePath = `Uploads/${safeName}`;
+
+        // Text extrahieren
+        const { extractDocument } = await import("./workspace/extractor.js");
+        const extraction = await extractDocument(destPath, doc.mime_type || "");
+
+        // In DB speichern wenn aktiv
+        if (DB_ENABLED && fileRepo) {
+          try {
+            await fileRepo.save({
+              filename: safeName,
+              filepath: relativePath,
+              filesize: doc.file_size || buffer.length,
+              mimeType: doc.mime_type || undefined,
+              contentText: extraction.text || undefined,
+            });
+          } catch {
+            // DB-Fehler — Datei ist trotzdem auf Filesystem
+          }
+        }
+
+        // Reply- und File-Context setzen
+        setReplyContext((msg) => safeReply(ctx, msg).then(() => {}));
+        setSendFileContext(async (absPath) => {
+          await ctx.replyWithDocument(new InputFile(absPath), { caption: path.basename(absPath) });
+        });
+
+        // LLM mit Dateiinhalt aufrufen
+        const extractedInfo =
+          extraction.format === "unsupported"
+            ? `[Format wird nicht unterstützt: ${path.extname(safeName)}]`
+            : extraction.text || "[Kein Textinhalt extrahierbar]";
+
+        const prompt = `Der Nutzer hat die Datei "${safeName}" hochgeladen.\n\nInhalt:\n${extractedInfo}`;
+        const antwort = await processMessage(prompt);
+
+        stopTyping();
+        await safeReply(ctx, antwort);
+      } catch (err) {
+        stopTyping();
+        logError("Dokument-Upload", err);
+        await ctx.reply("Fehler beim Verarbeiten der Datei.");
+      }
+    });
   });
 
   return bot;
