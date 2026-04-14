@@ -320,14 +320,30 @@ ok "Docker-Image gebaut"
 # ═════════════════════════════════════════════════════════════════════════════
 step "Web-Admin einrichten..."
 
-# Passwort via gebautem Image hashen (kein Node.js auf Host nötig)
-PASS_HASH=$(dc run --rm --no-deps bau-os \
-  node -e "const b=require('bcrypt'); b.hash(process.argv[1],10).then(h=>console.log(h))" \
-  "$WEB_PASS" 2>&1 | tail -1)
+# Passwort via gebautem Image hashen (-T: kein TTY, funktioniert auch via curl|bash)
+set +e
+BCRYPT_OUTPUT=$(dc run --rm --no-deps -T bau-os \
+  node -e "require('bcrypt').hash(process.argv[1],10).then(h=>console.log(h)).catch(e=>{console.error('ERR:'+e.message);process.exit(1)})" \
+  "$WEB_PASS" 2>&1)
+BCRYPT_CODE=$?
+set -e
 
-# Validieren: bcrypt-Hash beginnt immer mit $2b$ und ist 60 Zeichen lang
+if [ $BCRYPT_CODE -ne 0 ]; then
+  echo ""
+  warn "bcrypt-Container lieferte Exit-Code $BCRYPT_CODE. Ausgabe:"
+  echo "$BCRYPT_OUTPUT"
+  err "Passwort-Hash konnte nicht erstellt werden."
+fi
+
+# Hash aus letzter Zeile extrahieren (und evtl. \r entfernen)
+PASS_HASH=$(echo "$BCRYPT_OUTPUT" | tail -1 | tr -d '\r\n')
+
+# Validieren: bcrypt-Hash beginnt mit $2[aby]$ und ist 60 Zeichen
 if [ ${#PASS_HASH} -ne 60 ] || [[ ! "$PASS_HASH" =~ ^\$2[aby]\$ ]]; then
-  err "Passwort-Hash konnte nicht erstellt werden. Docker-Image defekt?"
+  echo ""
+  warn "Ungueltiger Hash (Laenge ${#PASS_HASH}). Volle Ausgabe:"
+  echo "$BCRYPT_OUTPUT"
+  err "Passwort-Hash ungueltig. Docker-Image defekt?"
 fi
 
 cat > "$INSTALL_DIR/data/users.json" << USERSEOF
@@ -346,14 +362,15 @@ if [ "$LLM_MODE" = "cloud" ]; then
   echo ""
 
   # Ollama signin im temporären Container (Credentials landen im Volume)
-  dc run --rm bau-os bash -c "ollama serve & sleep 5 && ollama signin" < /dev/tty || true
+  # -T für non-TTY (curl|bash), stdin von /dev/tty für interaktive URL-Eingabe
+  dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama signin" < /dev/tty || true
 
   echo ""
   echo -e "  ${YELLOW}→${NC} Sobald du dich im Browser angemeldet hast, drücke Enter."
   read -r < /dev/tty
 
   # Verbindung testen
-  CLOUD_TEST=$(dc run --rm bau-os bash -c "ollama serve & sleep 5 && ollama ls 2>&1" || true)
+  CLOUD_TEST=$(dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama ls 2>&1" || true)
   if echo "$CLOUD_TEST" | grep -qi "error\|unauthorized\|failed"; then
     warn "Ollama Cloud-Verbindung konnte nicht bestätigt werden"
     FAIL_CHOICE=$(select_option "Was möchtest du tun?" \
@@ -368,7 +385,7 @@ if [ "$LLM_MODE" = "cloud" ]; then
         info "Verfügbare: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
         OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:3b")
         step "Modell herunterladen ($OLLAMA_MODEL)..."
-        dc run --rm bau-os bash -c "ollama serve & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" \
+        dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" \
           || err "Modell-Download fehlgeschlagen"
         # .env aktualisieren
         sed -i "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$OLLAMA_MODEL|" "$INSTALL_DIR/.env"
@@ -391,7 +408,7 @@ else
   step "Modell herunterladen ($OLLAMA_MODEL)..."
   warn "Das kann je nach Internetverbindung einige Minuten dauern..."
 
-  dc run --rm bau-os bash -c "ollama serve & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" \
+  dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" \
     || err "Modell-Download fehlgeschlagen. Prüfe deine Internetverbindung."
 
   ok "Modell '$OLLAMA_MODEL' bereit"
