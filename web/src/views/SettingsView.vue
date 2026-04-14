@@ -46,6 +46,22 @@ const confirmPassword = ref("");
 
 const modelInput = ref("");
 
+// ── Cloud-Modelle (OpenAI-kompatibel) ────────────────────────────────────────
+// Schnellauswahl fuer haeufig genutzte Cloud-Modelle. Klick setzt den Input
+// und laesst den User mit "Setzen" bestaetigen.
+const CLOUD_MODELS: { id: string; label: string; desc: string }[] = [
+  { id: "gpt-4o-mini", label: "GPT-4o mini", desc: "Schnell & guenstig (Default)" },
+  { id: "gpt-4o", label: "GPT-4o", desc: "Flagship, multimodal, Top-Qualitaet" },
+  { id: "gpt-4.1", label: "GPT-4.1", desc: "Neu (2025), stark bei Tools & Instruction" },
+  { id: "gpt-4.1-mini", label: "GPT-4.1 mini", desc: "Schnell, aktuelle Generation" },
+  { id: "gpt-4.1-nano", label: "GPT-4.1 nano", desc: "Ultra-guenstig, einfache Tasks" },
+  { id: "o3-mini", label: "o3-mini", desc: "Reasoning-Modell (Mathe, Logik)" },
+];
+
+function pickModel(id: string) {
+  modelInput.value = id;
+}
+
 const dirty = computed(() => {
   if (!data.value) return false;
   const s = data.value.settings;
@@ -283,6 +299,28 @@ onMounted(loadAll);
             >
               Setzen
             </button>
+          </div>
+          <div class="px-4 py-3">
+            <p class="text-xs text-gray-500 mb-2">Cloud-Modelle (OpenAI):</p>
+            <div class="flex flex-wrap gap-2">
+              <button
+                v-for="m in CLOUD_MODELS"
+                :key="m.id"
+                @click="pickModel(m.id)"
+                :title="m.desc"
+                :class="[
+                  'px-2.5 py-1 text-xs rounded border transition text-left',
+                  modelInput === m.id
+                    ? 'border-gray-900 bg-gray-900 text-white'
+                    : 'border-gray-200 text-gray-700 hover:bg-gray-50',
+                ]"
+              >
+                <span class="font-mono">{{ m.label }}</span>
+              </button>
+            </div>
+            <p class="text-[11px] text-gray-400 mt-2">
+              Klick waehlt das Modell vor — mit "Setzen" wird es aktiv. Braucht <code class="font-mono">OPENAI_API_KEY</code> in der .env.
+            </p>
           </div>
           <div class="flex items-center justify-between px-4 py-3">
             <div>
