@@ -6,11 +6,20 @@ import type { Context, Next } from "hono";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
+export interface UserSettings {
+  displayName?: string;
+  notificationsEnabled?: boolean;
+  defaultProject?: string | null;
+  chatSearchMode?: boolean;
+  // weitere optionale Keys erlaubt (Whitelist wird im Settings-Handler erzwungen)
+}
+
 export interface User {
   username: string;
   passwordHash: string;
   role: string;
   createdAt: string;
+  settings?: UserSettings;
 }
 
 export interface JwtPayload {
@@ -35,6 +44,22 @@ export function saveUsers(users: User[]): void {
 
 export function findUser(username: string): User | undefined {
   return loadUsers().find((u) => u.username === username);
+}
+
+/** Patched einen Usereintrag (merge); legt kein neues Feld an, wenn User fehlt. */
+export function updateUser(username: string, patch: Partial<User>): User | undefined {
+  const users = loadUsers();
+  const idx = users.findIndex((u) => u.username === username);
+  if (idx === -1) return undefined;
+  // Merge — settings explizit mergen, nicht ueberschreiben
+  const next: User = {
+    ...users[idx],
+    ...patch,
+    settings: patch.settings ? { ...users[idx].settings, ...patch.settings } : users[idx].settings,
+  };
+  users[idx] = next;
+  saveUsers(users);
+  return next;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────────────

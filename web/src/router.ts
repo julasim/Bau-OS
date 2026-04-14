@@ -22,6 +22,7 @@ const router = createRouter({
         { path: "search", name: "search", component: () => import("./views/SearchView.vue") },
         { path: "files", name: "files", component: () => import("./views/FileBrowserView.vue") },
         { path: "chat", name: "chat", component: () => import("./views/ChatView.vue") },
+        { path: "settings", name: "settings", component: () => import("./views/SettingsView.vue") },
       ],
     },
   ],
