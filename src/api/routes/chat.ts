@@ -54,9 +54,14 @@ chatRoutes.get("/chat/sessions/:id/messages", async (c) => {
 // ── Chat-Nachricht senden ───────────────────────────────────────────────────
 chatRoutes.post("/chat", (c) => {
   return streamSSE(c, async (stream) => {
-    let body: { message: string; sessionId?: string };
+    let body: { message: string; sessionId?: string; searchMode?: boolean; projectFilter?: string | null };
     try {
-      body = await c.req.json<{ message: string; sessionId?: string }>();
+      body = await c.req.json<{
+        message: string;
+        sessionId?: string;
+        searchMode?: boolean;
+        projectFilter?: string | null;
+      }>();
     } catch {
       await stream.writeSSE({ event: "error", data: JSON.stringify({ error: "Ungueltiger Request" }) });
       return;
@@ -69,8 +74,10 @@ chatRoutes.post("/chat", (c) => {
 
     const agentName = "Main";
     const userMessage = body.message.trim();
+    const searchMode = body.searchMode === true;
+    const projectFilter = body.projectFilter ? String(body.projectFilter) : null;
 
-    logInfo(`[Chat] ${userMessage.slice(0, 80)}`);
+    logInfo(`[Chat] ${userMessage.slice(0, 80)}${searchMode ? " [Dateisuche an]" : ""}`);
 
     // Session bestimmen: explizit uebergeben oder neue erstellen
     let sessionId = body.sessionId;
@@ -91,7 +98,17 @@ chatRoutes.post("/chat", (c) => {
 
     const workspaceContext = loadAgentWorkspace(agentName, "full");
     const dateLine = buildDateLine();
-    const systemPrompt = workspaceContext ? `${dateLine}\n\n${workspaceContext}` : dateLine;
+    const baseSystemPrompt = workspaceContext ? `${dateLine}\n\n${workspaceContext}` : dateLine;
+
+    // Wenn Dateisuche aktiv: LLM zwingen das Tool 'semantisch_suchen' zu nutzen
+    const searchHint = searchMode
+      ? `\n\nWICHTIG: Der Benutzer hat die Dateisuche aktiviert. Du MUSST das Tool \`semantisch_suchen\` aufrufen, bevor du antwortest. Nutze die Suchergebnisse als Grundlage fuer deine Antwort und verweise auf die gefundenen Quellen.${
+          projectFilter
+            ? ` Beschraenke die Suche auf das Projekt "${projectFilter}" (Parameter projekt="${projectFilter}").`
+            : ""
+        }`
+      : "";
+    const systemPrompt = baseSystemPrompt + searchHint;
 
     // History aus DB oder leer
     let history: { user: string; assistant: string }[] = [];
@@ -117,13 +134,17 @@ chatRoutes.post("/chat", (c) => {
       const allTools = [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()];
 
       for (let i = 0; i < MAX_TOOL_ROUNDS; i++) {
+        // Runde 1 mit aktiver Dateisuche: Tool 'semantisch_suchen' erzwingen.
+        // Ab Runde 2 zurueck auf 'auto' damit der LLM die Antwort formulieren kann.
+        const toolChoice: OpenAI.Chat.ChatCompletionToolChoiceOption =
+          searchMode && i === 0 ? { type: "function", function: { name: "semantisch_suchen" } } : "auto";
         let response: Awaited<ReturnType<typeof client.chat.completions.create>>;
         try {
           response = await client.chat.completions.create({
             model: activeModel,
             messages,
             tools: allTools,
-            tool_choice: "auto",
+            tool_choice: toolChoice,
           });
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : String(err);

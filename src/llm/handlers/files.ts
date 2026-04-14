@@ -94,6 +94,7 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
             description: "Suchbereich: 'all' (Standard), 'note' (nur Notizen), 'file' (nur Dateien)",
           },
           limit: { type: "number", description: "Max. Ergebnisse (Standard: 5)" },
+          projekt: { type: "string", description: "Optional: Suche auf ein Projekt (Projektname) beschraenken" },
         },
         required: ["frage"],
       },
@@ -287,7 +288,8 @@ export const fileHandlers: HandlerMap = {
     const { semanticSearch } = await import("../../db/index.js");
     const type = (args.typ as "all" | "note" | "file") || "all";
     const limit = Number(args.limit) || 5;
-    const results = await semanticSearch(String(args.frage), { limit, type });
+    const project = args.projekt ? String(args.projekt) : null;
+    const results = await semanticSearch(String(args.frage), { limit, type, project });
     if (!results.length)
       return `Keine semantischen Treffer fuer "${args.frage}". Versuche vault_suchen fuer exakte Textsuche.`;
     return results

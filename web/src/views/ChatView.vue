@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from "vue";
+import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
 import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 
@@ -27,6 +27,33 @@ const chatContainer = ref<HTMLElement | null>(null);
 const sessions = ref<SessionInfo[]>([]);
 const activeSessionId = ref<string | null>(null);
 const sidebarOpen = ref(true);
+
+// ── Dateisuche-Mode ──────────────────────────────────────────────────────────
+const searchMode = ref(false);
+const projectFilter = ref<string | null>(null);
+const showAttachMenu = ref(false);
+const projects = ref<{ name: string }[]>([]);
+const attachMenuRef = ref<HTMLElement | null>(null);
+
+async function loadProjects() {
+  try {
+    projects.value = await api.get<{ name: string }[]>("/projects");
+  } catch {
+    projects.value = [];
+  }
+}
+
+function toggleAttachMenu() {
+  showAttachMenu.value = !showAttachMenu.value;
+}
+
+function onDocClick(e: MouseEvent) {
+  if (!showAttachMenu.value) return;
+  const target = e.target as Node;
+  if (attachMenuRef.value && !attachMenuRef.value.contains(target)) {
+    showAttachMenu.value = false;
+  }
+}
 
 // ── Sessions gruppieren ──────────────────────────────────────────────────────
 const groupedSessions = computed(() => {
@@ -142,6 +169,8 @@ async function send() {
       body: JSON.stringify({
         message: text,
         sessionId: activeSessionId.value || undefined,
+        searchMode: searchMode.value,
+        projectFilter: projectFilter.value,
       }),
     });
 
@@ -216,11 +245,16 @@ function onKeydown(e: KeyboardEvent) {
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
-  await loadSessions();
+  await Promise.all([loadSessions(), loadProjects()]);
   // Neueste Session oeffnen falls vorhanden
   if (sessions.value.length > 0) {
     await selectSession(sessions.value[0].id);
   }
+  document.addEventListener("mousedown", onDocClick);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("mousedown", onDocClick);
 });
 </script>
 
@@ -353,7 +387,70 @@ onMounted(async () => {
       <!-- Input -->
       <div class="border-t border-gray-200 bg-white">
         <div class="max-w-3xl mx-auto px-4 py-3">
-          <div class="flex gap-2">
+          <!-- Status-Pille, wenn Dateisuche aktiv -->
+          <div v-if="searchMode" class="flex items-center gap-2 text-xs text-gray-500 mb-2">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 border border-gray-200 rounded-full bg-gray-50">
+              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="7" />
+                <path d="m21 21-4.3-4.3" />
+              </svg>
+              Dateisuche aktiv
+              <span v-if="projectFilter" class="text-gray-400">&middot; {{ projectFilter }}</span>
+              <button
+                @click="searchMode = false; projectFilter = null"
+                class="ml-1 text-gray-300 hover:text-gray-900"
+                title="Dateisuche ausschalten"
+              >
+                &times;
+              </button>
+            </span>
+          </div>
+
+          <div class="flex gap-2 items-start relative" ref="attachMenuRef">
+            <!-- Plus-Button + Popover -->
+            <div class="relative">
+              <button
+                @click="toggleAttachMenu"
+                :disabled="loading"
+                :class="[
+                  'px-3 py-2 rounded-lg border text-sm transition',
+                  searchMode
+                    ? 'border-gray-900 bg-gray-50 text-gray-900'
+                    : 'border-gray-200 text-gray-500 hover:text-gray-900 hover:border-gray-400',
+                ]"
+                title="Werkzeuge"
+              >
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+
+              <!-- Popover-Menue -->
+              <div
+                v-if="showAttachMenu"
+                class="absolute bottom-full mb-2 left-0 w-72 bg-white border border-gray-200 rounded-lg p-4 z-10"
+              >
+                <label class="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" v-model="searchMode" class="accent-gray-900" />
+                  <span class="text-sm text-gray-800">Dateisuche aktivieren</span>
+                </label>
+                <p class="mt-1 ml-6 text-[11px] text-gray-400">
+                  Der Assistent durchsucht deinen Vault vor jeder Antwort.
+                </p>
+
+                <div v-if="searchMode" class="mt-3 pt-3 border-t border-gray-100">
+                  <label class="text-[11px] uppercase tracking-wider text-gray-400">Projekt</label>
+                  <select
+                    v-model="projectFilter"
+                    class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-gray-400 focus:border-gray-400 outline-none"
+                  >
+                    <option :value="null">Alle Projekte</option>
+                    <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
             <textarea
               v-model="input"
               @keydown="onKeydown"
