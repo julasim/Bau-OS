@@ -39,10 +39,13 @@ fi
 cd "$INSTALL_DIR"
 git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
 
+# Sicherstellen, dass das Skript selbst ausfuehrbar ist
+# (Git auf Windows/OneDrive verliert gelegentlich das Exec-Bit)
+chmod +x "$INSTALL_DIR/scripts/docker-update.sh" 2>/dev/null || true
+
 # Beim ersten Lauf einen praktischen Alias ablegen (idempotent, silent bei Fehlschlag)
-if [ ! -f /usr/local/bin/bau-os-update ] && [ -w /usr/local/bin ] 2>/dev/null; then
+if [ ! -L /usr/local/bin/bau-os-update ] && [ -w /usr/local/bin ] 2>/dev/null; then
   ln -sf "$INSTALL_DIR/scripts/docker-update.sh" /usr/local/bin/bau-os-update 2>/dev/null || true
-  chmod +x /usr/local/bin/bau-os-update 2>/dev/null || true
 fi
 
 echo -e "${CYAN}──────────────────────────────────────${NC}"

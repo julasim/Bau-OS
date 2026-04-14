@@ -449,8 +449,9 @@ done
 # bau-os-update Shortcut installieren
 # ═════════════════════════════════════════════════════════════════════════════
 if [ -f "$INSTALL_DIR/scripts/docker-update.sh" ]; then
+  # Exec-Bit auf das Zielskript (git unter Windows/OneDrive verliert es oefter)
+  chmod +x "$INSTALL_DIR/scripts/docker-update.sh" 2>/dev/null || true
   ln -sf "$INSTALL_DIR/scripts/docker-update.sh" /usr/local/bin/bau-os-update 2>/dev/null || true
-  chmod +x /usr/local/bin/bau-os-update 2>/dev/null || true
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
