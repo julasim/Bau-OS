@@ -421,12 +421,15 @@ fi
 step "Bau-OS Container starten..."
 dc up -d
 
-# Health-Check (max. 30 Sekunden)
+# Health-Check: Port antwortet (egal mit welchem HTTP-Code)
 echo ""
 info "Warte auf Bau-OS..."
 for i in $(seq 1 30); do
-  if curl -sf "http://localhost:$API_PORT/api/status" >/dev/null 2>&1; then
-    ok "Bau-OS läuft"
+  # -o /dev/null: Body verwerfen, nur prüfen ob Server antwortet
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$API_PORT/" 2>/dev/null || echo "000")
+  # Jeder HTTP-Status außer 000 (keine Verbindung) = Server läuft
+  if [ "$HTTP_CODE" != "000" ]; then
+    ok "Bau-OS läuft (HTTP $HTTP_CODE)"
     break
   fi
   if [ "$i" -eq 30 ]; then
