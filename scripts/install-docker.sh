@@ -312,7 +312,7 @@ API_PORT=$API_PORT
 ENVEOF
 chmod 600 "$INSTALL_DIR/.env"
 
-dc build || err "Docker-Image konnte nicht gebaut werden. Siehe Fehler oben."
+dc build < /dev/null || err "Docker-Image konnte nicht gebaut werden. Siehe Fehler oben."
 ok "Docker-Image gebaut"
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -320,11 +320,12 @@ ok "Docker-Image gebaut"
 # ═════════════════════════════════════════════════════════════════════════════
 step "Web-Admin einrichten..."
 
-# Passwort via gebautem Image hashen (-T: kein TTY, funktioniert auch via curl|bash)
+# Passwort via gebautem Image hashen
+# < /dev/null verhindert dass docker stdin vom Script (curl|bash) frisst
 set +e
-BCRYPT_OUTPUT=$(dc run --rm --no-deps -T bau-os \
+BCRYPT_OUTPUT=$(docker run --rm bau-os-bau-os:latest \
   node -e "require('bcrypt').hash(process.argv[1],10).then(h=>console.log(h)).catch(e=>{console.error('ERR:'+e.message);process.exit(1)})" \
-  "$WEB_PASS" 2>&1)
+  "$WEB_PASS" < /dev/null 2>&1)
 BCRYPT_CODE=$?
 set -e
 
@@ -369,8 +370,8 @@ if [ "$LLM_MODE" = "cloud" ]; then
   echo -e "  ${YELLOW}→${NC} Sobald du dich im Browser angemeldet hast, drücke Enter."
   read -r < /dev/tty
 
-  # Verbindung testen
-  CLOUD_TEST=$(dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama ls 2>&1" || true)
+  # Verbindung testen (< /dev/null damit docker nicht stdin vom Script frisst)
+  CLOUD_TEST=$(dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama ls 2>&1" < /dev/null || true)
   if echo "$CLOUD_TEST" | grep -qi "error\|unauthorized\|failed"; then
     warn "Ollama Cloud-Verbindung konnte nicht bestätigt werden"
     FAIL_CHOICE=$(select_option "Was möchtest du tun?" \
@@ -385,7 +386,7 @@ if [ "$LLM_MODE" = "cloud" ]; then
         info "Verfügbare: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
         OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:3b")
         step "Modell herunterladen ($OLLAMA_MODEL)..."
-        dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" \
+        dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" < /dev/null \
           || err "Modell-Download fehlgeschlagen"
         # .env aktualisieren
         sed -i "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$OLLAMA_MODEL|" "$INSTALL_DIR/.env"
@@ -408,7 +409,7 @@ else
   step "Modell herunterladen ($OLLAMA_MODEL)..."
   warn "Das kann je nach Internetverbindung einige Minuten dauern..."
 
-  dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" \
+  dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" < /dev/null \
     || err "Modell-Download fehlgeschlagen. Prüfe deine Internetverbindung."
 
   ok "Modell '$OLLAMA_MODEL' bereit"
