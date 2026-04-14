@@ -309,6 +309,8 @@ OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=$OLLAMA_MODEL
 JWT_SECRET=$JWT_SECRET
 API_PORT=$API_PORT
+# PostgreSQL läuft im gleichen Container (Port 5432 nur intern)
+DATABASE_URL=postgresql://bauos:bauos@localhost:5432/bauos
 ENVEOF
 chmod 600 "$INSTALL_DIR/.env"
 

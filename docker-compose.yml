@@ -1,6 +1,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Bau-OS Docker Compose
-# Alles in einem Container: Node.js (Bau-OS) + Ollama
+# Alles in einem Container: Node.js (Bau-OS) + Ollama + PostgreSQL 16
 #
 # Start:  docker compose up -d
 # Logs:   docker compose logs -f
@@ -37,6 +37,8 @@ services:
       - ./.chat_id:/opt/bau-os/.chat_id
       # Ollama-Modelle persistent (kein erneutes Download nach Neustart)
       - ollama_models:/root/.ollama
+      # PostgreSQL-Daten persistent (Chat-Historie, Notizen, Embeddings, ...)
+      - postgres_data:/var/lib/postgresql/16/main
     # GPU-Support für lokale Modelle (optional, benötigt nvidia-container-toolkit):
     # deploy:
     #   resources:
@@ -49,3 +51,5 @@ services:
 volumes:
   # Ollama-Modelle werden zwischen Container-Neustarts gespeichert
   ollama_models:
+  # PostgreSQL-Cluster-Daten (alle DB-Inhalte: Chat, Notizen, Embeddings, ...)
+  postgres_data:

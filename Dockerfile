@@ -1,6 +1,6 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # Bau-OS Docker Image
-# Enthält: Node.js 20 LTS + Ollama (alles in einem Container)
+# Enthält: Node.js 20 LTS + Ollama + PostgreSQL 16 + pgvector (alles in einem)
 # ─────────────────────────────────────────────────────────────────────────────
 
 FROM ubuntu:24.04
@@ -10,7 +10,10 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=de_AT.UTF-8
 ENV LC_ALL=de_AT.UTF-8
 
-# System-Pakete + Build-Tools (nötig für native Module: bcrypt, pdf-parse)
+# System-Pakete + Build-Tools + PostgreSQL 16
+#  - python3/make/g++: native Node-Module (bcrypt, pdf-parse)
+#  - zstd:            Ollama-Installer braucht es für Extraktion
+#  - postgresql-16 + postgresql-server-dev-16: DB + Header für pgvector-Build
 RUN apt-get update && apt-get install -y \
     curl \
     git \
@@ -20,8 +23,20 @@ RUN apt-get update && apt-get install -y \
     make \
     g++ \
     zstd \
+    postgresql-16 \
+    postgresql-contrib-16 \
+    postgresql-server-dev-16 \
     && locale-gen de_AT.UTF-8 2>/dev/null || locale-gen en_US.UTF-8 \
     && rm -rf /var/lib/apt/lists/*
+
+# pgvector aus Source bauen (keine verlässliche Ubuntu-Package in 24.04)
+RUN cd /tmp \
+    && git clone --depth 1 --branch v0.7.4 https://github.com/pgvector/pgvector.git \
+    && cd pgvector \
+    && make \
+    && make install \
+    && cd / \
+    && rm -rf /tmp/pgvector
 
 # Node.js 20 LTS
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
