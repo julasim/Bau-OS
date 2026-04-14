@@ -46,16 +46,15 @@ const confirmPassword = ref("");
 
 const modelInput = ref("");
 
-// ── Cloud-Modelle (OpenAI-kompatibel) ────────────────────────────────────────
-// Schnellauswahl fuer haeufig genutzte Cloud-Modelle. Klick setzt den Input
+// ── Cloud-Modelle (Ollama Cloud / Turbo) ─────────────────────────────────────
+// Schnellauswahl fuer Ollama-gehostete Cloud-Modelle. Klick setzt den Input
 // und laesst den User mit "Setzen" bestaetigen.
 const CLOUD_MODELS: { id: string; label: string; desc: string }[] = [
-  { id: "gpt-4o-mini", label: "GPT-4o mini", desc: "Schnell & guenstig (Default)" },
-  { id: "gpt-4o", label: "GPT-4o", desc: "Flagship, multimodal, Top-Qualitaet" },
-  { id: "gpt-4.1", label: "GPT-4.1", desc: "Neu (2025), stark bei Tools & Instruction" },
-  { id: "gpt-4.1-mini", label: "GPT-4.1 mini", desc: "Schnell, aktuelle Generation" },
-  { id: "gpt-4.1-nano", label: "GPT-4.1 nano", desc: "Ultra-guenstig, einfache Tasks" },
-  { id: "o3-mini", label: "o3-mini", desc: "Reasoning-Modell (Mathe, Logik)" },
+  { id: "gpt-oss:20b-cloud", label: "gpt-oss 20B", desc: "OpenAI Open-Weight, schnell & guenstig" },
+  { id: "gpt-oss:120b-cloud", label: "gpt-oss 120B", desc: "OpenAI Open-Weight, starkes Reasoning" },
+  { id: "qwen3-coder:480b-cloud", label: "qwen3-coder 480B", desc: "Coder-Spezialist, Top bei Tools" },
+  { id: "deepseek-v3.1:671b-cloud", label: "deepseek-v3.1 671B", desc: "Top Allrounder, sehr stark bei Reasoning" },
+  { id: "kimi-k2:1t-cloud", label: "kimi-k2 1T", desc: "Agentic, lange Kontexte, 1 Billion Params" },
 ];
 
 function pickModel(id: string) {
@@ -301,7 +300,7 @@ onMounted(loadAll);
             </button>
           </div>
           <div class="px-4 py-3">
-            <p class="text-xs text-gray-500 mb-2">Cloud-Modelle (OpenAI):</p>
+            <p class="text-xs text-gray-500 mb-2">Cloud-Modelle (Ollama Cloud):</p>
             <div class="flex flex-wrap gap-2">
               <button
                 v-for="m in CLOUD_MODELS"
@@ -319,7 +318,7 @@ onMounted(loadAll);
               </button>
             </div>
             <p class="text-[11px] text-gray-400 mt-2">
-              Klick waehlt das Modell vor — mit "Setzen" wird es aktiv. Braucht <code class="font-mono">OPENAI_API_KEY</code> in der .env.
+              Klick waehlt das Modell vor — mit "Setzen" wird es aktiv. Braucht einen Ollama-Cloud-Account (<code class="font-mono">ollama signin</code>) und <code class="font-mono">OLLAMA_BASE_URL=https://ollama.com</code> in der .env.
             </p>
           </div>
           <div class="flex items-center justify-between px-4 py-3">
