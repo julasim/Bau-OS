@@ -446,6 +446,14 @@ for i in $(seq 1 30); do
 done
 
 # ═════════════════════════════════════════════════════════════════════════════
+# bau-os-update Shortcut installieren
+# ═════════════════════════════════════════════════════════════════════════════
+if [ -f "$INSTALL_DIR/scripts/docker-update.sh" ]; then
+  ln -sf "$INSTALL_DIR/scripts/docker-update.sh" /usr/local/bin/bau-os-update 2>/dev/null || true
+  chmod +x /usr/local/bin/bau-os-update 2>/dev/null || true
+fi
+
+# ═════════════════════════════════════════════════════════════════════════════
 # FERTIG
 # ═════════════════════════════════════════════════════════════════════════════
 echo ""
@@ -457,11 +465,13 @@ echo ""
 echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>:${API_PORT}${NC}"
 echo    "    Login: ${WEB_USER} / (dein gewähltes Passwort)"
 echo ""
+echo -e "  ${BOLD}Update:${NC}"
+echo -e "    ${GREEN}bau-os-update${NC}                  → Pull + Rebuild + Restart"
+echo ""
 echo -e "  ${BOLD}Docker-Befehle:${NC}"
 echo    "    cd $INSTALL_DIR"
 echo    "    docker compose logs -f          → Live-Logs"
 echo    "    docker compose restart          → Neustart"
 echo    "    docker compose down             → Stoppen"
-echo    "    docker compose up -d --build    → Update (nach git pull)"
 echo    "    docker exec -it bau-os bash     → Shell im Container"
 echo ""
