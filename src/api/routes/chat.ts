@@ -242,7 +242,13 @@ chatRoutes.post("/chat", (c) => {
         await stream.writeSSE({ event: "status", data: JSON.stringify({ status: "thinking", round: i + 2 }) });
       }
 
-      const fallback = "Ich konnte deine Anfrage nicht vollstaendig bearbeiten.";
+      // Tool-Loop ist ohne 'antworten'-Call ausgelaufen — gib dem User wenigstens
+      // einen Hinweis was passiert ist (welche Tools wurden versucht).
+      const toolSummary = collectedTools.length ? collectedTools.join(", ") : "(keine)";
+      const fallback =
+        `Ich konnte deine Anfrage in ${MAX_TOOL_ROUNDS} Schritten nicht abschliessen. ` +
+        `Versuchte Tools: ${toolSummary}. ` +
+        `Bitte formuliere die Anfrage praeziser oder zerlege sie in Teilschritte.`;
       if (DB_ENABLED && chatRepo && sessionId) {
         try {
           await chatRepo.addMessage(sessionId, "assistant", fallback, collectedTools);

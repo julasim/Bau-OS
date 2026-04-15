@@ -12,7 +12,9 @@ export interface ProjectInfo {
 }
 
 function safeProjectName(name: string): boolean {
-  return /^[\w\-. ]+$/.test(name) && !name.includes("..");
+  // Unicode-Buchstaben (\p{L}: ae oe ue ss e a, kyrillisch, griechisch ...),
+  // Ziffern, Leerzeichen, "-", "_", "." sind erlaubt.
+  return /^[\p{L}\p{N}_\-. ]+$/u.test(name) && !name.includes("..");
 }
 
 /**

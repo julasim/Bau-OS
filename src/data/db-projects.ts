@@ -60,7 +60,8 @@ export const dbProjects: ProjectRepository = {
   },
 
   async create(name, description) {
-    if (!/^[\w\-. ]+$/.test(name) || name.includes("..")) return false;
+    // Gleiche Unicode-Regel wie in workspace/projects.ts (Umlaute & Co. erlaubt)
+    if (!/^[\p{L}\p{N}_\-. ]+$/u.test(name) || name.includes("..")) return false;
     const db = getDb();
     const [existing] = await db`SELECT id FROM projects WHERE name = ${name} LIMIT 1`;
     if (existing) return false;
