@@ -104,6 +104,21 @@ chatRoutes.post("/chat", (c) => {
       ? `${dateLine}\n\n${workspaceContext}\n\n${toolWhitelist}`
       : `${dateLine}\n\n${toolWhitelist}`;
 
+    // Erkennt Aktions-Anfragen auf Deutsch — bei denen darf der LLM in Runde 1
+    // NICHT einfach antworten-halluzinieren ("Projekt angelegt" ohne Tool-Call).
+    //
+    // WICHTIG: Die Stämme stehen hier OHNE trailing \b, weil deutsche
+    // Konjugationen Suffixe haben (speicher → speichere, speichert, speichern).
+    // Ein `\bspeicher\b` wuerde "Speichere" NICHT matchen, weil nach "speicher"
+    // noch ein Buchstabe (e/t/n) kommt — dann greift die Anti-Halluzinations-
+    // Defense nicht und das Modell kann frei "gespeichert" lügen.
+    //
+    // False-positives sind OK, weil das Modell notfalls ein Lese-Tool
+    // (projekt_info, notizen_auflisten) statt antworten waehlt.
+    const actionPattern =
+      /\b(leg|anleg|erstell|speicher|lösch|loesch|änder|aender|entfern|aktualisier|trag.*ein|plan.*ein|notier|merk|benenn.*um|verschieb|hinzufüg|einfüg|füg.*hinzu|buch|setz|schreib|erfass|protokollier)/i;
+    const isActionRequest = actionPattern.test(userMessage);
+
     // Wenn Dateisuche aktiv: LLM zwingen das Tool 'semantisch_suchen' zu nutzen
     const searchHint = searchMode
       ? `\n\nWICHTIG: Der Benutzer hat die Dateisuche aktiviert. Du MUSST das Tool \`semantisch_suchen\` aufrufen, bevor du antwortest. Nutze die Suchergebnisse als Grundlage fuer deine Antwort und verweise auf die gefundenen Quellen.${
@@ -112,7 +127,18 @@ chatRoutes.post("/chat", (c) => {
             : ""
         }`
       : "";
-    const systemPrompt = baseSystemPrompt + searchHint;
+    // Bei Aktions-Anfragen zusaetzlich in-message-Hint — tool_choice: "required"
+    // reicht bei kleineren Modellen (Ollama) nicht, die schummeln sich mit
+    // leerem tool_calls-Array durch. Ein expliziter deutscher Befehl im
+    // System-Prompt erhoeht die Erfolgsrate messbar.
+    const actionHint = isActionRequest
+      ? `\n\nWICHTIG: Der Benutzer fordert eine Aktion (speichern/anlegen/loeschen/...). ` +
+        `Du MUSST dafuer das entsprechende Tool aufrufen (z.B. notiz_speichern, termin_speichern, ` +
+        `task_speichern, projekt_anlegen). Bei mehreren Items: ein Tool-Call pro Item. ` +
+        `Gib NIEMALS eine Text-Antwort wie "gespeichert" oder "eingeplant" zurueck, ohne ` +
+        `vorher die Tool-Calls wirklich ausgefuehrt zu haben — das waere eine Luege.`
+      : "";
+    const systemPrompt = baseSystemPrompt + searchHint + actionHint;
 
     // History aus DB oder leer
     let history: { user: string; assistant: string }[] = [];
@@ -133,21 +159,6 @@ chatRoutes.post("/chat", (c) => {
     await stream.writeSSE({ event: "status", data: JSON.stringify({ status: "thinking" }) });
 
     const collectedTools: string[] = [];
-
-    // Erkennt Aktions-Anfragen auf Deutsch — bei denen darf der LLM in Runde 1
-    // NICHT einfach antworten-halluzinieren ("Projekt angelegt" ohne Tool-Call).
-    //
-    // WICHTIG: Die Stämme stehen hier OHNE trailing \b, weil deutsche
-    // Konjugationen Suffixe haben (speicher → speichere, speichert, speichern).
-    // Ein `\bspeicher\b` wuerde "Speichere" NICHT matchen, weil nach "speicher"
-    // noch ein Buchstabe (e/t/n) kommt — dann greift die Anti-Halluzinations-
-    // Defense nicht und das Modell kann frei "gespeichert" lügen.
-    //
-    // False-positives sind OK, weil das Modell notfalls ein Lese-Tool
-    // (projekt_info, notizen_auflisten) statt antworten waehlt.
-    const actionPattern =
-      /\b(leg|anleg|erstell|speicher|lösch|loesch|änder|aender|entfern|aktualisier|trag.*ein|plan.*ein|notier|merk|benenn.*um|verschieb|hinzufüg|einfüg|füg.*hinzu|buch|setz|schreib|erfass|protokollier)/i;
-    const isActionRequest = actionPattern.test(userMessage);
 
     try {
       const allTools = [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()];
@@ -186,6 +197,35 @@ chatRoutes.post("/chat", (c) => {
         messages.push(reply);
 
         if (!reply.tool_calls || reply.tool_calls.length === 0) {
+          // Hartes Halluzinations-Netz: Bei Aktions-Anfragen in Runde 1 IGNORIEREN
+          // wir die reine Text-Antwort und geben stattdessen einen ehrlichen Fehler.
+          // Grund: Das Modell ignoriert in diesem Fall tool_choice: "required"
+          // (bekanntes Ollama-Problem bei kleineren Modellen) und faked Erfolg
+          // ("Alle Termine gespeichert") ohne irgendetwas getan zu haben.
+          // Lieber explizit fehlschlagen als falsche Sicherheit suggerieren.
+          if (isActionRequest && i === 0) {
+            const warnung =
+              `\u26A0\uFE0F Das Modell hat behauptet, die Aktion ausgefuehrt zu haben, ` +
+              `aber keinen Tool-Call gemacht — es wurde also NICHTS gespeichert. ` +
+              `Das ist meistens ein Modell-Problem (ignoriert "tool_choice: required"). ` +
+              `Bitte die Anfrage nochmal senden oder ein groesseres Modell aktivieren (z.B. ueber /model).`;
+            logError(
+              "[Chat] Modell hat tool_choice=required ignoriert",
+              new Error(
+                `Action-Request ohne tool_calls. Modell: ${activeModel}. Antwort: ${(reply.content ?? "").slice(0, 200)}`,
+              ),
+            );
+            if (DB_ENABLED && chatRepo && sessionId) {
+              try {
+                await chatRepo.addMessage(sessionId, "assistant", warnung, collectedTools);
+              } catch (e) {
+                logError("[Chat DB]", e);
+              }
+            }
+            await stream.writeSSE({ event: "response", data: JSON.stringify({ text: warnung }) });
+            return;
+          }
+
           const antwort = reply.content ?? "Erledigt.";
           // In DB speichern
           if (DB_ENABLED && chatRepo && sessionId) {
