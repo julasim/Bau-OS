@@ -138,10 +138,13 @@ chatRoutes.post("/chat", (c) => {
       const allTools = [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()];
 
       for (let i = 0; i < MAX_TOOL_ROUNDS; i++) {
-        // Runde 1 mit aktiver Dateisuche: Tool 'semantisch_suchen' erzwingen.
-        // Ab Runde 2 zurueck auf 'auto' damit der LLM die Antwort formulieren kann.
+        // Tool-Choice-Strategie:
+        // - Runde 1 mit aktiver Dateisuche: 'semantisch_suchen' erzwingen.
+        // - Sonst IMMER 'required' — damit das Modell keine Antwort halluzinieren
+        //   kann ohne vorher die noetige Aktion (z.B. projekt_anlegen) auszufuehren.
+        //   Will der Agent direkt antworten ohne Aktion, ruft er das antworten-Tool auf.
         const toolChoice: OpenAI.Chat.ChatCompletionToolChoiceOption =
-          searchMode && i === 0 ? { type: "function", function: { name: "semantisch_suchen" } } : "auto";
+          searchMode && i === 0 ? { type: "function", function: { name: "semantisch_suchen" } } : "required";
         let response: Awaited<ReturnType<typeof client.chat.completions.create>>;
         try {
           response = await client.chat.completions.create({
