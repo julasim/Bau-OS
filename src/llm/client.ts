@@ -7,6 +7,8 @@ import {
   FAST_MODEL,
   SUBAGENT_MODEL,
   LOCALE,
+  getRuntimeMainModel,
+  setRuntimeMainModel,
 } from "../config.js";
 
 // OpenAI direkt wenn OPENAI_API_KEY gesetzt, sonst Ollama-kompatibel
@@ -14,11 +16,12 @@ export const client = OPENAI_ENABLED
   ? new OpenAI({ apiKey: OPENAI_API_KEY })
   : new OpenAI({ baseURL: OLLAMA_BASE_URL, apiKey: "ollama" });
 
-let MODEL = DEFAULT_MODEL;
+// Wahrheit liegt in config.ts (getRuntimeMainModel). Wir spiegeln nur
+// den Fast-Mode-Zustand hier, der Modellname selbst lebt im Override.
 let _fastMode = false;
 
 export function getModel(): string {
-  return MODEL;
+  return getRuntimeMainModel() ?? DEFAULT_MODEL;
 }
 export function getSubagentModel(): string {
   return SUBAGENT_MODEL;
@@ -28,12 +31,12 @@ export function isFastMode(): boolean {
 }
 
 export function setModel(name: string): void {
-  MODEL = name;
+  setRuntimeMainModel(name);
 }
 
 export function toggleFast(): boolean {
   _fastMode = !_fastMode;
-  MODEL = _fastMode ? FAST_MODEL : DEFAULT_MODEL;
+  setRuntimeMainModel(_fastMode ? FAST_MODEL : DEFAULT_MODEL);
   return _fastMode;
 }
 

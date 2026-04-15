@@ -21,7 +21,24 @@ export const AGENTS = [
 ];
 
 export const PROTECTED_AGENTS = AGENTS.filter((a) => a.protected).map((a) => a.name);
-export const getAgentModel = (name: string) => AGENTS.find((a) => a.name === name)?.model ?? DEFAULT_MODEL;
+
+// Runtime-Override fuer das Main-Modell. Wird durch client.ts#setModel gesetzt
+// (Web-UI "Setzen" / Fast-Mode-Toggle). Hier statt in client.ts, damit
+// getAgentModel() den Override lesen kann ohne Zirkular-Import.
+let _runtimeMainModel: string | null = null;
+export function setRuntimeMainModel(name: string | null): void {
+  _runtimeMainModel = name && name.trim() ? name.trim() : null;
+}
+export function getRuntimeMainModel(): string | null {
+  return _runtimeMainModel;
+}
+
+export const getAgentModel = (name: string): string => {
+  // Main-Agent respektiert den Runtime-Override (Web-UI + Fast-Mode).
+  // Alle anderen Agents nutzen ihr in AGENTS deklariertes Modell.
+  if (name === "Main" && _runtimeMainModel) return _runtimeMainModel;
+  return AGENTS.find((a) => a.name === name)?.model ?? DEFAULT_MODEL;
+};
 export const MAX_SPAWN_DEPTH = 2; // Sub-Agents können keine weiteren spawnen
 
 // ── Gedächtnis ────────────────────────────────────────────────────────────────
