@@ -30,14 +30,14 @@ export const projectSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "projekt_anlegen",
       description:
-        "Legt ein neues Projekt an (Ordner Projekte/<name>/ mit Notizen/-Unterordner und README.md; im DB-Modus zusaetzlich Eintrag in der projects-Tabelle). Idempotent: wenn DB und Vault inkonsistent sind (z.B. nur eine Seite hat das Projekt), wird die fehlende Seite nachgezogen. Gibt einen Fehler zurueck, wenn der Name ungueltige Zeichen enthaelt (erlaubt: Buchstaben inkl. Umlaute, Ziffern, Leerzeichen, '-', '_', '.').",
+        "Legt ein neues Projekt in der Datenbank an. Es werden KEINE Ordner oder Dateien auf der Festplatte erzeugt — Projekte sind rein logische DB-Entities. Notizen, Aufgaben und Termine zu einem Projekt landen ebenfalls in der DB, nicht im Dateisystem. Idempotent: existiert der Projektname schon, wird 'true' zurueckgegeben. Fehler nur bei ungueltigem Namen (erlaubt: Buchstaben inkl. Umlaute, Ziffern, Leerzeichen, '-', '_', '.'). Behaupte NIE, dass ein Ordner, eine README.md oder eine Datei-Struktur angelegt wurde — das stimmt nicht.",
       parameters: {
         type: "object",
         properties: {
-          name: { type: "string", description: "Projektname (wird auch als Ordnername verwendet)" },
+          name: { type: "string", description: "Projektname" },
           beschreibung: {
             type: "string",
-            description: "Optionale Kurzbeschreibung (landet in der README.md).",
+            description: "Optionale Kurzbeschreibung (landet in der projects.description-Spalte).",
           },
         },
         required: ["name"],
@@ -49,7 +49,7 @@ export const projectSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "projekt_loeschen",
       description:
-        "Loescht ein Projekt komplett: den Vault-Ordner Projekte/<name>/ inkl. aller Notizen, Aufgaben und Termine darin UND den DB-Eintrag. UNWIDERRUFLICH. Nur aufrufen, wenn der Benutzer das explizit verlangt hat.",
+        "Loescht ein Projekt aus der Datenbank. Damit werden auch alle Notizen des Projekts geloescht (FK-CASCADE). Aufgaben, Termine, Dateien und Team-Mitglieder bleiben erhalten, verlieren aber den Projekt-Bezug (FK SET NULL). UNWIDERRUFLICH. Nur aufrufen, wenn der Benutzer das explizit verlangt hat.",
       parameters: {
         type: "object",
         properties: {
@@ -87,7 +87,9 @@ export const projectHandlers: HandlerMap = {
     if (!ok) {
       return `Projekt "${name}" konnte nicht angelegt werden. Erlaubt sind Buchstaben (inkl. Umlaute), Ziffern, Leerzeichen, '-', '_' und '.'.`;
     }
-    return `Projekt "${name}" ist angelegt und synchron (Projekte/${name}/ + DB-Eintrag).`;
+    // Formulierung bewusst so, dass das LLM keine FS-Details erfindet:
+    // kein "Ordner", keine "README.md", keine "Struktur".
+    return `Projekt "${name}" ist in der Datenbank angelegt. Kein Ordner/keine Datei erzeugt (Projekte sind rein logische DB-Entities).`;
   },
 
   projekt_loeschen: async (args) => {
@@ -96,8 +98,8 @@ export const projectHandlers: HandlerMap = {
 
     const ok = await projectRepo.delete(name);
     if (!ok) {
-      return `Projekt "${name}" konnte nicht geloescht werden (ungueltiger Name oder FS-Fehler).`;
+      return `Projekt "${name}" konnte nicht geloescht werden (ungueltiger Name).`;
     }
-    return `Projekt "${name}" wurde vollstaendig geloescht (Vault-Ordner + DB-Eintrag).`;
+    return `Projekt "${name}" wurde aus der Datenbank geloescht. Notizen wurden per FK-CASCADE mitgeloescht; Aufgaben, Termine, Dateien und Team-Mitglieder bleiben erhalten (Projekt-Bezug auf NULL gesetzt).`;
   },
 };

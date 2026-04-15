@@ -134,15 +134,31 @@ chatRoutes.post("/chat", (c) => {
 
     const collectedTools: string[] = [];
 
+    // Erkennt Aktions-Anfragen auf Deutsch — bei denen darf der LLM in Runde 1
+    // NICHT einfach antworten-halluzinieren ("Projekt angelegt" ohne Tool-Call).
+    // Die Liste deckt alle typischen Imperative ab; false-positives sind OK,
+    // weil das Modell notfalls ein Lese-Tool (projekt_info, notizen_auflisten)
+    // statt antworten waehlt.
+    const actionPattern =
+      /\b(lege|legt|anlegen|erstell|speicher|lösch|loesch|ändere|aendere|entferne|aktualisier|trage?.*ein|plane?.*ein|notiere|merke|benenne.*um|verschiebe)\b/i;
+    const isActionRequest = actionPattern.test(userMessage);
+
     try {
       const allTools = [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()];
+      // Bei klaren Aktions-Anfragen in Runde 1: antworten-Tool rausfiltern,
+      // damit der LLM gezwungen ist, die echte Aktion aufzurufen (projekt_anlegen,
+      // notiz_speichern, ...). Ab Runde 2 wieder alle Tools verfuegbar, damit
+      // das Modell nach der Aktion auch antworten kann.
+      const toolsWithoutAntworten = allTools.filter((t) => !(t.type === "function" && t.function.name === "antworten"));
 
       for (let i = 0; i < MAX_TOOL_ROUNDS; i++) {
+        const forceActionInRound1 = isActionRequest && i === 0;
+        const effectiveTools = forceActionInRound1 ? toolsWithoutAntworten : allTools;
         // Tool-Choice-Strategie:
         // - Runde 1 mit aktiver Dateisuche: 'semantisch_suchen' erzwingen.
+        // - Runde 1 bei Aktions-Anfrage: 'required' + antworten rausgefiltert.
         // - Sonst IMMER 'required' — damit das Modell keine Antwort halluzinieren
         //   kann ohne vorher die noetige Aktion (z.B. projekt_anlegen) auszufuehren.
-        //   Will der Agent direkt antworten ohne Aktion, ruft er das antworten-Tool auf.
         const toolChoice: OpenAI.Chat.ChatCompletionToolChoiceOption =
           searchMode && i === 0 ? { type: "function", function: { name: "semantisch_suchen" } } : "required";
         let response: Awaited<ReturnType<typeof client.chat.completions.create>>;
@@ -150,7 +166,7 @@ chatRoutes.post("/chat", (c) => {
           response = await client.chat.completions.create({
             model: activeModel,
             messages,
-            tools: allTools,
+            tools: effectiveTools,
             tool_choice: toolChoice,
           });
         } catch (err) {
