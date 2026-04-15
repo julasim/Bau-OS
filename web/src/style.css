@@ -1,1 +1,78 @@
 @import "tailwindcss";
+
+/* Tailwind v4: dark-Variante per `.dark` auf <html>.
+   Wir nutzen `:is()` statt `:where()`, damit die Spezifitaet der `.dark`-Klasse
+   erhalten bleibt und `dark:bg-zinc-950` gegen `bg-white` gewinnt. */
+@custom-variant dark (&:is(.dark *));
+
+/* ── Grundlagen ─────────────────────────────────────────────────────────── */
+html {
+  background-color: #ffffff;
+  color-scheme: light;
+}
+html.dark {
+  background-color: #09090b; /* zinc-950 */
+  color-scheme: dark;
+}
+
+/* Sanfte Uebergaenge */
+html,
+body,
+aside,
+main,
+section,
+div,
+button,
+input,
+textarea,
+select {
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    color 180ms ease;
+}
+
+/* ── Dark-Mode-Overrides fuer bestehende View-Styles ────────────────────── */
+/* Die alten Views nutzen durchgaengig weisse/helle Tailwind-Tokens. Statt sie
+   einzeln auf `dark:`-Varianten umzubauen, remappen wir die haeufigsten Tokens
+   global. Neu gebaute Komponenten koennen weiterhin explizite `dark:`-Klassen
+   nutzen und ueberschreiben das hier via Spezifitaet. */
+html.dark .bg-white { background-color: #0f0f11; }
+html.dark .bg-gray-50 { background-color: #18181b; }
+html.dark .bg-gray-100 { background-color: #27272a; }
+html.dark .bg-gray-200 { background-color: #3f3f46; }
+html.dark .bg-gray-900 { background-color: #e4e4e7; color: #09090b; }
+html.dark .hover\:bg-gray-50:hover { background-color: #1f1f22; }
+html.dark .hover\:bg-gray-100:hover { background-color: #27272a; }
+html.dark .hover\:bg-gray-800:hover { background-color: #d4d4d8; }
+
+html.dark .border-gray-100 { border-color: #27272a; }
+html.dark .border-gray-200 { border-color: #27272a; }
+html.dark .border-gray-300 { border-color: #3f3f46; }
+html.dark .border-gray-900 { border-color: #f4f4f5; }
+html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #1f1f22; }
+html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #27272a; }
+
+html.dark .text-gray-900 { color: #f4f4f5; }
+html.dark .text-gray-800 { color: #e4e4e7; }
+html.dark .text-gray-700 { color: #d4d4d8; }
+html.dark .text-gray-600 { color: #a1a1aa; }
+html.dark .text-gray-500 { color: #a1a1aa; }
+html.dark .text-gray-400 { color: #71717a; }
+html.dark .hover\:text-gray-900:hover { color: #f4f4f5; }
+html.dark .hover\:text-gray-600:hover { color: #a1a1aa; }
+
+/* Primary-Button bleibt in Dark invertiert gut lesbar (bg → hellgrau, text → dunkel) */
+html.dark .text-white { color: inherit; }
+html.dark .bg-gray-900.text-white,
+html.dark .bg-gray-900 .text-white {
+  color: #09090b;
+}
+
+/* Flash-/Error-Panels etwas gedaempfter */
+html.dark .bg-red-50 { background-color: #2a1012; }
+html.dark .border-red-200 { border-color: #7f1d1d; }
+html.dark .text-red-700 { color: #fca5a5; }
+
+/* Sidebar bleibt durch ihre eigenen Klassen (bg-zinc-950 etc.) unveraendert.
+   Wir setzen sie in keinem der obigen Remaps. */
