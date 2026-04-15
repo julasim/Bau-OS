@@ -106,8 +106,11 @@ export const dbTermine: TerminRepository = {
 
   async delete(textOrId) {
     const db = getDb();
+    // id::text verhindert "invalid input syntax for type uuid" wenn ein
+    // Text-Match statt einer UUID uebergeben wird.
     const result = await db`
-      DELETE FROM termine WHERE id = ${textOrId} OR text LIKE ${"%" + textOrId + "%"}
+      DELETE FROM termine
+      WHERE id::text = ${textOrId} OR text LIKE ${"%" + textOrId + "%"}
     `;
     return result.count > 0;
   },

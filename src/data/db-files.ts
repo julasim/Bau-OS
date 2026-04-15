@@ -78,10 +78,12 @@ export const dbFiles: FileRepository = {
 
   async get(id) {
     const db = getDb();
+    // f.id::text verhindert "invalid input syntax for type uuid" wenn filename
+    // oder filepath statt einer UUID uebergeben wird.
     const [row] = await db`
       SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
       LEFT JOIN projects p ON f.project_id = p.id
-      WHERE f.id = ${id} OR f.filename = ${id} OR f.filepath = ${id}
+      WHERE f.id::text = ${id} OR f.filename = ${id} OR f.filepath = ${id}
       LIMIT 1
     `;
     return row ? rowToFile(row) : null;
@@ -89,9 +91,11 @@ export const dbFiles: FileRepository = {
 
   async readBlob(id) {
     const db = getDb();
+    // id::text verhindert "invalid input syntax for type uuid" wenn filename
+    // oder filepath statt einer UUID uebergeben wird.
     const [row] = await db`
       SELECT blob, mime_type, filename FROM files
-      WHERE id = ${id} OR filename = ${id} OR filepath = ${id}
+      WHERE id::text = ${id} OR filename = ${id} OR filepath = ${id}
       LIMIT 1
     `;
     if (!row || !row.blob) return null;
@@ -122,8 +126,11 @@ export const dbFiles: FileRepository = {
 
   async delete(id) {
     const db = getDb();
+    // id::text verhindert "invalid input syntax for type uuid" wenn filename
+    // oder filepath statt einer UUID uebergeben wird — sonst crasht die
+    // gesamte Query, bevor die OR-Klauseln ueberhaupt ausgewertet werden.
     const result = await db`
-      DELETE FROM files WHERE id = ${id} OR filename = ${id} OR filepath = ${id}
+      DELETE FROM files WHERE id::text = ${id} OR filename = ${id} OR filepath = ${id}
     `;
     return result.count > 0;
   },

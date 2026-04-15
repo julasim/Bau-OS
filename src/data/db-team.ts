@@ -75,8 +75,11 @@ export const dbTeam: TeamRepository = {
 
   async remove(nameOrId) {
     const db = getDb();
+    // id::text verhindert "invalid input syntax for type uuid" wenn ein Name
+    // statt einer UUID uebergeben wird — sonst crasht die gesamte Query,
+    // bevor die OR-Klausel auf name = ... ueberhaupt ausgewertet wird.
     const result = await db`
-      DELETE FROM team_members WHERE id = ${nameOrId} OR name = ${nameOrId}
+      DELETE FROM team_members WHERE id::text = ${nameOrId} OR name = ${nameOrId}
     `;
     return result.count > 0;
   },

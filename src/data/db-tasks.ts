@@ -109,9 +109,12 @@ export const dbTasks: TaskRepository = {
   async complete(textOrId) {
     const db = getDb();
     const now = new Date().toISOString();
+    // id::text verhindert "invalid input syntax for type uuid" wenn ein
+    // Text-Match statt einer UUID uebergeben wird — sonst crasht die gesamte
+    // Query, bevor die OR-Klausel auf text = ... ueberhaupt ausgewertet wird.
     const result = await db`
       UPDATE tasks SET status = 'done', completed_at = ${now}, updated_at = ${now}
-      WHERE id = ${textOrId} OR text = ${textOrId}
+      WHERE id::text = ${textOrId} OR text = ${textOrId}
     `;
     return result.count > 0;
   },

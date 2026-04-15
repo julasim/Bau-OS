@@ -63,10 +63,14 @@ export const dbNotes: NoteRepository = {
 
   async read(nameOrPath) {
     const db = getDb();
-    // Versuche ID, dann Titel
+    // id::text statt id — sonst crasht postgres bei Nicht-UUID-Strings mit
+    // "invalid input syntax for type uuid", und die Notiz ist weder per
+    // Titel noch per Dateiname lesbar.
     const [row] = await db`
       SELECT content FROM notes
-      WHERE id = ${nameOrPath} OR title = ${nameOrPath} OR title LIKE ${nameOrPath + "%"}
+      WHERE id::text = ${nameOrPath}
+         OR title = ${nameOrPath}
+         OR title LIKE ${nameOrPath + "%"}
       ORDER BY created_at DESC LIMIT 1
     `;
     return row ? String(row.content) : null;
@@ -82,7 +86,9 @@ export const dbNotes: NoteRepository = {
       UPDATE notes SET
         content = content || ${appendText},
         updated_at = ${now.toISOString()}
-      WHERE id = ${nameOrPath} OR title = ${nameOrPath} OR title LIKE ${nameOrPath + "%"}
+      WHERE id::text = ${nameOrPath}
+         OR title = ${nameOrPath}
+         OR title LIKE ${nameOrPath + "%"}
     `;
     return result.count > 0;
   },
@@ -92,7 +98,9 @@ export const dbNotes: NoteRepository = {
     const now = new Date().toISOString();
     const [row] = await db`
       UPDATE notes SET content = ${content}, updated_at = ${now}
-      WHERE id = ${nameOrPath} OR title = ${nameOrPath} OR title LIKE ${nameOrPath + "%"}
+      WHERE id::text = ${nameOrPath}
+         OR title = ${nameOrPath}
+         OR title LIKE ${nameOrPath + "%"}
       RETURNING id
     `;
     if (row) {
@@ -106,7 +114,9 @@ export const dbNotes: NoteRepository = {
     const db = getDb();
     const [row] = await db`
       DELETE FROM notes
-      WHERE id = ${nameOrPath} OR title = ${nameOrPath} OR title LIKE ${nameOrPath + "%"}
+      WHERE id::text = ${nameOrPath}
+         OR title = ${nameOrPath}
+         OR title LIKE ${nameOrPath + "%"}
       RETURNING title
     `;
     return row ? String(row.title) : null;
