@@ -153,31 +153,41 @@ export function createBot(token: string): Bot {
         if (!res.ok) throw new Error(`Telegram-Download fehlgeschlagen: ${res.status}`);
         const buffer = Buffer.from(await res.arrayBuffer());
 
-        // Im Workspace speichern
         const safeName = (doc.file_name || `upload_${Date.now()}`).replace(/[<>:"|?*]/g, "_");
-        const destDir = path.join(WORKSPACE_PATH, "Uploads");
-        fs.mkdirSync(destDir, { recursive: true });
-        const destPath = path.join(destDir, safeName);
-        fs.writeFileSync(destPath, buffer);
-        const relativePath = `Uploads/${safeName}`;
 
-        // Text extrahieren
-        const { extractDocument } = await import("./workspace/extractor.js");
-        const extraction = await extractDocument(destPath, doc.mime_type || "");
+        // Text aus Buffer extrahieren (kein Temp-File noetig)
+        const { extractDocumentFromBuffer, extractDocument } = await import("./workspace/extractor.js");
+        let extraction: { text: string; format: "pdf" | "docx" | "text" | "unsupported" };
+        try {
+          extraction = await extractDocumentFromBuffer(buffer, safeName, doc.mime_type || "");
+        } catch {
+          extraction = { text: "", format: "unsupported" };
+        }
 
-        // In DB speichern wenn aktiv
+        // DB-Modus: direkt als Blob in die DB, kein Vault-Write.
+        // FS-Modus (Legacy, kein DATABASE_URL gesetzt): in Uploads/ speichern,
+        // damit Telegram ohne DB nicht komplett den File-Support verliert.
         if (DB_ENABLED && fileRepo) {
           try {
             await fileRepo.save({
               filename: safeName,
-              filepath: relativePath,
+              filepath: safeName, // nur logischer Name, kein Pfad
               filesize: doc.file_size || buffer.length,
               mimeType: doc.mime_type || undefined,
               contentText: extraction.text || undefined,
+              blob: buffer,
             });
-          } catch {
-            // DB-Fehler — Datei ist trotzdem auf Filesystem
+          } catch (err) {
+            logError("[Telegram Upload DB]", err);
           }
+        } else {
+          // Legacy-Fallback ohne DB: in Uploads/ legen
+          const destDir = path.join(WORKSPACE_PATH, "Uploads");
+          fs.mkdirSync(destDir, { recursive: true });
+          fs.writeFileSync(path.join(destDir, safeName), buffer);
+          // Extractor wurde oben schon mit Buffer aufgerufen — wir brauchen den
+          // extractDocument()-File-Pfad-Variant hier nicht mehr.
+          void extractDocument;
         }
 
         // Reply- und File-Context setzen

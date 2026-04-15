@@ -176,9 +176,15 @@ export interface FileRepository {
     mimeType?: string;
     contentText?: string;
     project?: string;
+    /** Binaerinhalt — wird in files.blob (bytea) gespeichert. Wenn gesetzt,
+     *  liegt die Datei ausschliesslich in der DB (kein Vault-Pfad noetig). */
+    blob?: Buffer;
   }): Promise<FileEntry>;
   list(project?: string, limit?: number): Promise<FileEntry[]>;
   get(id: string): Promise<FileEntry | null>;
+  /** Liefert den Blob einer Datei (oder null, wenn kein Blob hinterlegt ist,
+   *  z.B. bei Legacy-Eintraegen die noch auf filepath zeigen). */
+  readBlob(id: string): Promise<{ blob: Buffer; mimeType: string | null; filename: string } | null>;
   search(query: string, limit?: number): Promise<FileEntry[]>;
   delete(id: string): Promise<boolean>;
   updateContent(id: string, contentText: string): Promise<boolean>;

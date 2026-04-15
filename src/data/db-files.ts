@@ -36,10 +36,13 @@ export const dbFiles: FileRepository = {
       projectId = p?.id ?? null;
     }
 
+    // blob: Buffer → bytea. postgres.js serialisiert Buffer automatisch,
+    //                wir muessen nichts encoden. NULL, wenn kein Blob
+    //                uebergeben wurde (Legacy/Metadaten-only).
     const [row] = await db`
-      INSERT INTO files (id, filename, filepath, filetype, filesize, mime_type, content_text, project_id, created_at, updated_at)
-      VALUES (${id}, ${file.filename}, ${file.filepath}, ${ext}, ${file.filesize}, ${file.mimeType ?? null}, ${file.contentText ?? null}, ${projectId}, ${now}, ${now})
-      RETURNING *, (SELECT name FROM projects WHERE id = project_id) as project_name
+      INSERT INTO files (id, filename, filepath, filetype, filesize, mime_type, content_text, project_id, blob, created_at, updated_at)
+      VALUES (${id}, ${file.filename}, ${file.filepath}, ${ext}, ${file.filesize}, ${file.mimeType ?? null}, ${file.contentText ?? null}, ${projectId}, ${file.blob ?? null}, ${now}, ${now})
+      RETURNING id, filename, filepath, filetype, filesize, mime_type, content_text, summary, tags, analyzed, created_at, updated_at, (SELECT name FROM projects WHERE id = project_id) as project_name
     `;
 
     // Auto-Embed wenn Text vorhanden (fire-and-forget)
@@ -55,7 +58,7 @@ export const dbFiles: FileRepository = {
     if (project) {
       return (
         await db`
-        SELECT f.*, p.name as project_name FROM files f
+        SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
         LEFT JOIN projects p ON f.project_id = p.id
         WHERE p.name = ${project}
         ORDER BY f.created_at DESC
@@ -65,7 +68,7 @@ export const dbFiles: FileRepository = {
     }
     return (
       await db`
-      SELECT f.*, p.name as project_name FROM files f
+      SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
       LEFT JOIN projects p ON f.project_id = p.id
       ORDER BY f.created_at DESC
       LIMIT ${limit}
@@ -76,7 +79,7 @@ export const dbFiles: FileRepository = {
   async get(id) {
     const db = getDb();
     const [row] = await db`
-      SELECT f.*, p.name as project_name FROM files f
+      SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
       LEFT JOIN projects p ON f.project_id = p.id
       WHERE f.id = ${id} OR f.filename = ${id} OR f.filepath = ${id}
       LIMIT 1
@@ -84,12 +87,29 @@ export const dbFiles: FileRepository = {
     return row ? rowToFile(row) : null;
   },
 
+  async readBlob(id) {
+    const db = getDb();
+    const [row] = await db`
+      SELECT blob, mime_type, filename FROM files
+      WHERE id = ${id} OR filename = ${id} OR filepath = ${id}
+      LIMIT 1
+    `;
+    if (!row || !row.blob) return null;
+    // postgres.js gibt bytea als Buffer zurueck (Node-native)
+    const blob = row.blob as Buffer;
+    return {
+      blob,
+      mimeType: row.mime_type ? String(row.mime_type) : null,
+      filename: String(row.filename),
+    };
+  },
+
   async search(query, limit = 20) {
     const db = getDb();
     const like = `%${query}%`;
     return (
       await db`
-      SELECT f.*, p.name as project_name FROM files f
+      SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
       LEFT JOIN projects p ON f.project_id = p.id
       WHERE f.filename ILIKE ${like}
         OR f.content_text ILIKE ${like}
