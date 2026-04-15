@@ -149,6 +149,9 @@ export interface ProjectRepository {
   getInfo(name: string): Promise<Project | null>;
   listNotes(name: string): Promise<string[]>;
   readNote(project: string, noteName: string): Promise<string | null>;
+  /** Legt ein neues Projekt an. Gibt false zurueck, wenn der Name ungueltig ist
+   *  oder das Projekt bereits existiert. */
+  create(name: string, description?: string | null): Promise<boolean>;
 }
 
 export interface TeamRepository {

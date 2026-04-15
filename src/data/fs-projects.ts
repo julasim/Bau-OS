@@ -15,4 +15,7 @@ export const fsProjects: ProjectRepository = {
   async readNote(project, noteName) {
     return vault.readProjectNote(project, noteName);
   },
+  async create(name, description) {
+    return vault.createProject(name, description);
+  },
 };

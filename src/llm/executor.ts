@@ -61,8 +61,9 @@ export async function executeTool(name: string, args: Record<string, string | nu
     const { isMcpTool, executeMcpTool } = await import("../mcp.js");
     if (isMcpTool(name)) return await executeMcpTool(name, args);
 
-    return `Unbekanntes Tool: ${name}`;
+    // Deutliche Fehlermeldung, damit das Modell nicht einfach "erledigt" antwortet.
+    return `FEHLER: Tool "${name}" existiert nicht. Die Aktion wurde NICHT ausgefuehrt. Pruefe die Liste der verfuegbaren Tools und nutze den korrekten Namen — oder melde dem Benutzer ehrlich, dass das Feature fehlt.`;
   } catch (err) {
-    return `Fehler bei ${name}: ${err}`;
+    return `FEHLER bei ${name} (Aktion NICHT ausgefuehrt): ${err}`;
   }
 }

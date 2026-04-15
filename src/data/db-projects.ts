@@ -1,6 +1,7 @@
 // Datenbank-Implementation: PostgreSQL via postgres.js
 import { getDb } from "../db/client.js";
 import type { Project, ProjectRepository } from "./types.js";
+import { createProject as createProjectOnDisk } from "../workspace/projects.js";
 
 export const dbProjects: ProjectRepository = {
   async list() {
@@ -56,5 +57,21 @@ export const dbProjects: ProjectRepository = {
       LIMIT 1
     `;
     return row ? String(row.content) : null;
+  },
+
+  async create(name, description) {
+    if (!/^[\w\-. ]+$/.test(name) || name.includes("..")) return false;
+    const db = getDb();
+    const [existing] = await db`SELECT id FROM projects WHERE name = ${name} LIMIT 1`;
+    if (existing) return false;
+
+    await db`
+      INSERT INTO projects (name, description, status)
+      VALUES (${name}, ${description ?? null}, 'aktiv')
+    `;
+    // Zusaetzlich Vault-Ordner anlegen, damit Notizen / Dateien etc. einen
+    // konsistenten Ablageort haben (DB-Modus ist nur fuer Metadaten).
+    createProjectOnDisk(name, description ?? null);
+    return true;
   },
 };

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { workspacePath } from "./helpers.js";
+import { workspacePath, ensureDir, atomicWriteSync, frontmatter } from "./helpers.js";
 import { listTasks } from "./tasks.js";
 import { listTermine } from "./termine.js";
 
@@ -13,6 +13,30 @@ export interface ProjectInfo {
 
 function safeProjectName(name: string): boolean {
   return /^[\w\-. ]+$/.test(name) && !name.includes("..");
+}
+
+/**
+ * Legt ein neues Projekt im Vault an.
+ * Struktur: Projekte/{name}/ mit Notizen/-Unterordner und README.md.
+ * Idempotent: wenn der Ordner schon existiert, kommt false zurueck.
+ */
+export function createProject(name: string, description?: string | null): boolean {
+  if (!safeProjectName(name)) return false;
+  const projectPath = path.join(workspacePath, "Projekte", name);
+  if (fs.existsSync(projectPath)) return false;
+
+  try {
+    ensureDir(projectPath);
+    ensureDir(path.join(projectPath, "Notizen"));
+    const readme = path.join(projectPath, "README.md");
+    const body = description
+      ? `${frontmatter("system")}# ${name}\n\n${description}\n`
+      : `${frontmatter("system")}# ${name}\n`;
+    atomicWriteSync(readme, body);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function listProjects(): string[] {
