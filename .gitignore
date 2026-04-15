@@ -14,3 +14,6 @@ docker/.env
 # Lokale Daten (Secrets)
 /data/
 .claude/settings.local.json
+
+# Testdaten mit erfundenen Projekten/Personen (nicht ins Repo)
+test-uploads/
