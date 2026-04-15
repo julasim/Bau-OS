@@ -136,11 +136,17 @@ chatRoutes.post("/chat", (c) => {
 
     // Erkennt Aktions-Anfragen auf Deutsch — bei denen darf der LLM in Runde 1
     // NICHT einfach antworten-halluzinieren ("Projekt angelegt" ohne Tool-Call).
-    // Die Liste deckt alle typischen Imperative ab; false-positives sind OK,
-    // weil das Modell notfalls ein Lese-Tool (projekt_info, notizen_auflisten)
-    // statt antworten waehlt.
+    //
+    // WICHTIG: Die Stämme stehen hier OHNE trailing \b, weil deutsche
+    // Konjugationen Suffixe haben (speicher → speichere, speichert, speichern).
+    // Ein `\bspeicher\b` wuerde "Speichere" NICHT matchen, weil nach "speicher"
+    // noch ein Buchstabe (e/t/n) kommt — dann greift die Anti-Halluzinations-
+    // Defense nicht und das Modell kann frei "gespeichert" lügen.
+    //
+    // False-positives sind OK, weil das Modell notfalls ein Lese-Tool
+    // (projekt_info, notizen_auflisten) statt antworten waehlt.
     const actionPattern =
-      /\b(lege|legt|anlegen|erstell|speicher|lösch|loesch|ändere|aendere|entferne|aktualisier|trage?.*ein|plane?.*ein|notiere|merke|benenne.*um|verschiebe)\b/i;
+      /\b(leg|anleg|erstell|speicher|lösch|loesch|änder|aender|entfern|aktualisier|trag.*ein|plan.*ein|notier|merk|benenn.*um|verschieb|hinzufüg|einfüg|füg.*hinzu|buch|setz|schreib|erfass|protokollier)/i;
     const isActionRequest = actionPattern.test(userMessage);
 
     try {
