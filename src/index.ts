@@ -3,7 +3,7 @@ import { createBot } from "./bot.js";
 import { startHeartbeat } from "./heartbeat.js";
 import { logInfo, logError } from "./logger.js";
 import { Bot } from "grammy";
-import { DB_ENABLED } from "./config.js";
+import { DB_ENABLED, DB_AUTO_MIGRATE } from "./config.js";
 
 const token = process.env.BOT_TOKEN;
 const workspacePath = process.env.WORKSPACE_PATH ?? process.env.VAULT_PATH;
@@ -24,8 +24,12 @@ if (DB_ENABLED) {
       } else {
         logInfo("[DB] pgvector Extension nicht gefunden — Embeddings deaktiviert");
       }
-      // Auto-Migrate beim Start
-      await runMigrations();
+      // Auto-Migrate beim Start — per DB_AUTO_MIGRATE=false abschaltbar
+      if (DB_AUTO_MIGRATE) {
+        await runMigrations();
+      } else {
+        logInfo("[DB] DB_AUTO_MIGRATE=false — Migrations uebersprungen");
+      }
     } else {
       logInfo("[DB] PostgreSQL nicht erreichbar — Fallback auf Filesystem");
     }

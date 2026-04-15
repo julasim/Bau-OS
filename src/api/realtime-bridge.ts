@@ -12,6 +12,23 @@ const WATCHED_TABLES = ["tasks", "termine", "notes", "projects", "files", "team_
 
 type TableName = (typeof WATCHED_TABLES)[number];
 
+// Bridge-Status fuer /dashboard/db-status
+let bridgeState: {
+  active: boolean;
+  startedAt: string | null;
+  tables: number;
+  lastError: string | null;
+} = {
+  active: false,
+  startedAt: null,
+  tables: 0,
+  lastError: null,
+};
+
+export function getRealtimeBridgeStatus(): typeof bridgeState {
+  return { ...bridgeState };
+}
+
 const tableToEventType: Record<TableName, "task" | "termin" | "note" | "project" | "file" | "team"> = {
   tasks: "task",
   termine: "termin",
@@ -27,7 +44,10 @@ const tableToEventType: Record<TableName, "task" | "termin" | "note" | "project"
  * Nur aktiv wenn SUPABASE_ENABLED=true.
  */
 export async function startRealtimeBridge(): Promise<void> {
-  if (!SUPABASE_ENABLED) return;
+  if (!SUPABASE_ENABLED) {
+    bridgeState = { active: false, startedAt: null, tables: 0, lastError: null };
+    return;
+  }
 
   try {
     const { subscribeToTable } = await import("../db/supabase.js");
@@ -55,8 +75,20 @@ export async function startRealtimeBridge(): Promise<void> {
       });
     }
 
+    bridgeState = {
+      active: true,
+      startedAt: new Date().toISOString(),
+      tables: WATCHED_TABLES.length,
+      lastError: null,
+    };
     logInfo(`[Realtime] Supabase Bridge aktiv fuer ${WATCHED_TABLES.length} Tabellen`);
   } catch (err) {
+    bridgeState = {
+      active: false,
+      startedAt: null,
+      tables: 0,
+      lastError: err instanceof Error ? err.message : String(err),
+    };
     logError("[Realtime] Bridge-Start fehlgeschlagen", err);
   }
 }

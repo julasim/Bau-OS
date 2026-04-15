@@ -67,6 +67,39 @@ export async function checkPgVector(): Promise<boolean> {
 }
 
 /**
+ * Liefert Pool-Metriken (Connections insgesamt, idle, waiting).
+ * Greift auf interne postgres.js-Felder zu — robust gegen das Fehlen einzelner
+ * Felder in unterschiedlichen Versionen.
+ */
+export function getPoolStats(): {
+  max: number;
+  total: number | null;
+  idle: number | null;
+  waiting: number | null;
+} {
+  const fallback = { max: 20, total: null, idle: null, waiting: null } as const;
+  if (!sql) return { ...fallback };
+  try {
+    // postgres.js legt eigene Pool-Infos intern ab. Typen reichen wir nicht
+    // durch — lieber tolerant per "any" lesen, Default falls Feld fehlt.
+    const anySql = sql as unknown as {
+      options?: { max?: number };
+      reserved?: unknown[];
+      backlog?: unknown[];
+      connections?: { all?: unknown[]; idle?: unknown[] };
+    };
+    return {
+      max: anySql.options?.max ?? 20,
+      total: anySql.connections?.all?.length ?? null,
+      idle: anySql.connections?.idle?.length ?? null,
+      waiting: anySql.backlog?.length ?? null,
+    };
+  } catch {
+    return { ...fallback };
+  }
+}
+
+/**
  * Schliesst den Connection Pool sauber.
  * Aufruf bei Graceful Shutdown.
  */

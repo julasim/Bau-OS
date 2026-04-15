@@ -124,6 +124,10 @@ export const API_ENABLED = !!JWT_SECRET;
 // ── Datenbank (Supabase / PostgreSQL) ────────────────────────────────────────
 export const DATABASE_URL = process.env.DATABASE_URL || "";
 export const DB_ENABLED = !!DATABASE_URL;
+// Auto-Migrate beim Start. Default ON (Entwickler-freundlich), fuer Produktion
+// mit Deploy-Pipelines per DB_AUTO_MIGRATE=false abschalten und Migrations
+// explizit ueber "npm run migrate" fahren.
+export const DB_AUTO_MIGRATE = (process.env.DB_AUTO_MIGRATE ?? "true").toLowerCase() !== "false";
 
 // ── Supabase Client ──────────────────────────────────────────────────────────
 export const SUPABASE_URL = process.env.SUPABASE_URL || "";

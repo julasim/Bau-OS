@@ -27,7 +27,11 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
   const vector = response.data[0]?.embedding;
   if (!vector || vector.length !== EMBEDDING_DIMENSIONS) {
-    throw new Error(`Unerwartete Embedding-Dimension: ${vector?.length ?? 0}, erwartet ${EMBEDDING_DIMENSIONS}`);
+    throw new Error(
+      `Unerwartete Embedding-Dimension: ${vector?.length ?? 0}, erwartet ${EMBEDDING_DIMENSIONS}. ` +
+        `Stimmt EMBEDDING_MODEL (${EMBEDDING_MODEL}) mit EMBEDDING_DIMENSIONS ueberein? ` +
+        `nomic-embed-text=768, text-embedding-3-small=1536.`,
+    );
   }
   return vector;
 }
@@ -156,6 +160,90 @@ export async function embedAllFiles(): Promise<number> {
   }
 
   return count;
+}
+
+// ── Health-Checks ───────────────────────────────────────────
+
+/**
+ * Prueft, ob der Embedding-Provider (Ollama / OpenAI) erreichbar ist.
+ * Versucht, einen Dummy-Text zu embedden — wenn das klappt, liefert der
+ * Provider-Endpunkt und die konfigurierte Dimension stimmt.
+ */
+export async function checkEmbeddingHealth(): Promise<{
+  ok: boolean;
+  model: string;
+  dimensions: number;
+  error?: string;
+}> {
+  try {
+    const vec = await generateEmbedding("bau-os-healthcheck");
+    return {
+      ok: true,
+      model: EMBEDDING_MODEL,
+      dimensions: vec.length,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      model: EMBEDDING_MODEL,
+      dimensions: EMBEDDING_DIMENSIONS,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
+/**
+ * Vergleicht die in der DB konfigurierte Vektor-Dimension (files.embedding,
+ * notes.embedding) mit EMBEDDING_DIMENSIONS aus der Env. Bei Provider-Wechsel
+ * (nomic-embed-text 768 → text-embedding-3-small 1536) muss das Schema per
+ * Migration angepasst werden, sonst schlagen alle embedNote/embedFile-Calls
+ * mit "vector dimension mismatch" fehl.
+ */
+export async function checkEmbeddingSchemaDims(): Promise<{
+  ok: boolean;
+  configured: number;
+  schema: { notes: number | null; files: number | null };
+  error?: string;
+}> {
+  if (!DB_ENABLED) {
+    return { ok: false, configured: EMBEDDING_DIMENSIONS, schema: { notes: null, files: null } };
+  }
+  try {
+    const db = getDb();
+    // format_type liefert bei pgvector 'vector(768)' o. ae. — Zahl extrahieren
+    const rows = await db`
+      SELECT
+        (SELECT format_type(atttypid, atttypmod)
+           FROM pg_attribute
+          WHERE attrelid = 'notes'::regclass AND attname = 'embedding') AS notes_t,
+        (SELECT format_type(atttypid, atttypmod)
+           FROM pg_attribute
+          WHERE attrelid = 'files'::regclass AND attname = 'embedding') AS files_t
+    `;
+    const row = rows[0] ?? {};
+    const parseDim = (t: string | null | undefined): number | null => {
+      if (!t) return null;
+      const m = /vector\((\d+)\)/i.exec(t);
+      return m ? Number(m[1]) : null;
+    };
+    const notesDim = parseDim(row.notes_t as string | null);
+    const filesDim = parseDim(row.files_t as string | null);
+    const ok =
+      (notesDim === null || notesDim === EMBEDDING_DIMENSIONS) &&
+      (filesDim === null || filesDim === EMBEDDING_DIMENSIONS);
+    return {
+      ok,
+      configured: EMBEDDING_DIMENSIONS,
+      schema: { notes: notesDim, files: filesDim },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      configured: EMBEDDING_DIMENSIONS,
+      schema: { notes: null, files: null },
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 // ── Embedding-Statistik ─────────────────────────────────────

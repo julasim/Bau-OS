@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import NavSidebar from "./NavSidebar.vue";
+import SystemStatusBanner from "./SystemStatusBanner.vue";
 
 const route = useRoute();
 const isChat = computed(() => route.name === "chat");
@@ -10,9 +11,17 @@ const isChat = computed(() => route.name === "chat");
 <template>
   <div class="flex h-screen bg-white dark:bg-zinc-950 text-gray-900 dark:text-zinc-100 overflow-hidden">
     <NavSidebar />
-    <main :class="['flex-1 min-w-0', isChat ? 'overflow-hidden' : 'overflow-auto px-8 py-6']">
-      <div :class="isChat ? 'h-full' : 'max-w-5xl'">
-        <router-view />
+    <main :class="['flex-1 min-w-0 flex flex-col', isChat ? 'overflow-hidden' : '']">
+      <SystemStatusBanner />
+      <div
+        :class="[
+          'flex-1 min-h-0',
+          isChat ? 'overflow-hidden' : 'overflow-auto px-8 py-6',
+        ]"
+      >
+        <div :class="isChat ? 'h-full' : 'max-w-5xl'">
+          <router-view />
+        </div>
       </div>
     </main>
   </div>

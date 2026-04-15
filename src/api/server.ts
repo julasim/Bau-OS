@@ -24,6 +24,7 @@ import { teamRoutes } from "./routes/team.js";
 import { eventsRoutes } from "./routes/events.js";
 import { chatRoutes } from "./routes/chat.js";
 import { settingsRoutes } from "./routes/settings.js";
+import { agentLogsRoutes } from "./routes/agent-logs.js";
 
 const app = new Hono<AppEnv>();
 
@@ -106,6 +107,7 @@ app.route("/api", teamRoutes);
 app.route("/api", eventsRoutes);
 app.route("/api", chatRoutes);
 app.route("/api", settingsRoutes);
+app.route("/api", agentLogsRoutes);
 
 // ── Statische Dateien (Vue SPA in Production) ────────────────────────────────
 app.use("/*", serveStatic({ root: "./dist/web" }));
