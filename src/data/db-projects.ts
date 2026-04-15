@@ -1,7 +1,10 @@
 // Datenbank-Implementation: PostgreSQL via postgres.js
 import { getDb } from "../db/client.js";
 import type { Project, ProjectRepository } from "./types.js";
-import { createProject as createProjectOnDisk } from "../workspace/projects.js";
+import {
+  createProject as createProjectOnDisk,
+  getProjectInfo as getProjectInfoFromDisk,
+} from "../workspace/projects.js";
 
 export const dbProjects: ProjectRepository = {
   async list() {
@@ -22,18 +25,31 @@ export const dbProjects: ProjectRepository = {
       WHERE p.name = ${name}
       LIMIT 1
     `;
-    if (!row) return null;
+    if (row) {
+      return {
+        id: String(row.id),
+        name: String(row.name),
+        description: row.description ? String(row.description) : null,
+        status: String(row.status),
+        color: row.color ? String(row.color) : null,
+        notes: Number(row.notes),
+        openTasks: Number(row.open_tasks),
+        termine: Number(row.termine),
+        createdAt: row.created_at ? String(row.created_at) : undefined,
+        updatedAt: row.updated_at ? String(row.updated_at) : undefined,
+      };
+    }
+    // Fallback: DB hat keinen Eintrag, aber Vault-Ordner existiert vielleicht
+    // (z.B. von einer alten manuellen Anlage). Damit der Agent korrekt sieht
+    // "Projekt existiert", liefern wir die FS-Sicht zurueck.
+    const disk = getProjectInfoFromDisk(name);
+    if (!disk) return null;
     return {
-      id: String(row.id),
-      name: String(row.name),
-      description: row.description ? String(row.description) : null,
-      status: String(row.status),
-      color: row.color ? String(row.color) : null,
-      notes: Number(row.notes),
-      openTasks: Number(row.open_tasks),
-      termine: Number(row.termine),
-      createdAt: row.created_at ? String(row.created_at) : undefined,
-      updatedAt: row.updated_at ? String(row.updated_at) : undefined,
+      name: disk.name,
+      notes: disk.notes,
+      openTasks: disk.openTasks,
+      termine: disk.termine,
+      status: "aktiv",
     };
   },
 
@@ -62,17 +78,33 @@ export const dbProjects: ProjectRepository = {
   async create(name, description) {
     // Gleiche Unicode-Regel wie in workspace/projects.ts (Umlaute & Co. erlaubt)
     if (!/^[\p{L}\p{N}_\-. ]+$/u.test(name) || name.includes("..")) return false;
+
     const db = getDb();
+    const folderPath = `Projekte/${name}`;
+
+    // Idempotent in beide Richtungen:
+    // 1. Vault-Ordner — falls noch nicht da, anlegen. Wenn schon da, ignorieren
+    //    (createProject gibt false, das ist OK — wir wollen nur sicherstellen,
+    //    dass am Ende beide Seiten existieren).
+    createProjectOnDisk(name, description ?? null);
+
+    // 2. DB-Eintrag — wenn schon vorhanden, NICHT als Fehler werten:
+    //    "create" wird hier als "stelle sicher dass es existiert" interpretiert.
+    //    folder_path ist NOT NULL in der Tabelle (siehe migrations/001_init.sql),
+    //    deshalb MUSS der Wert mit gesetzt werden. ON CONFLICT (name) brauchen
+    //    wir nicht, weil die Tabelle keinen UNIQUE-Constraint auf name hat —
+    //    wir pruefen vorher per SELECT.
     const [existing] = await db`SELECT id FROM projects WHERE name = ${name} LIMIT 1`;
-    if (existing) return false;
+    if (existing) {
+      // DB hatte den Eintrag schon (z.B. nach Server-Crash oder von vorherigem
+      // erfolgreichem Lauf). Vault wurde oben sichergestellt → fertig.
+      return true;
+    }
 
     await db`
-      INSERT INTO projects (name, description, status)
-      VALUES (${name}, ${description ?? null}, 'aktiv')
+      INSERT INTO projects (name, folder_path, description, status)
+      VALUES (${name}, ${folderPath}, ${description ?? null}, 'aktiv')
     `;
-    // Zusaetzlich Vault-Ordner anlegen, damit Notizen / Dateien etc. einen
-    // konsistenten Ablageort haben (DB-Modus ist nur fuer Metadaten).
-    createProjectOnDisk(name, description ?? null);
     return true;
   },
 };
