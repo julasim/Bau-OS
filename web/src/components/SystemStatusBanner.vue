@@ -68,7 +68,7 @@ const banner = computed<{ key: string; level: "warn" | "error"; text: string } |
     return {
       key: "embed-unhealthy",
       level: "warn",
-      text: `Embedding-Provider erreichbar nicht (Model: ${s.embedding.model}) — neue Inhalte sind nicht semantisch suchbar, bis der Provider zurück ist.`,
+      text: `Embedding-Provider nicht erreichbar (Modell: ${s.embedding.model}) — neue Inhalte sind nicht semantisch suchbar, bis der Provider zurück ist. Prüfe: ollama pull ${s.embedding.model}`,
     };
   }
 
