@@ -30,7 +30,9 @@ export const dbTermine: TerminRepository = {
     }
 
     const db = getDb();
-    const id = crypto.randomUUID().slice(0, 8);
+    // Volle UUID — die termine.id-Spalte ist UUID-typisiert, ein .slice(0,8)
+    // wuerde PostgresError "invalid input syntax for type uuid" werfen.
+    const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
     let projectId: string | null = null;
