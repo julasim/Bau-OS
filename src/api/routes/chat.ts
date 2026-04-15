@@ -160,6 +160,15 @@ chatRoutes.post("/chat", (c) => {
 
     const collectedTools: string[] = [];
 
+    // Maximale interne Retries wenn das Modell `tool_choice: required` ignoriert
+    // und mit reiner Text-Antwort kommt. Kleinere Modelle (Kimi-K2.5, manche
+    // Llama-Varianten) machen das gelegentlich — ein verstaerkter System-Hint
+    // als zusaetzliche user-Message bringt sie in ~80 % der Faelle zurueck auf
+    // Spur. Erst nach diesen Retries sehen den User die "nichts gespeichert"-
+    // Warnung. Ohne Retries musste der User die Anfrage bis zu 3x manuell senden.
+    const MAX_TOOL_SKIP_RETRIES = 2;
+    let actionToolSkipRetries = 0;
+
     try {
       const allTools = [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()];
       // Bei klaren Aktions-Anfragen in Runde 1: antworten-Tool rausfiltern,
@@ -202,17 +211,46 @@ chatRoutes.post("/chat", (c) => {
           // Grund: Das Modell ignoriert in diesem Fall tool_choice: "required"
           // (bekanntes Ollama-Problem bei kleineren Modellen) und faked Erfolg
           // ("Alle Termine gespeichert") ohne irgendetwas getan zu haben.
-          // Lieber explizit fehlschlagen als falsche Sicherheit suggerieren.
           if (isActionRequest && i === 0) {
+            // Retry-Zweig: Dem Modell einen verstaerkten Hint geben und die
+            // gleiche Runde nochmal spielen lassen. Die fehlerhafte Assistant-
+            // Reply bleibt in `messages` — das Modell sieht seinen eigenen Fehler
+            // und die Korrektur-User-Message direkt dahinter. Das hilft messbar
+            // gegen das "Erledigt"-ohne-Tool-Call Problem bei Kimi-K2.5 & Co.
+            if (actionToolSkipRetries < MAX_TOOL_SKIP_RETRIES) {
+              actionToolSkipRetries++;
+              messages.push({
+                role: "user",
+                content:
+                  `[SYSTEM-KORREKTUR] Du hast gerade KEINEN Tool-Call gemacht, ` +
+                  `obwohl tool_choice=required gesetzt war. Eine Text-Antwort wie ` +
+                  `"erledigt" oder "gespeichert" ist hier eine Luege, weil nichts ` +
+                  `wirklich passiert ist. Rufe JETZT sofort das passende Tool ` +
+                  `(notiz_loeschen, termin_loeschen, task_speichern, projekt_anlegen, ...) ` +
+                  `mit den richtigen Argumenten auf. Keine Text-Antwort — nur der Tool-Call.`,
+              });
+              logInfo(
+                `[Chat] Tool-Skip Retry ${actionToolSkipRetries}/${MAX_TOOL_SKIP_RETRIES} ` +
+                  `fuer "${userMessage.slice(0, 60)}" (Modell: ${activeModel})`,
+              );
+              await stream.writeSSE({
+                event: "status",
+                data: JSON.stringify({ status: "retry", attempt: actionToolSkipRetries }),
+              });
+              i--; // Runde 0 wiederholen — Retry zaehlt nicht als Tool-Round
+              continue;
+            }
+
+            // Retries erschoepft → User-sichtbare Warnung
             const warnung =
-              `\u26A0\uFE0F Das Modell hat behauptet, die Aktion ausgefuehrt zu haben, ` +
+              `\u26A0\uFE0F Das Modell hat ${MAX_TOOL_SKIP_RETRIES + 1}x behauptet, die Aktion ausgefuehrt zu haben, ` +
               `aber keinen Tool-Call gemacht — es wurde also NICHTS gespeichert. ` +
-              `Das ist meistens ein Modell-Problem (ignoriert "tool_choice: required"). ` +
-              `Bitte die Anfrage nochmal senden oder ein groesseres Modell aktivieren (z.B. ueber /model).`;
+              `Das Modell "${activeModel}" ignoriert tool_choice=required hartnaeckig. ` +
+              `Probiere ein groesseres Modell (z.B. ueber /model) oder formuliere die Anfrage anders.`;
             logError(
-              "[Chat] Modell hat tool_choice=required ignoriert",
+              "[Chat] Modell hat tool_choice=required nach Retries ignoriert",
               new Error(
-                `Action-Request ohne tool_calls. Modell: ${activeModel}. Antwort: ${(reply.content ?? "").slice(0, 200)}`,
+                `Action-Request ohne tool_calls nach ${MAX_TOOL_SKIP_RETRIES} Retries. Modell: ${activeModel}. Letzte Antwort: ${(reply.content ?? "").slice(0, 200)}`,
               ),
             );
             if (DB_ENABLED && chatRepo && sessionId) {
