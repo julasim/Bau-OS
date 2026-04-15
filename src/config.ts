@@ -12,12 +12,13 @@ export const DEFAULT_MODEL = process.env.OLLAMA_MODEL || _defaultModel;
 export const FAST_MODEL = process.env.OLLAMA_FAST_MODEL || DEFAULT_MODEL;
 export const SUBAGENT_MODEL = process.env.OLLAMA_SUBAGENT_MODEL || DEFAULT_MODEL;
 export const VISION_MODEL = process.env.VISION_MODEL || (OPENAI_ENABLED ? "gpt-4o" : DEFAULT_MODEL);
-// Max. Iterationen im Agentic Loop. Eine Runde = ein LLM-Call + Tool-Ausfuehrung.
-// Bei Bulk-Anfragen ("lege 10 Termine an") macht das Modell oft 1 Tool-Call pro
-// Runde statt parallel zu batchen — dann zaehlen die einzeln. Mit 5 lief das
-// Loop bei 10 Termine-Inserts ins Limit und gab nur den Fallback-Text zurueck.
-// 20 ist grosszuegig aber noch sicher gegen Endlos-Loops.
-export const MAX_TOOL_ROUNDS = Number(process.env.MAX_TOOL_ROUNDS) || 20;
+// Max. Iterationen im Agentic Loop. Semantik: aus User-Sicht ist EINE
+// Benutzer-Nachricht = EINE Anfrage, egal wie viele Tool-Calls der Agent
+// intern braucht. Der Loop zaehlt aber pro LLM-Iteration — kleine Ollama-
+// Modelle feuern Tool-Calls oft sequenziell statt parallel, dann zaehlt
+// jedes einzeln. Deshalb hier sehr hoch ansetzen (faktisch unlimitiert fuer
+// normale Bulk-Anfragen), nur als Sicherheitsnetz gegen echte Endlos-Loops.
+export const MAX_TOOL_ROUNDS = Number(process.env.MAX_TOOL_ROUNDS) || 100;
 
 // ── Agenten ───────────────────────────────────────────────────────────────────
 export const AGENTS = [

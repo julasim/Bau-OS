@@ -262,11 +262,12 @@ chatRoutes.post("/chat", (c) => {
       }
 
       // Tool-Loop ist ohne 'antworten'-Call ausgelaufen — gib dem User wenigstens
-      // einen Hinweis was passiert ist (welche Tools wurden versucht).
+      // einen Hinweis was passiert ist (welche Tools wurden versucht). Bewusst
+      // keine Zahl nennen: aus User-Sicht ist das EINE Anfrage, nicht X Schritte.
       const toolSummary = collectedTools.length ? collectedTools.join(", ") : "(keine)";
       const fallback =
-        `Ich konnte deine Anfrage in ${MAX_TOOL_ROUNDS} Schritten nicht abschliessen. ` +
-        `Versuchte Tools: ${toolSummary}. ` +
+        `Ich konnte deine Anfrage nicht vollstaendig abschliessen. ` +
+        `Ausgefuehrte Tools: ${toolSummary}. ` +
         `Bitte formuliere die Anfrage praeziser oder zerlege sie in Teilschritte.`;
       if (DB_ENABLED && chatRepo && sessionId) {
         try {
