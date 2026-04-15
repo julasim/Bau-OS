@@ -48,12 +48,18 @@ dashboardRoutes.get("/dashboard/db-status", async (c) => {
     const migrations = healthy ? await migrationStatus() : [];
 
     // Parallele Health-Checks fuer optionale Subsysteme
-    const [embeddingHealth, schemaDims, poolStats] = await Promise.all([
+    const [embeddingHealth, schemaDims, poolStats, coverage] = await Promise.all([
       healthy ? embeddingsMod.checkEmbeddingHealth() : Promise.resolve({ ok: false, model: "", dimensions: 0 }),
       healthy
         ? embeddingsMod.checkEmbeddingSchemaDims()
         : Promise.resolve({ ok: false, configured: 0, schema: { notes: null, files: null } }),
       Promise.resolve(getPoolStats()),
+      // Coverage: wieviele Notizen/Dateien haben ueberhaupt ein Embedding?
+      // Wenn < 100 %, findet semantisch_suchen sie nicht — Banner soll warnen
+      // und der User kann /api/search/reindex triggern.
+      healthy
+        ? embeddingsMod.embeddingStats()
+        : Promise.resolve({ notes: { total: 0, embedded: 0 }, files: { total: 0, embedded: 0 } }),
     ]);
 
     // Supabase Realtime-Bridge-Status (nur wenn SUPABASE konfiguriert)
@@ -79,6 +85,13 @@ dashboardRoutes.get("/dashboard/db-status", async (c) => {
       })),
       embedding: embeddingHealth,
       embeddingSchema: schemaDims,
+      embeddingCoverage: {
+        notes: coverage.notes,
+        files: coverage.files,
+        ok:
+          (coverage.notes.total === 0 || coverage.notes.embedded === coverage.notes.total) &&
+          (coverage.files.total === 0 || coverage.files.embedded === coverage.files.total),
+      },
       pool: poolStats,
       realtime: bridge,
     });

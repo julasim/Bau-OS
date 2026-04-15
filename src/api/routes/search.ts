@@ -55,3 +55,35 @@ searchRoutes.get("/search/stats", async (c) => {
   const stats = await embeddingStats();
   return c.json({ enabled: true, ...stats });
 });
+
+// Reindex: generiert Embeddings fuer alle Notizen/Dateien die noch keins haben.
+// Nutzen: nach Migration, nach Embedding-Modell-Wechsel, oder wenn der
+// Embedding-Provider zwischendurch down war (neue Notizen ohne Embedding).
+// Laeuft synchron — kann bei vielen Items laenger dauern. Bei einer mittleren
+// Vault-Groesse (100 Notizen) sind das ~30 s; fuer Horror-Szenarien spaeter
+// in einen Background-Job auslagern.
+searchRoutes.post("/search/reindex", async (c) => {
+  if (!DB_ENABLED) {
+    return c.json({ error: "Datenbank nicht aktiv" }, 503);
+  }
+  try {
+    const { embedAllNotes, embedAllFiles, embeddingStats } = await import("../../db/index.js");
+    const before = await embeddingStats();
+    const [notesEmbedded, filesEmbedded] = await Promise.all([embedAllNotes(), embedAllFiles()]);
+    const after = await embeddingStats();
+    return c.json({
+      ok: true,
+      embedded: { notes: notesEmbedded, files: filesEmbedded },
+      before,
+      after,
+    });
+  } catch (err) {
+    return c.json(
+      {
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
+      },
+      500,
+    );
+  }
+});

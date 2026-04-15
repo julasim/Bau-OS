@@ -38,7 +38,7 @@ export async function searchNotesSemantic(
     const rows = project
       ? await db`
           SELECT
-            n.id, n.title, left(n.content, 200) as snippet,
+            n.id, n.title, left(n.content, 500) as snippet,
             1 - (n.embedding <=> ${vecSql}::vector) as score,
             p.name as project
           FROM notes n
@@ -50,7 +50,7 @@ export async function searchNotesSemantic(
         `
       : await db`
           SELECT
-            n.id, n.title, left(n.content, 200) as snippet,
+            n.id, n.title, left(n.content, 500) as snippet,
             1 - (n.embedding <=> ${vecSql}::vector) as score,
             p.name as project
           FROM notes n
@@ -92,7 +92,7 @@ export async function searchFilesSemantic(
     const rows = project
       ? await db`
           SELECT
-            f.id, f.filename as title, left(f.content_text, 200) as snippet,
+            f.id, f.filename as title, left(f.content_text, 500) as snippet,
             1 - (f.embedding <=> ${vecSql}::vector) as score,
             p.name as project
           FROM files f
@@ -104,7 +104,7 @@ export async function searchFilesSemantic(
         `
       : await db`
           SELECT
-            f.id, f.filename as title, left(f.content_text, 200) as snippet,
+            f.id, f.filename as title, left(f.content_text, 500) as snippet,
             1 - (f.embedding <=> ${vecSql}::vector) as score,
             p.name as project
           FROM files f
@@ -141,7 +141,7 @@ export async function searchNotesText(query: string, limit = 10, project?: strin
     const rows = project
       ? await db`
           SELECT
-            n.id, n.title, left(n.content, 200) as snippet,
+            n.id, n.title, left(n.content, 500) as snippet,
             greatest(
               similarity(n.title, ${query}),
               similarity(left(n.content, 500), ${query})
@@ -156,7 +156,7 @@ export async function searchNotesText(query: string, limit = 10, project?: strin
         `
       : await db`
           SELECT
-            n.id, n.title, left(n.content, 200) as snippet,
+            n.id, n.title, left(n.content, 500) as snippet,
             greatest(
               similarity(n.title, ${query}),
               similarity(left(n.content, 500), ${query})
@@ -220,10 +220,16 @@ export async function searchHybrid(query: string, limit = 10, project?: string |
   });
 
   // Sortieren nach RRF-Score, Top-N zurueckgeben
-  return Array.from(scoreMap.values())
-    .sort((a, b) => b.rrfScore - a.rrfScore)
-    .slice(0, limit)
-    .map((entry) => ({ ...entry.result, score: entry.rrfScore }));
+  // RRF-Scores sind tiny (1/(k+rank+1), mit k=60 liegt Rang 0 bei ~0.016).
+  // Ein direkter `score * 100` im UI las sich als "1%" und sah fuer das LLM
+  // aus, als waeren die Treffer irrelevant — der Agent machte deshalb sofort
+  // weitere Suchen (vault_suchen, notizen_auflisten, projekt_info) anstatt
+  // die Ergebnisse zu verwenden. Deshalb normalisieren wir auf [0, 1] relativ
+  // zum besten Treffer: der Top-Treffer bekommt 1.0, der Rest absteigend.
+  // Damit liest sich "Score: 87%" fuer das LLM korrekt als "sehr relevant".
+  const sorted = Array.from(scoreMap.values()).sort((a, b) => b.rrfScore - a.rrfScore);
+  const maxRrf = sorted[0]?.rrfScore ?? 1;
+  return sorted.slice(0, limit).map((entry) => ({ ...entry.result, score: maxRrf > 0 ? entry.rrfScore / maxRrf : 0 }));
 }
 
 /**

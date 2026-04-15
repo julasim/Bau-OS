@@ -285,20 +285,57 @@ export const fileHandlers: HandlerMap = {
       if (!results.length) return `Keine Treffer fuer "${args.frage}" (Textsuche, DB nicht aktiv).`;
       return results.map((r) => `\u{1F4C4} ${r.file}\n   ${r.line}`).join("\n\n") + "\n\n[Textsuche — DB nicht aktiv]";
     }
-    const { semanticSearch } = await import("../../db/index.js");
+    const { semanticSearch, embeddingStats } = await import("../../db/index.js");
     const type = (args.typ as "all" | "note" | "file") || "all";
-    const limit = Number(args.limit) || 5;
+    // Default 8 statt 5: bei breiten Fragen ("Was haben wir zu X?") waren 5
+    // Ergebnisse zu wenig, Agent rief direkt notizen_auflisten hinterher.
+    const limit = Number(args.limit) || 8;
     const project = args.projekt ? String(args.projekt) : null;
     const results = await semanticSearch(String(args.frage), { limit, type, project });
-    if (!results.length)
+
+    if (!results.length) {
+      // Coverage-Check: liegt es evtl. daran, dass viele Notizen ueberhaupt
+      // kein Embedding haben? Wenn ja, ehrlich sagen — sonst denkt der Agent,
+      // es gibt einfach nichts, und halluziniert eine leere Antwort.
+      try {
+        const stats = await embeddingStats();
+        const noteGap = stats.notes.total - stats.notes.embedded;
+        const fileGap = stats.files.total - stats.files.embedded;
+        if (noteGap > 0 || fileGap > 0) {
+          return (
+            `Keine semantischen Treffer fuer "${args.frage}". ` +
+            `ACHTUNG: ${noteGap} Notiz(en) und ${fileGap} Datei(en) haben kein Embedding ` +
+            `(${stats.notes.embedded}/${stats.notes.total} Notizen, ${stats.files.embedded}/${stats.files.total} Dateien indexiert). ` +
+            `Admin muss /api/search/reindex triggern. Als Fallback jetzt vault_suchen verwenden.`
+          );
+        }
+      } catch {
+        // Stats-Abruf egal, normal fortfahren
+      }
       return `Keine semantischen Treffer fuer "${args.frage}". Versuche vault_suchen fuer exakte Textsuche.`;
-    return results
-      .map((r) => {
+    }
+
+    // Output-Format mit mehr Kontext:
+    // - Snippet bis 400 Zeichen (vorher 120) — dadurch kann der Agent die
+    //   Frage direkt beantworten ohne jede Notiz einzeln nachzulesen.
+    // - Nach den Treffern expliziter Antwort-Hint, damit der Agent nicht
+    //   in eine Such-Schleife faellt (semantisch_suchen -> vault_suchen ->
+    //   notizen_auflisten -> projekt_info).
+    const formatted = results
+      .map((r, i) => {
         const icon = r.type === "note" ? "\u{1F4DD}" : "\u{1F4C4}";
         const proj = r.project ? ` [${r.project}]` : "";
-        return `${icon} ${r.title}${proj} (Score: ${(r.score * 100).toFixed(0)}%)\n   ${r.snippet.replace(/\n/g, " ").slice(0, 120)}`;
+        const scorePct = (r.score * 100).toFixed(0);
+        const snippet = r.snippet.replace(/\s+/g, " ").trim().slice(0, 400);
+        return `${i + 1}. ${icon} ${r.title}${proj} — ${scorePct}%\n   ${snippet}`;
       })
       .join("\n\n");
+    return (
+      `${results.length} Treffer fuer "${args.frage}":\n\n${formatted}\n\n` +
+      `Beantworte die Frage des Nutzers anhand dieser Treffer. Wenn der Nutzer einen ` +
+      `einzelnen Eintrag komplett lesen moechte, rufe notiz_lesen mit dem Titel auf — ` +
+      `sonst direkt 'antworten' aufrufen.`
+    );
   },
 
   datei_bearbeiten: async (args) => {

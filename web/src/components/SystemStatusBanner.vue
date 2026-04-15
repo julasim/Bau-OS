@@ -14,12 +14,18 @@ interface DbStatus {
     schema: { notes: number | null; files: number | null };
     error?: string;
   };
+  embeddingCoverage?: {
+    ok: boolean;
+    notes: { total: number; embedded: number };
+    files: { total: number; embedded: number };
+  };
   realtime?: { enabled?: boolean; active?: boolean; lastError?: string | null };
   error?: string;
 }
 
 const status = ref<DbStatus | null>(null);
 const dismissed = ref<string | null>(null); // key des dismissed Banners in dieser Session
+const reindexing = ref(false);
 let timer: number | null = null;
 
 async function load() {
@@ -27,6 +33,19 @@ async function load() {
     status.value = await api.get<DbStatus>("/dashboard/db-status");
   } catch {
     status.value = null;
+  }
+}
+
+async function runReindex() {
+  if (reindexing.value) return;
+  reindexing.value = true;
+  try {
+    await api.post("/search/reindex", {});
+    await load(); // Status neu laden → Banner verschwindet wenn Coverage=100%
+  } catch (e) {
+    console.error("[Reindex]", e);
+  } finally {
+    reindexing.value = false;
   }
 }
 
@@ -81,6 +100,26 @@ const banner = computed<{ key: string; level: "warn" | "error"; text: string } |
     };
   }
 
+  // Embedding-Coverage-Luecke: Notizen/Dateien ohne Embedding werden von
+  // semantisch_suchen komplett ignoriert (WHERE embedding IS NOT NULL).
+  // Typische Ursache: Embedding-Provider war bei der Erstellung offline.
+  // Fix: /api/search/reindex triggern — der Button im Banner macht das.
+  if (s.embeddingCoverage && s.embeddingCoverage.ok === false) {
+    const { notes, files } = s.embeddingCoverage;
+    const noteGap = notes.total - notes.embedded;
+    const fileGap = files.total - files.embedded;
+    const parts: string[] = [];
+    if (noteGap > 0) parts.push(`${noteGap} Notiz(en) (${notes.embedded}/${notes.total})`);
+    if (fileGap > 0) parts.push(`${fileGap} Datei(en) (${files.embedded}/${files.total})`);
+    return {
+      key: "embed-coverage-gap",
+      level: "warn",
+      text: `Semantische Suche unvollständig: ${parts.join(
+        ", ",
+      )} haben kein Embedding. Diese Inhalte werden von der Dateisuche im Chat NICHT gefunden. Klick rechts auf „Neu indexieren" um die fehlenden Embeddings zu erzeugen.`,
+    };
+  }
+
   // Realtime-Bridge down (nur wenn Supabase konfiguriert)
   if (s.realtime && s.realtime.enabled && s.realtime.active === false) {
     return {
@@ -121,6 +160,14 @@ onUnmounted(() => {
   >
     <span class="font-medium shrink-0">{{ banner.level === 'error' ? 'Fehler' : 'Hinweis' }}:</span>
     <span class="flex-1">{{ banner.text }}</span>
+    <button
+      v-if="banner.key === 'embed-coverage-gap'"
+      @click="runReindex"
+      :disabled="reindexing"
+      class="shrink-0 text-xs px-2 py-1 border border-current rounded hover:bg-white/50 transition disabled:opacity-50"
+    >
+      {{ reindexing ? "Indexiere…" : "Neu indexieren" }}
+    </button>
     <button
       @click="dismiss"
       class="shrink-0 text-xs opacity-60 hover:opacity-100 transition"
