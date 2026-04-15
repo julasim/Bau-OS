@@ -1,6 +1,7 @@
 import type OpenAI from "openai";
 import { client, buildDateLine } from "./client.js";
 import { TOOLS } from "./tools.js";
+import { buildToolWhitelist } from "./whitelist.js";
 import { getDynamicToolSchemas } from "../tools.js";
 import { getMcpToolSchemas } from "../mcp.js";
 import { executeTool, setCurrentDepth, registerProcessAgent } from "./executor.js";
@@ -35,7 +36,10 @@ export async function processAgent(
 
   const workspaceContext = loadAgentWorkspace(agentName, mode);
   const dateLine = buildDateLine();
-  const systemPrompt = workspaceContext ? `${dateLine}\n\n${workspaceContext}` : dateLine;
+  const toolWhitelist = buildToolWhitelist();
+  const systemPrompt = workspaceContext
+    ? `${dateLine}\n\n${workspaceContext}\n\n${toolWhitelist}`
+    : `${dateLine}\n\n${toolWhitelist}`;
 
   const history = mode === "full" ? loadAgentHistory(agentName, HISTORY_LOAD_LIMIT) : [];
 

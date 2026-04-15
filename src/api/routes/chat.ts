@@ -3,6 +3,7 @@ import { streamSSE } from "hono/streaming";
 import type OpenAI from "openai";
 import { client, buildDateLine } from "../../llm/client.js";
 import { TOOLS } from "../../llm/tools.js";
+import { buildToolWhitelist } from "../../llm/whitelist.js";
 import { getDynamicToolSchemas } from "../../tools.js";
 import { getMcpToolSchemas } from "../../mcp.js";
 import { executeTool } from "../../llm/executor.js";
@@ -98,7 +99,10 @@ chatRoutes.post("/chat", (c) => {
 
     const workspaceContext = loadAgentWorkspace(agentName, "full");
     const dateLine = buildDateLine();
-    const baseSystemPrompt = workspaceContext ? `${dateLine}\n\n${workspaceContext}` : dateLine;
+    const toolWhitelist = buildToolWhitelist();
+    const baseSystemPrompt = workspaceContext
+      ? `${dateLine}\n\n${workspaceContext}\n\n${toolWhitelist}`
+      : `${dateLine}\n\n${toolWhitelist}`;
 
     // Wenn Dateisuche aktiv: LLM zwingen das Tool 'semantisch_suchen' zu nutzen
     const searchHint = searchMode
