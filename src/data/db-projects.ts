@@ -4,6 +4,7 @@ import type { Project, ProjectRepository } from "./types.js";
 import {
   createProject as createProjectOnDisk,
   getProjectInfo as getProjectInfoFromDisk,
+  deleteProject as deleteProjectOnDisk,
 } from "../workspace/projects.js";
 
 export const dbProjects: ProjectRepository = {
@@ -105,6 +106,27 @@ export const dbProjects: ProjectRepository = {
       INSERT INTO projects (name, folder_path, description, status)
       VALUES (${name}, ${folderPath}, ${description ?? null}, 'aktiv')
     `;
+    return true;
+  },
+
+  async delete(name) {
+    // Gleiche Validierung wie bei create
+    if (!/^[\p{L}\p{N}_\-. ]+$/u.test(name) || name.includes("..")) return false;
+
+    const db = getDb();
+
+    // 1. DB-Eintrag entfernen. FK-Verhalten laut Migration 001_init.sql:
+    //    - notes.project_id: ON DELETE CASCADE (Notizen werden mitgeloescht)
+    //    - tasks / termine / files / team.project_id: ON DELETE SET NULL
+    //      (bleiben erhalten, verlieren nur den Projekt-Bezug)
+    //    Auch wenn kein Eintrag existiert: DELETE ist idempotent, kein Fehler.
+    await db`DELETE FROM projects WHERE name = ${name}`;
+
+    // 2. Vault-Ordner rekursiv entfernen. Idempotent: wenn der Ordner schon
+    //    weg ist, gibt deleteProjectOnDisk true zurueck.
+    const fsOk = deleteProjectOnDisk(name);
+    if (!fsOk) return false;
+
     return true;
   },
 };

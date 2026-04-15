@@ -18,4 +18,7 @@ export const fsProjects: ProjectRepository = {
   async create(name, description) {
     return vault.createProject(name, description);
   },
+  async delete(name) {
+    return vault.deleteProject(name);
+  },
 };

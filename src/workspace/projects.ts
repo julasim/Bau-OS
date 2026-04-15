@@ -41,6 +41,23 @@ export function createProject(name: string, description?: string | null): boolea
   }
 }
 
+/**
+ * Loescht den Vault-Ordner eines Projekts komplett (inkl. aller Notizen,
+ * Aufgaben etc. die darin liegen). Idempotent: wenn der Ordner schon weg
+ * ist, gibt true zurueck. false nur bei ungueltigem Namen oder FS-Fehlern.
+ */
+export function deleteProject(name: string): boolean {
+  if (!safeProjectName(name)) return false;
+  const projectPath = path.join(workspacePath, "Projekte", name);
+  if (!fs.existsSync(projectPath)) return true; // schon weg — ok
+  try {
+    fs.rmSync(projectPath, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function listProjects(): string[] {
   const projektePath = path.join(workspacePath, "Projekte");
   if (!fs.existsSync(projektePath)) return [];

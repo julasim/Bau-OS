@@ -152,6 +152,11 @@ export interface ProjectRepository {
   /** Legt ein neues Projekt an. Gibt false zurueck, wenn der Name ungueltig ist
    *  oder das Projekt bereits existiert. */
   create(name: string, description?: string | null): Promise<boolean>;
+  /** Loescht ein Projekt komplett (DB-Eintrag + Vault-Ordner inkl. Inhalt).
+   *  Idempotent: gibt true zurueck, wenn das Projekt am Ende wirklich weg
+   *  ist (auch wenn es vorher schon nicht existierte). false nur bei echten
+   *  Fehlern (z.B. ungueltiger Name, FS-Problem). */
+  delete(name: string): Promise<boolean>;
 }
 
 export interface TeamRepository {
