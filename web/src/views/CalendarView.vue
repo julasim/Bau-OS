@@ -410,9 +410,11 @@ const VIEWS: { id: ViewMode; label: string }[] = [
         >
           <div class="flex items-start justify-between">
             <span
-              :class="day.today ? 'bg-gray-900 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs' : 'text-xs'"
-              class="inline-block cursor-pointer"
               @click="goToDate(day.iso)"
+              :class="day.today
+                ? 'bg-gray-900 text-white rounded-full w-7 h-7 text-[11px] leading-none font-medium'
+                : 'w-7 h-7 text-xs leading-none'"
+              class="inline-flex items-center justify-center cursor-pointer flex-shrink-0"
             >{{ day.date.getDate() }}</span>
             <button
               @click.stop="startCreate(day.iso)"
