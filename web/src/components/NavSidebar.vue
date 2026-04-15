@@ -17,7 +17,6 @@ const sections = [
     title: "Arbeit",
     items: [
       { to: "/tasks", label: "Aufgaben", icon: "check" },
-      { to: "/termine", label: "Termine", icon: "clock" },
       { to: "/calendar", label: "Kalender", icon: "calendar" },
       { to: "/projects", label: "Projekte", icon: "folder" },
     ],

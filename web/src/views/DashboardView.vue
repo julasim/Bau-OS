@@ -125,7 +125,7 @@ useEvents(["task", "termin", "note", "project"], () => load());
         <p class="text-2xl font-semibold text-gray-900">{{ data.openTasks }}</p>
         <p class="text-xs text-gray-400 mt-0.5">Offene Aufgaben</p>
       </router-link>
-      <router-link to="/termine" class="border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-300 transition">
+      <router-link to="/calendar" class="border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-300 transition">
         <p class="text-2xl font-semibold text-gray-900">{{ data.termine }}</p>
         <p class="text-xs text-gray-400 mt-0.5">Termine</p>
       </router-link>
@@ -205,7 +205,7 @@ useEvents(["task", "termin", "note", "project"], () => load());
         <div>
           <div class="flex items-center justify-between mb-3">
             <h3 class="text-sm font-semibold text-gray-900">Naechste Termine</h3>
-            <router-link to="/termine" class="text-xs text-gray-400 hover:text-gray-600 transition">Alle anzeigen</router-link>
+            <router-link to="/calendar" class="text-xs text-gray-400 hover:text-gray-600 transition">Alle anzeigen</router-link>
           </div>
           <div class="divide-y divide-gray-100">
             <div v-for="t in upcomingTermine" :key="t.id" class="flex items-start gap-3 py-2">
