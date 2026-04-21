@@ -1,0 +1,37 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Bau-OS Caddyfile
+#
+# Zwei Modi:
+#   1) CADDY_DOMAIN gesetzt → automatisches Let's-Encrypt + HTTPS-Redirect
+#   2) CADDY_DOMAIN leer    → nur HTTP auf Port 80 (fuer interne Netze / lokale
+#      Entwicklung / hinter einem anderen Reverse-Proxy)
+#
+# Beide Modi proxen auf app:3000 (Docker-Compose-Netzwerk).
+# ─────────────────────────────────────────────────────────────────────────────
+
+{
+    email {$CADDY_EMAIL:admin@bau-os.local}
+}
+
+{$CADDY_DOMAIN::80} {
+    encode gzip zstd
+
+    # SSE-Streaming fuer /api/events und /api/chat darf nicht gepuffert werden
+    @sse {
+        path /api/events /api/events/* /api/chat /api/chat/*
+    }
+    reverse_proxy @sse app:3000 {
+        flush_interval -1
+        transport http {
+            read_timeout 24h
+            write_timeout 24h
+        }
+    }
+
+    reverse_proxy app:3000
+
+    log {
+        output stdout
+        format console
+    }
+}

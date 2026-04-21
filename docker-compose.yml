@@ -1,45 +1,60 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Docker Compose
-# Alles in einem Container: Node.js (Bau-OS) + Ollama + PostgreSQL 16
+# Bau-OS Docker Compose — 4-Service-Architektur
 #
-# Start:  docker compose up -d
-# Logs:   docker compose logs -f
-# Stop:   docker compose down
-# Update: docker compose up -d --build
+#   postgres  pgvector/pgvector:pg16  — DB + Vector-Extension
+#   ollama    ollama/ollama           — LLM-Runtime + Embeddings
+#   app       (Build aus Dockerfile)  — Bau-OS Telegram-Bot + WebUI + API
+#   caddy     caddy:2                 — Reverse-Proxy + automatisches HTTPS
+#
+# Nur `app` ist unser Code. Alle anderen sind offizielle Images, ziehen
+# Updates ueber `docker compose pull`.
+#
+# Start:   docker compose up -d
+# Logs:    docker compose logs -f            (alle)
+#          docker compose logs -f ollama     (nur ein Service)
+# Update:  docker compose pull && docker compose build app && docker compose up -d
+# Stop:    docker compose down
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: bau-os
 
 services:
-  bau-os:
-    build: .
-    container_name: bau-os
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: bauos-postgres
     restart: always
-    env_file: .env
     environment:
-      # Workspace-Pfad innerhalb des Containers (→ wird als Volume gemountet)
-      - WORKSPACE_PATH=/workspace
-      # Ollama läuft im gleichen Container → localhost
-      - OLLAMA_BASE_URL=http://localhost:11434/v1
-    ports:
-      # Host-Port aus .env (API_PORT), Standard 3000
-      - "${API_PORT:-3000}:${API_PORT:-3000}"
+      POSTGRES_USER: ${POSTGRES_USER:-bauos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bauos}
+      POSTGRES_DB: ${POSTGRES_DB:-bauos}
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      # Benutzerdaten — WORKSPACE_HOST_DIR aus .env (Standard: ./workspace)
-      - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
-      # Bot-Logs
-      - ./logs:/opt/bau-os/logs
-      # Web-UI Benutzer (users.json)
-      - ./data:/opt/bau-os/data
-      # Dynamische Tool-Skripte
-      - ./tools:/opt/bau-os/tools
-      # Telegram Chat-ID (Datei muss auf Host existieren: touch .chat_id)
-      - ./.chat_id:/opt/bau-os/.chat_id
-      # Ollama-Modelle persistent (kein erneutes Download nach Neustart)
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bauos} -d ${POSTGRES_DB:-bauos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Postgres bleibt intern — nur app redet mit ihm. Wer von aussen debuggen
+    # will, kann 5432 freigeben, sollte das aber bewusst tun.
+    # ports:
+    #   - "127.0.0.1:5432:5432"
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bauos-ollama
+    restart: always
+    volumes:
       - ollama_models:/root/.ollama
-      # PostgreSQL-Daten persistent (Chat-Historie, Notizen, Embeddings, ...)
-      - postgres_data:/var/lib/postgresql/16/main
-    # GPU-Support für lokale Modelle (optional, benötigt nvidia-container-toolkit):
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    # GPU-Support (optional, erfordert nvidia-container-toolkit auf dem Host):
     # deploy:
     #   resources:
     #     reservations:
@@ -48,8 +63,54 @@ services:
     #           count: 1
     #           capabilities: [gpu]
 
+  app:
+    build: .
+    image: bau-os-app:latest
+    container_name: bauos-app
+    restart: always
+    env_file: .env
+    environment:
+      # Service-zu-Service-URLs ueberschreiben alles aus .env.
+      DATABASE_URL: postgres://${POSTGRES_USER:-bauos}:${POSTGRES_PASSWORD:-bauos}@postgres:5432/${POSTGRES_DB:-bauos}
+      OLLAMA_BASE_URL: http://ollama:11434/v1
+      WORKSPACE_PATH: /workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+    volumes:
+      - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
+      - ./logs:/opt/bau-os/logs
+      - ./data:/opt/bau-os/data
+      - ./tools:/opt/bau-os/tools
+      - ./.chat_id:/opt/bau-os/.chat_id
+    # App-Port bleibt intern erreichbar; Caddy proxyt von aussen.
+    # Wer Caddy nicht will, kann hier direkt exposen:
+    # ports:
+    #   - "${API_PORT:-3000}:3000"
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2
+    container_name: bauos-caddy
+    restart: always
+    environment:
+      # Wird aus .env uebernommen (leer = nur HTTP auf :80)
+      CADDY_DOMAIN: ${CADDY_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
 volumes:
-  # Ollama-Modelle werden zwischen Container-Neustarts gespeichert
-  ollama_models:
-  # PostgreSQL-Cluster-Daten (alle DB-Inhalte: Chat, Notizen, Embeddings, ...)
   postgres_data:
+  ollama_models:
+  caddy_data:
+  caddy_config:

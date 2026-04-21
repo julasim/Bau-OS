@@ -1,64 +1,41 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Docker Image
-# Enthält: Node.js 20 LTS + Ollama + PostgreSQL 16 + pgvector (alles in einem)
+# Bau-OS App-Container — nur Node.js + unser Code.
+# PostgreSQL, Ollama und Caddy laufen jeweils als separate Container
+# (offizielle Images — siehe docker-compose.yml).
 # ─────────────────────────────────────────────────────────────────────────────
 
-FROM ubuntu:24.04
+FROM node:20-bookworm-slim
 
-# Kein interaktiver apt-get
 ENV DEBIAN_FRONTEND=noninteractive
-ENV LANG=de_AT.UTF-8
-ENV LC_ALL=de_AT.UTF-8
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
-# System-Pakete + Build-Tools + PostgreSQL 16
-#  - python3/make/g++: native Node-Module (bcrypt, pdf-parse)
-#  - zstd:            Ollama-Installer braucht es für Extraktion
-#  - postgresql-16 + postgresql-server-dev-16: DB + Header für pgvector-Build
-RUN apt-get update && apt-get install -y \
-    curl \
-    git \
-    ca-certificates \
-    locales \
+# Build-Tools fuer native Node-Module (bcrypt, pdf-parse) + curl fuer Healthcheck
+RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     make \
     g++ \
-    zstd \
-    postgresql-16 \
-    postgresql-contrib-16 \
-    postgresql-server-dev-16 \
-    && locale-gen de_AT.UTF-8 2>/dev/null || locale-gen en_US.UTF-8 \
+    curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
-# pgvector aus Source bauen (keine verlässliche Ubuntu-Package in 24.04)
-RUN cd /tmp \
-    && git clone --depth 1 --branch v0.7.4 https://github.com/pgvector/pgvector.git \
-    && cd pgvector \
-    && make \
-    && make install \
-    && cd / \
-    && rm -rf /tmp/pgvector
-
-# Node.js 20 LTS
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
-    && apt-get install -y nodejs \
-    && rm -rf /var/lib/apt/lists/*
-
-# Ollama
-RUN curl -fsSL https://ollama.com/install.sh | sh
 
 WORKDIR /opt/bau-os
 
-# Abhängigkeiten installieren (native Module werden hier kompiliert)
+# Dependencies zuerst (bessere Layer-Caches)
 COPY package*.json ./
 RUN npm ci
 
-# Quellcode kopieren + bauen
+# Quellcode kopieren + bauen (Backend-TS + Vue-Frontend)
 COPY . .
 RUN npm run build:all \
-    && npm prune --omit=dev \
-    && chmod +x scripts/docker-entrypoint.sh
+    && npm prune --omit=dev
 
-# Web-UI Port
 EXPOSE 3000
 
-CMD ["bash", "scripts/docker-entrypoint.sh"]
+# Healthcheck — App sollte auf /api/status antworten (ok oder auth-required)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS "http://localhost:${API_PORT:-3000}/api/status" > /dev/null || exit 1
+
+# Node startet direkt — die App kuemmert sich selbst um DB-Migrationen,
+# wartet wenn noetig auf Postgres, respektiert DB_AUTO_MIGRATE aus .env.
+CMD ["node", "dist/index.js"]

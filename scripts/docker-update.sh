@@ -99,11 +99,17 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. Docker Rebuild + Restart
+# 5. Docker: Offizielle Images pullen (postgres/ollama/caddy), App rebuilden
 # ─────────────────────────────────────────────────────────────────────────────
 
-echo -e "  ${GREEN}▶ docker compose up -d --build ...${NC}"
-docker compose up -d --build
+echo -e "  ${GREEN}▶ docker compose pull postgres ollama caddy ...${NC}"
+docker compose pull postgres ollama caddy || true
+
+echo -e "  ${GREEN}▶ docker compose up -d --build app ...${NC}"
+docker compose up -d --build app
+
+# caddy und ollama nur starten wenn sie down sind (kein unnoetiger Restart)
+docker compose up -d postgres ollama caddy
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Health-Check (einfach: laeuft der Container?)

@@ -294,28 +294,39 @@ dc() {
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 5: Docker-Image bauen
 # ═════════════════════════════════════════════════════════════════════════════
-step "Docker-Image bauen (das dauert beim ersten Mal einige Minuten)..."
-info "Lädt Ubuntu 24.04 + Node.js 20 + Ollama herunter und kompiliert den Code."
+step "Docker-Images vorbereiten..."
+info "4 Services: postgres (pgvector), ollama, app (Bau-OS), caddy."
+info "Offizielle Images werden gezogen, nur 'app' lokal gebaut."
 echo ""
 
-# .env erstellen (WORKSPACE_HOST_DIR für docker-compose Volume-Mount)
+# .env erstellen — Service-Namen aus docker-compose.yml als Hostnames.
 JWT_SECRET=$(openssl rand -hex 32)
+POSTGRES_PASSWORD=$(openssl rand -hex 16)
 cat > "$INSTALL_DIR/.env" << ENVEOF
 # Bau-OS Konfiguration (generiert von install-docker.sh)
 BOT_TOKEN=$BOT_TOKEN
-WORKSPACE_PATH=$WORKSPACE_DIR
+WORKSPACE_PATH=/workspace
 WORKSPACE_HOST_DIR=$WORKSPACE_DIR
-OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=$OLLAMA_MODEL
 JWT_SECRET=$JWT_SECRET
 API_PORT=$API_PORT
-# PostgreSQL läuft im gleichen Container (Port 5432 nur intern)
-DATABASE_URL=postgresql://bauos:bauos@localhost:5432/bauos
+
+# PostgreSQL — Container 'postgres' im compose-Netzwerk
+POSTGRES_USER=bauos
+POSTGRES_PASSWORD=$POSTGRES_PASSWORD
+POSTGRES_DB=bauos
+
+# Caddy Reverse-Proxy — Domain leer = nur HTTP auf Port 80
+# Beispiel: CADDY_DOMAIN=bauos.meine-firma.at
+CADDY_DOMAIN=
+CADDY_EMAIL=admin@example.com
 ENVEOF
 chmod 600 "$INSTALL_DIR/.env"
 
-dc build < /dev/null || err "Docker-Image konnte nicht gebaut werden. Siehe Fehler oben."
-ok "Docker-Image gebaut"
+# Offizielle Images ziehen, dann App bauen
+dc pull postgres ollama caddy < /dev/null || warn "Pull für Standard-Images fehlgeschlagen — versuche trotzdem weiter"
+dc build app < /dev/null || err "App-Image konnte nicht gebaut werden. Siehe Fehler oben."
+ok "Images bereit"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 6: Admin-User anlegen
@@ -325,7 +336,7 @@ step "Web-Admin einrichten..."
 # Passwort via gebautem Image hashen
 # < /dev/null verhindert dass docker stdin vom Script (curl|bash) frisst
 set +e
-BCRYPT_OUTPUT=$(docker run --rm bau-os-bau-os:latest \
+BCRYPT_OUTPUT=$(docker run --rm bau-os-app:latest \
   node -e "require('bcrypt').hash(process.argv[1],10).then(h=>console.log(h)).catch(e=>{console.error('ERR:'+e.message);process.exit(1)})" \
   "$WEB_PASS" < /dev/null 2>&1)
 BCRYPT_CODE=$?
@@ -358,22 +369,29 @@ ok "Admin-User '$WEB_USER' erstellt"
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 7: LLM-Modell vorbereiten
 # ═════════════════════════════════════════════════════════════════════════════
+# Ollama-Service einmal hochziehen (bleibt dann laufen), damit 'signin' und
+# 'pull' ihn direkt erreichen. Postgres brauchen wir hier noch nicht.
+dc up -d ollama < /dev/null || err "Ollama-Container konnte nicht gestartet werden"
+
+# Kurz warten bis Ollama API antwortet
+for i in $(seq 1 30); do
+  if dc exec -T ollama ollama list >/dev/null 2>&1; then break; fi
+  sleep 1
+done
+
 if [ "$LLM_MODE" = "cloud" ]; then
   step "Ollama Cloud einrichten..."
   info "Es wird ein Link angezeigt — öffne ihn im Browser oder Handy."
   info "Melde dich mit deinem Ollama-Konto an (ollama.com)."
   echo ""
 
-  # Ollama signin im temporären Container (Credentials landen im Volume)
-  # -T für non-TTY (curl|bash), stdin von /dev/tty für interaktive URL-Eingabe
-  dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama signin" < /dev/tty || true
+  dc exec ollama ollama signin < /dev/tty || true
 
   echo ""
   echo -e "  ${YELLOW}→${NC} Sobald du dich im Browser angemeldet hast, drücke Enter."
   read -r < /dev/tty
 
-  # Verbindung testen (< /dev/null damit docker nicht stdin vom Script frisst)
-  CLOUD_TEST=$(dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama ls 2>&1" < /dev/null || true)
+  CLOUD_TEST=$(dc exec -T ollama ollama list 2>&1 < /dev/null || true)
   if echo "$CLOUD_TEST" | grep -qi "error\|unauthorized\|failed"; then
     warn "Ollama Cloud-Verbindung konnte nicht bestätigt werden"
     FAIL_CHOICE=$(select_option "Was möchtest du tun?" \
@@ -388,20 +406,19 @@ if [ "$LLM_MODE" = "cloud" ]; then
         info "Verfügbare: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
         OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:3b")
         step "Modell herunterladen ($OLLAMA_MODEL)..."
-        dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" < /dev/null \
+        dc exec -T ollama ollama pull "$OLLAMA_MODEL" < /dev/null \
           || err "Modell-Download fehlgeschlagen"
-        # .env aktualisieren
         sed -i "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$OLLAMA_MODEL|" "$INSTALL_DIR/.env"
         ok "Modell '$OLLAMA_MODEL' bereit"
         ;;
       2)
         echo "Abgebrochen."
-        info "Login nachholen: docker exec -it bau-os bash -c 'ollama signin'"
+        info "Login nachholen: docker compose exec ollama ollama signin"
         exit 0
         ;;
       3)
         warn "Installation wird fortgesetzt ohne Cloud-Bestätigung"
-        info "Login nachholen: docker exec -it bau-os bash -c 'ollama signin'"
+        info "Login nachholen: docker compose exec ollama ollama signin"
         ;;
     esac
   else
@@ -411,10 +428,18 @@ else
   step "Modell herunterladen ($OLLAMA_MODEL)..."
   warn "Das kann je nach Internetverbindung einige Minuten dauern..."
 
-  dc run --rm -T bau-os bash -c "ollama serve >/dev/null 2>&1 & sleep 5 && ollama pull \"$OLLAMA_MODEL\"" < /dev/null \
+  dc exec -T ollama ollama pull "$OLLAMA_MODEL" < /dev/null \
     || err "Modell-Download fehlgeschlagen. Prüfe deine Internetverbindung."
 
   ok "Modell '$OLLAMA_MODEL' bereit"
+fi
+
+# Embedding-Modell fuer pgvector (nur bei lokalem Ollama — Cloud-Modelle
+# bringen Embeddings nicht mit). Klein, ~270 MB, laeuft auf jeder CPU.
+if [ "$LLM_MODE" = "local" ]; then
+  step "Embedding-Modell herunterladen (nomic-embed-text)..."
+  dc exec -T ollama ollama pull nomic-embed-text < /dev/null \
+    || warn "Embedding-Modell konnte nicht geladen werden — semantische Suche bleibt vorerst aus"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -423,20 +448,18 @@ fi
 step "Bau-OS Container starten..."
 dc up -d
 
-# Health-Check: Port antwortet (egal mit welchem HTTP-Code)
+# Health-Check: Caddy proxt auf Port 80 nach app:3000 — egal welcher HTTP-Code
 echo ""
 info "Warte auf Bau-OS..."
-for i in $(seq 1 30); do
-  # -o /dev/null: Body verwerfen, nur prüfen ob Server antwortet
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:$API_PORT/" 2>/dev/null || echo "000")
-  # Jeder HTTP-Status außer 000 (keine Verbindung) = Server läuft
+for i in $(seq 1 60); do
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost/" 2>/dev/null || echo "000")
   if [ "$HTTP_CODE" != "000" ]; then
-    ok "Bau-OS läuft (HTTP $HTTP_CODE)"
+    ok "Bau-OS läuft (HTTP $HTTP_CODE via Caddy)"
     break
   fi
-  if [ "$i" -eq 30 ]; then
+  if [ "$i" -eq 60 ]; then
     echo ""
-    warn "Health-Check fehlgeschlagen. Logs:"
+    warn "Health-Check fehlgeschlagen. Logs (letzte 30 Zeilen pro Service):"
     echo ""
     dc logs --tail 30
     echo ""
@@ -463,16 +486,21 @@ echo ""
 echo -e "  ${GREEN}▸${NC} Öffne deinen Telegram Bot und schreibe ${BOLD}'Hallo'${NC}"
 echo    "    Der Setup-Wizard führt dich durch die Einrichtung."
 echo ""
-echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>:${API_PORT}${NC}"
+echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>${NC} (Port 80 via Caddy)"
 echo    "    Login: ${WEB_USER} / (dein gewähltes Passwort)"
+echo ""
+echo -e "  ${GREEN}▸${NC} HTTPS aktivieren: Setze ${BOLD}CADDY_DOMAIN=deine.domain.at${NC} in der .env"
+echo -e "    und führe ${GREEN}docker compose up -d caddy${NC} aus — Let's Encrypt läuft automatisch."
 echo ""
 echo -e "  ${BOLD}Update:${NC}"
 echo -e "    ${GREEN}bau-os-update${NC}                  → Pull + Rebuild + Restart"
 echo ""
-echo -e "  ${BOLD}Docker-Befehle:${NC}"
-echo    "    cd $INSTALL_DIR"
-echo    "    docker compose logs -f          → Live-Logs"
-echo    "    docker compose restart          → Neustart"
-echo    "    docker compose down             → Stoppen"
-echo    "    docker exec -it bau-os bash     → Shell im Container"
+echo -e "  ${BOLD}Docker-Befehle${NC} (in $INSTALL_DIR):"
+echo    "    docker compose logs -f                    → alle Logs"
+echo    "    docker compose logs -f app                → nur Bau-OS"
+echo    "    docker compose logs -f ollama             → nur LLM"
+echo    "    docker compose restart app                → Bau-OS neu starten"
+echo    "    docker compose down                       → alles stoppen"
+echo    "    docker compose exec app bash              → Shell in Bau-OS"
+echo    "    docker compose exec ollama ollama list    → Modelle auflisten"
 echo ""
