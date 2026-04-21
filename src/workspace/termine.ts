@@ -1,3 +1,21 @@
+/**
+ * TERMINE — Datum-Konvention
+ * =========================
+ * Die Datenbank (und JSON-Files im FS-Modus) speichern Datum als
+ * `TT.MM.JJJJ` (deutsches Format) — historisch gewachsen aus der
+ * Telegram-Bot-Ära, wo LLM-Outputs in diesem Format zurueckkamen.
+ *
+ * Das Frontend (HTML <input type="date">) sendet ISO `YYYY-MM-DD`.
+ *
+ * `validateDatum()` akzeptiert beide Formate. `normalizeDatum()`
+ * wandelt auf das kanonische `TT.MM.JJJJ` um — IMMER vor dem
+ * Persistieren aufrufen. Nur eine Stelle (src/workspace/termine.ts
+ * + db-termine.ts) hat diese Verantwortung.
+ *
+ * Ein kompletter Umbau auf ISO waere moeglich, erfordert aber eine
+ * DB-Migration + Anpassung aller bestehenden JSON-Dateien. Aktuell
+ * nicht priorisiert.
+ */
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";

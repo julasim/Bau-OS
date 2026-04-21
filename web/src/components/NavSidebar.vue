@@ -3,11 +3,13 @@ import { computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { clearToken } from "../api";
 import { useTheme } from "../composables/useTheme";
+import { useSidebar } from "../composables/useSidebar";
 import BIcon from "./BIcon.vue";
 
 const router = useRouter();
 const route = useRoute();
 const { theme, toggle } = useTheme();
+const { open, close } = useSidebar();
 
 interface NavItem {
   to: string;
@@ -64,11 +66,26 @@ function logout() {
   clearToken();
   router.push("/login");
 }
+
+function onNavClick() {
+  // Auf Mobile beim Klick auf einen Nav-Link den Drawer schliessen.
+  if (typeof window !== "undefined" && window.innerWidth < 1024) {
+    close();
+  }
+}
 </script>
 
 <template>
+  <!-- Backdrop (nur auf Mobile sichtbar, wenn offen) -->
+  <div
+    v-if="open"
+    class="sidebar-backdrop"
+    @click="close"
+    aria-hidden="true"
+  />
+
   <aside
-    class="flex flex-col flex-shrink-0 relative z-[2]"
+    :class="['sidebar-root flex flex-col flex-shrink-0', open ? 'sidebar-open' : 'sidebar-closed']"
     style="
       width: 240px;
       background: var(--color-bg-subtle);
@@ -112,6 +129,7 @@ function logout() {
           v-for="item in section.items"
           :key="item.to"
           :to="item.to"
+          @click="onNavClick"
           :class="[
             'nav-item group flex items-center gap-2.5 rounded-[6px] text-[13px] relative',
             isActive(item.to) ? 'nav-item-active' : 'nav-item-idle',
@@ -222,5 +240,45 @@ function logout() {
 .nav-icon-btn:hover {
   color: var(--color-text);
   background: var(--color-border-subtle);
+}
+</style>
+
+<!-- Nicht-scoped styles: Responsiver Overlay-Drawer + Backdrop.
+     Unscoped, damit Media-Queries + position:fixed zuverlaessig greifen. -->
+<style>
+.sidebar-root {
+  position: relative;
+  z-index: 2;
+}
+
+/* Backdrop standardmaessig ausgeblendet (Desktop). */
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 1023.98px) {
+  .sidebar-root {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    z-index: 50;
+    transition: transform 180ms ease-out;
+    box-shadow: 2px 0 16px rgba(0, 0, 0, 0.18);
+  }
+  .sidebar-root.sidebar-closed {
+    transform: translateX(-100%);
+  }
+  .sidebar-root.sidebar-open {
+    transform: translateX(0);
+  }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 40;
+  }
 }
 </style>

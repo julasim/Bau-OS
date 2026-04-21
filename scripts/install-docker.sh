@@ -1,7 +1,7 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # Bau-OS Docker-Installations-Script
-# Installiert Bau-OS als Docker-Container (alles in einem: App + Ollama)
+# Installiert Bau-OS als Docker-Compose-Stack (postgres + ollama + app + caddy)
 #
 # Verwendung:
 #   curl -fsSL https://raw.githubusercontent.com/julasim/Bau-OS/main/scripts/install-docker.sh | bash
@@ -165,7 +165,7 @@ print_logo
 print_header "Bau-OS Installation (Docker)"
 
 echo "Dieses Script installiert Bau-OS als Docker-Container."
-echo "Alles läuft in einem Container: App + Ollama."
+echo "4 Services: postgres (pgvector), ollama, app (Bau-OS), caddy (Reverse-Proxy + HTTPS)."
 echo ""
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -332,6 +332,12 @@ ok "Images bereit"
 # SCHRITT 6: Admin-User anlegen
 # ═════════════════════════════════════════════════════════════════════════════
 step "Web-Admin einrichten..."
+
+# Sicherstellen dass das App-Image existiert — sonst schlaegt docker run
+# mit einer irrefuehrenden "image not found" Meldung fehl
+if ! docker image inspect bau-os-app:latest >/dev/null 2>&1; then
+  err "Image bau-os-app:latest nicht gefunden. Build fehlgeschlagen? Pruefe: docker compose build app"
+fi
 
 # Passwort via gebautem Image hashen
 # < /dev/null verhindert dass docker stdin vom Script (curl|bash) frisst

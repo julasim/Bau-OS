@@ -16,14 +16,35 @@ export function isAuthenticated(): boolean {
   return !!getToken();
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function retryableFetch(url: string, opts: RequestInit, tries = 3): Promise<Response> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, opts);
+      // Retry nur bei 5xx oder 408/429
+      if (res.status < 500 && res.status !== 408 && res.status !== 429) return res;
+      if (i === tries - 1) return res;
+      lastErr = new Error(`HTTP ${res.status}`);
+    } catch (err) {
+      lastErr = err;
+      if (i === tries - 1) throw err;
+    }
+    // Exponential backoff: 300ms, 900ms, 2700ms
+    await new Promise((r) => setTimeout(r, 300 * Math.pow(3, i)));
+  }
+  throw lastErr;
+}
+
+async function request<T>(path: string, options: RequestInit = {}, useRetry = false): Promise<T> {
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
-  const res = await fetch(`${BASE}${path}`, { ...options, headers });
+  const res = useRetry
+    ? await retryableFetch(`${BASE}${path}`, { ...options, headers })
+    : await fetch(`${BASE}${path}`, { ...options, headers });
 
   if (res.status === 401) {
     clearToken();
@@ -40,7 +61,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  get: <T>(path: string) => request<T>(path),
+  get: <T>(path: string) => request<T>(path, {}, true),
   post: <T>(path: string, body: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body) }),
   put: <T>(path: string, body: unknown) => request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   patch: <T>(path: string, body: unknown) => request<T>(path, { method: "PATCH", body: JSON.stringify(body) }),

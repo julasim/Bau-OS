@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useSidebar } from "../composables/useSidebar";
 import BIcon from "./BIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
+const { toggle: toggleSidebar } = useSidebar();
 
 // Mapping Route-Name → lesbarer Titel (Breadcrumb + window.title).
 const titles: Record<string, string> = {
@@ -43,6 +45,29 @@ function openPalette() {
       flex-shrink: 0;
     "
   >
+    <!-- Hamburger (nur auf Mobile sichtbar) -->
+    <button
+      type="button"
+      class="topbar-hamburger"
+      @click="toggleSidebar"
+      aria-label="Menu oeffnen"
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <line x1="3" y1="6" x2="21" y2="6" />
+        <line x1="3" y1="12" x2="21" y2="12" />
+        <line x1="3" y1="18" x2="21" y2="18" />
+      </svg>
+    </button>
+
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-1.5 flex-1 min-w-0" style="font-size: 12px">
       <span style="color: var(--color-text-tertiary)">Sima Architektur</span>
@@ -91,3 +116,29 @@ function openPalette() {
     </button>
   </header>
 </template>
+
+<!-- Unscoped, damit Media-Query zuverlaessig greift. -->
+<style>
+.topbar-hamburger {
+  display: none;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.topbar-hamburger:hover {
+  color: var(--color-text);
+  background: var(--color-border-subtle);
+}
+@media (max-width: 1023.98px) {
+  .topbar-hamburger {
+    display: inline-flex;
+  }
+}
+</style>
