@@ -185,12 +185,24 @@ onMounted(loadAll);
 </script>
 
 <template>
-  <div class="max-w-3xl">
-    <h2 class="text-lg font-semibold mb-1">Einstellungen</h2>
-    <p class="text-xs text-gray-400 mb-6">
-      Persoenliche Praeferenzen, Profil und Laufzeit-Optionen. System-Variablen (DATABASE_URL, BOT_TOKEN etc.)
-      werden in der <code class="font-mono">.env</code>-Datei verwaltet.
-    </p>
+  <div
+    style="
+      max-width: 780px;
+      margin: 0 auto;
+      padding: 28px 32px 48px;
+      color: var(--color-text);
+    "
+  >
+    <div style="margin-bottom: 20px">
+      <div class="eyebrow" style="margin-bottom: 6px">System</div>
+      <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">
+        Einstellungen
+      </h1>
+      <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
+        Persönliche Präferenzen, Profil und Laufzeit-Optionen. System-Variablen (DATABASE_URL,
+        BOT_TOKEN etc.) werden in der <code class="font-mono">.env</code>-Datei verwaltet.
+      </p>
+    </div>
 
     <!-- Flash-Meldung -->
     <div

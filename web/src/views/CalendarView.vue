@@ -265,174 +265,202 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 </script>
 
 <template>
-  <div>
+  <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
     <!-- ── Header ─────────────────────────────────────────────── -->
-    <div class="flex items-center justify-between mb-5">
-      <h2 class="text-lg font-semibold">Kalender</h2>
-      <div class="flex items-center gap-3">
-        <button
-          @click="startCreate()"
-          class="px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition"
+    <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
+      <div class="min-w-0">
+        <div class="eyebrow" style="margin-bottom: 6px">Arbeit</div>
+        <h1
+          style="
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.01em;
+            color: var(--color-text);
+          "
         >
-          + Neuer Termin
-        </button>
-        <div class="flex gap-1 text-xs">
+          Kalender
+        </h1>
+        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
+          {{ termine.length }} Termine insgesamt
+        </p>
+      </div>
+      <div class="flex items-center" style="gap: 12px">
+        <!-- Navigation (nur in Grid-Ansichten) -->
+        <template v-if="view !== 'list'">
+          <button @click="prev" class="cal-nav-btn" aria-label="Zurück">‹</button>
+          <span
+            style="
+              font-size: 13px;
+              font-weight: 500;
+              color: var(--color-text);
+              min-width: 180px;
+              text-align: center;
+            "
+            >{{ rangeLabel }}</span
+          >
+          <button @click="next" class="cal-nav-btn" aria-label="Vor">›</button>
+          <button @click="goToday" class="bauos-btn ghost">Heute</button>
+        </template>
+
+        <!-- Segmented View-Switcher -->
+        <div
+          class="flex"
+          style="border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden"
+        >
           <button
-            v-for="v in VIEWS"
+            v-for="(v, i) in VIEWS"
             :key="v.id"
             @click="view = v.id"
-            :class="view === v.id ? 'text-gray-900 font-medium' : 'text-gray-400'"
-            class="px-2 py-1 hover:text-gray-600 transition"
+            :class="['seg-btn', view === v.id ? 'seg-btn-active' : '', i > 0 ? 'seg-divider' : '']"
           >
             {{ v.label }}
           </button>
         </div>
+
+        <button @click="startCreate()" class="bauos-btn solid">+ Termin</button>
       </div>
     </div>
 
-    <!-- ── Navigation (nur in Grid-Ansichten) ─────────────────── -->
-    <div v-if="view !== 'list'" class="flex items-center gap-3 mb-4">
-      <button @click="prev" class="text-gray-400 hover:text-gray-600 transition text-sm">←</button>
-      <span class="text-sm font-medium text-gray-700 min-w-[200px] text-center">{{ rangeLabel }}</span>
-      <button @click="next" class="text-gray-400 hover:text-gray-600 transition text-sm">→</button>
-      <button
-        @click="goToday"
-        class="text-xs text-gray-400 hover:text-gray-600 ml-2"
-      >Heute</button>
-    </div>
-
     <!-- ── Inline Create-Formular ─────────────────────────────── -->
-    <div v-if="showCreate" class="border border-gray-200 rounded-lg p-4 mb-5 space-y-3">
-      <div class="grid grid-cols-[140px_120px_1fr] gap-3">
+    <div v-if="showCreate" class="form-card">
+      <div class="grid" style="grid-template-columns: 140px 120px 1fr; gap: 12px; margin-bottom: 12px">
         <div>
-          <label class="block text-[11px] text-gray-400 mb-1">Datum</label>
-          <input
-            v-model="newDatum"
-            type="date"
-            class="w-full px-2 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
-          />
+          <label class="eyebrow" style="display: block; margin-bottom: 4px">Datum</label>
+          <input v-model="newDatum" type="date" class="form-input" />
         </div>
         <div>
-          <label class="block text-[11px] text-gray-400 mb-1">Uhrzeit</label>
-          <input
-            v-model="newUhrzeit"
-            type="time"
-            class="w-full px-2 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
-          />
+          <label class="eyebrow" style="display: block; margin-bottom: 4px">Uhrzeit</label>
+          <input v-model="newUhrzeit" type="time" class="form-input" />
         </div>
         <div>
-          <label class="block text-[11px] text-gray-400 mb-1">Beschreibung</label>
+          <label class="eyebrow" style="display: block; margin-bottom: 4px">Beschreibung</label>
           <input
             v-model="newText"
-            placeholder="Termin..."
+            placeholder="Termin…"
             @keyup.enter="create"
-            class="w-full px-2 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
+            class="form-input"
           />
         </div>
       </div>
       <div class="flex gap-2">
-        <button
-          @click="create"
-          class="px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition"
-        >Erstellen</button>
-        <button
-          @click="showCreate = false"
-          class="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition"
-        >Abbrechen</button>
+        <button @click="create" class="bauos-btn solid">Erstellen</button>
+        <button @click="showCreate = false" class="bauos-btn ghost">Abbrechen</button>
       </div>
     </div>
 
     <!-- ── Inline Edit-Formular ───────────────────────────────── -->
-    <div v-if="editing" class="border border-gray-200 rounded-lg p-4 mb-5 space-y-3">
-      <div>
-        <label class="block text-[11px] text-gray-400 mb-1">Beschreibung</label>
-        <input
-          v-model="editing.text"
-          class="w-full px-2 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
-        />
+    <div v-if="editing" class="form-card">
+      <div style="margin-bottom: 12px">
+        <label class="eyebrow" style="display: block; margin-bottom: 4px">Beschreibung</label>
+        <input v-model="editing.text" class="form-input" />
       </div>
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px">
         <div>
-          <label class="block text-[11px] text-gray-400 mb-1">Datum</label>
-          <input v-model="editing.datum" type="date" class="w-full px-2 py-1.5 border border-gray-200 rounded text-sm outline-none" />
+          <label class="eyebrow" style="display: block; margin-bottom: 4px">Datum</label>
+          <input v-model="editing.datum" type="date" class="form-input" />
         </div>
         <div>
-          <label class="block text-[11px] text-gray-400 mb-1">Von</label>
-          <input v-model="editing.uhrzeit" type="time" class="w-full px-2 py-1.5 border border-gray-200 rounded text-sm outline-none" />
+          <label class="eyebrow" style="display: block; margin-bottom: 4px">Von</label>
+          <input v-model="editing.uhrzeit" type="time" class="form-input" />
         </div>
         <div>
-          <label class="block text-[11px] text-gray-400 mb-1">Bis</label>
-          <input v-model="editing.endzeit" type="time" class="w-full px-2 py-1.5 border border-gray-200 rounded text-sm outline-none" />
+          <label class="eyebrow" style="display: block; margin-bottom: 4px">Bis</label>
+          <input v-model="editing.endzeit" type="time" class="form-input" />
         </div>
       </div>
-      <div>
-        <label class="block text-[11px] text-gray-400 mb-1">Ort</label>
+      <div style="margin-bottom: 12px">
+        <label class="eyebrow" style="display: block; margin-bottom: 4px">Ort</label>
         <input
           v-model="editing.location"
-          placeholder="z.B. Buero, Baustelle..."
-          class="w-full px-2 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
+          placeholder="z. B. Büro, Baustelle…"
+          class="form-input"
         />
       </div>
-      <div v-if="team.length > 0">
-        <label class="block text-[11px] text-gray-400 mb-1">Personen</label>
-        <div class="flex gap-2 flex-wrap">
+      <div v-if="team.length > 0" style="margin-bottom: 16px">
+        <label class="eyebrow" style="display: block; margin-bottom: 4px">Personen</label>
+        <div class="flex flex-wrap" style="gap: 6px">
           <button
             v-for="m in team"
             :key="m"
             @click="toggleAssignee(m)"
-            :class="editing.assignees.includes(m) ? 'bg-gray-900 text-white' : 'text-gray-500 border-gray-200'"
-            class="px-2.5 py-1 text-xs rounded border transition"
-          >{{ m }}</button>
+            :class="['chip-btn', editing.assignees.includes(m) ? 'chip-btn-active' : '']"
+          >
+            {{ m }}
+          </button>
         </div>
       </div>
-      <div class="flex gap-2 pt-1">
-        <button @click="save(editing!)" class="px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">Speichern</button>
-        <button @click="editing = null" class="px-3 py-1.5 text-xs text-gray-400 hover:text-gray-600 transition">Abbrechen</button>
+      <div class="flex gap-2">
+        <button @click="save(editing!)" class="bauos-btn solid">Speichern</button>
+        <button @click="editing = null" class="bauos-btn ghost">Abbrechen</button>
         <div class="flex-1" />
-        <button @click="remove(editing.id); editing = null" class="px-3 py-1.5 text-xs text-gray-400 hover:text-red-500 transition">Loeschen</button>
+        <button
+          @click="remove(editing.id); editing = null"
+          class="bauos-btn ghost"
+          style="color: var(--color-danger-text)"
+        >
+          Löschen
+        </button>
       </div>
     </div>
 
     <!-- ── MONATS-ANSICHT ─────────────────────────────────────── -->
     <div v-if="view === 'month'">
-      <div class="grid grid-cols-7 text-xs text-gray-400 mb-1">
-        <div v-for="wd in weekdays" :key="wd" class="py-1 text-center">{{ wd }}</div>
+      <div
+        class="grid"
+        style="grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--color-bg-subtle); border: 1px solid var(--color-border); border-bottom: 0"
+      >
+        <div
+          v-for="wd in weekdays"
+          :key="wd"
+          class="eyebrow"
+          style="padding: 8px; text-align: center"
+        >
+          {{ wd }}
+        </div>
       </div>
-      <div class="grid grid-cols-7 border-t border-l border-gray-100">
+      <div
+        class="grid"
+        style="
+          grid-template-columns: repeat(7, minmax(0, 1fr));
+          grid-auto-rows: 1fr;
+          border: 1px solid var(--color-border);
+        "
+      >
         <div
           v-for="day in monthDays"
           :key="day.iso"
-          :class="[
-            day.inMonth ? 'text-gray-700' : 'text-gray-300',
-            day.today ? 'bg-gray-50' : '',
-          ]"
-          class="relative border-r border-b border-gray-100 p-1.5 min-h-[90px] hover:bg-gray-50 transition group"
+          class="cal-day-cell"
+          :class="{
+            'cal-day-today': day.today,
+            'cal-day-outside': !day.inMonth,
+          }"
+          @click="startCreate(day.iso)"
         >
           <div class="flex items-start justify-between">
             <span
-              @click="goToDate(day.iso)"
-              :class="day.today
-                ? 'bg-gray-900 text-white rounded-full w-7 h-7 text-[11px] leading-none font-medium'
-                : 'w-7 h-7 text-xs leading-none'"
-              class="inline-flex items-center justify-center cursor-pointer flex-shrink-0"
-            >{{ day.date.getDate() }}</span>
-            <button
-              @click.stop="startCreate(day.iso)"
-              title="Termin an diesem Tag erstellen"
-              class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-900 text-xs leading-none transition"
-            >+</button>
+              @click.stop="goToDate(day.iso)"
+              :class="['cal-day-num', day.today ? 'cal-day-num-today' : '']"
+              >{{ day.date.getDate() }}</span
+            >
           </div>
-          <div class="mt-0.5 space-y-0.5">
+          <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px">
             <button
               v-for="t in termineForDate(day.iso).slice(0, 3)"
               :key="t.id"
               @click.stop="edit(t)"
-              class="block w-full text-left text-[10px] text-gray-600 truncate leading-tight hover:text-gray-900 transition"
+              class="cal-event"
             >
-              <span v-if="t.uhrzeit" class="text-gray-400">{{ t.uhrzeit }} </span>{{ t.text }}
+              <span v-if="t.uhrzeit" class="font-mono" style="color: var(--color-text-tertiary)">
+                {{ t.uhrzeit }}
+              </span>
+              <span class="truncate" style="flex: 1">{{ t.text }}</span>
             </button>
-            <div v-if="termineForDate(day.iso).length > 3" class="text-[10px] text-gray-400">
-              +{{ termineForDate(day.iso).length - 3 }} mehr
+            <div
+              v-if="termineForDate(day.iso).length > 3"
+              style="font-size: 10px; color: var(--color-text-tertiary); padding-left: 4px"
+            >
+              +{{ termineForDate(day.iso).length - 3 }} weitere
             </div>
           </div>
         </div>
@@ -441,32 +469,47 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 
     <!-- ── WOCHEN-ANSICHT ─────────────────────────────────────── -->
     <div v-if="view === 'week'">
-      <div class="grid grid-cols-7 border-t border-l border-gray-100">
+      <div
+        class="grid"
+        style="
+          grid-template-columns: repeat(7, minmax(0, 1fr));
+          border: 1px solid var(--color-border);
+        "
+      >
         <div
           v-for="day in weekDays"
           :key="day.iso"
-          :class="day.today ? 'bg-gray-50' : ''"
-          class="border-r border-b border-gray-100 p-2 min-h-[240px] group hover:bg-gray-50 transition"
+          class="cal-week-cell"
+          :class="{ 'cal-day-today': day.today }"
         >
-          <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center justify-between" style="margin-bottom: 8px">
             <button
               @click="goToDate(day.iso)"
-              :class="day.today ? 'font-medium text-gray-900' : 'text-gray-500 hover:text-gray-900'"
-              class="text-xs transition"
-            >{{ day.label }}</button>
-            <button
-              @click="startCreate(day.iso)"
-              class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-gray-900 text-xs leading-none transition"
-            >+</button>
+              :style="{
+                fontSize: '11px',
+                fontWeight: day.today ? 600 : 500,
+                color: day.today ? 'var(--color-text)' : 'var(--color-text-muted)',
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+              }"
+            >
+              {{ day.label }}
+            </button>
+            <button @click="startCreate(day.iso)" class="cal-add-btn">+</button>
           </div>
-          <div class="space-y-1">
+          <div style="display: flex; flex-direction: column; gap: 4px">
             <button
               v-for="t in termineForDate(day.iso)"
               :key="t.id"
               @click="edit(t)"
-              class="block w-full text-left text-xs text-gray-600 py-1 px-1.5 rounded bg-gray-100 hover:bg-gray-200 transition"
+              class="cal-event"
             >
-              <span v-if="t.uhrzeit" class="text-gray-400">{{ t.uhrzeit }} </span>{{ t.text }}
+              <span v-if="t.uhrzeit" class="font-mono" style="color: var(--color-text-tertiary)">
+                {{ t.uhrzeit }}
+              </span>
+              <span class="truncate" style="flex: 1">{{ t.text }}</span>
             </button>
           </div>
         </div>
@@ -475,37 +518,66 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 
     <!-- ── TAGES-ANSICHT ──────────────────────────────────────── -->
     <div v-if="view === 'day'">
-      <div class="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
-        <div v-for="h in hours" :key="h" class="flex min-h-[52px]">
-          <div class="w-16 text-xs text-gray-400 py-2 px-3 flex-shrink-0">{{ String(h).padStart(2, "0") }}:00</div>
-          <div class="flex-1 py-1 pr-3 border-l border-gray-100 pl-3 space-y-1">
+      <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+        <div
+          v-for="h in hours"
+          :key="h"
+          class="flex"
+          style="min-height: 48px; border-bottom: 1px solid var(--color-border-subtle)"
+        >
+          <div
+            class="font-mono"
+            style="
+              width: 56px;
+              padding: 8px 10px;
+              font-size: 11px;
+              color: var(--color-text-tertiary);
+              flex-shrink: 0;
+            "
+          >
+            {{ String(h).padStart(2, "0") }}:00
+          </div>
+          <div
+            style="
+              flex: 1;
+              padding: 4px 12px;
+              border-left: 1px solid var(--color-border-subtle);
+              display: flex;
+              flex-direction: column;
+              gap: 4px;
+            "
+          >
             <button
-              v-for="t in termineForDate(dayISO).filter(t => t.uhrzeit && parseInt(t.uhrzeit) === h)"
+              v-for="t in termineForDate(dayISO).filter((t) => t.uhrzeit && parseInt(t.uhrzeit) === h)"
               :key="t.id"
               @click="edit(t)"
-              class="block w-full text-left text-sm text-gray-700 py-1 px-2 rounded bg-gray-100 hover:bg-gray-200 transition"
+              class="cal-event-big"
             >
-              <span class="text-gray-400 text-xs mr-1">
+              <span class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary)">
                 {{ t.uhrzeit }}{{ t.endzeit ? ` – ${t.endzeit}` : "" }}
               </span>
-              {{ t.text }}
-              <span v-if="t.location" class="text-gray-400 text-xs ml-1">· {{ t.location }}</span>
+              <span style="font-weight: 500">{{ t.text }}</span>
+              <span v-if="t.location" style="color: var(--color-text-muted); font-size: 11px">
+                · {{ t.location }}
+              </span>
             </button>
           </div>
         </div>
       </div>
 
-      <div v-if="termineForDate(dayISO).filter(t => !t.uhrzeit).length > 0" class="mt-4">
-        <p class="text-[11px] uppercase tracking-wider text-gray-400 mb-2">Ganztaegig</p>
-        <div class="space-y-1">
+      <div v-if="termineForDate(dayISO).filter((t) => !t.uhrzeit).length > 0" style="margin-top: 16px">
+        <div class="eyebrow" style="margin-bottom: 8px">Ganztägig</div>
+        <div style="display: flex; flex-direction: column; gap: 4px">
           <button
-            v-for="t in termineForDate(dayISO).filter(t => !t.uhrzeit)"
+            v-for="t in termineForDate(dayISO).filter((t) => !t.uhrzeit)"
             :key="t.id"
             @click="edit(t)"
-            class="block w-full text-left text-sm text-gray-700 py-1.5 px-2 rounded bg-gray-50 hover:bg-gray-100 transition"
+            class="cal-event-big"
           >
-            {{ t.text }}
-            <span v-if="t.location" class="text-gray-400 text-xs ml-1">· {{ t.location }}</span>
+            <span style="font-weight: 500">{{ t.text }}</span>
+            <span v-if="t.location" style="color: var(--color-text-muted); font-size: 11px">
+              · {{ t.location }}
+            </span>
           </button>
         </div>
       </div>
@@ -513,37 +585,332 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 
     <!-- ── LISTEN-ANSICHT ─────────────────────────────────────── -->
     <div v-if="view === 'list'">
-      <div v-for="group in grouped" :key="group.date" class="mb-6">
-        <h3 class="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-2">{{ group.label }}</h3>
-        <div class="divide-y divide-gray-100">
+      <div v-for="group in grouped" :key="group.date" style="margin-bottom: 24px">
+        <div class="eyebrow" style="margin-bottom: 8px">{{ group.label }}</div>
+        <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
           <div
             v-for="t in group.items"
             :key="t.id"
-            class="flex items-start justify-between py-3 group"
+            class="cal-list-row"
           >
-            <button
-              @click="edit(t)"
-              class="flex items-start gap-3 flex-1 text-left hover:bg-gray-50 rounded px-2 -mx-2 py-1 -my-1 transition"
-            >
-              <span v-if="t.uhrzeit" class="text-sm font-mono text-gray-500 w-12 flex-shrink-0 pt-0.5">{{ t.uhrzeit }}</span>
-              <span v-else class="text-sm font-mono text-gray-300 w-12 flex-shrink-0 pt-0.5">--:--</span>
-              <div>
-                <p class="text-sm text-gray-700">{{ t.text }}</p>
-                <div class="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-[11px] text-gray-400">
-                  <span v-if="t.endzeit">bis {{ t.endzeit }}</span>
+            <button @click="edit(t)" class="cal-list-btn">
+              <span
+                v-if="t.uhrzeit"
+                class="font-mono"
+                style="
+                  font-size: 12px;
+                  color: var(--color-text-muted);
+                  width: 52px;
+                  flex-shrink: 0;
+                "
+                >{{ t.uhrzeit }}</span
+              >
+              <span
+                v-else
+                class="font-mono"
+                style="
+                  font-size: 12px;
+                  color: var(--color-text-faint);
+                  width: 52px;
+                  flex-shrink: 0;
+                "
+                >–:–</span
+              >
+              <div class="min-w-0">
+                <div style="font-size: 13px; color: var(--color-text); font-weight: 500">
+                  {{ t.text }}
+                </div>
+                <div
+                  class="flex flex-wrap"
+                  style="
+                    gap: 12px;
+                    margin-top: 2px;
+                    font-size: 11px;
+                    color: var(--color-text-tertiary);
+                  "
+                >
+                  <span v-if="t.endzeit" class="font-mono">bis {{ t.endzeit }}</span>
                   <span v-if="t.location">{{ t.location }}</span>
                   <span v-if="t.assignees.length">{{ t.assignees.join(", ") }}</span>
                 </div>
               </div>
             </button>
-            <button
-              @click="remove(t.id)"
-              class="ml-2 text-xs text-gray-400 hover:text-red-500 transition opacity-0 group-hover:opacity-100"
-            >Loeschen</button>
+            <button @click="remove(t.id)" class="cal-del-btn" aria-label="Löschen">
+              <span style="font-size: 11px">Löschen</span>
+            </button>
           </div>
         </div>
       </div>
-      <p v-if="termine.length === 0" class="text-gray-400 text-sm py-6 text-center">Keine Termine vorhanden.</p>
+      <p
+        v-if="termine.length === 0"
+        style="
+          font-size: 13px;
+          color: var(--color-text-tertiary);
+          text-align: center;
+          padding: 32px 0;
+        "
+      >
+        Keine Termine vorhanden.
+      </p>
     </div>
   </div>
 </template>
+
+<style scoped>
+.bauos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  transition: all 180ms ease;
+}
+.bauos-btn.ghost:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+.bauos-btn.solid {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+.bauos-btn.solid:hover {
+  opacity: 0.9;
+}
+
+.cal-nav-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 180ms ease;
+}
+.cal-nav-btn:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+
+.seg-btn {
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease;
+}
+.seg-btn-active {
+  background: var(--color-border-subtle);
+  color: var(--color-text);
+}
+.seg-divider {
+  border-left: 1px solid var(--color-border);
+}
+
+.form-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  background: var(--color-bg);
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.chip-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+.chip-btn-active {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+
+/* Kalender-Zellen */
+.cal-day-cell {
+  min-height: 96px;
+  padding: 6px 8px;
+  border-right: 1px solid var(--color-border-subtle);
+  border-bottom: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+  transition: background 180ms ease;
+  position: relative;
+}
+.cal-day-cell:hover {
+  background: var(--color-bg-subtle);
+}
+.cal-day-cell:nth-child(7n) {
+  border-right: 0;
+}
+.cal-day-outside {
+  background: var(--color-bg-muted);
+  color: var(--color-text-faint);
+}
+.cal-day-today {
+  background: var(--color-bg-subtle);
+}
+
+.cal-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9999px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  font-weight: 500;
+}
+.cal-day-outside .cal-day-num {
+  color: var(--color-text-faint);
+}
+.cal-day-num-today {
+  background: var(--color-primary);
+  color: var(--color-bg);
+}
+
+.cal-event {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--color-border-subtle);
+  border-left: 2px solid var(--color-text);
+  font-size: 10px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
+  transition: background 180ms ease;
+}
+.cal-event:hover {
+  background: var(--color-border);
+}
+
+.cal-event-big {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 180ms ease;
+}
+.cal-event-big:hover {
+  background: var(--color-border-subtle);
+}
+
+.cal-week-cell {
+  min-height: 240px;
+  padding: 8px 10px;
+  border-right: 1px solid var(--color-border-subtle);
+  transition: background 180ms ease;
+}
+.cal-week-cell:nth-child(7n) {
+  border-right: 0;
+}
+.cal-week-cell:hover {
+  background: var(--color-bg-subtle);
+}
+
+.cal-add-btn {
+  opacity: 0;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  transition: all 180ms ease;
+}
+.cal-day-cell:hover .cal-add-btn,
+.cal-week-cell:hover .cal-add-btn {
+  opacity: 1;
+}
+.cal-add-btn:hover {
+  background: var(--color-border);
+  color: var(--color-text);
+}
+
+.cal-list-row {
+  display: flex;
+  align-items: stretch;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.cal-list-row:first-child {
+  border-top: 0;
+}
+.cal-list-row:hover {
+  background: var(--color-bg-subtle);
+}
+.cal-list-btn {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  flex: 1;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+}
+.cal-del-btn {
+  padding: 0 16px;
+  color: var(--color-text-faint);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.cal-list-row:hover .cal-del-btn {
+  opacity: 1;
+}
+.cal-del-btn:hover {
+  color: var(--color-danger-text);
+}
+</style>

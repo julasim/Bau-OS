@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
+import BIcon from "../components/BIcon.vue";
 
 interface NoteSummary {
   title: string;
@@ -100,90 +101,287 @@ useEvents(["note"], () => load());
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-5">
-      <h2 class="text-xl font-semibold">Notizen</h2>
-      <div class="flex items-center gap-2">
-        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="p-1.5 rounded hover:bg-gray-100 transition" title="Ansicht wechseln">
-          <svg v-if="viewMode === 'list'" class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          <svg v-else class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+  <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+    <!-- Header -->
+    <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
+      <div class="min-w-0">
+        <div class="eyebrow" style="margin-bottom: 6px">Inhalte</div>
+        <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">
+          Notizen
+        </h1>
+        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
+          {{ notes.length }} Notizen im Workspace
+        </p>
+      </div>
+      <div class="flex items-center" style="gap: 8px">
+        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="bauos-btn ghost">
+          <BIcon :name="viewMode === 'list' ? 'grid' : 'list'" :size="14" />
+          {{ viewMode === "list" ? "Kacheln" : "Liste" }}
         </button>
-        <button
-          @click="showCreate = !showCreate"
-          class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition"
-        >{{ showCreate ? "Abbrechen" : "Neue Notiz" }}</button>
+        <button @click="showCreate = !showCreate" class="bauos-btn solid">
+          <BIcon name="plus" :size="14" :stroke-width="2" />
+          {{ showCreate ? "Abbrechen" : "Neue Notiz" }}
+        </button>
       </div>
     </div>
 
     <!-- Create -->
-    <div v-if="showCreate" class="mb-6 border border-gray-200 rounded-lg p-4">
-      <textarea v-model="newContent" placeholder="Markdown-Inhalt..." rows="5" class="w-full px-3 py-2 border border-gray-200 rounded text-sm font-mono outline-none focus:ring-1 focus:ring-gray-400 resize-y mb-3"></textarea>
-      <button @click="create" class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">Speichern</button>
+    <div v-if="showCreate" class="form-card">
+      <textarea
+        v-model="newContent"
+        placeholder="Markdown-Inhalt…"
+        rows="6"
+        class="form-input font-mono"
+        style="resize: vertical; margin-bottom: 12px"
+      />
+      <button @click="create" class="bauos-btn solid">Speichern</button>
     </div>
 
     <!-- Search + Count -->
-    <div class="flex items-center gap-3 mb-4">
-      <input v-model="searchQuery" placeholder="Notizen filtern..." class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
-      <span class="text-xs text-gray-400 flex-shrink-0">{{ filtered.length }} von {{ notes.length }}</span>
+    <div class="flex items-center" style="gap: 12px; margin-bottom: 16px">
+      <div
+        class="flex items-center"
+        style="
+          flex: 1;
+          gap: 8px;
+          padding: 6px 12px;
+          border: 1px solid var(--color-border);
+          border-radius: 6px;
+          background: var(--color-bg);
+        "
+      >
+        <BIcon name="search" :size="14" style="color: var(--color-text-muted)" />
+        <input
+          v-model="searchQuery"
+          placeholder="Notizen filtern…"
+          style="
+            flex: 1;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-size: 13px;
+            color: var(--color-text);
+          "
+        />
+      </div>
+      <span style="font-size: 11px; color: var(--color-text-tertiary); flex-shrink: 0">
+        {{ filtered.length }} von {{ notes.length }}
+      </span>
     </div>
 
     <!-- Grid View -->
-    <div v-if="viewMode === 'grid'" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+    <div v-if="viewMode === 'grid'" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px">
       <div
         v-for="note in filtered"
         :key="note.title"
         @click="router.push(`/notes/${encodeURIComponent(note.title)}`)"
-        class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-gray-300 transition group"
+        class="note-card"
       >
-        <div class="flex items-start justify-between mb-2">
-          <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
-          <button @click.stop="remove(note.title)" class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+        <div class="flex items-start justify-between" style="margin-bottom: 10px">
+          <BIcon name="file" :size="18" style="color: var(--color-text-muted)" />
+          <button
+            @click.stop="remove(note.title)"
+            class="note-del-btn"
+            aria-label="Löschen"
+          >
+            <BIcon name="x" :size="12" />
           </button>
         </div>
-        <p class="text-sm font-medium text-gray-700 truncate mb-1">{{ note.title }}</p>
-        <div class="flex items-center gap-2 text-[11px] text-gray-400">
-          <span v-if="note.project" class="px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">{{ note.project }}</span>
+        <div style="font-size: 13px; font-weight: 500; color: var(--color-text); margin-bottom: 4px" class="truncate">
+          {{ note.title }}
+        </div>
+        <div class="flex items-center flex-wrap" style="gap: 6px; font-size: 11px; color: var(--color-text-tertiary)">
+          <span
+            v-if="note.project"
+            style="
+              background: var(--color-border-subtle);
+              padding: 1px 6px;
+              border-radius: 3px;
+              color: var(--color-text-muted);
+            "
+            >{{ note.project }}</span
+          >
           <span>{{ relativeTime(note.updatedAt) }}</span>
-          <span>{{ formatSize(note.size) }}</span>
+          <span class="font-mono">{{ formatSize(note.size) }}</span>
         </div>
       </div>
-      <p v-if="filtered.length === 0" class="col-span-full text-gray-400 text-sm py-6 text-center">
+      <p
+        v-if="filtered.length === 0"
+        style="grid-column: 1 / -1; font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
+      >
         {{ searchQuery ? "Keine Treffer." : "Keine Notizen vorhanden." }}
       </p>
     </div>
 
     <!-- List View -->
-    <div v-else>
-      <!-- Column Headers -->
-      <div class="flex items-center gap-3 px-3 py-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-wider border-b border-gray-100">
-        <button @click="toggleSort('title')" class="flex-1 text-left hover:text-gray-600 transition">Name {{ sortIcon("title") }}</button>
-        <span class="w-24 text-left">Projekt</span>
-        <button @click="toggleSort('size')" class="w-16 text-right hover:text-gray-600 transition">Groesse {{ sortIcon("size") }}</button>
-        <button @click="toggleSort('updatedAt')" class="w-36 text-right hover:text-gray-600 transition">Geaendert {{ sortIcon("updatedAt") }}</button>
-        <span class="w-6"></span>
+    <div v-else style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+      <!-- Header -->
+      <div
+        class="flex items-center"
+        style="
+          gap: 12px;
+          padding: 10px 16px;
+          background: var(--color-bg-subtle);
+          border-bottom: 1px solid var(--color-border);
+        "
+      >
+        <span style="width: 14px" />
+        <button @click="toggleSort('title')" class="eyebrow flex-1" style="text-align: left; background: transparent; border: none; cursor: pointer">
+          Name {{ sortIcon("title") }}
+        </button>
+        <span class="eyebrow" style="width: 120px">Projekt</span>
+        <button @click="toggleSort('size')" class="eyebrow" style="width: 70px; text-align: right; background: transparent; border: none; cursor: pointer">
+          Größe {{ sortIcon("size") }}
+        </button>
+        <button @click="toggleSort('updatedAt')" class="eyebrow" style="width: 130px; text-align: right; background: transparent; border: none; cursor: pointer">
+          Geändert {{ sortIcon("updatedAt") }}
+        </button>
+        <span style="width: 20px" />
       </div>
-
       <div
         v-for="note in filtered"
         :key="note.title"
-        class="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-gray-50 cursor-pointer transition group"
+        class="note-row flex items-center"
+        style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
         @click="router.push(`/notes/${encodeURIComponent(note.title)}`)"
       >
-        <svg class="w-4 h-4 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
-        <span class="flex-1 text-sm text-gray-700 truncate">{{ note.title }}</span>
-        <span class="w-24 text-[11px] text-gray-400 truncate">
-          <span v-if="note.project" class="px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">{{ note.project }}</span>
+        <BIcon name="file" :size="14" style="color: var(--color-text-muted); flex-shrink: 0" />
+        <span style="flex: 1; font-size: 13px; color: var(--color-text-secondary)" class="truncate">
+          {{ note.title }}
         </span>
-        <span class="w-16 text-[11px] text-gray-400 text-right font-mono">{{ formatSize(note.size) }}</span>
-        <span class="w-36 text-[11px] text-gray-400 text-right">{{ formatDate(note.updatedAt) }}</span>
-        <button @click.stop="remove(note.title)" class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+        <span style="width: 120px" class="truncate">
+          <span
+            v-if="note.project"
+            style="
+              background: var(--color-border-subtle);
+              padding: 2px 8px;
+              border-radius: 4px;
+              font-size: 11px;
+              color: var(--color-text-muted);
+            "
+            >{{ note.project }}</span
+          >
+          <span v-else style="font-size: 11px; color: var(--color-text-faint)">—</span>
+        </span>
+        <span class="font-mono" style="width: 70px; font-size: 11px; color: var(--color-text-muted); text-align: right">
+          {{ formatSize(note.size) }}
+        </span>
+        <span style="width: 130px; font-size: 11px; color: var(--color-text-tertiary); text-align: right">
+          {{ formatDate(note.updatedAt) }}
+        </span>
+        <button
+          @click.stop="remove(note.title)"
+          class="note-del-btn"
+          style="width: 20px"
+          aria-label="Löschen"
+        >
+          <BIcon name="x" :size="12" />
         </button>
       </div>
-      <p v-if="filtered.length === 0" class="text-gray-400 text-sm py-6 text-center">
+      <p
+        v-if="filtered.length === 0"
+        style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
+      >
         {{ searchQuery ? "Keine Treffer." : "Keine Notizen vorhanden." }}
       </p>
     </div>
   </div>
 </template>
+
+<style scoped>
+.bauos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  transition: all 180ms ease;
+}
+.bauos-btn.ghost:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+.bauos-btn.solid {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+.bauos-btn.solid:hover {
+  opacity: 0.9;
+}
+
+.form-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  background: var(--color-bg);
+}
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.note-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--color-bg);
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+.note-card:hover {
+  border-color: var(--color-text-faint);
+  background: var(--color-bg-subtle);
+}
+.note-card .note-del-btn {
+  opacity: 0;
+}
+.note-card:hover .note-del-btn {
+  opacity: 1;
+}
+
+.note-row {
+  cursor: pointer;
+  transition: background 180ms ease;
+}
+.note-row:hover {
+  background: var(--color-bg-subtle);
+}
+.note-row .note-del-btn {
+  opacity: 0;
+}
+.note-row:hover .note-del-btn {
+  opacity: 1;
+}
+
+.note-del-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-faint);
+  transition: opacity 180ms ease, color 180ms ease, background 180ms ease;
+}
+.note-del-btn:hover {
+  color: var(--color-danger-text);
+  background: var(--color-border-subtle);
+}
+</style>

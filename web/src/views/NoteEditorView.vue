@@ -3,6 +3,7 @@ import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
+import BIcon from "../components/BIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -13,7 +14,9 @@ const preview = ref(false);
 
 onMounted(async () => {
   name.value = route.params.name as string;
-  const note = await api.get<{ name: string; content: string }>(`/notes/${encodeURIComponent(name.value)}`);
+  const note = await api.get<{ name: string; content: string }>(
+    `/notes/${encodeURIComponent(name.value)}`,
+  );
   content.value = note.content;
 });
 
@@ -28,42 +31,110 @@ async function save() {
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="text-lg font-semibold">{{ name }}</h2>
-      <div class="flex gap-2">
+  <div style="max-width: 760px; margin: 0 auto; padding: 40px 48px; color: var(--color-text)">
+    <button
+      @click="router.back()"
+      class="flex items-center"
+      style="
+        gap: 4px;
+        background: transparent;
+        border: none;
+        color: var(--color-text-muted);
+        font-size: 12px;
+        cursor: pointer;
+        margin-bottom: 16px;
+      "
+    >
+      <BIcon name="arrowLeft" :size="12" />
+      Alle Notizen
+    </button>
+
+    <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
+      <div class="min-w-0">
+        <div class="eyebrow" style="margin-bottom: 6px">Notiz</div>
+        <h1 style="font-size: 28px; font-weight: 600; margin: 0; letter-spacing: -0.01em">
+          {{ name }}
+        </h1>
+      </div>
+      <div class="flex" style="gap: 8px">
         <button
           @click="preview = !preview"
-          :class="preview ? 'text-gray-900' : 'text-gray-400'"
-          class="px-3 py-1.5 text-sm hover:text-gray-700 transition"
+          class="bauos-btn ghost"
         >
           {{ preview ? "Bearbeiten" : "Vorschau" }}
         </button>
-        <button
-          @click="save"
-          :disabled="saving"
-          class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 disabled:opacity-50 transition"
-        >
-          {{ saving ? "Speichert..." : "Speichern" }}
-        </button>
-        <button
-          @click="router.back()"
-          class="px-3 py-1.5 text-sm text-gray-400 hover:text-gray-600 transition"
-        >
-          Zurueck
+        <button @click="save" :disabled="saving" class="bauos-btn solid">
+          {{ saving ? "Speichert…" : "Speichern" }}
         </button>
       </div>
     </div>
 
-    <div v-if="preview" class="border border-gray-100 rounded p-5 min-h-[400px]">
+    <div
+      v-if="preview"
+      style="
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 24px 28px;
+        min-height: 400px;
+        background: var(--color-bg);
+        font-size: 14px;
+        line-height: 1.7;
+        color: var(--color-text-secondary);
+      "
+    >
       <MarkdownRenderer :content="content" />
     </div>
 
     <textarea
       v-else
       v-model="content"
-      rows="25"
-      class="w-full px-4 py-3 border border-gray-200 rounded font-mono text-sm outline-none focus:ring-1 focus:ring-gray-400 resize-y"
-    ></textarea>
+      rows="28"
+      class="font-mono"
+      style="
+        width: 100%;
+        padding: 16px 20px;
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        outline: none;
+        background: var(--color-bg);
+        color: var(--color-text);
+        font-size: 14px;
+        line-height: 1.6;
+        resize: vertical;
+      "
+    />
   </div>
 </template>
+
+<style scoped>
+.bauos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  transition: all 180ms ease;
+}
+.bauos-btn.ghost:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+.bauos-btn.solid {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+.bauos-btn.solid:hover {
+  opacity: 0.9;
+}
+.bauos-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>

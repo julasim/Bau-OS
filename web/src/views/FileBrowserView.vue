@@ -290,51 +290,80 @@ onMounted(async () => {
     @dragover="onDragOver"
     @dragleave="onDragLeave"
     @drop="onDrop"
-    class="min-h-[500px] relative"
+    style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; position: relative; min-height: 500px; color: var(--color-text)"
   >
     <!-- Header -->
-    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-      <div class="flex items-center gap-3">
-        <h2 class="text-xl font-semibold">Dateien</h2>
-        <span class="text-xs text-gray-400">
+    <div class="flex items-end justify-between flex-wrap" style="gap: 12px; margin-bottom: 20px">
+      <div class="min-w-0">
+        <div class="eyebrow" style="margin-bottom: 6px">Inhalte</div>
+        <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">
+          Dateien
+        </h1>
+        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
           {{ files.length }} Datei<span v-if="files.length !== 1">en</span>
-        </span>
+        </p>
       </div>
 
-      <div class="flex items-center gap-2 flex-wrap">
-        <span v-if="uploadMsg" class="text-xs text-green-600">{{ uploadMsg }}</span>
-
-        <!-- Projekt-Filter -->
-        <div class="flex items-center gap-1.5">
-          <label class="text-[11px] uppercase tracking-wider text-gray-400">Anzeigen</label>
+      <div class="flex items-center flex-wrap" style="gap: 8px">
+        <span
+          v-if="uploadMsg"
+          style="font-size: 11px; color: var(--color-success-text)"
+          >{{ uploadMsg }}</span
+        >
+        <div class="flex items-center" style="gap: 6px">
+          <label class="eyebrow">Anzeigen</label>
           <select
             :value="selectedFilter"
             @change="setFilter(($event.target as HTMLSelectElement).value)"
-            class="border border-gray-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
+            style="
+              border: 1px solid var(--color-border);
+              border-radius: 6px;
+              padding: 4px 8px;
+              font-size: 12px;
+              background: var(--color-bg);
+              color: var(--color-text);
+              outline: none;
+            "
           >
             <option value="">Alle Projekte</option>
             <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
             <option value="__none__">— Ohne Projekt —</option>
           </select>
         </div>
-
-        <!-- Upload-Projekt -->
-        <div class="flex items-center gap-1.5">
-          <label class="text-[11px] uppercase tracking-wider text-gray-400">Upload zu</label>
+        <div class="flex items-center" style="gap: 6px">
+          <label class="eyebrow">Upload zu</label>
           <select
             v-model="uploadProject"
-            class="border border-gray-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400"
+            style="
+              border: 1px solid var(--color-border);
+              border-radius: 6px;
+              padding: 4px 8px;
+              font-size: 12px;
+              background: var(--color-bg);
+              color: var(--color-text);
+              outline: none;
+            "
           >
             <option value="">Ohne Projekt</option>
             <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
           </select>
         </div>
-
         <label
-          class="px-3 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 cursor-pointer transition"
+          style="
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            background: var(--color-primary);
+            color: var(--color-bg);
+            cursor: pointer;
+            transition: opacity 180ms ease;
+          "
         >
           Hochladen
-          <input type="file" multiple class="hidden" @change="onFileInput" />
+          <input type="file" multiple style="display: none" @change="onFileInput" />
         </label>
       </div>
     </div>

@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
+import BIcon from "../components/BIcon.vue";
 
 interface ProjectInfo {
   name: string;
@@ -66,83 +67,249 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-5">
-      <h2 class="text-xl font-semibold">Projekte</h2>
-      <button @click="viewMode = viewMode === 'grid' ? 'list' : 'grid'" class="p-1.5 rounded hover:bg-gray-100 transition" title="Ansicht wechseln">
-        <svg v-if="viewMode === 'grid'" class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-        <svg v-else class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+  <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+    <!-- Header -->
+    <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
+      <div class="min-w-0">
+        <div class="eyebrow" style="margin-bottom: 6px">Arbeit</div>
+        <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">Projekte</h1>
+        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
+          {{ projects.length }} Projekte
+        </p>
+      </div>
+      <button @click="viewMode = viewMode === 'grid' ? 'list' : 'grid'" class="bauos-btn ghost">
+        <BIcon :name="viewMode === 'grid' ? 'list' : 'grid'" :size="14" />
+        {{ viewMode === "grid" ? "Liste" : "Kacheln" }}
       </button>
     </div>
 
     <!-- Search -->
-    <div class="flex items-center gap-3 mb-4" v-if="projects.length > 3">
-      <input v-model="searchQuery" placeholder="Projekte filtern..." class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
-      <span class="text-xs text-gray-400 flex-shrink-0">{{ filtered.length }} von {{ projects.length }}</span>
+    <div v-if="projects.length > 3" style="margin-bottom: 16px">
+      <div
+        class="flex items-center"
+        style="
+          gap: 8px;
+          padding: 6px 12px;
+          border: 1px solid var(--color-border);
+          border-radius: 6px;
+          background: var(--color-bg);
+        "
+      >
+        <BIcon name="search" :size="14" style="color: var(--color-text-muted)" />
+        <input
+          v-model="searchQuery"
+          placeholder="Projekte filtern…"
+          style="
+            flex: 1;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-size: 13px;
+            color: var(--color-text);
+          "
+        />
+        <span style="font-size: 11px; color: var(--color-text-tertiary)">
+          {{ filtered.length }} / {{ projects.length }}
+        </span>
+      </div>
     </div>
 
-    <!-- Grid View -->
-    <div v-if="viewMode === 'grid'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <!-- Grid -->
+    <div v-if="viewMode === 'grid'" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px">
       <div
         v-for="p in filtered"
         :key="p.name"
         @click="router.push(`/projects/${encodeURIComponent(p.name)}`)"
-        class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-gray-300 transition group"
+        class="proj-card"
       >
-        <div class="flex items-start justify-between mb-2">
-          <div class="flex items-center gap-2">
-            <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-            <span class="text-sm font-medium text-gray-900">{{ p.name }}</span>
-          </div>
-          <span v-if="p.status" :class="statusColor(p.status)" class="px-1.5 py-0.5 text-[10px] rounded font-medium">{{ statusLabel(p.status) }}</span>
+        <div class="flex items-center justify-between" style="margin-bottom: 10px">
+          <span
+            v-if="p.status"
+            :class="['pill', `pill-${p.status}`]"
+            style="font-size: 10px"
+            >{{ statusLabel(p.status) }}</span
+          >
+          <span
+            v-if="p.updatedAt"
+            class="font-mono"
+            style="font-size: 10px; color: var(--color-text-tertiary)"
+            >{{ relativeTime(p.updatedAt) }}</span
+          >
         </div>
-        <p v-if="p.description" class="text-xs text-gray-400 mb-3 line-clamp-2">{{ p.description }}</p>
-        <div class="flex gap-4 text-xs text-gray-400 mb-2">
+        <div style="font-size: 15px; font-weight: 600; color: var(--color-text); margin-bottom: 4px">
+          {{ p.name }}
+        </div>
+        <p
+          v-if="p.description"
+          style="
+            font-size: 12px;
+            color: var(--color-text-muted);
+            line-height: 1.5;
+            margin: 0 0 12px 0;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            min-height: 36px;
+          "
+        >
+          {{ p.description }}
+        </p>
+        <div v-else style="min-height: 36px; margin-bottom: 12px"></div>
+        <div
+          class="flex items-center"
+          style="gap: 12px; font-size: 11px; color: var(--color-text-muted)"
+        >
           <span>{{ p.notes }} Notizen</span>
-          <span :class="p.openTasks > 0 ? 'text-amber-600' : ''">{{ p.openTasks }} Aufgaben</span>
+          <span :style="{ color: p.openTasks > 0 ? 'var(--color-warning-text)' : 'inherit' }">
+            {{ p.openTasks }} Aufgaben
+          </span>
           <span>{{ p.termine }} Termine</span>
         </div>
-        <div class="flex items-center justify-between text-[11px] text-gray-300 pt-2 border-t border-gray-50">
-          <span v-if="p.createdAt">Erstellt {{ formatDate(p.createdAt) }}</span>
-          <span v-if="p.updatedAt">{{ relativeTime(p.updatedAt) }}</span>
-        </div>
       </div>
+      <p
+        v-if="filtered.length === 0"
+        style="
+          grid-column: 1 / -1;
+          font-size: 13px;
+          color: var(--color-text-tertiary);
+          text-align: center;
+          padding: 32px 0;
+        "
+      >
+        {{ searchQuery ? "Keine Treffer." : "Keine Projekte vorhanden." }}
+      </p>
     </div>
 
-    <!-- List View -->
-    <div v-else>
-      <div class="flex items-center gap-3 px-3 py-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-wider border-b border-gray-100">
-        <span class="flex-1 text-left">Projekt</span>
-        <span class="w-16 text-left">Status</span>
-        <span class="w-16 text-center">Notizen</span>
-        <span class="w-16 text-center">Aufgaben</span>
-        <span class="w-16 text-center">Termine</span>
-        <span class="w-28 text-right">Erstellt</span>
-        <span class="w-28 text-right">Geaendert</span>
+    <!-- List -->
+    <div v-else style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+      <div
+        class="flex items-center"
+        style="
+          gap: 12px;
+          padding: 10px 16px;
+          background: var(--color-bg-subtle);
+          border-bottom: 1px solid var(--color-border);
+        "
+      >
+        <span class="eyebrow flex-1">Projekt</span>
+        <span class="eyebrow" style="width: 80px">Status</span>
+        <span class="eyebrow" style="width: 60px; text-align: center">Notizen</span>
+        <span class="eyebrow" style="width: 60px; text-align: center">Aufgaben</span>
+        <span class="eyebrow" style="width: 60px; text-align: center">Termine</span>
+        <span class="eyebrow" style="width: 90px; text-align: right">Geändert</span>
       </div>
       <div
         v-for="p in filtered"
         :key="p.name"
+        class="proj-row flex items-center"
+        style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
         @click="router.push(`/projects/${encodeURIComponent(p.name)}`)"
-        class="flex items-center gap-3 px-3 py-2.5 rounded hover:bg-gray-50 cursor-pointer transition group"
       >
-        <div class="flex-1 min-w-0 flex items-center gap-2">
-          <svg class="w-4 h-4 text-gray-400 group-hover:text-gray-600 transition flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-          <span class="text-sm text-gray-700 truncate">{{ p.name }}</span>
+        <div class="flex-1 min-w-0 flex items-center" style="gap: 8px">
+          <BIcon name="folder" :size="14" style="color: var(--color-text-muted); flex-shrink: 0" />
+          <span style="font-size: 13px; color: var(--color-text)" class="truncate">{{ p.name }}</span>
         </div>
-        <span class="w-16 flex-shrink-0">
-          <span v-if="p.status" :class="statusColor(p.status)" class="px-1.5 py-0.5 text-[10px] rounded font-medium">{{ statusLabel(p.status) }}</span>
+        <div style="width: 80px">
+          <span
+            v-if="p.status"
+            :class="['pill', `pill-${p.status}`]"
+            style="font-size: 10px"
+            >{{ statusLabel(p.status) }}</span
+          >
+        </div>
+        <span style="width: 60px; text-align: center; font-size: 11px; color: var(--color-text-muted)">
+          {{ p.notes }}
         </span>
-        <span class="w-16 text-[11px] text-gray-400 text-center flex-shrink-0">{{ p.notes }}</span>
-        <span class="w-16 text-[11px] text-center flex-shrink-0" :class="p.openTasks > 0 ? 'text-amber-600' : 'text-gray-400'">{{ p.openTasks }}</span>
-        <span class="w-16 text-[11px] text-gray-400 text-center flex-shrink-0">{{ p.termine }}</span>
-        <span class="w-28 text-[11px] text-gray-400 text-right flex-shrink-0">{{ formatDate(p.createdAt) }}</span>
-        <span class="w-28 text-[11px] text-gray-400 text-right flex-shrink-0">{{ formatDate(p.updatedAt) }}</span>
+        <span
+          style="width: 60px; text-align: center; font-size: 11px"
+          :style="{ color: p.openTasks > 0 ? 'var(--color-warning-text)' : 'var(--color-text-muted)' }"
+        >
+          {{ p.openTasks }}
+        </span>
+        <span style="width: 60px; text-align: center; font-size: 11px; color: var(--color-text-muted)">
+          {{ p.termine }}
+        </span>
+        <span
+          class="font-mono"
+          style="width: 90px; text-align: right; font-size: 11px; color: var(--color-text-tertiary)"
+        >
+          {{ formatDate(p.updatedAt) }}
+        </span>
       </div>
+      <p
+        v-if="filtered.length === 0"
+        style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
+      >
+        {{ searchQuery ? "Keine Treffer." : "Keine Projekte vorhanden." }}
+      </p>
     </div>
-
-    <p v-if="filtered.length === 0" class="text-gray-400 text-sm py-6 text-center">
-      {{ searchQuery ? "Keine Treffer." : "Keine Projekte vorhanden." }}
-    </p>
   </div>
 </template>
+
+<style scoped>
+.bauos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  transition: all 180ms ease;
+}
+.bauos-btn.ghost:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+
+.proj-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  background: var(--color-bg);
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+.proj-card:hover {
+  border-color: var(--color-text-faint);
+  background: var(--color-bg-subtle);
+}
+.proj-row {
+  cursor: pointer;
+  transition: background 180ms ease;
+}
+.proj-row:hover {
+  background: var(--color-bg-subtle);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+}
+.pill-aktiv {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-color: var(--color-success-border);
+}
+.pill-pausiert {
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-color: var(--color-warning-border);
+}
+.pill-archiviert {
+  background: var(--color-border-subtle);
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+</style>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from "vue";
 import { api } from "../api";
+import BIcon from "../components/BIcon.vue";
 
 interface TextResult {
   file: string;
@@ -51,55 +52,175 @@ async function search() {
 </script>
 
 <template>
-  <div>
-    <h2 class="text-lg font-semibold mb-2">Suche</h2>
-    <p class="text-xs text-gray-400 mb-6">
-      Schnelle Suche in Notizen und Dateien. Fuer eine KI-Antwort mit Quellen: im Chat das +-Menue nutzen.
+  <div style="max-width: 760px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+    <div class="eyebrow" style="margin-bottom: 6px; text-align: center">Inhalte</div>
+    <h1
+      style="
+        font-size: 24px;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: -0.01em;
+        text-align: center;
+        margin-bottom: 6px;
+      "
+    >
+      Suche
+    </h1>
+    <p
+      style="
+        font-size: 13px;
+        color: var(--color-text-muted);
+        text-align: center;
+        margin-bottom: 24px;
+      "
+    >
+      Hybrid-Suche über Notizen, Dateien und Projekte.
     </p>
 
-    <div class="flex gap-2 mb-6">
+    <div
+      class="flex items-center"
+      style="
+        gap: 8px;
+        padding: 10px 14px;
+        border: 1px solid var(--color-border);
+        border-radius: 10px;
+        background: var(--color-bg);
+        margin-bottom: 20px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+      "
+    >
+      <BIcon name="search" :size="16" style="color: var(--color-text-muted)" />
       <input
         v-model="query"
-        placeholder="Suchbegriff oder Frage..."
+        placeholder="Suchbegriff oder Frage…"
         @keyup.enter="search"
-        class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
+        style="
+          flex: 1;
+          border: none;
+          outline: none;
+          background: transparent;
+          font-size: 14px;
+          color: var(--color-text);
+        "
       />
       <button
         @click="search"
         :disabled="loading"
-        class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition disabled:opacity-50"
+        class="bauos-btn solid"
+        style="padding: 4px 12px; font-size: 12px"
       >
-        {{ loading ? "..." : "Suchen" }}
+        {{ loading ? "…" : "Suchen" }}
       </button>
     </div>
 
+    <p
+      v-if="searched"
+      style="font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 12px"
+    >
+      {{ (responseMode === "semantic" ? semanticResults.length : textResults.length) }} Treffer für
+      „{{ query }}" · {{ responseMode === "semantic" ? "Hybrid-Suche (Keyword + Embedding)" : "Text-Suche" }}
+    </p>
+
     <!-- Semantic Results -->
-    <div v-if="responseMode === 'semantic' && semanticResults.length > 0" class="divide-y divide-gray-100">
-      <div v-for="r in semanticResults" :key="r.id" class="py-3">
-        <div class="flex items-center gap-2">
-          <span class="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+    <div v-if="responseMode === 'semantic' && semanticResults.length > 0" class="flex flex-col" style="gap: 12px">
+      <div
+        v-for="r in semanticResults"
+        :key="r.id"
+        style="
+          border: 1px solid var(--color-border);
+          border-radius: 8px;
+          padding: 14px 16px;
+          background: var(--color-bg);
+          transition: border-color 180ms ease;
+        "
+        class="search-card"
+      >
+        <div class="flex items-center" style="gap: 10px; margin-bottom: 6px">
+          <span
+            style="
+              font-size: 10px;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              padding: 2px 8px;
+              border-radius: 4px;
+              background: var(--color-primary);
+              color: var(--color-bg);
+            "
+          >
             {{ r.type === "note" ? "Notiz" : "Datei" }}
           </span>
-          <span class="text-sm font-medium text-gray-800">{{ r.title }}</span>
-          <span v-if="r.project" class="text-xs text-gray-400">{{ r.project }}</span>
+          <span style="font-size: 13px; font-weight: 500; color: var(--color-text)">
+            {{ r.title }}
+          </span>
+          <span v-if="r.project" class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary)">
+            {{ r.project }}
+          </span>
         </div>
-        <p class="text-xs text-gray-500 mt-1 line-clamp-2">{{ r.snippet }}</p>
+        <p style="font-size: 12px; color: var(--color-text-muted); line-height: 1.5; margin: 0">
+          {{ r.snippet }}
+        </p>
       </div>
     </div>
 
     <!-- Text Results -->
-    <div v-if="responseMode === 'text' && textResults.length > 0" class="divide-y divide-gray-100">
-      <div v-for="r in textResults" :key="r.file" class="py-2.5">
-        <p class="text-xs text-gray-400 font-mono">{{ r.file }}</p>
-        <p class="text-sm text-gray-700 mt-0.5">{{ r.line }}</p>
+    <div v-if="responseMode === 'text' && textResults.length > 0" class="flex flex-col" style="gap: 8px">
+      <div
+        v-for="r in textResults"
+        :key="r.file + r.line"
+        style="
+          border: 1px solid var(--color-border-subtle);
+          border-radius: 6px;
+          padding: 10px 14px;
+          background: var(--color-bg);
+        "
+      >
+        <div class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 4px">
+          {{ r.file }}
+        </div>
+        <div style="font-size: 13px; color: var(--color-text-secondary)">
+          {{ r.line }}
+        </div>
       </div>
     </div>
 
     <p
       v-if="searched && !loading && textResults.length === 0 && semanticResults.length === 0"
-      class="text-gray-400 text-sm py-4"
+      style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
     >
       Keine Ergebnisse.
     </p>
   </div>
 </template>
+
+<style scoped>
+.bauos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  transition: all 180ms ease;
+}
+.bauos-btn.solid {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+.bauos-btn.solid:hover {
+  opacity: 0.9;
+}
+.bauos-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.search-card:hover {
+  border-color: var(--color-text-faint);
+}
+</style>

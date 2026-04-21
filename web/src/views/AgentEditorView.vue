@@ -2,6 +2,7 @@
 import { ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
+import BIcon from "../components/BIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
@@ -14,7 +15,7 @@ onMounted(async () => {
   agentName.value = route.params.name as string;
   filename.value = route.params.filename as string;
   const file = await api.get<{ name: string; content: string }>(
-    `/agents/${encodeURIComponent(agentName.value)}/files/${encodeURIComponent(filename.value)}`
+    `/agents/${encodeURIComponent(agentName.value)}/files/${encodeURIComponent(filename.value)}`,
   );
   content.value = file.content;
 });
@@ -24,7 +25,7 @@ async function save() {
   try {
     await api.put(
       `/agents/${encodeURIComponent(agentName.value)}/files/${encodeURIComponent(filename.value)}`,
-      { content: content.value }
+      { content: content.value },
     );
   } finally {
     saving.value = false;
@@ -33,34 +34,88 @@ async function save() {
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-4">
-      <div class="flex items-center gap-2">
-        <span class="text-sm text-gray-400">{{ agentName }}</span>
-        <span class="text-gray-300">/</span>
-        <h2 class="text-lg font-semibold">{{ filename }}</h2>
-      </div>
-      <div class="flex gap-2">
-        <button
-          @click="save"
-          :disabled="saving"
-          class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 disabled:opacity-50 transition"
+  <div style="max-width: 960px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+    <button
+      @click="router.back()"
+      class="flex items-center"
+      style="
+        gap: 4px;
+        background: transparent;
+        border: none;
+        color: var(--color-text-muted);
+        font-size: 12px;
+        cursor: pointer;
+        margin-bottom: 16px;
+      "
+    >
+      <BIcon name="arrowLeft" :size="12" />
+      Zurück
+    </button>
+
+    <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
+      <div class="min-w-0">
+        <div
+          class="font-mono eyebrow"
+          style="margin-bottom: 6px"
         >
-          {{ saving ? "Speichert..." : "Speichern" }}
-        </button>
-        <button
-          @click="router.back()"
-          class="px-4 py-1.5 text-sm text-gray-500 hover:text-gray-700 transition"
+          {{ agentName }}
+        </div>
+        <h1
+          class="font-mono"
+          style="font-size: 20px; font-weight: 600; margin: 0; color: var(--color-text)"
         >
-          Zurueck
-        </button>
+          {{ filename }}
+        </h1>
       </div>
+      <button
+        @click="save"
+        :disabled="saving"
+        class="bauos-btn solid"
+      >
+        {{ saving ? "Speichert…" : "Speichern" }}
+      </button>
     </div>
 
     <textarea
       v-model="content"
-      rows="30"
-      class="w-full px-4 py-3 border border-gray-200 rounded font-mono text-sm outline-none focus:ring-1 focus:ring-gray-400 resize-y"
-    ></textarea>
+      rows="32"
+      class="font-mono"
+      style="
+        width: 100%;
+        padding: 16px;
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        outline: none;
+        background: var(--color-bg-subtle);
+        color: var(--color-text);
+        font-size: 13px;
+        line-height: 1.55;
+        resize: vertical;
+      "
+    />
   </div>
 </template>
+
+<style scoped>
+.bauos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-bg);
+  transition: opacity 180ms ease;
+}
+.bauos-btn:hover {
+  opacity: 0.9;
+}
+.bauos-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+</style>
