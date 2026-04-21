@@ -26,12 +26,16 @@ import { dbTermine } from "./db-termine.js";
 import { dbNotes } from "./db-notes.js";
 import { dbProjects } from "./db-projects.js";
 import { dbFiles } from "./db-files.js";
-import { dbChat } from "./db-chat.js";
 import { fsTeam } from "./fs-team.js";
 import { dbTeam } from "./db-team.js";
-import { dbAgentLogs } from "./db-agent-logs.js";
+import { fsChat } from "./fs-chat.js";
+import { fsAgentLogs } from "./fs-agent-logs.js";
 
 // ── Repos basierend auf Config wählen ────────────────────────
+// User-Daten: DB wenn verfuegbar, sonst FS-Fallback.
+// Chat + Agent-Logs: immer FS (bewusste Design-Entscheidung —
+// haengt nicht an der DB-Verfuegbarkeit, einfache Wartung via
+// tail/grep auf JSONL-Dateien).
 
 export const taskRepo: TaskRepository = DB_ENABLED ? dbTasks : fsTasks;
 export const terminRepo: TerminRepository = DB_ENABLED ? dbTermine : fsTermine;
@@ -39,9 +43,8 @@ export const noteRepo: NoteRepository = DB_ENABLED ? dbNotes : fsNotes;
 export const projectRepo: ProjectRepository = DB_ENABLED ? dbProjects : fsProjects;
 export const teamRepo: TeamRepository = DB_ENABLED ? dbTeam : fsTeam;
 export const fileRepo: FileRepository | null = DB_ENABLED ? dbFiles : null;
-export const chatRepo: ChatRepository | null = DB_ENABLED ? dbChat : null;
-// DB-only — ohne Filesystem-Pendant; null im FS-Modus
-export const agentLogRepo: AgentLogRepository | null = DB_ENABLED ? dbAgentLogs : null;
+export const chatRepo: ChatRepository = fsChat;
+export const agentLogRepo: AgentLogRepository = fsAgentLogs;
 
 /** Gibt den aktuellen Modus zurueck */
 export function dataMode(): "database" | "filesystem" {

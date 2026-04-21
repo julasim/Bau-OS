@@ -14,7 +14,6 @@ import { chatRepo } from "../../data/index.js";
 import {
   MAX_HISTORY_CHARS,
   MAX_TOOL_ROUNDS,
-  DB_ENABLED,
   KEPT_TOOL_MESSAGES,
   HISTORY_LOAD_LIMIT,
   getAgentModel,
@@ -25,21 +24,18 @@ export const chatRoutes = new Hono();
 
 // ── Sessions auflisten ──────────────────────────────────────────────────────
 chatRoutes.get("/chat/sessions", async (c) => {
-  if (!DB_ENABLED || !chatRepo) return c.json([]);
   const sessions = await chatRepo.listSessions("Main");
   return c.json(sessions);
 });
 
 // ── Neue Session erstellen ──────────────────────────────────────────────────
 chatRoutes.post("/chat/sessions", async (c) => {
-  if (!DB_ENABLED || !chatRepo) return c.json({ error: "DB nicht aktiv" }, 500);
   const session = await chatRepo.createSession("Main");
   return c.json(session);
 });
 
 // ── Session loeschen ────────────────────────────────────────────────────────
 chatRoutes.delete("/chat/sessions/:id", async (c) => {
-  if (!DB_ENABLED || !chatRepo) return c.json({ error: "DB nicht aktiv" }, 500);
   const id = c.req.param("id");
   await chatRepo.deleteSession(id);
   return c.json({ success: true });
@@ -47,7 +43,6 @@ chatRoutes.delete("/chat/sessions/:id", async (c) => {
 
 // ── Nachrichten einer Session laden ─────────────────────────────────────────
 chatRoutes.get("/chat/sessions/:id/messages", async (c) => {
-  if (!DB_ENABLED || !chatRepo) return c.json([]);
   const id = c.req.param("id");
   const messages = await chatRepo.getMessages(id);
   return c.json(messages);
@@ -83,20 +78,16 @@ chatRoutes.post("/chat", (c) => {
 
     // Session bestimmen: explizit uebergeben oder neue erstellen
     let sessionId = body.sessionId;
-    if (DB_ENABLED && chatRepo) {
-      if (!sessionId) {
-        const session = await chatRepo.createSession(agentName);
-        sessionId = session.id;
-      }
-      // User-Nachricht in DB speichern
-      try {
-        await chatRepo.addMessage(sessionId, "user", userMessage);
-      } catch (e) {
-        logError("[Chat DB]", e);
-      }
-      // Session-ID an Client senden
-      await stream.writeSSE({ event: "session", data: JSON.stringify({ sessionId }) });
+    if (!sessionId) {
+      const session = await chatRepo.createSession(agentName);
+      sessionId = session.id;
     }
+    try {
+      await chatRepo.addMessage(sessionId, "user", userMessage);
+    } catch (e) {
+      logError("[Chat]", e);
+    }
+    await stream.writeSSE({ event: "session", data: JSON.stringify({ sessionId }) });
 
     const workspaceContext = loadAgentWorkspace(agentName, "full");
     const dateLine = buildDateLine();
@@ -122,11 +113,7 @@ chatRoutes.post("/chat", (c) => {
     const actionHint = isAction ? ACTION_HINT : "";
     const systemPrompt = baseSystemPrompt + searchHint + actionHint;
 
-    // History aus DB oder leer
-    let history: { user: string; assistant: string }[] = [];
-    if (DB_ENABLED && chatRepo) {
-      history = await chatRepo.getRecentHistory(agentName, HISTORY_LOAD_LIMIT);
-    }
+    const history = await chatRepo.getRecentHistory(agentName, HISTORY_LOAD_LIMIT);
 
     const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
@@ -221,11 +208,11 @@ chatRoutes.post("/chat", (c) => {
                 `Action-Request ohne tool_calls nach ${MAX_TOOL_SKIP_RETRIES} Retries. Modell: ${activeModel}. Letzte Antwort: ${(reply.content ?? "").slice(0, 200)}`,
               ),
             );
-            if (DB_ENABLED && chatRepo && sessionId) {
+            if (sessionId) {
               try {
                 await chatRepo.addMessage(sessionId, "assistant", warnung, collectedTools);
               } catch (e) {
-                logError("[Chat DB]", e);
+                logError("[Chat]", e);
               }
             }
             await stream.writeSSE({ event: "response", data: JSON.stringify({ text: warnung }) });
@@ -233,12 +220,11 @@ chatRoutes.post("/chat", (c) => {
           }
 
           const antwort = reply.content ?? "Erledigt.";
-          // In DB speichern
-          if (DB_ENABLED && chatRepo && sessionId) {
+          if (sessionId) {
             try {
               await chatRepo.addMessage(sessionId, "assistant", antwort, collectedTools);
             } catch (e) {
-              logError("[Chat DB]", e);
+              logError("[Chat]", e);
             }
           }
           await stream.writeSSE({ event: "response", data: JSON.stringify({ text: antwort }) });
@@ -285,12 +271,11 @@ chatRoutes.post("/chat", (c) => {
           } catch {
             // Fallback
           }
-          // In DB speichern
-          if (DB_ENABLED && chatRepo && sessionId) {
+          if (sessionId) {
             try {
               await chatRepo.addMessage(sessionId, "assistant", antwortText, collectedTools);
             } catch (e) {
-              logError("[Chat DB]", e);
+              logError("[Chat]", e);
             }
           }
           await stream.writeSSE({ event: "response", data: JSON.stringify({ text: antwortText }) });
@@ -321,11 +306,11 @@ chatRoutes.post("/chat", (c) => {
         `Ich konnte deine Anfrage nicht vollstaendig abschliessen. ` +
         `Ausgefuehrte Tools: ${toolSummary}. ` +
         `Bitte formuliere die Anfrage praeziser oder zerlege sie in Teilschritte.`;
-      if (DB_ENABLED && chatRepo && sessionId) {
+      if (sessionId) {
         try {
           await chatRepo.addMessage(sessionId, "assistant", fallback, collectedTools);
         } catch (e) {
-          logError("[Chat DB]", e);
+          logError("[Chat]", e);
         }
       }
       await stream.writeSSE({ event: "response", data: JSON.stringify({ text: fallback }) });

@@ -1,20 +1,16 @@
 // ============================================================
 // Bau-OS — Agent-Logs API
-// Liefert die in der DB gespeicherten Tool-/Thought-/Event-Logs
-// des Agent-Laufs. Nur aktiv wenn DB_ENABLED=true.
+// Liefert die Tool-/Thought-/Event-Logs des Agent-Laufs.
+// Quelle: logs/agent-logs.jsonl (immer FS, unabhaengig von DB_ENABLED).
 // ============================================================
 
 import { Hono } from "hono";
 import { agentLogRepo } from "../../data/index.js";
-import { DB_ENABLED } from "../../config.js";
 
 export const agentLogsRoutes = new Hono();
 
 // ── Liste (zuletzt / gefiltert) ─────────────────────────────────────────────
 agentLogsRoutes.get("/agent-logs", async (c) => {
-  if (!DB_ENABLED || !agentLogRepo) {
-    return c.json({ enabled: false, items: [] });
-  }
   const limit = Math.min(parseInt(c.req.query("limit") ?? "50", 10) || 50, 500);
   const offset = Math.max(parseInt(c.req.query("offset") ?? "0", 10) || 0, 0);
   const sessionId = c.req.query("session") ?? undefined;
@@ -44,9 +40,6 @@ agentLogsRoutes.get("/agent-logs", async (c) => {
 
 // ── Session-Detail ──────────────────────────────────────────────────────────
 agentLogsRoutes.get("/agent-logs/session/:id", async (c) => {
-  if (!DB_ENABLED || !agentLogRepo) {
-    return c.json({ enabled: false, items: [] });
-  }
   const id = c.req.param("id");
   const limit = Math.min(parseInt(c.req.query("limit") ?? "200", 10) || 200, 1000);
   const items = await agentLogRepo.listBySession(id, limit);

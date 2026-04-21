@@ -288,7 +288,6 @@ export function appendAgentConversation(agentName: string, userMsg: string, botR
 
 async function _saveConversationToDB(agentName: string, userMsg: string, botReply: string): Promise<void> {
   const { chatRepo } = await import("../data/index.js");
-  if (!chatRepo) return;
   const sessionId = await chatRepo.getOrCreateTodaySession(agentName, "telegram");
   await chatRepo.addMessage(sessionId, "user", userMsg, [], "telegram");
   await chatRepo.addMessage(sessionId, "assistant", botReply, [], "telegram");
