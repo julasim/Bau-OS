@@ -28,6 +28,7 @@ termineRoutes.post("/termine", async (c) => {
   if (!body.datum || !body.text) return c.json({ error: "Datum und Text erforderlich" }, 400);
   const termin = await terminRepo.save(body.datum, body.text, body.uhrzeit, body.project);
   if (typeof termin === "string") return c.json({ error: termin }, 400);
+  let result = termin;
   if (body.endzeit || body.location || body.assignees?.length) {
     const updated = await terminRepo.update(
       termin.id,
@@ -38,11 +39,10 @@ termineRoutes.post("/termine", async (c) => {
       },
       body.project,
     );
-    emit({ type: "termin", action: "created", id: termin.id, project: body.project });
-    return c.json(updated, 201);
+    if (updated) result = updated;
   }
   emit({ type: "termin", action: "created", id: termin.id, project: body.project });
-  return c.json(termin, 201);
+  return c.json(result, 201);
 });
 
 termineRoutes.put("/termine/:id", async (c) => {

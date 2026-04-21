@@ -16,25 +16,29 @@ if (DB_ENABLED) {
   try {
     const { checkDbHealth, checkPgVector, runMigrations } = await import("./db/index.js");
     const healthy = await checkDbHealth();
-    if (healthy) {
-      logInfo("[DB] PostgreSQL verbunden");
-      const hasVector = await checkPgVector();
-      if (hasVector) {
-        logInfo("[DB] pgvector Extension aktiv");
-      } else {
-        logInfo("[DB] pgvector Extension nicht gefunden — Embeddings deaktiviert");
-      }
-      // Auto-Migrate beim Start — per DB_AUTO_MIGRATE=false abschaltbar
-      if (DB_AUTO_MIGRATE) {
-        await runMigrations();
-      } else {
-        logInfo("[DB] DB_AUTO_MIGRATE=false — Migrations uebersprungen");
-      }
+    if (!healthy) {
+      logError(
+        "[DB]",
+        "DATABASE_URL ist gesetzt aber die DB antwortet nicht. Entweder Postgres starten oder DATABASE_URL entfernen für FS-Modus.",
+      );
+      process.exit(1);
+    }
+    logInfo("[DB] PostgreSQL verbunden");
+    const hasVector = await checkPgVector();
+    if (hasVector) {
+      logInfo("[DB] pgvector Extension aktiv");
     } else {
-      logInfo("[DB] PostgreSQL nicht erreichbar — Fallback auf Filesystem");
+      logInfo("[DB] pgvector Extension nicht gefunden — Embeddings deaktiviert");
+    }
+    // Auto-Migrate beim Start — per DB_AUTO_MIGRATE=false abschaltbar
+    if (DB_AUTO_MIGRATE) {
+      await runMigrations();
+    } else {
+      logInfo("[DB] DB_AUTO_MIGRATE=false — Migrations uebersprungen");
     }
   } catch (err) {
     logError("[DB]", err);
+    process.exit(1);
   }
 } else {
   logInfo("[DB] Kein DATABASE_URL gesetzt — nur Filesystem-Modus");

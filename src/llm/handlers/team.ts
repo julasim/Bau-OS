@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import { teamRepo } from "../../data/index.js";
+import { emit } from "../../api/events.js";
 import type { HandlerMap } from "./types.js";
 
 export const teamSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -69,6 +70,7 @@ export const teamHandlers: HandlerMap = {
         company: args.firma ? String(args.firma) : null,
         projectId: null,
       });
+      emit({ type: "team", action: "created", id: member.id });
       return `Team-Mitglied "${member.name}" angelegt.`;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -80,6 +82,8 @@ export const teamHandlers: HandlerMap = {
     const name = String(args.name ?? "").trim();
     if (!name) return "Fehler: Name ist erforderlich.";
     const ok = await teamRepo.remove(name);
-    return ok ? `"${name}" aus dem Team entfernt.` : `"${name}" nicht im Team gefunden.`;
+    if (!ok) return `"${name}" nicht im Team gefunden.`;
+    emit({ type: "team", action: "deleted" });
+    return `"${name}" aus dem Team entfernt.`;
   },
 };

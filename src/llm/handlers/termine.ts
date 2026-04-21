@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import { terminRepo } from "../../data/index.js";
+import { emit } from "../../api/events.js";
 import type { HandlerMap } from "./types.js";
 
 export const terminSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -61,6 +62,12 @@ export const terminHandlers: HandlerMap = {
       args.projekt ? String(args.projekt) : undefined,
     );
     if (typeof result === "string") return result;
+    emit({
+      type: "termin",
+      action: "created",
+      id: result.id,
+      project: args.projekt ? String(args.projekt) : null,
+    });
     return `Termin gespeichert: ${result.datum} – ${result.text}`;
   },
 
@@ -78,8 +85,10 @@ export const terminHandlers: HandlerMap = {
 
   termin_loeschen: async (args) => {
     const ok = await terminRepo.delete(String(args.text), args.projekt ? String(args.projekt) : undefined);
-    return ok
-      ? `Termin geloescht: ${args.text}`
-      : `Termin "${args.text}" nicht gefunden. Nutze termine_auflisten um den genauen Text zu sehen.`;
+    if (!ok) {
+      return `Termin "${args.text}" nicht gefunden. Nutze termine_auflisten um den genauen Text zu sehen.`;
+    }
+    emit({ type: "termin", action: "deleted", project: args.projekt ? String(args.projekt) : null });
+    return `Termin geloescht: ${args.text}`;
   },
 };

@@ -283,7 +283,8 @@ onMounted(loadAll);
             <button
               @click="changePassword"
               :disabled="savingPassword || !oldPassword || !newPassword"
-              class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 disabled:opacity-50 transition"
+              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+              :style="{ opacity: (savingPassword || !oldPassword || !newPassword) ? 0.5 : 1 }"
             >
               {{ savingPassword ? "..." : "Passwort aendern" }}
             </button>
@@ -343,7 +344,7 @@ onMounted(loadAll);
               :class="[
                 'px-3 py-1 text-xs font-medium rounded border transition',
                 data.runtime.fastMode
-                  ? 'border-gray-900 bg-gray-900 text-white hover:bg-gray-800'
+                  ? 'primary-btn'
                   : 'border-gray-200 text-gray-600 hover:bg-gray-50',
               ]"
             >
@@ -393,7 +394,8 @@ onMounted(loadAll);
           <button
             @click="saveSettings"
             :disabled="savingSettings || !dirty"
-            class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 disabled:opacity-50 transition"
+            class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+            :style="{ opacity: (savingSettings || !dirty) ? 0.5 : 1 }"
           >
             {{ savingSettings ? "..." : "Speichern" }}
           </button>
@@ -431,3 +433,17 @@ onMounted(loadAll);
     </div>
   </div>
 </template>
+
+<style scoped>
+.primary-btn {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border: 1px solid var(--color-primary);
+}
+.primary-btn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.primary-btn:disabled {
+  cursor: not-allowed;
+}
+</style>

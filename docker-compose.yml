@@ -78,7 +78,7 @@ services:
       postgres:
         condition: service_healthy
       ollama:
-        condition: service_started
+        condition: service_healthy
     volumes:
       - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
       - ./logs:/opt/bau-os/logs

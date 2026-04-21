@@ -28,6 +28,7 @@ const chatContainer = ref<HTMLElement | null>(null);
 const sessions = ref<SessionInfo[]>([]);
 const activeSessionId = ref<string | null>(null);
 const sidebarOpen = ref(true);
+const abortCtrl = ref<AbortController | null>(null);
 
 // ── Dateisuche-Mode ──────────────────────────────────────────────────────────
 const searchMode = ref(false);
@@ -160,6 +161,12 @@ async function send() {
 
   const token = localStorage.getItem("bau-os-token");
 
+  // Alten Stream canceln, falls noch aktiv
+  if (abortCtrl.value) {
+    abortCtrl.value.abort();
+  }
+  abortCtrl.value = new AbortController();
+
   try {
     const res = await fetch("/api/chat", {
       method: "POST",
@@ -173,6 +180,7 @@ async function send() {
         searchMode: searchMode.value,
         projectFilter: projectFilter.value,
       }),
+      signal: abortCtrl.value.signal,
     });
 
     if (!res.ok || !res.body) {
@@ -228,7 +236,8 @@ async function send() {
 
     // Sessions-Liste aktualisieren
     await loadSessions();
-  } catch {
+  } catch (err) {
+    if ((err as Error).name === "AbortError") return;
     messages.value.push({ role: "assistant", text: "Verbindung zum Server verloren." });
   } finally {
     loading.value = false;
@@ -256,6 +265,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener("mousedown", onDocClick);
+  abortCtrl.value?.abort();
 });
 </script>
 

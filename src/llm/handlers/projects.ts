@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import { projectRepo } from "../../data/index.js";
+import { emit } from "../../api/events.js";
 import type { HandlerMap } from "./types.js";
 
 export const projectSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -87,6 +88,7 @@ export const projectHandlers: HandlerMap = {
     if (!ok) {
       return `Projekt "${name}" konnte nicht angelegt werden. Erlaubt sind Buchstaben (inkl. Umlaute), Ziffern, Leerzeichen, '-', '_' und '.'.`;
     }
+    emit({ type: "project", action: "created", id: name });
     // Formulierung bewusst so, dass das LLM keine FS-Details erfindet:
     // kein "Ordner", keine "README.md", keine "Struktur".
     return `Projekt "${name}" ist in der Datenbank angelegt. Kein Ordner/keine Datei erzeugt (Projekte sind rein logische DB-Entities).`;
@@ -100,6 +102,7 @@ export const projectHandlers: HandlerMap = {
     if (!ok) {
       return `Projekt "${name}" konnte nicht geloescht werden (ungueltiger Name).`;
     }
+    emit({ type: "project", action: "deleted", id: name });
     return `Projekt "${name}" wurde aus der Datenbank geloescht. Notizen wurden per FK-CASCADE mitgeloescht; Aufgaben, Termine, Dateien und Team-Mitglieder bleiben erhalten (Projekt-Bezug auf NULL gesetzt).`;
   },
 };

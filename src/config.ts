@@ -142,6 +142,10 @@ export const EMBEDDING_MODEL = process.env.EMBEDDING_MODEL || _defaultEmbeddingM
 export const EMBEDDING_DIMENSIONS = parseInt(process.env.EMBEDDING_DIMENSIONS || _defaultEmbeddingDims, 10);
 export const EMBEDDING_BATCH_SIZE = 5; // Parallele Embedding-Anfragen
 
+// ── Upload-Limits ────────────────────────────────────────────────────────────
+export const MAX_UPLOAD_MB = Number(process.env.MAX_UPLOAD_MB ?? "50");
+export const MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024;
+
 // ── Dokument-Extraktion ──────────────────────────────────────────────────────
 export const DAILY_NOTES_DIR = process.env.DAILY_NOTES_DIR || "Daily";
 export const TEMPLATES_DIR = process.env.TEMPLATES_DIR || "Templates";

@@ -9,7 +9,7 @@ import { logError } from "./logger.js";
 import { enqueue } from "./queue.js";
 import { fmt, stripMarkdown } from "./format.js";
 import { saveChatId } from "./heartbeat.js";
-import { TYPING_INTERVAL_MS, WORKSPACE_PATH, DB_ENABLED } from "./config.js";
+import { TYPING_INTERVAL_MS, WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "./config.js";
 import { fileRepo } from "./data/index.js";
 import {
   handleHilfe,
@@ -145,6 +145,15 @@ export function createBot(token: string): Bot {
     enqueue(ctx.chat.id, async () => {
       saveChatId(ctx.chat.id);
       const doc = ctx.message.document;
+
+      // Size-Limit VOR dem Download pruefen — sonst laden wir GBs umsonst.
+      if (doc.file_size && doc.file_size > MAX_UPLOAD_BYTES) {
+        await ctx.reply(
+          `Die Datei "${doc.file_name || "Dokument"}" ist zu groß (max ${MAX_UPLOAD_MB} MB). Bitte kleinere Datei senden.`,
+        );
+        return;
+      }
+
       const stopTyping = startTyping(ctx);
 
       try {

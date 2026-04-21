@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import fs from "fs";
 import path from "path";
-import { WORKSPACE_PATH, DB_ENABLED } from "../../config.js";
+import { WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../../config.js";
 import { readFile, listFolder } from "../../workspace/index.js";
 import { fileRepo } from "../../data/index.js";
 import { emit } from "../events.js";
@@ -148,6 +148,9 @@ filesRoutes.post("/files/upload", async (c) => {
   if (DB_ENABLED && fileRepo) {
     for (const file of files) {
       if (!file.name || file.size === 0) continue;
+      if (file.size > MAX_UPLOAD_BYTES) {
+        return c.json({ error: `Datei "${file.name}" ist zu groß (max ${MAX_UPLOAD_MB} MB)` }, 413);
+      }
       const safeName = file.name.replace(/[<>:"|?*]/g, "_");
       const buffer = Buffer.from(await file.arrayBuffer());
 
@@ -195,6 +198,9 @@ filesRoutes.post("/files/upload", async (c) => {
 
   for (const file of files) {
     if (!file.name || file.size === 0) continue;
+    if (file.size > MAX_UPLOAD_BYTES) {
+      return c.json({ error: `Datei "${file.name}" ist zu groß (max ${MAX_UPLOAD_MB} MB)` }, 413);
+    }
     const safeName = file.name.replace(/[<>:"|?*]/g, "_");
     const destPath = path.join(destDir, safeName);
     if (!destPath.startsWith(WORKSPACE_PATH)) continue;

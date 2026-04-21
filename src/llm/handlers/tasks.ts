@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import { taskRepo } from "../../data/index.js";
+import { emit } from "../../api/events.js";
 import type { HandlerMap } from "./types.js";
 
 export const taskSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -53,6 +54,7 @@ export const taskSchemas: OpenAI.Chat.ChatCompletionTool[] = [
 export const taskHandlers: HandlerMap = {
   aufgabe_speichern: async (args) => {
     await taskRepo.save(String(args.text), args.projekt ? String(args.projekt) : undefined);
+    emit({ type: "task", action: "created", project: args.projekt ? String(args.projekt) : null });
     return `Aufgabe gespeichert: ${args.text}`;
   },
 
@@ -68,8 +70,10 @@ export const taskHandlers: HandlerMap = {
 
   aufgabe_erledigen: async (args) => {
     const ok = await taskRepo.complete(String(args.text), args.projekt ? String(args.projekt) : undefined);
-    return ok
-      ? `Erledigt: ${args.text}`
-      : `Aufgabe nicht gefunden: "${args.text}". Der Text muss exakt uebereinstimmen — nutze aufgaben_auflisten um den genauen Text zu sehen.`;
+    if (!ok) {
+      return `Aufgabe nicht gefunden: "${args.text}". Der Text muss exakt uebereinstimmen — nutze aufgaben_auflisten um den genauen Text zu sehen.`;
+    }
+    emit({ type: "task", action: "completed", project: args.projekt ? String(args.projekt) : null });
+    return `Erledigt: ${args.text}`;
   },
 };

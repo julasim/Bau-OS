@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import { noteRepo } from "../../data/index.js";
+import { emit } from "../../api/events.js";
 import type { HandlerMap } from "./types.js";
 
 export const noteSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -79,7 +80,9 @@ export const noteSchemas: OpenAI.Chat.ChatCompletionTool[] = [
 export const noteHandlers: HandlerMap = {
   notiz_speichern: async (args) => {
     const filepath = await noteRepo.save(String(args.text), args.projekt ? String(args.projekt) : undefined);
-    return `Notiz gespeichert: ${filepath.split(/[\\/]/).pop()}`;
+    const id = filepath.split(/[\\/]/).pop();
+    emit({ type: "note", action: "created", id, project: args.projekt ? String(args.projekt) : null });
+    return `Notiz gespeichert: ${id}`;
   },
 
   notizen_auflisten: async (args) => {
@@ -97,15 +100,19 @@ export const noteHandlers: HandlerMap = {
 
   notiz_loeschen: async (args) => {
     const deleted = await noteRepo.delete(String(args.dateiname));
-    return deleted
-      ? `Notiz geloescht: ${deleted}`
-      : `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;
+    if (!deleted) {
+      return `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;
+    }
+    emit({ type: "note", action: "deleted", id: String(deleted) });
+    return `Notiz geloescht: ${deleted}`;
   },
 
   notiz_bearbeiten: async (args) => {
     const ok = await noteRepo.append(String(args.dateiname), String(args.text));
-    return ok
-      ? `Nachtrag gespeichert in: ${args.dateiname}`
-      : `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;
+    if (!ok) {
+      return `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;
+    }
+    emit({ type: "note", action: "updated", id: String(args.dateiname) });
+    return `Nachtrag gespeichert in: ${args.dateiname}`;
   },
 };
