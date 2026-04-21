@@ -33,8 +33,9 @@ RUN npm run build:all \
 EXPOSE 3000
 
 # Healthcheck — App sollte auf /api/status antworten (ok oder auth-required)
+# Port 3000 ist im Container fix — API_PORT aus .env ist nur das Host-Mapping.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS "http://localhost:${API_PORT:-3000}/api/status" > /dev/null || exit 1
+    CMD curl -fsS "http://localhost:3000/api/status" > /dev/null || exit 1
 
 # Node startet direkt — die App kuemmert sich selbst um DB-Migrationen,
 # wartet wenn noetig auf Postgres, respektiert DB_AUTO_MIGRATE aus .env.

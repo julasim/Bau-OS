@@ -208,41 +208,45 @@ onMounted(loadAll);
     <div
       v-if="message"
       :class="[
-        'mb-4 px-3 py-2 text-sm border rounded',
-        message.type === 'success'
-          ? 'border-gray-200 bg-gray-50 text-gray-700'
-          : 'border-red-200 bg-red-50 text-red-700',
+        'settings-flash mb-4 px-3 py-2 text-sm rounded',
+        message.type === 'success' ? 'settings-flash-ok' : 'settings-flash-err',
       ]"
     >
       {{ message.text }}
     </div>
 
-    <div v-if="loading" class="text-sm text-gray-400 py-8">Laedt...</div>
+    <div
+      v-if="loading"
+      class="text-sm py-8"
+      style="color: var(--color-text-tertiary)"
+    >
+      Laedt...
+    </div>
 
     <div v-else-if="data" class="space-y-8">
       <!-- ── Profil ─────────────────────────────────────────────────── -->
       <section>
-        <h3 class="text-sm font-semibold text-gray-800 mb-3">Profil</h3>
-        <div class="border border-gray-200 rounded-lg divide-y divide-gray-100">
-          <div class="flex items-center justify-between px-4 py-3">
-            <span class="text-sm text-gray-500">Benutzername</span>
-            <span class="text-sm font-mono text-gray-800">{{ data.profile.username }}</span>
+        <h3 class="settings-h3 mb-3">Profil</h3>
+        <div class="settings-card settings-divide">
+          <div class="settings-row flex items-center justify-between px-4 py-3">
+            <span class="text-sm settings-label">Benutzername</span>
+            <span class="text-sm font-mono settings-value">{{ data.profile.username }}</span>
           </div>
-          <div class="flex items-center justify-between px-4 py-3">
-            <span class="text-sm text-gray-500">Rolle</span>
-            <span class="text-sm text-gray-800">{{ data.profile.role }}</span>
+          <div class="settings-row flex items-center justify-between px-4 py-3">
+            <span class="text-sm settings-label">Rolle</span>
+            <span class="text-sm settings-value">{{ data.profile.role }}</span>
           </div>
-          <div class="flex items-center justify-between px-4 py-3">
-            <span class="text-sm text-gray-500">Registriert</span>
-            <span class="text-sm text-gray-800">{{ data.profile.createdAt }}</span>
+          <div class="settings-row flex items-center justify-between px-4 py-3">
+            <span class="text-sm settings-label">Registriert</span>
+            <span class="text-sm settings-value">{{ data.profile.createdAt }}</span>
           </div>
-          <div class="flex items-center gap-3 px-4 py-3">
-            <label class="text-sm text-gray-500 w-40 flex-shrink-0">Anzeige-Name</label>
+          <div class="settings-row flex items-center gap-3 px-4 py-3">
+            <label class="text-sm settings-label w-40 flex-shrink-0">Anzeige-Name</label>
             <input
               v-model="displayName"
               type="text"
               placeholder="z.B. Julius"
-              class="flex-1 px-3 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
+              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
             />
           </div>
         </div>
@@ -250,33 +254,33 @@ onMounted(loadAll);
 
       <!-- ── Passwort ───────────────────────────────────────────────── -->
       <section>
-        <h3 class="text-sm font-semibold text-gray-800 mb-3">Passwort aendern</h3>
-        <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+        <h3 class="settings-h3 mb-3">Passwort aendern</h3>
+        <div class="settings-card p-4 space-y-3">
           <div class="flex items-center gap-3">
-            <label class="text-sm text-gray-500 w-40 flex-shrink-0">Altes Passwort</label>
+            <label class="text-sm settings-label w-40 flex-shrink-0">Altes Passwort</label>
             <input
               v-model="oldPassword"
               type="password"
               autocomplete="current-password"
-              class="flex-1 px-3 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
+              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
             />
           </div>
           <div class="flex items-center gap-3">
-            <label class="text-sm text-gray-500 w-40 flex-shrink-0">Neues Passwort</label>
+            <label class="text-sm settings-label w-40 flex-shrink-0">Neues Passwort</label>
             <input
               v-model="newPassword"
               type="password"
               autocomplete="new-password"
-              class="flex-1 px-3 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
+              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
             />
           </div>
           <div class="flex items-center gap-3">
-            <label class="text-sm text-gray-500 w-40 flex-shrink-0">Bestaetigen</label>
+            <label class="text-sm settings-label w-40 flex-shrink-0">Bestaetigen</label>
             <input
               v-model="confirmPassword"
               type="password"
               autocomplete="new-password"
-              class="flex-1 px-3 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
+              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
             />
           </div>
           <div class="flex justify-end pt-1">
@@ -294,26 +298,26 @@ onMounted(loadAll);
 
       <!-- ── LLM / Laufzeit ─────────────────────────────────────────── -->
       <section>
-        <h3 class="text-sm font-semibold text-gray-800 mb-3">LLM</h3>
-        <div class="border border-gray-200 rounded-lg divide-y divide-gray-100">
-          <div class="flex items-center gap-3 px-4 py-3">
-            <label class="text-sm text-gray-500 w-40 flex-shrink-0">Aktives Modell</label>
+        <h3 class="settings-h3 mb-3">LLM</h3>
+        <div class="settings-card settings-divide">
+          <div class="settings-row flex items-center gap-3 px-4 py-3">
+            <label class="text-sm settings-label w-40 flex-shrink-0">Aktives Modell</label>
             <input
               v-model="modelInput"
               type="text"
-              class="flex-1 px-3 py-1.5 border border-gray-200 rounded text-sm font-mono outline-none focus:ring-1 focus:ring-gray-400"
+              class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
               :placeholder="data.system.defaultModel"
             />
             <button
               @click="applyModel"
               :disabled="savingModel || !modelInput.trim() || modelInput.trim() === data.runtime.currentModel"
-              class="px-3 py-1.5 text-sm font-medium border border-gray-200 rounded hover:bg-gray-50 disabled:opacity-50 transition"
+              class="settings-ghost-btn px-3 py-1.5 text-sm font-medium rounded disabled:opacity-50 transition"
             >
               Setzen
             </button>
           </div>
-          <div class="px-4 py-3">
-            <p class="text-xs text-gray-500 mb-2">Cloud-Modelle (Ollama Cloud):</p>
+          <div class="settings-row px-4 py-3">
+            <p class="text-xs settings-label mb-2">Cloud-Modelle (Ollama Cloud):</p>
             <div class="flex flex-wrap gap-2">
               <button
                 v-for="m in CLOUD_MODELS"
@@ -321,37 +325,38 @@ onMounted(loadAll);
                 @click="pickModel(m.id)"
                 :title="m.desc"
                 :class="[
-                  'px-2.5 py-1 text-xs rounded border transition text-left',
-                  modelInput === m.id
-                    ? 'border-gray-900 bg-gray-900 text-white'
-                    : 'border-gray-200 text-gray-700 hover:bg-gray-50',
+                  'settings-chip px-2.5 py-1 text-xs rounded transition text-left',
+                  modelInput === m.id ? 'settings-chip-active' : '',
                 ]"
               >
                 <span class="font-mono">{{ m.label }}</span>
               </button>
             </div>
-            <p class="text-[11px] text-gray-400 mt-2">
+            <p class="text-[11px] mt-2" style="color: var(--color-text-tertiary)">
               Klick waehlt das Modell vor — mit "Setzen" wird es aktiv. Braucht einen Ollama-Cloud-Account (<code class="font-mono">ollama signin</code>) und <code class="font-mono">OLLAMA_BASE_URL=https://ollama.com</code> in der .env.
             </p>
           </div>
-          <div class="flex items-center justify-between px-4 py-3">
+          <div class="settings-row flex items-center justify-between px-4 py-3">
             <div>
-              <p class="text-sm text-gray-700">Fast-Mode</p>
-              <p class="text-xs text-gray-400">Nutzt das Schnell-Modell ({{ data.system.fastModel }}) statt {{ data.system.defaultModel }}</p>
+              <p class="text-sm" style="color: var(--color-text-secondary)">Fast-Mode</p>
+              <p class="text-xs" style="color: var(--color-text-tertiary)">
+                Nutzt das Schnell-Modell ({{ data.system.fastModel }}) statt {{ data.system.defaultModel }}
+              </p>
             </div>
             <button
               @click="toggleFast"
               :class="[
-                'px-3 py-1 text-xs font-medium rounded border transition',
-                data.runtime.fastMode
-                  ? 'primary-btn'
-                  : 'border-gray-200 text-gray-600 hover:bg-gray-50',
+                'px-3 py-1 text-xs font-medium rounded transition',
+                data.runtime.fastMode ? 'primary-btn' : 'settings-ghost-btn',
               ]"
             >
               {{ data.runtime.fastMode ? "An" : "Aus" }}
             </button>
           </div>
-          <div class="flex items-center justify-between px-4 py-3 text-xs text-gray-400">
+          <div
+            class="settings-row flex items-center justify-between px-4 py-3 text-xs"
+            style="color: var(--color-text-tertiary)"
+          >
             <span>Subagent-Modell</span>
             <span class="font-mono">{{ data.system.subagentModel }}</span>
           </div>
@@ -360,29 +365,35 @@ onMounted(loadAll);
 
       <!-- ── Praeferenzen ───────────────────────────────────────────── -->
       <section>
-        <h3 class="text-sm font-semibold text-gray-800 mb-3">Praeferenzen</h3>
-        <div class="border border-gray-200 rounded-lg divide-y divide-gray-100">
-          <label class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+        <h3 class="settings-h3 mb-3">Praeferenzen</h3>
+        <div class="settings-card settings-divide">
+          <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
             <div>
-              <p class="text-sm text-gray-700">Benachrichtigungen</p>
-              <p class="text-xs text-gray-400">Telegram-Toasts bei neuen Aufgaben und Terminen</p>
+              <p class="text-sm" style="color: var(--color-text-secondary)">Benachrichtigungen</p>
+              <p class="text-xs" style="color: var(--color-text-tertiary)">
+                Telegram-Toasts bei neuen Aufgaben und Terminen
+              </p>
             </div>
-            <input v-model="notificationsEnabled" type="checkbox" class="accent-gray-900" />
+            <input v-model="notificationsEnabled" type="checkbox" class="settings-checkbox" />
           </label>
 
-          <label class="flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+          <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
             <div>
-              <p class="text-sm text-gray-700">Dateisuche im Chat standardmaessig an</p>
-              <p class="text-xs text-gray-400">Der Chat startet mit aktiver Vault-Suche (+-Menue)</p>
+              <p class="text-sm" style="color: var(--color-text-secondary)">
+                Dateisuche im Chat standardmaessig an
+              </p>
+              <p class="text-xs" style="color: var(--color-text-tertiary)">
+                Der Chat startet mit aktiver Vault-Suche (+-Menue)
+              </p>
             </div>
-            <input v-model="chatSearchMode" type="checkbox" class="accent-gray-900" />
+            <input v-model="chatSearchMode" type="checkbox" class="settings-checkbox" />
           </label>
 
-          <div class="flex items-center gap-3 px-4 py-3">
-            <label class="text-sm text-gray-500 w-40 flex-shrink-0">Standard-Projekt</label>
+          <div class="settings-row flex items-center gap-3 px-4 py-3">
+            <label class="text-sm settings-label w-40 flex-shrink-0">Standard-Projekt</label>
             <select
               v-model="defaultProject"
-              class="flex-1 px-3 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
+              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
             >
               <option :value="null">Kein Standard</option>
               <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
@@ -404,29 +415,35 @@ onMounted(loadAll);
 
       <!-- ── System-Info ───────────────────────────────────────────── -->
       <section>
-        <h3 class="text-sm font-semibold text-gray-800 mb-3">System</h3>
-        <div class="border border-gray-200 rounded-lg divide-y divide-gray-100 text-sm">
-          <div class="flex items-center justify-between px-4 py-2.5">
-            <span class="text-gray-500">Datenbank</span>
-            <span :class="data.runtime.dbEnabled ? 'text-gray-800' : 'text-gray-400'">
+        <h3 class="settings-h3 mb-3">System</h3>
+        <div class="settings-card settings-divide text-sm">
+          <div class="settings-row flex items-center justify-between px-4 py-2.5">
+            <span class="settings-label">Datenbank</span>
+            <span
+              :style="{
+                color: data.runtime.dbEnabled
+                  ? 'var(--color-text-secondary)'
+                  : 'var(--color-text-tertiary)'
+              }"
+            >
               {{ data.runtime.dbEnabled ? "Aktiv (PostgreSQL + pgvector)" : "Nicht aktiv (Dateisystem-Fallback)" }}
             </span>
           </div>
-          <div class="flex items-center justify-between px-4 py-2.5">
-            <span class="text-gray-500">Sprache</span>
-            <span class="text-gray-800">{{ data.system.language }} ({{ data.system.locale }})</span>
+          <div class="settings-row flex items-center justify-between px-4 py-2.5">
+            <span class="settings-label">Sprache</span>
+            <span class="settings-value">{{ data.system.language }} ({{ data.system.locale }})</span>
           </div>
-          <div class="flex items-center justify-between px-4 py-2.5">
-            <span class="text-gray-500">Zeitzone</span>
-            <span class="text-gray-800">{{ data.system.timezone }}</span>
+          <div class="settings-row flex items-center justify-between px-4 py-2.5">
+            <span class="settings-label">Zeitzone</span>
+            <span class="settings-value">{{ data.system.timezone }}</span>
           </div>
-          <div class="flex items-center justify-between px-4 py-2.5">
-            <span class="text-gray-500">Ollama-URL</span>
-            <span class="text-gray-800 font-mono text-xs">{{ data.system.ollamaBaseUrl }}</span>
+          <div class="settings-row flex items-center justify-between px-4 py-2.5">
+            <span class="settings-label">Ollama-URL</span>
+            <span class="settings-value font-mono text-xs">{{ data.system.ollamaBaseUrl }}</span>
           </div>
-          <div class="flex items-center justify-between px-4 py-2.5">
-            <span class="text-gray-500">Auto-Kompaktieren ab</span>
-            <span class="text-gray-800">{{ data.system.compactThreshold.toLocaleString() }} Zeichen</span>
+          <div class="settings-row flex items-center justify-between px-4 py-2.5">
+            <span class="settings-label">Auto-Kompaktieren ab</span>
+            <span class="settings-value">{{ data.system.compactThreshold.toLocaleString() }} Zeichen</span>
           </div>
         </div>
       </section>
@@ -445,5 +462,89 @@ onMounted(loadAll);
 }
 .primary-btn:disabled {
   cursor: not-allowed;
+}
+
+.settings-h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.settings-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+}
+
+.settings-divide > .settings-row + .settings-row,
+.settings-divide > label.settings-row + .settings-row,
+.settings-divide > .settings-row + label.settings-row,
+.settings-divide > label.settings-row + label.settings-row {
+  border-top: 1px solid var(--color-border-subtle);
+}
+
+.settings-label {
+  color: var(--color-text-muted);
+}
+.settings-value {
+  color: var(--color-text);
+}
+
+.settings-input {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+.settings-input:focus {
+  border-color: var(--color-text-faint);
+  box-shadow: 0 0 0 1px var(--color-text-faint);
+}
+
+.settings-ghost-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.settings-ghost-btn:hover:not(:disabled) {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+
+.settings-chip {
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}
+.settings-chip:hover {
+  background: var(--color-bg-subtle);
+}
+.settings-chip-active {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-bg);
+}
+.settings-chip-active:hover {
+  background: var(--color-primary);
+  opacity: 0.9;
+}
+
+.settings-checkbox {
+  accent-color: var(--color-primary);
+}
+
+.settings-flash {
+  border: 1px solid;
+}
+.settings-flash-ok {
+  border-color: var(--color-border);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-secondary);
+}
+.settings-flash-err {
+  border-color: var(--color-danger-border, #fecaca);
+  background: var(--color-danger-bg, #fef2f2);
+  color: var(--color-danger-text, #b91c1c);
 }
 </style>

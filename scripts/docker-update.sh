@@ -103,7 +103,9 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 
 echo -e "  ${GREEN}▶ docker compose pull postgres ollama caddy ...${NC}"
-docker compose pull postgres ollama caddy || true
+if ! docker compose pull postgres ollama caddy; then
+  echo -e "  ${YELLOW}⚠ Pull fehlgeschlagen (Offline? Registry down?) — fahre mit lokalen Images fort${NC}"
+fi
 
 echo -e "  ${GREEN}▶ docker compose up -d --build app ...${NC}"
 docker compose up -d --build app

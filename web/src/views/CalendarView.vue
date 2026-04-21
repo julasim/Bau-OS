@@ -39,6 +39,15 @@ const newDatum = ref("");
 const newUhrzeit = ref("");
 const newText = ref("");
 
+// Flash-Message
+const message = ref<{ type: "success" | "error"; text: string } | null>(null);
+function flash(type: "success" | "error", text: string) {
+  message.value = { type, text };
+  setTimeout(() => {
+    if (message.value?.text === text) message.value = null;
+  }, 4000);
+}
+
 const weekdays = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
 const hours = Array.from({ length: 14 }, (_, i) => i + 7); // 07 – 20
 
@@ -201,16 +210,21 @@ function startCreate(iso?: string) {
 
 async function create() {
   if (!newDatum.value || !newText.value.trim()) return;
-  await api.post("/termine", {
-    datum: newDatum.value,
-    text: newText.value.trim(),
-    uhrzeit: newUhrzeit.value || undefined,
-  });
-  newDatum.value = "";
-  newUhrzeit.value = "";
-  newText.value = "";
-  showCreate.value = false;
-  await load();
+  try {
+    await api.post("/termine", {
+      datum: newDatum.value,
+      text: newText.value.trim(),
+      uhrzeit: newUhrzeit.value || undefined,
+    });
+    newDatum.value = "";
+    newUhrzeit.value = "";
+    newText.value = "";
+    showCreate.value = false;
+    await load();
+    flash("success", "Termin erstellt");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  }
 }
 
 function edit(t: Termin) {
@@ -219,21 +233,31 @@ function edit(t: Termin) {
 }
 
 async function save(t: Termin) {
-  await api.put(`/termine/${t.id}`, {
-    text: t.text,
-    datum: t.datum,
-    uhrzeit: t.uhrzeit,
-    endzeit: t.endzeit,
-    location: t.location,
-    assignees: t.assignees,
-  });
-  editing.value = null;
-  await load();
+  try {
+    await api.put(`/termine/${t.id}`, {
+      text: t.text,
+      datum: t.datum,
+      uhrzeit: t.uhrzeit,
+      endzeit: t.endzeit,
+      location: t.location,
+      assignees: t.assignees,
+    });
+    editing.value = null;
+    await load();
+    flash("success", "Termin gespeichert");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  }
 }
 
 async function remove(id: string) {
-  await api.delete(`/termine/${id}`);
-  await load();
+  try {
+    await api.delete(`/termine/${id}`);
+    await load();
+    flash("success", "Termin gelöscht");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Löschen fehlgeschlagen");
+  }
 }
 
 function toggleAssignee(name: string) {
@@ -266,6 +290,23 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 
 <template>
   <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+    <!-- ── Flash-Message ──────────────────────────────────────── -->
+    <div
+      v-if="message"
+      :style="{
+        padding: '8px 14px',
+        marginBottom: '12px',
+        borderRadius: '6px',
+        fontSize: '13px',
+        border: '1px solid',
+        background: message.type === 'success' ? 'var(--color-success-bg)' : 'var(--color-danger-bg)',
+        borderColor: message.type === 'success' ? 'var(--color-success-border)' : 'var(--color-danger-border)',
+        color: message.type === 'success' ? 'var(--color-success-text)' : 'var(--color-danger-text)',
+      }"
+    >
+      {{ message.text }}
+    </div>
+
     <!-- ── Header ─────────────────────────────────────────────── -->
     <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
       <div class="min-w-0">
@@ -657,33 +698,6 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 </template>
 
 <style scoped>
-.bauos-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text-secondary);
-  transition: all 180ms ease;
-}
-.bauos-btn.ghost:hover {
-  background: var(--color-bg-subtle);
-  color: var(--color-text);
-}
-.bauos-btn.solid {
-  background: var(--color-primary);
-  color: var(--color-bg);
-  border-color: var(--color-primary);
-}
-.bauos-btn.solid:hover {
-  opacity: 0.9;
-}
-
 .cal-nav-btn {
   width: 28px;
   height: 28px;

@@ -28,6 +28,7 @@
         }
     }
 
+    # Default fuer alle uebrigen Routes (alles was nicht @sse matched)
     reverse_proxy app:3000
 
     log {

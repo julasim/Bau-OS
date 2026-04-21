@@ -437,33 +437,6 @@ const kanbanColumns = computed(() => [
 </template>
 
 <style scoped>
-.bauos-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text-secondary);
-  transition: all 180ms ease;
-}
-.bauos-btn.ghost:hover {
-  background: var(--color-bg-subtle);
-  color: var(--color-text);
-}
-.bauos-btn.solid {
-  background: var(--color-primary);
-  color: var(--color-bg);
-  border-color: var(--color-primary);
-}
-.bauos-btn.solid:hover {
-  opacity: 0.9;
-}
-
 .seg-btn {
   display: inline-flex;
   align-items: center;

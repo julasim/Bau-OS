@@ -370,27 +370,46 @@ onMounted(async () => {
 
     <!-- File Preview -->
     <div v-if="fileContent !== null">
-      <div class="flex items-center justify-between mb-3 pb-3 border-b border-gray-100">
+      <div
+        class="flex items-center justify-between mb-3 pb-3"
+        style="border-bottom: 1px solid var(--color-border-subtle)"
+      >
         <div class="flex items-center gap-2">
-          <svg class="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+          <svg
+            class="w-4 h-4"
+            style="color: var(--color-text-tertiary)"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
             <path d="M14 2v6h6" />
           </svg>
-          <span class="text-sm font-medium text-gray-700">{{ fileName }}</span>
+          <span
+            class="text-sm font-medium"
+            style="color: var(--color-text-secondary)"
+            >{{ fileName }}</span
+          >
         </div>
         <button
           @click="fileContent = null"
-          class="px-3 py-1 text-sm text-gray-400 hover:text-gray-600 border border-gray-200 rounded transition"
+          class="fb-close-btn px-3 py-1 text-sm rounded transition"
         >
           Schliessen
         </button>
       </div>
-      <div v-if="isMarkdown" class="border border-gray-100 rounded-lg p-6 overflow-auto max-h-[600px]">
+      <div
+        v-if="isMarkdown"
+        class="rounded-lg p-6 overflow-auto max-h-[600px]"
+        style="border: 1px solid var(--color-border-subtle)"
+      >
         <MarkdownRenderer :content="fileContent" />
       </div>
       <pre
         v-else
-        class="p-5 border border-gray-100 rounded-lg text-sm font-mono whitespace-pre-wrap overflow-auto max-h-[600px] text-gray-700 bg-gray-50"
+        class="p-5 rounded-lg text-sm font-mono whitespace-pre-wrap overflow-auto max-h-[600px]"
+        style="border: 1px solid var(--color-border-subtle); color: var(--color-text-secondary); background: var(--color-bg-subtle)"
         >{{ fileContent }}</pre>
     </div>
 
@@ -399,16 +418,16 @@ onMounted(async () => {
       <!-- Spalten-Header -->
       <div
         v-if="files.length > 0"
-        class="flex items-center gap-3 px-2 py-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-wider border-b border-gray-100"
+        class="fb-col-header flex items-center gap-3 px-2 py-1.5 text-[11px] font-medium uppercase tracking-wider"
       >
         <span class="w-5"></span>
-        <button @click="toggleSort('name')" class="flex-1 text-left hover:text-gray-600 transition">
+        <button @click="toggleSort('name')" class="fb-sort-btn flex-1 text-left transition">
           Name {{ sortIcon("name") }}
         </button>
-        <button @click="toggleSort('size')" class="w-20 text-right hover:text-gray-600 transition">
+        <button @click="toggleSort('size')" class="fb-sort-btn w-20 text-right transition">
           Groesse {{ sortIcon("size") }}
         </button>
-        <button @click="toggleSort('modified')" class="w-32 text-right hover:text-gray-600 transition">
+        <button @click="toggleSort('modified')" class="fb-sort-btn w-32 text-right transition">
           Geaendert {{ sortIcon("modified") }}
         </button>
         <span class="w-16"></span>
@@ -420,16 +439,16 @@ onMounted(async () => {
              (sonst redundant mit dem Select oben) -->
         <p
           v-if="!selectedFilter"
-          class="mt-4 mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400"
+          class="fb-group-label mt-4 mb-1 px-2 text-[10px] font-semibold uppercase tracking-wider"
         >
           {{ projectLabel(group.project) }}
-          <span class="text-gray-300 font-normal normal-case">· {{ group.items.length }}</span>
+          <span class="fb-group-count font-normal normal-case">· {{ group.items.length }}</span>
         </p>
 
         <div
           v-for="file in group.items"
           :key="file.id"
-          class="flex items-center gap-3 px-2 py-2 rounded hover:bg-gray-50 cursor-pointer transition group"
+          class="fb-row flex items-center gap-3 px-2 py-2 rounded cursor-pointer transition group"
           @click="openFile(file)"
         >
           <svg
@@ -444,17 +463,29 @@ onMounted(async () => {
             <path d="M14 2v6h6" />
           </svg>
           <div class="flex-1 min-w-0">
-            <span class="text-sm text-gray-700 truncate block">{{ file.name }}</span>
+            <span
+              class="text-sm truncate block"
+              style="color: var(--color-text-secondary)"
+              >{{ file.name }}</span
+            >
           </div>
-          <span class="text-[11px] text-gray-400 w-20 text-right font-mono">{{ formatSize(file.size) }}</span>
-          <span class="text-[11px] text-gray-400 w-32 text-right">{{ formatDate(file.modified) }}</span>
+          <span
+            class="text-[11px] w-20 text-right font-mono"
+            style="color: var(--color-text-tertiary)"
+            >{{ formatSize(file.size) }}</span
+          >
+          <span
+            class="text-[11px] w-32 text-right"
+            style="color: var(--color-text-tertiary)"
+            >{{ formatDate(file.modified) }}</span
+          >
 
           <!-- Aktionen -->
           <div class="flex items-center gap-2 w-16 justify-end">
             <a
               :href="downloadUrl(file)"
               @click.stop
-              class="text-gray-300 hover:text-gray-900 opacity-0 group-hover:opacity-100 transition"
+              class="fb-icon-btn opacity-0 group-hover:opacity-100 transition"
               title="Download"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -463,7 +494,7 @@ onMounted(async () => {
             </a>
             <button
               @click.stop="deleteFile(file)"
-              class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+              class="fb-icon-btn fb-icon-btn-danger opacity-0 group-hover:opacity-100 transition"
               title="Loeschen"
             >
               <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -475,14 +506,24 @@ onMounted(async () => {
       </div>
 
       <!-- Empty state -->
-      <p v-if="files.length === 0 && !loading && !uploading" class="text-gray-400 text-sm py-12 text-center">
+      <p
+        v-if="files.length === 0 && !loading && !uploading"
+        class="text-sm py-12 text-center"
+        style="color: var(--color-text-tertiary)"
+      >
         <span v-if="selectedFilter === '__none__'">Keine Dateien ohne Projekt-Zuordnung.</span>
         <span v-else-if="selectedFilter">Keine Dateien im Projekt „{{ selectedFilter }}".</span>
         <span v-else>Noch keine Dateien. Drag &amp; Drop oder „Hochladen" nutzen.</span>
       </p>
 
       <!-- Loading -->
-      <p v-if="loading" class="text-gray-400 text-sm py-8 text-center">Laedt...</p>
+      <p
+        v-if="loading"
+        class="text-sm py-8 text-center"
+        style="color: var(--color-text-tertiary)"
+      >
+        Laedt...
+      </p>
     </div>
 
     <!-- Drop Overlay -->
@@ -505,9 +546,68 @@ onMounted(async () => {
     </div>
 
     <!-- Upload Spinner -->
-    <div v-if="uploading" class="flex items-center gap-2 mt-4 text-sm text-gray-500">
-      <span class="animate-spin inline-block w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full"></span>
+    <div
+      v-if="uploading"
+      class="flex items-center gap-2 mt-4 text-sm"
+      style="color: var(--color-text-muted)"
+    >
+      <span class="fb-spinner animate-spin inline-block w-4 h-4 rounded-full"></span>
       Wird hochgeladen...
     </div>
   </div>
 </template>
+
+<style scoped>
+.fb-close-btn {
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border);
+  background: transparent;
+}
+.fb-close-btn:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-subtle);
+}
+
+.fb-col-header {
+  color: var(--color-text-tertiary);
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.fb-sort-btn {
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.fb-sort-btn:hover {
+  color: var(--color-text-secondary);
+}
+
+.fb-group-label {
+  color: var(--color-text-tertiary);
+}
+.fb-group-count {
+  color: var(--color-text-faint);
+}
+
+.fb-row:hover {
+  background: var(--color-bg-subtle);
+}
+
+.fb-icon-btn {
+  color: var(--color-text-faint);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.fb-icon-btn:hover {
+  color: var(--color-primary);
+}
+.fb-icon-btn-danger:hover {
+  color: var(--color-danger-text, #ef4444);
+}
+
+.fb-spinner {
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-text-secondary);
+}
+</style>

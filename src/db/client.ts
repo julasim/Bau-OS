@@ -111,4 +111,28 @@ export async function closeDb(): Promise<void> {
   }
 }
 
+/**
+ * Führt eine DB-Operation aus und retried bei transienten Connection-Fehlern
+ * (ECONNREFUSED, ECONNRESET, Connection terminated, ...).
+ * Exponential backoff: 200ms, 600ms, 1800ms. Max 3 Versuche.
+ * Nicht für Queries mit Seiteneffekten (INSERT/UPDATE) ohne Transaktion!
+ */
+export async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      const transient = /ECONN|terminated|timeout|Connection/i.test(msg);
+      if (!transient || i === tries - 1) throw err;
+      const delay = 200 * Math.pow(3, i);
+      logInfo(`[DB] Retry ${i + 1}/${tries} nach ${delay}ms (${msg.slice(0, 80)})`);
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw lastErr;
+}
+
 export { sql };

@@ -96,26 +96,3 @@ async function save() {
   </div>
 </template>
 
-<style scoped>
-.bauos-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-bg);
-  transition: opacity 180ms ease;
-}
-.bauos-btn:hover {
-  opacity: 0.9;
-}
-.bauos-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-</style>

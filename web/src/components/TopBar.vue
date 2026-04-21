@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import BIcon from "./BIcon.vue";
 
 const route = useRoute();
+const router = useRouter();
 
 // Mapping Route-Name → lesbarer Titel (Breadcrumb + window.title).
 const titles: Record<string, string> = {
@@ -26,7 +27,8 @@ const titles: Record<string, string> = {
 const current = computed(() => titles[String(route.name ?? "")] ?? "Bau-OS");
 
 function openPalette() {
-  window.dispatchEvent(new CustomEvent("bauos:toggle-cmd"));
+  // Command-Palette ist noch nicht gebaut — Suche-Button navigiert zur Such-Seite.
+  router.push("/search");
 }
 </script>
 

@@ -248,25 +248,6 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.bauos-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text-secondary);
-  transition: all 180ms ease;
-}
-.bauos-btn.ghost:hover {
-  background: var(--color-bg-subtle);
-  color: var(--color-text);
-}
-
 .proj-card {
   border: 1px solid var(--color-border);
   border-radius: 8px;

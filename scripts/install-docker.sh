@@ -434,13 +434,12 @@ else
   ok "Modell '$OLLAMA_MODEL' bereit"
 fi
 
-# Embedding-Modell fuer pgvector (nur bei lokalem Ollama — Cloud-Modelle
-# bringen Embeddings nicht mit). Klein, ~270 MB, laeuft auf jeder CPU.
-if [ "$LLM_MODE" = "local" ]; then
-  step "Embedding-Modell herunterladen (nomic-embed-text)..."
-  dc exec -T ollama ollama pull nomic-embed-text < /dev/null \
-    || warn "Embedding-Modell konnte nicht geladen werden — semantische Suche bleibt vorerst aus"
-fi
+# Embedding-Modell IMMER lokal (auch bei Cloud-LLM):
+# Cloud-Modelle bringen Embeddings nicht verlaesslich mit, nomic-embed-text
+# ist klein (~270 MB), laeuft auf jeder CPU und spart Cloud-Credits.
+step "Embedding-Modell herunterladen (nomic-embed-text)..."
+dc exec -T ollama ollama pull nomic-embed-text < /dev/null \
+  || warn "Embedding-Modell konnte nicht geladen werden — semantische Suche bleibt vorerst aus"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 8: Container starten

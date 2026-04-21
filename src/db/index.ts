@@ -3,7 +3,7 @@
 // ============================================================
 
 // Direkter PostgreSQL Client (fuer Migrations, Queries, Transaktionen)
-export { getDb, checkDbHealth, checkPgVector, getPoolStats, closeDb } from "./client.js";
+export { getDb, checkDbHealth, checkPgVector, getPoolStats, closeDb, withRetry } from "./client.js";
 export { runMigrations, migrationStatus } from "./migrate.js";
 
 // Supabase JS Client (fuer Realtime, Storage, Auth)
