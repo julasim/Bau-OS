@@ -17,15 +17,15 @@ describe("executeTool — Dispatch", () => {
     executeTool = mod.executeTool;
   });
 
-  it("gibt 'Unbekanntes Tool' fuer nicht-existierenden Tool-Namen zurueck", async () => {
+  it("meldet 'existiert nicht' fuer nicht-existierenden Tool-Namen", async () => {
     const result = await executeTool("gibts_nicht_tool", {});
-    expect(result).toContain("Unbekanntes Tool");
+    expect(result).toContain("existiert nicht");
     expect(result).toContain("gibts_nicht_tool");
   });
 
-  it("gibt 'Unbekanntes Tool' fuer leeren Namen zurueck", async () => {
+  it("meldet 'existiert nicht' fuer leeren Namen", async () => {
     const result = await executeTool("", {});
-    expect(result).toContain("Unbekanntes Tool");
+    expect(result).toContain("existiert nicht");
   });
 
   it("fuehrt bekanntes Tool aus (echo via befehl_ausfuehren)", async () => {

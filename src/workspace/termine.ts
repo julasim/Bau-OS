@@ -89,16 +89,29 @@ function migrateLegacy(project?: string): Termin[] {
   return termine;
 }
 
-/** Prueft Datum im Format TT.MM.JJJJ — gibt Fehlermeldung oder null bei Erfolg */
+/** Akzeptiert TT.MM.JJJJ oder YYYY-MM-DD. Gibt Fehlermeldung oder null bei Erfolg. */
 export function validateDatum(datum: string): string | null {
-  if (!/^\d{2}\.\d{2}\.\d{4}$/.test(datum)) {
-    return `Ungueltiges Datumsformat "${datum}" — erwartet: TT.MM.JJJJ (z.B. 15.04.2026)`;
+  let tag: number, monat: number, jahr: number;
+  if (/^\d{2}\.\d{2}\.\d{4}$/.test(datum)) {
+    [tag, monat, jahr] = datum.split(".").map(Number);
+  } else if (/^\d{4}-\d{2}-\d{2}$/.test(datum)) {
+    [jahr, monat, tag] = datum.split("-").map(Number);
+  } else {
+    return `Ungueltiges Datumsformat "${datum}" — erwartet: TT.MM.JJJJ (z.B. 15.04.2026) oder YYYY-MM-DD`;
   }
-  const [tag, monat, jahr] = datum.split(".").map(Number);
   if (monat < 1 || monat > 12) return `Ungueltiger Monat ${monat} in "${datum}"`;
   if (tag < 1 || tag > 31) return `Ungueltiger Tag ${tag} in "${datum}"`;
   if (jahr < 2020 || jahr > 2099) return `Ungueltiges Jahr ${jahr} in "${datum}"`;
   return null;
+}
+
+/** Normalisiert ein validiertes Datum auf das kanonische TT.MM.JJJJ. */
+export function normalizeDatum(datum: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datum)) {
+    const [jahr, monat, tag] = datum.split("-");
+    return `${tag}.${monat}.${jahr}`;
+  }
+  return datum;
 }
 
 /** Prueft Uhrzeit im Format HH:MM — gibt Fehlermeldung oder null bei Erfolg */
@@ -119,6 +132,7 @@ export function saveTermin(datum: string, text: string, uhrzeit?: string, projec
     const uhrzeitErr = validateUhrzeit(uhrzeit);
     if (uhrzeitErr) return uhrzeitErr;
   }
+  datum = normalizeDatum(datum);
 
   const termine = loadTermine(project);
   const now = new Date().toISOString();
@@ -154,6 +168,12 @@ export function updateTermin(
   const termine = loadTermine(project);
   const idx = termine.findIndex((t) => t.id === id);
   if (idx === -1) return null;
+
+  if (updates.datum) {
+    const err = validateDatum(updates.datum);
+    if (err) return null;
+    updates = { ...updates, datum: normalizeDatum(updates.datum) };
+  }
 
   termine[idx] = { ...termine[idx], ...updates };
   saveTermine(termine, project);

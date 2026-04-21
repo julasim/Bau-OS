@@ -6,6 +6,7 @@ import { getDynamicToolSchemas } from "../tools.js";
 import { getMcpToolSchemas } from "../mcp.js";
 import { executeTool, setCurrentDepth, registerProcessAgent } from "./executor.js";
 import { runCompaction } from "./compaction.js";
+import { isActionRequest, ACTION_HINT, TOOL_SKIP_CORRECTION, MAX_TOOL_SKIP_RETRIES } from "./actions.js";
 import { loadAgentWorkspace, appendAgentConversation, loadAgentHistory, shouldCompact } from "../workspace/index.js";
 import {
   MAX_HISTORY_CHARS,
@@ -37,9 +38,16 @@ export async function processAgent(
   const workspaceContext = loadAgentWorkspace(agentName, mode);
   const dateLine = buildDateLine();
   const toolWhitelist = buildToolWhitelist();
-  const systemPrompt = workspaceContext
+  const baseSystemPrompt = workspaceContext
     ? `${dateLine}\n\n${workspaceContext}\n\n${toolWhitelist}`
     : `${dateLine}\n\n${toolWhitelist}`;
+
+  // Halluzinations-Schutz (parity mit api/routes/chat.ts): bei klaren
+  // Aktions-Anfragen einen Zusatz-Hint in den System-Prompt haengen und in
+  // Runde 1 das antworten-Tool rausfiltern, damit das Modell die echte Aktion
+  // aufrufen muss statt Erfolg zu faken.
+  const isAction = isActionRequest(userMessage);
+  const systemPrompt = isAction ? baseSystemPrompt + ACTION_HINT : baseSystemPrompt;
 
   const history = mode === "full" ? loadAgentHistory(agentName, HISTORY_LOAD_LIMIT) : [];
 
@@ -53,12 +61,19 @@ export async function processAgent(
   ];
 
   const activeModel = mode === "minimal" ? SUBAGENT_MODEL : getAgentModel(agentName);
+  const allTools = [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()];
+  const toolsWithoutAntworten = allTools.filter((t) => !(t.type === "function" && t.function.name === "antworten"));
+
+  let actionToolSkipRetries = 0;
 
   for (let i = 0; i < MAX_TOOL_ROUNDS; i++) {
+    const forceActionInRound1 = isAction && i === 0;
+    const effectiveTools = forceActionInRound1 ? toolsWithoutAntworten : allTools;
+
     const response = await client.chat.completions.create({
       model: activeModel,
       messages,
-      tools: [...TOOLS, ...getDynamicToolSchemas(), ...getMcpToolSchemas()],
+      tools: effectiveTools,
       tool_choice: "required",
     });
 
@@ -67,6 +82,32 @@ export async function processAgent(
 
     // Fallback: Modell hat keinen Tool-Call gemacht (sollte bei "required" nicht passieren)
     if (!reply.tool_calls || reply.tool_calls.length === 0) {
+      // Hartes Halluzinations-Netz fuer Aktions-Anfragen in Runde 1: Retry mit
+      // verstaerktem System-Hint, nach MAX_TOOL_SKIP_RETRIES ehrlicher Fehler.
+      if (isAction && i === 0) {
+        if (actionToolSkipRetries < MAX_TOOL_SKIP_RETRIES) {
+          actionToolSkipRetries++;
+          messages.push({ role: "user", content: TOOL_SKIP_CORRECTION });
+          logInfo(
+            `[${agentName}] Tool-Skip Retry ${actionToolSkipRetries}/${MAX_TOOL_SKIP_RETRIES} ` +
+              `(Modell: ${activeModel})`,
+          );
+          i--;
+          continue;
+        }
+        const warnung =
+          `\u26A0\uFE0F Das Modell hat ${MAX_TOOL_SKIP_RETRIES + 1}x behauptet, die Aktion ausgefuehrt zu haben, ` +
+          `aber keinen Tool-Call gemacht — es wurde also NICHTS gespeichert. ` +
+          `Das Modell "${activeModel}" ignoriert tool_choice=required hartnaeckig. ` +
+          `Probiere ein groesseres Modell (/model) oder formuliere die Anfrage anders.`;
+        appendAgentConversation(agentName, userMessage, warnung);
+        logError(
+          "[Runtime] Modell hat tool_choice=required nach Retries ignoriert",
+          new Error(`Action-Request ohne tool_calls nach ${MAX_TOOL_SKIP_RETRIES} Retries. Modell: ${activeModel}.`),
+        );
+        return warnung;
+      }
+
       const antwort = reply.content ?? "Erledigt.";
       appendAgentConversation(agentName, userMessage, antwort);
       logInfo(`[${agentName}] Antwort ohne Tool (Runde ${i + 1}, ${antwort.length} Z)`);

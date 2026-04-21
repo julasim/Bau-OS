@@ -12,7 +12,7 @@ import {
 import { safePath } from "../../workspace/helpers.js";
 import { fileRepo } from "../../data/index.js";
 import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED, TOOL_OUTPUT_MAX_CHARS, WORKSPACE_PATH } from "../../config.js";
-import { sendFile } from "../context.js";
+import { sendFile, sendBuffer } from "../context.js";
 import type { HandlerMap } from "./types.js";
 
 const DOCUMENT_EXTS = new Set(["pdf", "docx", "doc"]);
@@ -177,13 +177,14 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "datei_senden",
       description:
-        "Sendet eine Datei aus dem Workspace als Telegram-Dokument an den Nutzer. Relativer Pfad zum Workspace-Root, z.B. 'Exports/Bericht.pdf'. Nach pdf_erstellen oder docx_erstellen verwenden um die generierte Datei zuzustellen.",
+        "Sendet eine Datei als Telegram-Dokument an den Nutzer. Entweder 'id' (Datenbank-Datei-ID oder Dateiname hochgeladener Dateien) ODER 'pfad' (relativer Workspace-Pfad fuer generierte Exports). Nach pdf_erstellen oder docx_erstellen reicht der Pfad. Hochgeladene Uploads werden ueber die id adressiert.",
       parameters: {
         type: "object",
         properties: {
+          id: { type: "string", description: "DB-ID oder Dateiname einer hochgeladenen Datei" },
           pfad: { type: "string", description: "Relativer Pfad im Workspace (z.B. 'Exports/Bericht.pdf')" },
         },
-        required: ["pfad"],
+        required: [],
       },
     },
   },
@@ -442,9 +443,25 @@ export const fileHandlers: HandlerMap = {
   },
 
   datei_senden: async (args) => {
-    const pfad = String(args.pfad);
+    const id = args.id ? String(args.id) : "";
+    const pfad = args.pfad ? String(args.pfad) : "";
+    if (!id && !pfad) return "Fehler: Entweder 'id' (DB-Datei) oder 'pfad' (Workspace-Datei) angeben.";
+
+    if (id && DB_ENABLED && fileRepo) {
+      try {
+        const result = await fileRepo.readBlob(id);
+        if (result) {
+          await sendBuffer(result.blob, result.filename, result.mimeType);
+          return `Datei gesendet: ${result.filename}`;
+        }
+        if (!pfad) return `Datei mit id/name "${id}" nicht gefunden oder hat keinen Blob.`;
+      } catch (err) {
+        return `Fehler beim Lesen der DB-Datei: ${err instanceof Error ? err.message : String(err)}`;
+      }
+    }
+
+    if (!pfad) return `Datei mit id/name "${id}" nicht gefunden.`;
     const absPath = path.resolve(WORKSPACE_PATH, pfad);
-    // Path-Traversal-Schutz
     if (!absPath.startsWith(WORKSPACE_PATH)) {
       return "Zugriff verweigert: Pfad liegt ausserhalb des Workspace.";
     }

@@ -39,6 +39,19 @@ export async function sendFile(absolutePath: string): Promise<void> {
   if (_sendFileFn) await _sendFileFn(absolutePath);
 }
 
+// ---- Send-Buffer Context (DB-Blobs ohne FS-Umweg) ----
+
+type SendBufferFn = (buffer: Buffer, filename: string, mimeType?: string | null) => Promise<void>;
+let _sendBufferFn: SendBufferFn | null = null;
+
+export function setSendBufferContext(fn: SendBufferFn): void {
+  _sendBufferFn = fn;
+}
+
+export async function sendBuffer(buffer: Buffer, filename: string, mimeType?: string | null): Promise<void> {
+  if (_sendBufferFn) await _sendBufferFn(buffer, filename, mimeType);
+}
+
 // ---- Late-bound processAgent (avoids circular import with runtime) ----
 
 type ProcessAgentFn = (name: string, msg: string, mode: "full" | "minimal", depth: number) => Promise<string>;

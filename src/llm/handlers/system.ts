@@ -125,12 +125,13 @@ const ALLOWED_COMMANDS = [
 
 export const systemHandlers: HandlerMap = {
   befehl_ausfuehren: async (args) => {
-    const cmd = String(args.befehl).trim();
-    // Jeden Befehl nach |, ;, &&, || einzeln validieren
+    const cmd = String(args.befehl ?? "").trim();
+    if (!cmd) return "Befehl nicht erlaubt: leerer Befehl.";
     const cmdTokens = cmd
       .split(/\s*(?:\|{1,2}|;|&&)\s*/)
       .map((part) => part.trim().split(/\s/)[0].replace(/^.*\//, ""))
       .filter(Boolean);
+    if (cmdTokens.length === 0) return "Befehl nicht erlaubt: leerer Befehl.";
     const blocked = cmdTokens.filter((t) => !ALLOWED_COMMANDS.includes(t));
     if (blocked.length > 0)
       return `Befehl nicht erlaubt: ${blocked.join(", ")}. Erlaubte Befehle: ${ALLOWED_COMMANDS.slice(0, 15).join(", ")}...`;

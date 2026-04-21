@@ -9,6 +9,7 @@ import { getMcpToolSchemas } from "../../mcp.js";
 import { executeTool } from "../../llm/executor.js";
 import { loadAgentWorkspace, shouldCompact } from "../../workspace/index.js";
 import { runCompaction } from "../../llm/compaction.js";
+import { isActionRequest, ACTION_HINT, TOOL_SKIP_CORRECTION, MAX_TOOL_SKIP_RETRIES } from "../../llm/actions.js";
 import { chatRepo } from "../../data/index.js";
 import {
   MAX_HISTORY_CHARS,
@@ -104,20 +105,7 @@ chatRoutes.post("/chat", (c) => {
       ? `${dateLine}\n\n${workspaceContext}\n\n${toolWhitelist}`
       : `${dateLine}\n\n${toolWhitelist}`;
 
-    // Erkennt Aktions-Anfragen auf Deutsch — bei denen darf der LLM in Runde 1
-    // NICHT einfach antworten-halluzinieren ("Projekt angelegt" ohne Tool-Call).
-    //
-    // WICHTIG: Die Stämme stehen hier OHNE trailing \b, weil deutsche
-    // Konjugationen Suffixe haben (speicher → speichere, speichert, speichern).
-    // Ein `\bspeicher\b` wuerde "Speichere" NICHT matchen, weil nach "speicher"
-    // noch ein Buchstabe (e/t/n) kommt — dann greift die Anti-Halluzinations-
-    // Defense nicht und das Modell kann frei "gespeichert" lügen.
-    //
-    // False-positives sind OK, weil das Modell notfalls ein Lese-Tool
-    // (projekt_info, notizen_auflisten) statt antworten waehlt.
-    const actionPattern =
-      /\b(leg|anleg|erstell|speicher|lösch|loesch|änder|aender|entfern|aktualisier|trag.*ein|plan.*ein|notier|merk|benenn.*um|verschieb|hinzufüg|einfüg|füg.*hinzu|buch|setz|schreib|erfass|protokollier)/i;
-    const isActionRequest = actionPattern.test(userMessage);
+    const isAction = isActionRequest(userMessage);
 
     // Wenn Dateisuche aktiv: LLM zwingen das Tool 'semantisch_suchen' zu nutzen
     const searchHint = searchMode
@@ -131,13 +119,7 @@ chatRoutes.post("/chat", (c) => {
     // reicht bei kleineren Modellen (Ollama) nicht, die schummeln sich mit
     // leerem tool_calls-Array durch. Ein expliziter deutscher Befehl im
     // System-Prompt erhoeht die Erfolgsrate messbar.
-    const actionHint = isActionRequest
-      ? `\n\nWICHTIG: Der Benutzer fordert eine Aktion (speichern/anlegen/loeschen/...). ` +
-        `Du MUSST dafuer das entsprechende Tool aufrufen (z.B. notiz_speichern, termin_speichern, ` +
-        `task_speichern, projekt_anlegen). Bei mehreren Items: ein Tool-Call pro Item. ` +
-        `Gib NIEMALS eine Text-Antwort wie "gespeichert" oder "eingeplant" zurueck, ohne ` +
-        `vorher die Tool-Calls wirklich ausgefuehrt zu haben — das waere eine Luege.`
-      : "";
+    const actionHint = isAction ? ACTION_HINT : "";
     const systemPrompt = baseSystemPrompt + searchHint + actionHint;
 
     // History aus DB oder leer
@@ -160,13 +142,8 @@ chatRoutes.post("/chat", (c) => {
 
     const collectedTools: string[] = [];
 
-    // Maximale interne Retries wenn das Modell `tool_choice: required` ignoriert
-    // und mit reiner Text-Antwort kommt. Kleinere Modelle (Kimi-K2.5, manche
-    // Llama-Varianten) machen das gelegentlich — ein verstaerkter System-Hint
-    // als zusaetzliche user-Message bringt sie in ~80 % der Faelle zurueck auf
-    // Spur. Erst nach diesen Retries sehen den User die "nichts gespeichert"-
-    // Warnung. Ohne Retries musste der User die Anfrage bis zu 3x manuell senden.
-    const MAX_TOOL_SKIP_RETRIES = 2;
+    // Retry-Counter fuer Modelle, die tool_choice=required ignorieren.
+    // Konstanten aus ../../llm/actions.js (shared mit runtime.ts).
     let actionToolSkipRetries = 0;
 
     try {
@@ -178,7 +155,7 @@ chatRoutes.post("/chat", (c) => {
       const toolsWithoutAntworten = allTools.filter((t) => !(t.type === "function" && t.function.name === "antworten"));
 
       for (let i = 0; i < MAX_TOOL_ROUNDS; i++) {
-        const forceActionInRound1 = isActionRequest && i === 0;
+        const forceActionInRound1 = isAction && i === 0;
         const effectiveTools = forceActionInRound1 ? toolsWithoutAntworten : allTools;
         // Tool-Choice-Strategie:
         // - Runde 1 mit aktiver Dateisuche: 'semantisch_suchen' erzwingen.
@@ -211,7 +188,7 @@ chatRoutes.post("/chat", (c) => {
           // Grund: Das Modell ignoriert in diesem Fall tool_choice: "required"
           // (bekanntes Ollama-Problem bei kleineren Modellen) und faked Erfolg
           // ("Alle Termine gespeichert") ohne irgendetwas getan zu haben.
-          if (isActionRequest && i === 0) {
+          if (isAction && i === 0) {
             // Retry-Zweig: Dem Modell einen verstaerkten Hint geben und die
             // gleiche Runde nochmal spielen lassen. Die fehlerhafte Assistant-
             // Reply bleibt in `messages` — das Modell sieht seinen eigenen Fehler
@@ -219,16 +196,7 @@ chatRoutes.post("/chat", (c) => {
             // gegen das "Erledigt"-ohne-Tool-Call Problem bei Kimi-K2.5 & Co.
             if (actionToolSkipRetries < MAX_TOOL_SKIP_RETRIES) {
               actionToolSkipRetries++;
-              messages.push({
-                role: "user",
-                content:
-                  `[SYSTEM-KORREKTUR] Du hast gerade KEINEN Tool-Call gemacht, ` +
-                  `obwohl tool_choice=required gesetzt war. Eine Text-Antwort wie ` +
-                  `"erledigt" oder "gespeichert" ist hier eine Luege, weil nichts ` +
-                  `wirklich passiert ist. Rufe JETZT sofort das passende Tool ` +
-                  `(notiz_loeschen, termin_loeschen, task_speichern, projekt_anlegen, ...) ` +
-                  `mit den richtigen Argumenten auf. Keine Text-Antwort — nur der Tool-Call.`,
-              });
+              messages.push({ role: "user", content: TOOL_SKIP_CORRECTION });
               logInfo(
                 `[Chat] Tool-Skip Retry ${actionToolSkipRetries}/${MAX_TOOL_SKIP_RETRIES} ` +
                   `fuer "${userMessage.slice(0, 60)}" (Modell: ${activeModel})`,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateDatum, validateUhrzeit } from "../src/workspace/termine.js";
+import { validateDatum, validateUhrzeit, normalizeDatum } from "../src/workspace/termine.js";
 
 describe("validateDatum", () => {
   it("akzeptiert gueltiges Datum TT.MM.JJJJ", () => {
@@ -8,12 +8,21 @@ describe("validateDatum", () => {
     expect(validateDatum("31.12.2099")).toBeNull();
   });
 
+  it("akzeptiert ISO-Datum YYYY-MM-DD (HTML date-Input)", () => {
+    expect(validateDatum("2026-04-15")).toBeNull();
+    expect(validateDatum("2024-01-01")).toBeNull();
+  });
+
   it("lehnt falsches Format ab", () => {
-    expect(validateDatum("2026-04-15")).toContain("Ungueltiges Datumsformat");
     expect(validateDatum("15/04/2026")).toContain("Ungueltiges Datumsformat");
     expect(validateDatum("15.4.2026")).toContain("Ungueltiges Datumsformat");
     expect(validateDatum("morgen")).toContain("Ungueltiges Datumsformat");
     expect(validateDatum("")).toContain("Ungueltiges Datumsformat");
+  });
+
+  it("normalizeDatum konvertiert ISO → TT.MM.JJJJ, laesst TT.MM.JJJJ durch", () => {
+    expect(normalizeDatum("2026-04-15")).toBe("15.04.2026");
+    expect(normalizeDatum("15.04.2026")).toBe("15.04.2026");
   });
 
   it("lehnt ungueltigen Monat ab", () => {

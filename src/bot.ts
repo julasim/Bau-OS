@@ -4,7 +4,7 @@ import { Bot, InputFile } from "grammy";
 import { saveNote, isMainWorkspaceConfigured } from "./workspace/index.js";
 import { processMessage, processBtw, processAgent } from "./llm/runtime.js";
 import { processSetup, isSetupActive, activateSetup } from "./llm/setup.js";
-import { setReplyContext, setSendFileContext } from "./llm/executor.js";
+import { setReplyContext, setSendFileContext, setSendBufferContext } from "./llm/executor.js";
 import { logError } from "./logger.js";
 import { enqueue } from "./queue.js";
 import { fmt, stripMarkdown } from "./format.js";
@@ -116,6 +116,9 @@ export function createBot(token: string): Bot {
         setSendFileContext(async (absPath) => {
           await ctx.replyWithDocument(new InputFile(absPath), { caption: path.basename(absPath) });
         });
+        setSendBufferContext(async (buffer, filename) => {
+          await ctx.replyWithDocument(new InputFile(buffer, filename), { caption: filename });
+        });
         const antwort = await processMessage(text);
         stopTyping();
         await safeReply(ctx, antwort);
@@ -194,6 +197,9 @@ export function createBot(token: string): Bot {
         setReplyContext((msg) => safeReply(ctx, msg).then(() => {}));
         setSendFileContext(async (absPath) => {
           await ctx.replyWithDocument(new InputFile(absPath), { caption: path.basename(absPath) });
+        });
+        setSendBufferContext(async (buffer, filename) => {
+          await ctx.replyWithDocument(new InputFile(buffer, filename), { caption: filename });
         });
 
         // LLM mit Dateiinhalt aufrufen

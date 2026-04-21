@@ -23,6 +23,8 @@ export {
   getProcessAgentFn,
   setSendFileContext,
   sendFile,
+  setSendBufferContext,
+  sendBuffer,
 } from "./context.js";
 
 // ---- Handler Registry ----

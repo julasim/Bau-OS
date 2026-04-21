@@ -1,7 +1,7 @@
 // Datenbank-Implementation: PostgreSQL via postgres.js
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import { validateDatum, validateUhrzeit } from "../workspace/termine.js";
+import { validateDatum, validateUhrzeit, normalizeDatum } from "../workspace/termine.js";
 import type { Termin, TerminRepository } from "./types.js";
 
 function rowToTermin(row: Record<string, unknown>): Termin {
@@ -28,6 +28,7 @@ export const dbTermine: TerminRepository = {
       const uhrzeitErr = validateUhrzeit(uhrzeit);
       if (uhrzeitErr) return uhrzeitErr;
     }
+    datum = normalizeDatum(datum);
 
     const db = getDb();
     // Volle UUID — die termine.id-Spalte ist UUID-typisiert, ein .slice(0,8)
@@ -86,6 +87,12 @@ export const dbTermine: TerminRepository = {
     // Aktuelle Werte holen um undefined vs null unterscheiden zu koennen
     const [current] = await db`SELECT * FROM termine WHERE id = ${id}`;
     if (!current) return null;
+
+    if (updates.datum) {
+      const err = validateDatum(updates.datum);
+      if (err) return null;
+      updates = { ...updates, datum: normalizeDatum(updates.datum) };
+    }
 
     const text = "text" in updates ? updates.text : current.text;
     const datum = "datum" in updates ? updates.datum : current.datum;
