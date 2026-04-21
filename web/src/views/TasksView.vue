@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from "vue";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
+import BIcon from "../components/BIcon.vue";
 
 interface Task {
   id: string;
@@ -17,25 +18,18 @@ interface Task {
   updatedAt: string;
 }
 
+type ViewMode = "list" | "kanban" | "timeline";
+
 const tasks = ref<Task[]>([]);
 const team = ref<string[]>([]);
 const editing = ref<Task | null>(null);
 const newText = ref("");
 const filter = ref<"all" | "open" | "in_progress" | "done">("all");
-const viewMode = ref<"list" | "grid">("list");
-const sortBy = ref<"updatedAt" | "text" | "status">("updatedAt");
-const sortAsc = ref(false);
+const viewMode = ref<ViewMode>("list");
 
 const filtered = computed(() => {
-  let result = tasks.value;
-  if (filter.value !== "all") result = result.filter((t) => t.status === filter.value);
-  return result.sort((a, b) => {
-    let cmp = 0;
-    if (sortBy.value === "text") cmp = a.text.localeCompare(b.text);
-    else if (sortBy.value === "status") cmp = a.status.localeCompare(b.status);
-    else if (sortBy.value === "updatedAt") cmp = a.updatedAt.localeCompare(b.updatedAt);
-    return sortAsc.value ? cmp : -cmp;
-  });
+  if (filter.value === "all") return tasks.value;
+  return tasks.value.filter((t) => t.status === filter.value);
 });
 
 const counts = computed(() => ({
@@ -46,7 +40,10 @@ const counts = computed(() => ({
 }));
 
 async function load() {
-  [tasks.value, team.value] = await Promise.all([api.get<Task[]>("/tasks"), api.get<string[]>("/team")]);
+  [tasks.value, team.value] = await Promise.all([
+    api.get<Task[]>("/tasks"),
+    api.get<string[]>("/team").catch(() => []),
+  ]);
 }
 
 async function create() {
@@ -73,6 +70,15 @@ async function setStatus(task: Task, status: Task["status"]) {
   await load();
 }
 
+async function cycleStatus(task: Task) {
+  const next: Record<Task["status"], Task["status"]> = {
+    open: "in_progress",
+    in_progress: "done",
+    done: "open",
+  };
+  await setStatus(task, next[task.status]);
+}
+
 async function remove(id: string) {
   await api.delete(`/tasks/${id}`);
   await load();
@@ -82,218 +88,559 @@ function edit(task: Task) {
   editing.value = { ...task };
 }
 
-const statusLabel: Record<string, string> = { open: "Offen", in_progress: "In Arbeit", done: "Erledigt" };
-const statusColor: Record<string, string> = { open: "text-gray-500", in_progress: "text-amber-600", done: "text-green-600" };
-const statusDot: Record<string, string> = { open: "border-gray-300", in_progress: "bg-amber-500 border-amber-500", done: "bg-green-500 border-green-500" };
-const statusBg: Record<string, string> = { open: "bg-gray-100 text-gray-600", in_progress: "bg-amber-50 text-amber-700", done: "bg-green-50 text-green-700" };
+const statusLabel: Record<Task["status"], string> = {
+  open: "Offen",
+  in_progress: "In Arbeit",
+  done: "Erledigt",
+};
+const filterLabel: Record<"all" | Task["status"], string> = {
+  all: "Alle",
+  open: "Offen",
+  in_progress: "In Arbeit",
+  done: "Erledigt",
+};
 
-function formatDate(d: string) {
-  if (!d) return "–";
+function formatDate(d: string | null) {
+  if (!d) return "";
   if (d.includes(".")) return d;
-  const date = new Date(d);
-  return date.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
-}
-
-function formatDateTime(iso: string) {
-  if (!iso) return "–";
-  const d = new Date(iso);
-  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + d.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
-}
-
-function relativeTime(iso: string) {
-  if (!iso) return "";
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "gerade eben";
-  if (mins < 60) return `vor ${mins} Min`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `vor ${hrs} Std`;
-  const days = Math.floor(hrs / 24);
-  if (days < 7) return `vor ${days} Tagen`;
-  return formatDateTime(iso);
-}
-
-function toggleSort(col: typeof sortBy.value) {
-  if (sortBy.value === col) sortAsc.value = !sortAsc.value;
-  else { sortBy.value = col; sortAsc.value = col === "text"; }
-}
-
-function sortIcon(col: string) {
-  if (sortBy.value !== col) return "";
-  return sortAsc.value ? "\u25B2" : "\u25BC";
+  const [y, m, day] = d.split("-");
+  return `${day}.${m}.${y}`;
 }
 
 onMounted(load);
 useEvents(["task"], () => load());
+
+const kanbanColumns = computed(() => [
+  { key: "open" as const, title: "Offen", dotClass: "status-open", items: tasks.value.filter((t) => t.status === "open") },
+  { key: "in_progress" as const, title: "In Arbeit", dotClass: "status-progress", items: tasks.value.filter((t) => t.status === "in_progress") },
+  { key: "done" as const, title: "Erledigt", dotClass: "status-done", items: tasks.value.filter((t) => t.status === "done") },
+]);
 </script>
 
 <template>
-  <div>
-    <div class="flex items-center justify-between mb-5">
-      <h2 class="text-xl font-semibold">Aufgaben</h2>
-      <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="p-1.5 rounded hover:bg-gray-100 transition" title="Ansicht wechseln">
-        <svg v-if="viewMode === 'list'" class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        <svg v-else class="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
-      </button>
+  <div
+    style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)"
+  >
+    <!-- Header -->
+    <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
+      <div class="min-w-0">
+        <div class="eyebrow" style="margin-bottom: 6px">Arbeit</div>
+        <h1
+          style="
+            font-size: 24px;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.01em;
+            color: var(--color-text);
+          "
+        >
+          Aufgaben
+        </h1>
+        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
+          {{ counts.open }} offen · {{ counts.in_progress }} in Arbeit · {{ counts.done }} erledigt
+        </p>
+      </div>
+      <!-- Segmented View-Switcher -->
+      <div
+        class="flex"
+        style="border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden"
+      >
+        <button
+          v-for="(m, i) in ['list', 'kanban', 'timeline'] as ViewMode[]"
+          :key="m"
+          @click="viewMode = m"
+          :class="['seg-btn', viewMode === m ? 'seg-btn-active' : '', i > 0 ? 'seg-divider' : '']"
+          :aria-pressed="viewMode === m"
+        >
+          <BIcon :name="m" :size="14" />
+          <span>{{ m === "list" ? "Liste" : m === "kanban" ? "Kanban" : "Zeitstrahl" }}</span>
+        </button>
+      </div>
     </div>
 
-    <!-- Neue Aufgabe -->
-    <div class="flex gap-2 mb-6">
+    <!-- Quick-Add -->
+    <div class="flex gap-2" style="margin-bottom: 20px">
       <input
         v-model="newText"
-        placeholder="Neue Aufgabe..."
+        placeholder="Neue Aufgabe…"
         @keyup.enter="create"
-        class="flex-1 px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
+        class="flex-1"
+        style="
+          padding: 8px 12px;
+          border: 1px solid var(--color-border);
+          border-radius: 6px;
+          font-size: 13px;
+          outline: none;
+          background: var(--color-bg);
+          color: var(--color-text);
+        "
       />
-      <button @click="create" class="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">
-        Hinzufuegen
+      <button @click="create" class="bauos-btn solid">
+        <BIcon name="plus" :size="14" :stroke-width="2" /> Hinzufügen
       </button>
     </div>
 
-    <!-- Filter Tabs -->
-    <div class="flex gap-1 mb-5 border-b border-gray-100 pb-3">
+    <!-- Filter-Pills -->
+    <div class="flex" style="gap: 6px; margin-bottom: 16px">
       <button
         v-for="f in (['all', 'open', 'in_progress', 'done'] as const)"
         :key="f"
         @click="filter = f"
-        :class="filter === f ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-100'"
-        class="px-3 py-1 rounded text-sm transition"
+        :class="['filter-pill', filter === f ? 'filter-pill-active' : '']"
       >
-        {{ f === "all" ? "Alle" : statusLabel[f] }}
-        <span
-          :class="filter === f ? 'bg-white/20' : 'bg-gray-200'"
-          class="ml-1.5 inline-block px-1.5 py-0 text-[11px] rounded-full"
-        >{{ counts[f] }}</span>
+        {{ filterLabel[f] }}
+        <span :class="['filter-count', filter === f ? 'filter-count-active' : '']">
+          {{ counts[f] }}
+        </span>
       </button>
     </div>
 
-    <!-- Edit Form -->
-    <div v-if="editing" class="border border-gray-200 rounded-lg p-5 mb-6 space-y-3">
-      <div>
-        <label class="block text-xs text-gray-400 mb-1">Beschreibung</label>
-        <input v-model="editing.text" class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
+    <!-- Edit-Form -->
+    <div
+      v-if="editing"
+      style="
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 20px;
+        background: var(--color-bg);
+      "
+    >
+      <div style="margin-bottom: 12px">
+        <label class="eyebrow" style="margin-bottom: 4px; display: block">Beschreibung</label>
+        <input v-model="editing.text" class="form-input" />
       </div>
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px">
         <div>
-          <label class="block text-xs text-gray-400 mb-1">Status</label>
-          <select v-model="editing.status" class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none">
+          <label class="eyebrow" style="margin-bottom: 4px; display: block">Status</label>
+          <select v-model="editing.status" class="form-input">
             <option value="open">Offen</option>
             <option value="in_progress">In Arbeit</option>
             <option value="done">Erledigt</option>
           </select>
         </div>
         <div>
-          <label class="block text-xs text-gray-400 mb-1">Person</label>
-          <select v-model="editing.assignee" class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none">
+          <label class="eyebrow" style="margin-bottom: 4px; display: block">Person</label>
+          <select v-model="editing.assignee" class="form-input">
             <option :value="null">–</option>
             <option v-for="m in team" :key="m" :value="m">{{ m }}</option>
           </select>
         </div>
         <div>
-          <label class="block text-xs text-gray-400 mb-1">Datum</label>
-          <input v-model="editing.date" type="date" class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none" />
+          <label class="eyebrow" style="margin-bottom: 4px; display: block">Datum</label>
+          <input v-model="editing.date" type="date" class="form-input" />
         </div>
       </div>
-      <div>
-        <label class="block text-xs text-gray-400 mb-1">Ort</label>
-        <input v-model="editing.location" placeholder="z.B. Baustelle Wien" class="w-full px-3 py-2 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400" />
+      <div style="margin-bottom: 16px">
+        <label class="eyebrow" style="margin-bottom: 4px; display: block">Ort</label>
+        <input v-model="editing.location" placeholder="z. B. Baustelle Wien" class="form-input" />
       </div>
-      <div class="flex gap-2 pt-1">
-        <button @click="save(editing!)" class="px-4 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">Speichern</button>
-        <button @click="editing = null" class="px-4 py-1.5 text-sm text-gray-400 hover:text-gray-600 transition">Abbrechen</button>
+      <div class="flex gap-2">
+        <button @click="save(editing!)" class="bauos-btn solid">Speichern</button>
+        <button @click="editing = null" class="bauos-btn ghost">Abbrechen</button>
       </div>
     </div>
 
-    <!-- Grid View -->
-    <div v-if="viewMode === 'grid'" class="grid grid-cols-2 md:grid-cols-3 gap-3">
+    <!-- LIST VIEW -->
+    <div
+      v-if="viewMode === 'list'"
+      style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden"
+    >
+      <!-- Header -->
+      <div
+        class="flex items-center"
+        style="
+          gap: 12px;
+          padding: 10px 16px;
+          background: var(--color-bg-subtle);
+          border-bottom: 1px solid var(--color-border);
+        "
+      >
+        <span style="width: 14px" />
+        <span class="eyebrow flex-1">Aufgabe</span>
+        <span class="eyebrow" style="width: 120px">Projekt</span>
+        <span class="eyebrow" style="width: 100px">Person</span>
+        <span class="eyebrow" style="width: 90px">Fällig</span>
+      </div>
+      <div v-if="filtered.length === 0" style="padding: 24px; font-size: 13px; color: var(--color-text-tertiary); text-align: center">
+        Keine Aufgaben in dieser Ansicht.
+      </div>
       <div
         v-for="task in filtered"
         :key="task.id"
-        class="border border-gray-200 rounded-lg p-4 cursor-pointer hover:border-gray-300 transition group"
+        class="task-row flex items-center"
+        style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
       >
-        <div class="flex items-start justify-between mb-2">
-          <button
-            @click="setStatus(task, task.status === 'done' ? 'open' : task.status === 'open' ? 'in_progress' : 'done')"
-            :class="statusDot[task.status]"
-            class="mt-0.5 w-4 h-4 rounded border flex-shrink-0 transition hover:border-green-400"
-          ></button>
-          <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition">
-            <button @click="edit(task)" class="text-gray-300 hover:text-gray-600 transition">
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-            </button>
-            <button @click="remove(task.id)" class="text-gray-300 hover:text-red-500 transition">
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
+        <button
+          @click="cycleStatus(task)"
+          :class="['status-box', `status-${task.status}`]"
+          :aria-label="statusLabel[task.status]"
+        >
+          <BIcon v-if="task.status === 'done'" name="check" :size="10" :stroke-width="2.5" />
+        </button>
+        <div class="flex-1 min-w-0" @click="edit(task)" style="cursor: pointer">
+          <div
+            :class="{ 'line-through': task.status === 'done' }"
+            :style="{
+              fontSize: '13px',
+              color:
+                task.status === 'done'
+                  ? 'var(--color-text-tertiary)'
+                  : 'var(--color-text-secondary)',
+            }"
+            class="truncate"
+          >
+            {{ task.text }}
           </div>
-        </div>
-        <p :class="{ 'line-through text-gray-300': task.status === 'done' }" class="text-sm font-medium text-gray-700 mb-2">{{ task.text }}</p>
-        <div class="flex flex-wrap gap-1.5 mb-2">
-          <span :class="statusBg[task.status]" class="px-1.5 py-0.5 text-[10px] rounded font-medium">{{ statusLabel[task.status] }}</span>
-          <span v-if="task.project" class="px-1.5 py-0.5 bg-gray-100 rounded text-[10px] text-gray-500">{{ task.project }}</span>
-          <span v-if="task.priority" class="px-1.5 py-0.5 bg-red-50 rounded text-[10px] text-red-600">{{ task.priority }}</span>
-        </div>
-        <div class="space-y-0.5 text-[11px] text-gray-400">
-          <div v-if="task.assignee" class="flex items-center gap-1">
-            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            {{ task.assignee }}
-          </div>
-          <div v-if="task.date" class="flex items-center gap-1">
-            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-            {{ formatDate(task.date) }}
-          </div>
-          <div v-if="task.location" class="flex items-center gap-1">
-            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+          <div
+            v-if="task.location"
+            style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px"
+          >
             {{ task.location }}
           </div>
-          <div class="pt-1 text-gray-300">{{ relativeTime(task.updatedAt) }}</div>
+        </div>
+        <div style="width: 120px; font-size: 12px; color: var(--color-text-muted)" class="truncate">
+          <span
+            v-if="task.project"
+            style="
+              background: var(--color-border-subtle);
+              padding: 2px 8px;
+              border-radius: 4px;
+              font-size: 11px;
+            "
+            >{{ task.project }}</span
+          >
+          <span v-else style="color: var(--color-text-faint)">—</span>
+        </div>
+        <div style="width: 100px; font-size: 12px; color: var(--color-text-muted)" class="truncate">
+          {{ task.assignee || "—" }}
+        </div>
+        <div
+          class="font-mono"
+          style="width: 90px; font-size: 11px; color: var(--color-text-muted)"
+        >
+          {{ formatDate(task.date) || "—" }}
+        </div>
+        <div class="task-actions flex" style="gap: 6px">
+          <button class="icon-btn" @click="remove(task.id)" title="Löschen">
+            <BIcon name="x" :size="12" />
+          </button>
         </div>
       </div>
-      <p v-if="filtered.length === 0" class="col-span-full text-gray-400 text-sm py-6 text-center">
-        Keine Aufgaben in dieser Ansicht.
-      </p>
     </div>
 
-    <!-- List View -->
-    <div v-else>
-      <!-- Column Headers -->
-      <div class="flex items-center gap-3 px-3 py-1.5 text-[11px] font-medium text-gray-400 uppercase tracking-wider border-b border-gray-100">
-        <span class="w-4"></span>
-        <button @click="toggleSort('text')" class="flex-1 text-left hover:text-gray-600 transition">Aufgabe {{ sortIcon("text") }}</button>
-        <button @click="toggleSort('status')" class="w-20 text-left hover:text-gray-600 transition">Status {{ sortIcon("status") }}</button>
-        <span class="w-20 text-left">Person</span>
-        <span class="w-20 text-left">Projekt</span>
-        <button @click="toggleSort('updatedAt')" class="w-32 text-right hover:text-gray-600 transition">Geaendert {{ sortIcon("updatedAt") }}</button>
-        <span class="w-14"></span>
-      </div>
-
-      <div class="divide-y divide-gray-100">
-        <div v-for="task in filtered" :key="task.id" class="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50 transition group">
-          <button
-            @click="setStatus(task, task.status === 'done' ? 'open' : task.status === 'open' ? 'in_progress' : 'done')"
-            :class="statusDot[task.status]"
-            class="w-4 h-4 rounded border flex-shrink-0 transition hover:border-green-400"
-          ></button>
-          <div class="flex-1 min-w-0">
-            <p :class="{ 'line-through text-gray-300': task.status === 'done' }" class="text-sm text-gray-700 truncate">{{ task.text }}</p>
-            <div class="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 text-[11px] text-gray-400">
-              <span v-if="task.date">{{ formatDate(task.date) }}</span>
-              <span v-if="task.location">{{ task.location }}</span>
+    <!-- KANBAN VIEW -->
+    <div v-else-if="viewMode === 'kanban'" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px">
+      <div
+        v-for="col in kanbanColumns"
+        :key="col.key"
+        style="
+          background: var(--color-bg-subtle);
+          border: 1px solid var(--color-border-subtle);
+          border-radius: 8px;
+          padding: 12px;
+          min-height: 400px;
+        "
+      >
+        <div class="flex items-center justify-between" style="margin-bottom: 12px; padding: 0 4px">
+          <div class="flex items-center gap-2">
+            <span :class="['dot', col.dotClass]" />
+            <span style="font-size: 13px; font-weight: 600; color: var(--color-text)">
+              {{ col.title }}
+            </span>
+            <span style="font-size: 11px; color: var(--color-text-tertiary)">
+              {{ col.items.length }}
+            </span>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div
+            v-for="task in col.items"
+            :key="task.id"
+            class="kanban-card"
+            @click="edit(task)"
+          >
+            <div
+              :class="{ 'line-through': task.status === 'done' }"
+              :style="{
+                fontSize: '13px',
+                fontWeight: 500,
+                color:
+                  task.status === 'done'
+                    ? 'var(--color-text-tertiary)'
+                    : 'var(--color-text)',
+                marginBottom: '8px',
+              }"
+            >
+              {{ task.text }}
+            </div>
+            <div class="flex items-center justify-between" style="gap: 6px; font-size: 10px">
+              <span
+                v-if="task.project"
+                style="
+                  background: var(--color-border-subtle);
+                  padding: 1px 6px;
+                  border-radius: 3px;
+                  color: var(--color-text-muted);
+                "
+              >
+                {{ task.project }}
+              </span>
+              <span class="font-mono" style="color: var(--color-text-tertiary)">
+                {{ formatDate(task.date) }}
+              </span>
             </div>
           </div>
-          <span :class="statusBg[task.status]" class="w-20 text-center px-1.5 py-0.5 text-[10px] rounded font-medium flex-shrink-0">{{ statusLabel[task.status] }}</span>
-          <span class="w-20 text-[11px] text-gray-400 truncate flex-shrink-0">{{ task.assignee || "–" }}</span>
-          <span class="w-20 text-[11px] text-gray-400 truncate flex-shrink-0">
-            <span v-if="task.project" class="px-1.5 py-0.5 bg-gray-100 rounded text-gray-500">{{ task.project }}</span>
-            <span v-else>–</span>
-          </span>
-          <span class="w-32 text-[11px] text-gray-400 text-right flex-shrink-0">{{ formatDateTime(task.updatedAt) }}</span>
-          <div class="w-14 flex gap-2 justify-end opacity-0 group-hover:opacity-100 transition flex-shrink-0">
-            <button @click="edit(task)" class="text-xs text-gray-400 hover:text-gray-600">Bearbeiten</button>
-            <button @click="remove(task.id)" class="text-xs text-gray-400 hover:text-red-500">Loeschen</button>
+          <div
+            v-if="col.items.length === 0"
+            style="font-size: 11px; color: var(--color-text-faint); text-align: center; padding: 12px 0"
+          >
+            keine
           </div>
         </div>
       </div>
-      <p v-if="filtered.length === 0" class="text-gray-400 text-sm py-6 text-center">Keine Aufgaben in dieser Ansicht.</p>
+    </div>
+
+    <!-- TIMELINE VIEW -->
+    <div
+      v-else-if="viewMode === 'timeline'"
+      style="border: 1px solid var(--color-border); border-radius: 8px; padding: 20px; background: var(--color-bg)"
+    >
+      <div v-if="filtered.length === 0" style="font-size: 13px; color: var(--color-text-tertiary); text-align: center">
+        Keine Aufgaben in dieser Ansicht.
+      </div>
+      <div v-else style="display: flex; flex-direction: column; gap: 8px">
+        <div
+          v-for="task in filtered"
+          :key="task.id"
+          style="
+            height: 36px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid var(--color-border-subtle);
+          "
+        >
+          <div
+            :class="['timeline-pill', `status-${task.status}`]"
+            @click="edit(task)"
+          >
+            <span :class="['dot', `status-${task.status}`]" />
+            <span class="truncate" style="flex: 1">{{ task.text }}</span>
+            <span class="font-mono" style="font-size: 10px; opacity: 0.7">
+              {{ formatDate(task.date) }}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.bauos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  transition: all 180ms ease;
+}
+.bauos-btn.ghost:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+.bauos-btn.solid {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+.bauos-btn.solid:hover {
+  opacity: 0.9;
+}
+
+.seg-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease;
+}
+.seg-btn-active {
+  background: var(--color-border-subtle);
+  color: var(--color-text);
+}
+.seg-divider {
+  border-left: 1px solid var(--color-border);
+}
+
+.filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+.filter-pill:hover {
+  border-color: var(--color-text-faint);
+  color: var(--color-text);
+}
+.filter-pill-active {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+.filter-count {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 9999px;
+  background: var(--color-border-subtle);
+  color: var(--color-text-muted);
+}
+.filter-count-active {
+  background: rgba(255, 255, 255, 0.2);
+  color: var(--color-bg);
+}
+
+.form-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.status-box {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border: 1px solid var(--color-text-faint);
+  background: transparent;
+  color: #fff;
+  padding: 0;
+  transition: all 180ms ease;
+}
+.status-box.status-in_progress {
+  background: var(--color-warning);
+  border-color: var(--color-warning);
+}
+.status-box.status-done {
+  background: var(--color-success);
+  border-color: var(--color-success);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+}
+.dot.status-open {
+  background: var(--color-text-faint);
+}
+.dot.status-progress,
+.dot.status-in_progress {
+  background: var(--color-warning);
+}
+.dot.status-done {
+  background: var(--color-success);
+}
+
+.task-row {
+  cursor: default;
+  transition: background 180ms ease;
+}
+.task-row:hover {
+  background: var(--color-bg-subtle);
+}
+.task-row .task-actions {
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.task-row:hover .task-actions {
+  opacity: 1;
+}
+
+.icon-btn {
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+.icon-btn:hover {
+  background: var(--color-border-subtle);
+  color: var(--color-text);
+}
+
+.kanban-card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: border-color 180ms ease;
+}
+.kanban-card:hover {
+  border-color: var(--color-text-faint);
+}
+
+.timeline-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  font-size: 12px;
+  color: var(--color-text);
+  cursor: pointer;
+  max-width: 70%;
+  transition: all 180ms ease;
+}
+.timeline-pill.status-in_progress {
+  background: var(--color-warning-bg);
+  border-color: var(--color-warning-border);
+  color: var(--color-warning-text);
+}
+.timeline-pill.status-done {
+  background: var(--color-success-bg);
+  border-color: var(--color-success-border);
+  color: var(--color-success-text);
+}
+.timeline-pill:hover {
+  transform: translateX(2px);
+}
+</style>

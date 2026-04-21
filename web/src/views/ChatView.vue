@@ -2,6 +2,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
 import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
+import BIcon from "../components/BIcon.vue";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -259,218 +260,559 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full">
-    <!-- Sidebar -->
+  <div class="flex h-full" style="background: var(--color-bg)">
+    <!-- Session-Sidebar -->
     <aside
       v-if="sidebarOpen"
-      class="w-64 border-r border-gray-200 flex flex-col flex-shrink-0 bg-white"
+      class="flex flex-col flex-shrink-0"
+      style="
+        width: 260px;
+        border-right: 1px solid var(--color-border);
+        background: var(--color-bg-subtle);
+      "
     >
-      <!-- New Chat Button -->
-      <div class="p-3">
+      <!-- Neuer Chat -->
+      <div style="padding: 12px">
         <button
           @click="newChat"
-          class="flex items-center gap-2 w-full px-3 py-2 text-sm font-medium text-gray-700 border border-gray-200 rounded hover:bg-gray-50 transition"
+          class="flex items-center gap-2"
+          style="
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid var(--color-border);
+            border-radius: 6px;
+            background: var(--color-bg);
+            color: var(--color-text);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 180ms ease;
+          "
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
+          <BIcon name="plus" :size="14" :stroke-width="2" />
           Neuer Chat
         </button>
       </div>
 
-      <!-- Sessions List -->
-      <nav class="flex-1 overflow-y-auto px-2 pb-3">
-        <div v-for="group in groupedSessions" :key="group.label" class="mb-3">
-          <p class="px-3 mb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400">
+      <!-- Sessions -->
+      <nav class="flex-1 overflow-y-auto" style="padding: 0 8px 12px">
+        <div v-for="group in groupedSessions" :key="group.label" style="margin-bottom: 14px">
+          <div class="eyebrow" style="padding: 0 12px; margin-bottom: 6px">
             {{ group.label }}
-          </p>
+          </div>
           <div
             v-for="session in group.items"
             :key="session.id"
             @click="selectSession(session.id)"
-            :class="[
-              'flex items-center gap-1 px-3 py-2 rounded text-sm cursor-pointer transition group',
-              activeSessionId === session.id
-                ? 'bg-gray-100 text-gray-900'
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
-            ]"
+            :class="['session-item', activeSessionId === session.id ? 'session-item-active' : '']"
           >
             <span class="flex-1 truncate" :title="session.lastMessage || session.title">
               {{ session.lastMessage || session.title }}
             </span>
             <button
               @click.stop="deleteSession(session.id)"
-              class="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition flex-shrink-0"
+              class="session-del"
+              aria-label="Löschen"
             >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M6 18L18 6M6 6l12 12"/></svg>
+              <BIcon name="x" :size="12" />
             </button>
           </div>
         </div>
-        <div v-if="sessions.length === 0" class="px-3 py-4 text-xs text-gray-400 text-center">
+        <div
+          v-if="sessions.length === 0"
+          style="
+            padding: 16px 12px;
+            font-size: 11px;
+            color: var(--color-text-tertiary);
+            text-align: center;
+          "
+        >
           Noch keine Chats
         </div>
       </nav>
+
+      <!-- Model-Indicator -->
+      <div
+        style="
+          padding: 10px 16px;
+          border-top: 1px solid var(--color-border);
+          font-size: 11px;
+          color: var(--color-text-muted);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        "
+      >
+        <span
+          style="
+            width: 6px;
+            height: 6px;
+            border-radius: 9999px;
+            background: var(--color-success);
+          "
+        />
+        <span class="font-mono">Main</span>
+      </div>
     </aside>
 
-    <!-- Main Chat Area -->
-    <div class="flex-1 flex flex-col min-w-0">
-      <!-- Top Bar -->
-      <div class="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100">
+    <!-- Conversation -->
+    <div class="flex-1 flex flex-col min-w-0" style="background: var(--color-bg)">
+      <!-- Conversation-Header -->
+      <div
+        class="flex items-center gap-3"
+        style="
+          height: 48px;
+          padding: 0 20px;
+          border-bottom: 1px solid var(--color-border-subtle);
+          flex-shrink: 0;
+        "
+      >
         <button
           @click="sidebarOpen = !sidebarOpen"
-          class="p-1.5 rounded hover:bg-gray-100 transition text-gray-400 hover:text-gray-600"
+          class="icon-btn"
+          :aria-label="sidebarOpen ? 'Sidebar schließen' : 'Sidebar öffnen'"
         >
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-            <path d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+          <BIcon name="list" :size="14" />
         </button>
-        <span class="text-sm text-gray-500">Chat</span>
+        <div
+          style="
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: #111827;
+            color: #fff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+          "
+        >
+          📑
+        </div>
+        <div class="flex-1 min-w-0">
+          <div style="font-size: 13px; font-weight: 600; color: var(--color-text)">Main</div>
+          <div style="font-size: 11px; color: var(--color-text-muted)">
+            professionell und freundlich
+          </div>
+        </div>
       </div>
 
       <!-- Messages -->
       <div ref="chatContainer" class="flex-1 overflow-y-auto">
-        <div class="max-w-3xl mx-auto px-4 py-6 space-y-4">
-          <div v-if="messages.length === 0 && !loading" class="text-center py-20">
-            <p class="text-gray-400 text-sm">Starte ein Gespraech mit dem KI-Agenten.</p>
+        <div
+          style="max-width: 760px; margin: 0 auto; padding: 32px 20px"
+          class="flex flex-col gap-6"
+        >
+          <div
+            v-if="messages.length === 0 && !loading"
+            style="
+              text-align: center;
+              padding: 60px 0;
+              font-size: 13px;
+              color: var(--color-text-tertiary);
+            "
+          >
+            Starte ein Gespräch mit dem KI-Agenten.
           </div>
 
           <div
             v-for="(msg, i) in messages"
             :key="i"
-            :class="msg.role === 'user' ? 'flex justify-end' : 'flex justify-start'"
+            class="flex"
+            :style="{
+              gap: '12px',
+              alignItems: 'flex-start',
+              flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+            }"
           >
+            <!-- Avatar -->
             <div
-              :class="[
-                'max-w-[85%] rounded-lg px-4 py-3 text-sm',
-                msg.role === 'user'
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-50 border border-gray-100 text-gray-800',
-              ]"
+              :style="{
+                width: '28px',
+                height: '28px',
+                borderRadius: '6px',
+                flexShrink: 0,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '11px',
+                fontWeight: 600,
+                background: msg.role === 'user' ? 'var(--color-border)' : '#111827',
+                color: msg.role === 'user' ? 'var(--color-text)' : '#fff',
+              }"
             >
-              <div v-if="msg.tools && msg.tools.length > 0" class="flex flex-wrap gap-1 mb-2">
-                <span
-                  v-for="tool in msg.tools"
-                  :key="tool"
-                  class="inline-block px-1.5 py-0.5 text-[10px] font-mono bg-gray-200 text-gray-500 rounded"
-                >
-                  {{ tool }}
+              {{ msg.role === "user" ? "JS" : "📑" }}
+            </div>
+            <div style="flex: 1; min-width: 0; max-width: calc(100% - 40px)">
+              <!-- Tool-Call-Chips -->
+              <div
+                v-if="msg.tools && msg.tools.length > 0"
+                class="flex flex-wrap"
+                style="gap: 4px; margin-bottom: 6px"
+              >
+                <span v-for="tool in msg.tools" :key="tool" class="tool-chip">
+                  ↳ {{ tool }}
                 </span>
               </div>
-              <div v-if="msg.role === 'assistant'">
-                <MarkdownRenderer :content="msg.text" />
+              <!-- Bubble -->
+              <div
+                :class="['msg-bubble', msg.role === 'user' ? 'msg-user' : 'msg-assistant']"
+              >
+                <MarkdownRenderer v-if="msg.role === 'assistant'" :content="msg.text" />
+                <span v-else>{{ msg.text }}</span>
               </div>
-              <span v-else>{{ msg.text }}</span>
             </div>
           </div>
 
-          <!-- Loading -->
-          <div v-if="loading" class="flex justify-start">
-            <div class="bg-gray-50 border border-gray-100 rounded-lg px-4 py-3 text-sm text-gray-500">
-              <div class="flex items-center gap-2">
-                <span class="animate-spin inline-block w-3.5 h-3.5 border-2 border-gray-300 border-t-gray-600 rounded-full"></span>
-                <span v-if="toolCalls.length === 0">Denkt nach...</span>
-                <span v-else class="flex flex-wrap items-center gap-1">
-                  <span
-                    v-for="tool in toolCalls"
-                    :key="tool"
-                    class="inline-block px-1.5 py-0.5 text-[10px] font-mono bg-gray-200 text-gray-500 rounded"
-                  >
-                    {{ tool }}
-                  </span>
+          <!-- Denkt nach… -->
+          <div v-if="loading" class="flex" style="gap: 12px; align-items: flex-start">
+            <div
+              style="
+                width: 28px;
+                height: 28px;
+                border-radius: 6px;
+                background: #111827;
+                color: #fff;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 11px;
+                flex-shrink: 0;
+              "
+            >
+              📑
+            </div>
+            <div class="msg-bubble msg-assistant" style="flex: 1; max-width: none">
+              <div class="flex items-center" style="gap: 8px">
+                <span class="chat-spinner" />
+                <span v-if="toolCalls.length === 0" style="color: var(--color-text-muted)">
+                  ● Denkt nach…
                 </span>
+                <div v-else class="flex flex-wrap" style="gap: 4px">
+                  <span v-for="tool in toolCalls" :key="tool" class="tool-chip">
+                    ↳ {{ tool }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Input -->
-      <div class="border-t border-gray-200 bg-white">
-        <div class="max-w-3xl mx-auto px-4 py-3">
-          <!-- Status-Pille, wenn Dateisuche aktiv -->
-          <div v-if="searchMode" class="flex items-center gap-2 text-xs text-gray-500 mb-2">
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 border border-gray-200 rounded-full bg-gray-50">
-              <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m21 21-4.3-4.3" />
-              </svg>
+      <!-- Composer -->
+      <div
+        style="
+          border-top: 1px solid var(--color-border-subtle);
+          background: var(--color-bg);
+          flex-shrink: 0;
+        "
+      >
+        <div style="max-width: 760px; margin: 0 auto; padding: 16px 20px">
+          <!-- Status-Pille bei Dateisuche -->
+          <div
+            v-if="searchMode"
+            class="flex items-center"
+            style="gap: 8px; font-size: 11px; color: var(--color-text-muted); margin-bottom: 8px"
+          >
+            <span
+              class="flex items-center"
+              style="
+                gap: 6px;
+                padding: 3px 10px;
+                border: 1px solid var(--color-border);
+                border-radius: 9999px;
+                background: var(--color-bg-subtle);
+              "
+            >
+              <BIcon name="search" :size="12" />
               Dateisuche aktiv
-              <span v-if="projectFilter" class="text-gray-400">&middot; {{ projectFilter }}</span>
+              <span v-if="projectFilter" class="font-mono" style="color: var(--color-text-tertiary)"
+                >· {{ projectFilter }}</span
+              >
               <button
                 @click="searchMode = false; projectFilter = null"
-                class="ml-1 text-gray-300 hover:text-gray-900"
-                title="Dateisuche ausschalten"
+                style="
+                  background: transparent;
+                  border: none;
+                  color: var(--color-text-faint);
+                  cursor: pointer;
+                  padding: 0;
+                  margin-left: 2px;
+                "
               >
-                &times;
+                <BIcon name="x" :size="10" />
               </button>
             </span>
           </div>
 
-          <div class="flex gap-2 items-start relative" ref="attachMenuRef">
-            <!-- Plus-Button + Popover -->
-            <div class="relative">
-              <button
-                @click="toggleAttachMenu"
-                :disabled="loading"
-                :class="[
-                  'px-3 py-2 rounded-lg border text-sm transition',
-                  searchMode
-                    ? 'border-gray-900 bg-gray-50 text-gray-900'
-                    : 'border-gray-200 text-gray-500 hover:text-gray-900 hover:border-gray-400',
-                ]"
-                title="Werkzeuge"
-              >
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path d="M12 5v14M5 12h14" />
-                </svg>
-              </button>
-
-              <!-- Popover-Menue -->
-              <div
-                v-if="showAttachMenu"
-                class="absolute bottom-full mb-2 left-0 w-72 bg-white border border-gray-200 rounded-lg p-4 z-10"
-              >
-                <label class="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" v-model="searchMode" class="accent-gray-900" />
-                  <span class="text-sm text-gray-800">Dateisuche aktivieren</span>
-                </label>
-                <p class="mt-1 ml-6 text-[11px] text-gray-400">
-                  Der Assistent durchsucht deinen Vault vor jeder Antwort.
-                </p>
-
-                <div v-if="searchMode" class="mt-3 pt-3 border-t border-gray-100">
-                  <label class="text-[11px] uppercase tracking-wider text-gray-400">Projekt</label>
-                  <select
-                    v-model="projectFilter"
-                    class="mt-1 w-full border border-gray-200 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-gray-400 focus:border-gray-400 outline-none"
-                  >
-                    <option :value="null">Alle Projekte</option>
-                    <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
+          <!-- Input-Box -->
+          <div
+            ref="attachMenuRef"
+            style="
+              position: relative;
+              border: 1px solid var(--color-border);
+              border-radius: 10px;
+              padding: 8px 8px 6px;
+              background: var(--color-bg);
+            "
+          >
             <textarea
               v-model="input"
               @keydown="onKeydown"
               :disabled="loading"
-              placeholder="Nachricht eingeben..."
+              placeholder="Nachricht eingeben…"
               rows="1"
-              class="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none focus:ring-1 focus:ring-gray-400 focus:border-gray-400 outline-none disabled:opacity-50"
+              style="
+                width: 100%;
+                padding: 6px 8px;
+                border: none;
+                outline: none;
+                font-size: 14px;
+                resize: none;
+                background: transparent;
+                color: var(--color-text);
+                font-family: inherit;
+                min-height: 44px;
+              "
             />
-            <button
-              @click="send"
-              :disabled="loading || !input.trim()"
-              class="px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-lg hover:bg-gray-800 disabled:opacity-50 transition"
+            <div class="flex items-center" style="gap: 4px; padding: 0 4px">
+              <button @click="toggleAttachMenu" :disabled="loading" class="composer-icon" title="Werkzeuge">
+                <BIcon name="plus" :size="14" />
+              </button>
+              <button class="composer-icon" disabled title="Anhang">
+                <BIcon name="paperclip" :size="14" />
+              </button>
+              <button class="composer-icon" disabled title="Audio">
+                <BIcon name="mic" :size="14" />
+              </button>
+              <div class="flex-1" />
+              <span style="font-size: 10px; color: var(--color-text-tertiary); margin-right: 8px">
+                <span class="kbd">⏎</span> senden · <span class="kbd">⇧⏎</span> neue Zeile
+              </span>
+              <button
+                @click="send"
+                :disabled="loading || !input.trim()"
+                class="send-btn"
+                aria-label="Senden"
+              >
+                <BIcon name="arrowRight" :size="14" :stroke-width="2" />
+              </button>
+            </div>
+
+            <!-- Werkzeug-Popover -->
+            <div
+              v-if="showAttachMenu"
+              style="
+                position: absolute;
+                bottom: 100%;
+                left: 0;
+                margin-bottom: 8px;
+                width: 288px;
+                background: var(--color-bg);
+                border: 1px solid var(--color-border);
+                border-radius: 10px;
+                padding: 14px;
+                box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+                z-index: 10;
+              "
             >
-              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path d="M5 12h14M12 5l7 7-7 7" />
-              </svg>
-            </button>
+              <label class="flex items-center" style="gap: 8px; cursor: pointer">
+                <input type="checkbox" v-model="searchMode" />
+                <span style="font-size: 13px; color: var(--color-text)">Dateisuche aktivieren</span>
+              </label>
+              <p
+                style="
+                  margin: 4px 0 0 24px;
+                  font-size: 11px;
+                  color: var(--color-text-tertiary);
+                "
+              >
+                Der Assistent durchsucht deinen Workspace vor jeder Antwort.
+              </p>
+              <div
+                v-if="searchMode"
+                style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--color-border-subtle)"
+              >
+                <div class="eyebrow" style="margin-bottom: 4px">Projekt</div>
+                <select
+                  v-model="projectFilter"
+                  style="
+                    width: 100%;
+                    padding: 6px 8px;
+                    border: 1px solid var(--color-border);
+                    border-radius: 6px;
+                    font-size: 13px;
+                    outline: none;
+                    background: var(--color-bg);
+                    color: var(--color-text);
+                  "
+                >
+                  <option :value="null">Alle Projekte</option>
+                  <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
+                </select>
+              </div>
+            </div>
           </div>
+
+          <p
+            style="
+              text-align: center;
+              font-size: 10px;
+              color: var(--color-text-tertiary);
+              margin-top: 8px;
+              margin-bottom: 0;
+            "
+          >
+            Lokal gehostet · Antworten können Fehler enthalten.
+          </p>
         </div>
       </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.session-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+.session-item:hover {
+  background: var(--color-border-subtle);
+  color: var(--color-text);
+}
+.session-item-active {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+.session-del {
+  background: transparent;
+  border: none;
+  color: var(--color-text-faint);
+  cursor: pointer;
+  opacity: 0;
+  padding: 2px;
+  border-radius: 4px;
+  transition: opacity 180ms ease;
+}
+.session-item:hover .session-del {
+  opacity: 1;
+}
+.session-del:hover {
+  color: var(--color-danger);
+  background: var(--color-border-subtle);
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+.icon-btn:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+
+.msg-bubble {
+  padding: 10px 14px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.55;
+  word-wrap: break-word;
+}
+.msg-user {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-bottom-right-radius: 2px;
+  display: inline-block;
+  max-width: 85%;
+  margin-left: auto;
+}
+.msg-assistant {
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text);
+  border-bottom-left-radius: 2px;
+}
+
+.tool-chip {
+  display: inline-flex;
+  align-items: center;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--color-border-subtle);
+  color: var(--color-text-muted);
+}
+
+.chat-spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-text-muted);
+  border-radius: 9999px;
+  animation: chat-spin 700ms linear infinite;
+}
+@keyframes chat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.composer-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+}
+.composer-icon:hover {
+  background: var(--color-border-subtle);
+  color: var(--color-text);
+}
+.composer-icon:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.send-btn {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border: none;
+  cursor: pointer;
+  transition: opacity 180ms ease;
+}
+.send-btn:hover {
+  opacity: 0.9;
+}
+.send-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+</style>

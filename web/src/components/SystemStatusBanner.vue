@@ -151,26 +151,56 @@ onUnmounted(() => {
 <template>
   <div
     v-if="visible && banner"
-    :class="[
-      'border-b px-4 py-2 flex items-start gap-3 text-sm',
+    class="flex items-start gap-3"
+    :style="
       banner.level === 'error'
-        ? 'bg-red-50 border-red-200 text-red-900'
-        : 'bg-amber-50 border-amber-200 text-amber-900',
-    ]"
+        ? {
+            background: 'var(--color-danger-bg)',
+            borderBottom: '1px solid var(--color-danger-border)',
+            color: 'var(--color-danger-text)',
+          }
+        : {
+            background: 'var(--color-warning-bg)',
+            borderBottom: '1px solid var(--color-warning-border)',
+            color: 'var(--color-warning-text)',
+          }
+    "
+    style="padding: 8px 24px; font-size: 12px; flex-shrink: 0"
   >
-    <span class="font-medium shrink-0">{{ banner.level === 'error' ? 'Fehler' : 'Hinweis' }}:</span>
+    <span
+      class="shrink-0"
+      style="
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 9999px;
+        background: currentColor;
+        margin-top: 6px;
+        opacity: 0.7;
+      "
+    />
     <span class="flex-1">{{ banner.text }}</span>
     <button
       v-if="banner.key === 'embed-coverage-gap'"
       @click="runReindex"
       :disabled="reindexing"
-      class="shrink-0 text-xs px-2 py-1 border border-current rounded hover:bg-white/50 transition disabled:opacity-50"
+      class="shrink-0"
+      style="
+        font-size: 11px;
+        padding: 2px 8px;
+        border: 1px solid currentColor;
+        border-radius: 4px;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      "
     >
       {{ reindexing ? "Indexiere…" : "Neu indexieren" }}
     </button>
     <button
       @click="dismiss"
-      class="shrink-0 text-xs opacity-60 hover:opacity-100 transition"
+      class="shrink-0"
+      style="font-size: 11px; opacity: 0.5; background: transparent; border: none; cursor: pointer; color: inherit"
       title="Für diese Session ausblenden"
     >
       ✕

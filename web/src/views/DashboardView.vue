@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
+import BIcon from "../components/BIcon.vue";
 
 interface DashboardData {
   notes: number;
@@ -20,6 +21,7 @@ interface Task {
   status: "open" | "in_progress" | "done";
   assignee: string | null;
   date: string | null;
+  project?: string | null;
 }
 
 interface Termin {
@@ -31,19 +33,28 @@ interface Termin {
   location: string | null;
 }
 
-interface DbStatus {
-  enabled: boolean;
-  mode?: string;
-  healthy?: boolean;
-  pgvector?: boolean;
+interface Project {
+  name: string;
+  status?: string;
+  client?: string;
+  phase?: string;
+  progress?: number;
+  tasks?: { open: number; done: number };
+  updated?: string;
 }
 
 const router = useRouter();
 const data = ref<DashboardData | null>(null);
 const tasks = ref<Task[]>([]);
 const termine = ref<Termin[]>([]);
-const dbStatus = ref<DbStatus | null>(null);
-const newTaskText = ref("");
+const projects = ref<Project[]>([]);
+const stats = computed(() => ({
+  openTasks: data.value?.openTasks ?? 0,
+  termine: data.value?.termine ?? 0,
+  notes: data.value?.notes ?? 0,
+  projects: data.value?.projects ?? 0,
+  progressTasks: tasks.value.filter((t) => t.status === "in_progress").length,
+}));
 
 const today = new Date().toISOString().slice(0, 10);
 const todayDE = new Date().toLocaleDateString("de-AT", {
@@ -52,53 +63,35 @@ const todayDE = new Date().toLocaleDateString("de-AT", {
   month: "long",
   year: "numeric",
 });
-
-const openTasks = computed(() => tasks.value.filter((t) => t.status !== "done").slice(0, 8));
-const todayTermine = computed(() =>
-  termine.value.filter((t) => {
-    // Match both ISO (2026-04-11) and German (11.04.2026) formats
-    if (t.datum === today) return true;
-    const parts = t.datum.split(".");
-    if (parts.length === 3) {
-      const iso = `${parts[2]}-${parts[1]}-${parts[0]}`;
-      return iso === today;
-    }
-    return false;
-  }),
+const hour = new Date().getHours();
+const greeting = computed(() =>
+  hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend",
 );
+
+const openTasks = computed(() => tasks.value.filter((t) => t.status !== "done").slice(0, 6));
 const upcomingTermine = computed(() =>
   termine.value
     .filter((t) => {
       const d = t.datum.includes(".") ? t.datum.split(".").reverse().join("-") : t.datum;
       return d >= today;
     })
-    .slice(0, 6),
+    .slice(0, 4),
+);
+const activeProjects = computed(() =>
+  projects.value.filter((p) => !p.status || p.status === "aktiv").slice(0, 3),
 );
 
 async function load() {
-  const [d, t, te, db] = await Promise.all([
+  const [d, t, te, ps] = await Promise.all([
     api.get<DashboardData>("/dashboard"),
     api.get<Task[]>("/tasks"),
     api.get<Termin[]>("/termine"),
-    api.get<DbStatus>("/dashboard/db-status").catch(() => null),
+    api.get<Project[]>("/projects").catch(() => []),
   ]);
   data.value = d;
   tasks.value = t;
   termine.value = te;
-  dbStatus.value = db;
-}
-
-async function addTask() {
-  if (!newTaskText.value.trim()) return;
-  await api.post("/tasks", { text: newTaskText.value });
-  newTaskText.value = "";
-  await load();
-}
-
-async function toggleTask(task: Task) {
-  const next = task.status === "done" ? "open" : "done";
-  await api.put(`/tasks/${task.id}`, { status: next });
-  await load();
+  projects.value = ps;
 }
 
 function formatDate(d: string) {
@@ -107,136 +100,414 @@ function formatDate(d: string) {
   return `${day}.${m}.${y}`;
 }
 
+function terminWeekday(datum: string): string {
+  const iso = datum.includes(".") ? datum.split(".").reverse().join("-") : datum;
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString("de-AT", { weekday: "short" });
+}
+
+function terminDay(datum: string): string {
+  if (datum.includes(".")) return datum.split(".")[0];
+  return datum.split("-")[2];
+}
+
+function openPalette() {
+  window.dispatchEvent(new CustomEvent("bauos:toggle-cmd"));
+}
+
 onMounted(load);
 useEvents(["task", "termin", "note", "project"], () => load());
+
+const statCards = computed(() => [
+  {
+    key: "openTasks",
+    label: "Offene Aufgaben",
+    value: stats.value.openTasks,
+    sub: `${stats.value.progressTasks} in Arbeit`,
+    to: "/tasks",
+    icon: "check",
+  },
+  {
+    key: "termine",
+    label: "Termine",
+    value: stats.value.termine,
+    sub: "diese Woche",
+    to: "/calendar",
+    icon: "calendar",
+  },
+  {
+    key: "notes",
+    label: "Notizen",
+    value: stats.value.notes,
+    sub: `${stats.value.projects} Projekte`,
+    to: "/notes",
+    icon: "file",
+  },
+  {
+    key: "chats",
+    label: "Chat-Sessions",
+    value: data.value?.agents.length ?? 0,
+    sub: "heute aktiv",
+    to: "/chat",
+    icon: "message",
+  },
+]);
 </script>
 
 <template>
-  <div>
+  <div
+    style="
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 28px 32px 48px;
+      color: var(--color-text);
+    "
+  >
     <!-- Header -->
-    <div class="mb-8">
-      <h2 class="text-xl font-semibold text-gray-900">Dashboard</h2>
-      <p class="text-sm text-gray-400 mt-0.5">{{ todayDE }}</p>
+    <div class="flex items-end justify-between gap-4" style="margin-bottom: 28px">
+      <div class="min-w-0">
+        <div class="eyebrow" style="margin-bottom: 6px">Dashboard</div>
+        <h1
+          style="
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.01em;
+            color: var(--color-text);
+          "
+        >
+          {{ greeting }}, Julius.
+        </h1>
+        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 6px; margin-bottom: 0">
+          {{ todayDE }} ·
+          <span style="color: var(--color-text); font-weight: 500"
+            >{{ stats.openTasks }} offene Aufgaben</span
+          >
+          · {{ stats.termine }} Termine diese Woche
+        </p>
+      </div>
+      <div class="flex flex-shrink-0" style="gap: 8px">
+        <button class="bauos-btn ghost" @click="router.push('/notes')">
+          <BIcon name="file" :size="14" /> Notiz
+        </button>
+        <button class="bauos-btn ghost" @click="router.push('/calendar')">
+          <BIcon name="calendar" :size="14" /> Termin
+        </button>
+        <button class="bauos-btn ghost" @click="openPalette">
+          <BIcon name="search" :size="14" /> Suche
+        </button>
+        <button class="bauos-btn ghost" @click="router.push('/chat')">
+          <BIcon name="message" :size="14" /> Neuer Chat
+        </button>
+        <button class="bauos-btn solid" @click="router.push('/tasks')">
+          <BIcon name="plus" :size="14" :stroke-width="2" /> Aufgabe
+        </button>
+      </div>
     </div>
 
-    <!-- Stats -->
-    <div v-if="data" class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-      <router-link to="/tasks" class="border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-300 transition">
-        <p class="text-2xl font-semibold text-gray-900">{{ data.openTasks }}</p>
-        <p class="text-xs text-gray-400 mt-0.5">Offene Aufgaben</p>
-      </router-link>
-      <router-link to="/calendar" class="border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-300 transition">
-        <p class="text-2xl font-semibold text-gray-900">{{ data.termine }}</p>
-        <p class="text-xs text-gray-400 mt-0.5">Termine</p>
-      </router-link>
-      <router-link to="/notes" class="border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-300 transition">
-        <p class="text-2xl font-semibold text-gray-900">{{ data.notes }}</p>
-        <p class="text-xs text-gray-400 mt-0.5">Notizen</p>
-      </router-link>
-      <router-link to="/projects" class="border border-gray-200 rounded-lg px-4 py-3 hover:border-gray-300 transition">
-        <p class="text-2xl font-semibold text-gray-900">{{ data.projects }}</p>
-        <p class="text-xs text-gray-400 mt-0.5">Projekte</p>
+    <!-- Stat-Grid (4 cards) -->
+    <div class="grid gap-3" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 28px">
+      <router-link
+        v-for="s in statCards"
+        :key="s.key"
+        :to="s.to"
+        class="stat-card"
+      >
+        <div class="flex items-start justify-between" style="margin-bottom: 14px">
+          <BIcon :name="s.icon" :size="16" style="color: var(--color-text-muted)" />
+          <BIcon name="arrowUpRight" :size="14" style="color: var(--color-text-faint)" />
+        </div>
+        <div
+          style="
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            line-height: 1;
+            color: var(--color-text);
+          "
+        >
+          {{ s.value }}
+        </div>
+        <div style="font-size: 12px; color: var(--color-text-secondary); margin-top: 6px">
+          {{ s.label }}
+        </div>
+        <div style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px">
+          {{ s.sub }}
+        </div>
       </router-link>
     </div>
 
-    <!-- Two-Column Layout -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-      <!-- Left: Aufgaben -->
-      <div>
-        <div class="flex items-center justify-between mb-3">
-          <h3 class="text-sm font-semibold text-gray-900">Offene Aufgaben</h3>
-          <router-link to="/tasks" class="text-xs text-gray-400 hover:text-gray-600 transition">Alle anzeigen</router-link>
+    <!-- Two-Column: Aufgaben | Termine -->
+    <div
+      class="grid gap-5"
+      style="grid-template-columns: 1.3fr 1fr; margin-bottom: 28px"
+    >
+      <!-- Aufgaben -->
+      <section class="surface-card">
+        <div class="flex items-center justify-between" style="margin-bottom: 12px">
+          <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">
+            Offene Aufgaben
+          </h2>
+          <router-link
+            to="/tasks"
+            style="font-size: 11px; color: var(--color-text-muted); text-decoration: none"
+            class="hover-link"
+            >Alle →</router-link
+          >
         </div>
-
-        <!-- Quick-Add -->
-        <div class="flex gap-2 mb-3">
-          <input
-            v-model="newTaskText"
-            placeholder="Neue Aufgabe..."
-            @keyup.enter="addTask"
-            class="flex-1 px-3 py-1.5 border border-gray-200 rounded text-sm outline-none focus:ring-1 focus:ring-gray-400"
-          />
-          <button @click="addTask" class="px-3 py-1.5 text-sm font-medium text-white bg-gray-900 rounded hover:bg-gray-800 transition">+</button>
+        <div v-if="openTasks.length === 0" style="font-size: 12px; color: var(--color-text-tertiary)">
+          Keine offenen Aufgaben.
         </div>
-
-        <div class="divide-y divide-gray-100">
-          <div v-for="task in openTasks" :key="task.id" class="flex items-center gap-3 py-2">
-            <button
-              @click="toggleTask(task)"
-              :class="task.status === 'in_progress' ? 'bg-amber-500 border-amber-500' : 'border-gray-300'"
-              class="w-4 h-4 rounded border flex-shrink-0 transition hover:border-green-400"
-            ></button>
+        <div v-else class="divide-y" style="--tw-divide-opacity: 1">
+          <div
+            v-for="task in openTasks"
+            :key="task.id"
+            class="flex items-center"
+            style="gap: 10px; padding: 8px 0; border-top: 1px solid var(--color-border-subtle)"
+          >
+            <span
+              :style="{
+                width: '14px',
+                height: '14px',
+                borderRadius: '4px',
+                flexShrink: 0,
+                background:
+                  task.status === 'in_progress'
+                    ? 'var(--color-warning)'
+                    : 'transparent',
+                border:
+                  task.status === 'in_progress'
+                    ? '1px solid var(--color-warning)'
+                    : '1px solid var(--color-text-faint)',
+              }"
+            />
             <div class="flex-1 min-w-0">
-              <p class="text-sm text-gray-700 truncate">{{ task.text }}</p>
-              <div class="flex gap-2 text-[11px] text-gray-400">
+              <div style="font-size: 13px; color: var(--color-text-secondary)" class="truncate">
+                {{ task.text }}
+              </div>
+              <div
+                class="flex items-center"
+                style="gap: 8px; font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px"
+              >
+                <span v-if="task.project">{{ task.project }}</span>
+                <span v-if="task.date" class="font-mono">{{ formatDate(task.date) }}</span>
                 <span v-if="task.assignee">{{ task.assignee }}</span>
-                <span v-if="task.date">{{ formatDate(task.date) }}</span>
               </div>
             </div>
           </div>
-          <p v-if="openTasks.length === 0" class="text-gray-400 text-sm py-3">Keine offenen Aufgaben.</p>
         </div>
-      </div>
+      </section>
 
-      <!-- Right: Termine -->
-      <div>
-        <!-- Heute -->
-        <div class="mb-6">
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-semibold text-gray-900">Heute</h3>
-            <router-link to="/calendar" class="text-xs text-gray-400 hover:text-gray-600 transition">Kalender</router-link>
-          </div>
-          <div v-if="todayTermine.length > 0" class="space-y-2">
-            <div v-for="t in todayTermine" :key="t.id" class="flex items-start gap-3 py-1.5">
-              <span class="w-1 h-1 rounded-full bg-gray-900 mt-2 flex-shrink-0"></span>
-              <div>
-                <p class="text-sm text-gray-700">{{ t.text }}</p>
-                <div class="flex gap-2 text-[11px] text-gray-400">
-                  <span v-if="t.uhrzeit">{{ t.uhrzeit }}{{ t.endzeit ? ` – ${t.endzeit}` : '' }}</span>
-                  <span v-if="t.location">{{ t.location }}</span>
-                </div>
+      <!-- Naechste Termine -->
+      <section class="surface-card">
+        <div class="flex items-center justify-between" style="margin-bottom: 12px">
+          <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">
+            Naechste Termine
+          </h2>
+          <router-link
+            to="/calendar"
+            style="font-size: 11px; color: var(--color-text-muted); text-decoration: none"
+            class="hover-link"
+            >Kalender →</router-link
+          >
+        </div>
+        <div
+          v-if="upcomingTermine.length === 0"
+          style="font-size: 12px; color: var(--color-text-tertiary)"
+        >
+          Keine anstehenden Termine.
+        </div>
+        <div v-else>
+          <div
+            v-for="t in upcomingTermine"
+            :key="t.id"
+            class="flex items-start"
+            style="gap: 12px; padding: 10px 0; border-top: 1px solid var(--color-border-subtle)"
+          >
+            <div
+              class="flex-shrink-0 text-center"
+              style="width: 44px"
+            >
+              <div class="eyebrow" style="font-size: 9px">{{ terminWeekday(t.datum) }}</div>
+              <div
+                style="
+                  font-size: 18px;
+                  font-weight: 600;
+                  color: var(--color-text);
+                  line-height: 1.2;
+                  letter-spacing: -0.02em;
+                "
+              >
+                {{ terminDay(t.datum) }}
+              </div>
+              <div v-if="t.uhrzeit" class="font-mono" style="font-size: 10px; color: var(--color-text-muted)">
+                {{ t.uhrzeit }}
+              </div>
+            </div>
+            <div
+              style="width: 1px; align-self: stretch; background: var(--color-border-subtle)"
+            />
+            <div class="flex-1 min-w-0">
+              <div style="font-size: 13px; color: var(--color-text); font-weight: 500" class="truncate">
+                {{ t.text }}
+              </div>
+              <div
+                class="flex items-center"
+                style="gap: 8px; font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px"
+              >
+                <span v-if="t.location">{{ t.location }}</span>
+                <span v-if="t.endzeit" class="font-mono">bis {{ t.endzeit }}</span>
               </div>
             </div>
           </div>
-          <p v-else class="text-gray-400 text-sm py-1">Keine Termine heute.</p>
         </div>
-
-        <!-- Naechste Termine -->
-        <div>
-          <div class="flex items-center justify-between mb-3">
-            <h3 class="text-sm font-semibold text-gray-900">Naechste Termine</h3>
-            <router-link to="/calendar" class="text-xs text-gray-400 hover:text-gray-600 transition">Alle anzeigen</router-link>
-          </div>
-          <div class="divide-y divide-gray-100">
-            <div v-for="t in upcomingTermine" :key="t.id" class="flex items-start gap-3 py-2">
-              <span class="text-[11px] text-gray-400 font-mono w-16 flex-shrink-0 pt-0.5">{{ formatDate(t.datum) }}</span>
-              <div class="flex-1 min-w-0">
-                <p class="text-sm text-gray-700 truncate">{{ t.text }}</p>
-                <div class="flex gap-2 text-[11px] text-gray-400">
-                  <span v-if="t.uhrzeit">{{ t.uhrzeit }}</span>
-                  <span v-if="t.location">{{ t.location }}</span>
-                </div>
-              </div>
-            </div>
-            <p v-if="upcomingTermine.length === 0" class="text-gray-400 text-sm py-3">Keine anstehenden Termine.</p>
-          </div>
-        </div>
-      </div>
+      </section>
     </div>
 
-    <!-- System Footer -->
-    <div v-if="dbStatus || data" class="mt-8 pt-6 border-t border-gray-100">
-      <div class="flex flex-wrap gap-6 text-xs text-gray-400">
-        <div v-if="dbStatus" class="flex items-center gap-1.5">
-          <span :class="dbStatus.enabled && dbStatus.healthy ? 'bg-green-400' : dbStatus.enabled ? 'bg-red-400' : 'bg-gray-300'" class="w-1.5 h-1.5 rounded-full"></span>
-          {{ dbStatus.mode === 'database' ? 'PostgreSQL' : 'Filesystem' }}
-        </div>
-        <div v-if="data" class="flex items-center gap-1.5">
-          <span class="w-1.5 h-1.5 rounded-full bg-green-400"></span>
-          {{ data.agents.length }} Agent{{ data.agents.length !== 1 ? 'en' : '' }}
-        </div>
-        <div v-if="data">{{ data.totalTasks }} Aufgaben gesamt</div>
+    <!-- Aktive Projekte -->
+    <section v-if="activeProjects.length > 0">
+      <div class="flex items-center justify-between" style="margin-bottom: 12px">
+        <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">
+          Aktive Projekte
+        </h2>
+        <router-link
+          to="/projects"
+          style="font-size: 11px; color: var(--color-text-muted); text-decoration: none"
+          class="hover-link"
+          >Alle Projekte →</router-link
+        >
       </div>
-    </div>
+      <div class="grid gap-3" style="grid-template-columns: repeat(3, 1fr)">
+        <router-link
+          v-for="p in activeProjects"
+          :key="p.name"
+          :to="`/projects/${encodeURIComponent(p.name)}`"
+          class="surface-card hover-card"
+        >
+          <div class="flex items-center justify-between" style="margin-bottom: 10px">
+            <span class="pill pill-success">aktiv</span>
+            <span
+              v-if="p.updated"
+              class="font-mono"
+              style="font-size: 10px; color: var(--color-text-tertiary)"
+              >{{ p.updated }}</span
+            >
+          </div>
+          <div style="font-size: 14px; font-weight: 600; color: var(--color-text); margin-bottom: 4px">
+            {{ p.name }}
+          </div>
+          <div
+            v-if="p.client || p.phase"
+            style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 12px"
+          >
+            {{ [p.client, p.phase].filter(Boolean).join(" · ") }}
+          </div>
+          <div
+            style="height: 2px; background: var(--color-border-subtle); border-radius: 2px; overflow: hidden"
+          >
+            <div
+              :style="{
+                width: `${p.progress ?? 0}%`,
+                height: '100%',
+                background: 'var(--color-accent)',
+              }"
+            />
+          </div>
+          <div
+            class="flex items-center justify-between"
+            style="margin-top: 8px; font-size: 10px; color: var(--color-text-tertiary)"
+          >
+            <span>{{ p.progress ?? 0 }} % abgeschlossen</span>
+            <span v-if="p.tasks"
+              >{{ p.tasks.open }} offen · {{ p.tasks.done }} erledigt</span
+            >
+          </div>
+        </router-link>
+      </div>
+    </section>
   </div>
 </template>
+
+<style scoped>
+.bauos-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  transition: all 180ms ease;
+}
+.bauos-btn.ghost:hover {
+  background: var(--color-bg-subtle);
+  border-color: var(--color-text-faint);
+  color: var(--color-text);
+}
+.bauos-btn.solid {
+  background: var(--color-primary);
+  color: var(--color-bg);
+  border-color: var(--color-primary);
+}
+.bauos-btn.solid:hover {
+  opacity: 0.9;
+}
+
+.stat-card {
+  display: block;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: var(--color-bg);
+  color: inherit;
+  text-decoration: none;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+.stat-card:hover {
+  border-color: var(--color-text-faint);
+  background: var(--color-bg-subtle);
+}
+
+.surface-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  background: var(--color-bg);
+}
+.hover-card {
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 180ms ease, background 180ms ease;
+}
+.hover-card:hover {
+  border-color: var(--color-text-faint);
+  background: var(--color-bg-subtle);
+}
+.hover-link {
+  transition: color 180ms ease;
+}
+.hover-link:hover {
+  color: var(--color-text) !important;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border: 1px solid transparent;
+}
+.pill-success {
+  background: var(--color-success-bg);
+  color: var(--color-success-text);
+  border-color: var(--color-success-border);
+}
+</style>

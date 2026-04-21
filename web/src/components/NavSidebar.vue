@@ -1,12 +1,27 @@
 <script setup lang="ts">
-import { useRouter } from "vue-router";
+import { computed } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import { clearToken } from "../api";
 import { useTheme } from "../composables/useTheme";
+import BIcon from "./BIcon.vue";
 
 const router = useRouter();
+const route = useRoute();
 const { theme, toggle } = useTheme();
 
-const sections = [
+interface NavItem {
+  to: string;
+  label: string;
+  icon: string;
+  badge?: number;
+  kbd?: string;
+}
+interface NavSection {
+  title?: string;
+  items: NavItem[];
+}
+
+const sections: NavSection[] = [
   {
     items: [
       { to: "/", label: "Dashboard", icon: "grid" },
@@ -26,7 +41,7 @@ const sections = [
     items: [
       { to: "/notes", label: "Notizen", icon: "file" },
       { to: "/files", label: "Dateien", icon: "archive" },
-      { to: "/search", label: "Suche", icon: "search" },
+      { to: "/search", label: "Suche", icon: "search", kbd: "⌘K" },
     ],
   },
   {
@@ -38,6 +53,13 @@ const sections = [
   },
 ];
 
+const currentPath = computed(() => route.path);
+
+function isActive(to: string): boolean {
+  if (to === "/") return currentPath.value === "/";
+  return currentPath.value.startsWith(to);
+}
+
 function logout() {
   clearToken();
   router.push("/login");
@@ -46,69 +68,159 @@ function logout() {
 
 <template>
   <aside
-    class="w-60 flex flex-col flex-shrink-0 bg-zinc-950 text-zinc-300 border-r border-white/5"
+    class="flex flex-col flex-shrink-0 relative z-[2]"
+    style="
+      width: 240px;
+      background: var(--color-bg-subtle);
+      border-right: 1px solid var(--color-border);
+    "
   >
-    <!-- ── Header ─────────────────────────────────────────────── -->
-    <div class="px-5 py-4 border-b border-white/5 flex items-center gap-2.5">
-      <div class="w-7 h-7 rounded-md bg-white/10 flex items-center justify-center text-white text-[13px] font-semibold">B</div>
+    <!-- Logo -->
+    <div
+      class="flex items-center gap-2.5"
+      style="padding: 16px 20px; border-bottom: 1px solid var(--color-border)"
+    >
+      <div
+        class="flex items-center justify-center font-semibold"
+        style="
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+          background: #111827;
+          color: #fff;
+          font-size: 13px;
+          letter-spacing: -0.02em;
+        "
+      >
+        B
+      </div>
       <div class="leading-tight">
-        <h1 class="text-sm font-semibold text-white">Bau-OS</h1>
-        <p class="text-[10px] text-zinc-500">Workspace</p>
+        <div style="color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.2">
+          Bau-OS
+        </div>
+        <div class="eyebrow" style="margin-top: 2px">Workspace</div>
       </div>
     </div>
 
-    <!-- ── Navigation ─────────────────────────────────────────── -->
-    <nav class="flex-1 px-2 py-3 overflow-y-auto">
-      <div v-for="(section, si) in sections" :key="si" :class="si > 0 ? 'mt-5' : ''">
-        <p
-          v-if="section.title"
-          class="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500"
-        >{{ section.title }}</p>
+    <!-- Navigation -->
+    <nav class="flex-1 overflow-y-auto" style="padding: 12px 8px">
+      <div v-for="(section, si) in sections" :key="si" :style="si > 0 ? { marginTop: '18px' } : {}">
+        <div v-if="section.title" class="eyebrow" style="padding: 0 12px; margin-bottom: 6px">
+          {{ section.title }}
+        </div>
         <router-link
-          v-for="link in section.items"
-          :key="link.to"
-          :to="link.to"
-          class="group flex items-center gap-2.5 px-3 py-1.5 rounded-md text-[13px] text-zinc-400 hover:text-white hover:bg-white/5 transition"
-          active-class="!text-white !bg-white/10"
+          v-for="item in section.items"
+          :key="item.to"
+          :to="item.to"
+          :class="[
+            'nav-item group flex items-center gap-2.5 rounded-[6px] text-[13px] relative',
+            isActive(item.to) ? 'nav-item-active' : 'nav-item-idle',
+          ]"
+          style="padding: 6px 12px; text-decoration: none"
         >
-          <!-- Icons -->
-          <svg v-if="link.icon === 'grid'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-          <svg v-else-if="link.icon === 'message'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
-          <svg v-else-if="link.icon === 'check'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
-          <svg v-else-if="link.icon === 'clock'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
-          <svg v-else-if="link.icon === 'calendar'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-          <svg v-else-if="link.icon === 'folder'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
-          <svg v-else-if="link.icon === 'file'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
-          <svg v-else-if="link.icon === 'archive'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/></svg>
-          <svg v-else-if="link.icon === 'search'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          <svg v-else-if="link.icon === 'cpu'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/></svg>
-          <svg v-else-if="link.icon === 'settings'" class="w-4 h-4 flex-shrink-0 opacity-80" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-          {{ link.label }}
+          <span
+            v-if="isActive(item.to)"
+            style="
+              position: absolute;
+              left: -8px;
+              top: 6px;
+              bottom: 6px;
+              width: 2px;
+              background: var(--color-accent);
+              border-radius: 2px;
+            "
+          />
+          <BIcon :name="item.icon" :size="14" />
+          <span class="flex-1">{{ item.label }}</span>
+          <span
+            v-if="item.badge"
+            class="font-semibold"
+            style="
+              font-size: 10px;
+              background: var(--color-border);
+              color: var(--color-text-muted);
+              padding: 1px 6px;
+              border-radius: 9999px;
+            "
+          >
+            {{ item.badge }}
+          </span>
+          <span v-if="item.kbd" class="kbd">{{ item.kbd }}</span>
         </router-link>
       </div>
     </nav>
 
-    <!-- ── Footer: Theme-Toggle + Abmelden ────────────────────── -->
-    <div class="px-2 py-2 border-t border-white/5 flex items-center gap-1">
+    <!-- Footer -->
+    <div
+      class="flex items-center"
+      style="padding: 10px 12px; border-top: 1px solid var(--color-border); gap: 10px"
+    >
+      <div
+        class="flex items-center justify-center font-semibold"
+        style="
+          width: 26px;
+          height: 26px;
+          border-radius: 9999px;
+          background: var(--color-border);
+          color: var(--color-text);
+          font-size: 11px;
+        "
+      >
+        JS
+      </div>
+      <div class="flex-1 min-w-0 leading-tight">
+        <div
+          class="truncate"
+          style="font-size: 12px; font-weight: 500; color: var(--color-text)"
+        >
+          Julius Sima
+        </div>
+        <div class="truncate" style="font-size: 10px; color: var(--color-text-tertiary)">
+          Sima Architektur
+        </div>
+      </div>
       <button
         @click="toggle"
-        :title="theme === 'dark' ? 'Hellen Modus aktivieren' : 'Dunklen Modus aktivieren'"
-        class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-zinc-400 hover:text-white hover:bg-white/5 transition"
+        :title="theme === 'dark' ? 'Hellen Modus' : 'Dunklen Modus'"
+        class="nav-icon-btn"
+        aria-label="Theme wechseln"
       >
-        <svg v-if="theme === 'dark'" class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-        <svg v-else class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-        {{ theme === 'dark' ? 'Hell' : 'Dunkel' }}
+        <BIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="14" />
       </button>
-
-      <div class="flex-1" />
-
-      <button
-        @click="logout"
-        title="Abmelden"
-        class="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-xs text-zinc-400 hover:text-white hover:bg-white/5 transition"
-      >
-        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      <button @click="logout" title="Abmelden" class="nav-icon-btn" aria-label="Abmelden">
+        <BIcon name="logout" :size="14" />
       </button>
     </div>
   </aside>
 </template>
+
+<style scoped>
+.nav-item-idle {
+  color: var(--color-text-secondary);
+  background: transparent;
+}
+.nav-item-idle:hover {
+  color: var(--color-text);
+  background: var(--color-border-subtle);
+}
+.nav-item-active {
+  color: var(--color-text);
+  background: var(--color-border);
+}
+.nav-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.nav-icon-btn:hover {
+  color: var(--color-text);
+  background: var(--color-border-subtle);
+}
+</style>

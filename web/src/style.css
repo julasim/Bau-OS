@@ -1,78 +1,192 @@
 @import "tailwindcss";
 
-/* Tailwind v4: dark-Variante per `.dark` auf <html>.
-   Wir nutzen `:is()` statt `:where()`, damit die Spezifitaet der `.dark`-Klasse
-   erhalten bleibt und `dark:bg-zinc-950` gegen `bg-white` gewinnt. */
+/* ──────────────────────────────────────────────────────────────────────────
+   Bau-OS Design System
+   Monochromatische Neutrale + ein waehlbarer Akzent. Quelle: Design-Handoff
+   (components/Shell.jsx, components/Icons.jsx, views/*.jsx).
+   Keine neuen Farben — alles aus diesen Tokens.
+   ────────────────────────────────────────────────────────────────────────── */
+
+:root {
+  /* Neutrale Flaechen & Text */
+  --color-bg: #ffffff;
+  --color-bg-subtle: #fafafa;
+  --color-bg-muted: #f9fafb;
+  --color-border: #e5e7eb;
+  --color-border-subtle: #f3f4f6;
+  --color-text: #111827;
+  --color-text-secondary: #374151;
+  --color-text-muted: #6b7280;
+  --color-text-tertiary: #9ca3af;
+  --color-text-faint: #d1d5db;
+  --color-primary: #111827;
+
+  /* User-waehlbarer Akzent (Default = schwarz) */
+  --color-accent: #111827;
+
+  /* Status */
+  --color-success: #22c55e;
+  --color-success-bg: #f0fdf4;
+  --color-success-text: #15803d;
+  --color-success-border: #bbf7d0;
+
+  --color-warning: #f59e0b;
+  --color-warning-bg: #fffbeb;
+  --color-warning-text: #b45309;
+  --color-warning-border: #fde68a;
+
+  --color-danger: #dc2626;
+  --color-danger-bg: #fef2f2;
+  --color-danger-text: #b91c1c;
+  --color-danger-border: #fee2e2;
+
+  /* Login-Split-Panel (nur dort genutzt) */
+  --color-login-bg: #0a0a0a;
+  --color-login-text-secondary: #a1a1aa;
+  --color-login-border: #27272a;
+  --color-login-faint: #52525b;
+}
+
+/* Dark-Mode: Tokens flippen. Der Look bleibt dezent, Fokus auf Kontrast. */
 @custom-variant dark (&:is(.dark *));
 
-/* ── Grundlagen ─────────────────────────────────────────────────────────── */
-html {
-  background-color: #ffffff;
-  color-scheme: light;
-}
 html.dark {
-  background-color: #09090b; /* zinc-950 */
+  --color-bg: #0f0f11;
+  --color-bg-subtle: #18181b;
+  --color-bg-muted: #1f1f22;
+  --color-border: #27272a;
+  --color-border-subtle: #1f1f22;
+  --color-text: #f4f4f5;
+  --color-text-secondary: #e4e4e7;
+  --color-text-muted: #a1a1aa;
+  --color-text-tertiary: #71717a;
+  --color-text-faint: #3f3f46;
+  --color-primary: #f4f4f5;
   color-scheme: dark;
 }
+html {
+  color-scheme: light;
+}
 
-/* Sanfte Uebergaenge */
+/* ── Typographie ──────────────────────────────────────────────────────────── */
 html,
-body,
-aside,
-main,
-section,
-div,
+body {
+  font-family: "Inter", -apple-system, system-ui, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  background: var(--color-bg);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.font-mono,
+code,
+pre,
+kbd,
+samp {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Eyebrow/Overline — Section-Labels */
+.eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-tertiary);
+}
+
+/* Keyboard-Hint-Pill */
+.kbd {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  line-height: 1;
+}
+
+/* Sanfte Uebergaenge auf interaktiven Elementen */
+a,
 button,
-input,
-textarea,
-select {
+aside,
+.transition-bauos {
   transition:
     background-color 180ms ease,
     border-color 180ms ease,
     color 180ms ease;
 }
 
-/* ── Dark-Mode-Overrides fuer bestehende View-Styles ────────────────────── */
-/* Die alten Views nutzen durchgaengig weisse/helle Tailwind-Tokens. Statt sie
-   einzeln auf `dark:`-Varianten umzubauen, remappen wir die haeufigsten Tokens
-   global. Neu gebaute Komponenten koennen weiterhin explizite `dark:`-Klassen
-   nutzen und ueberschreiben das hier via Spezifitaet. */
-html.dark .bg-white { background-color: #0f0f11; }
-html.dark .bg-gray-50 { background-color: #18181b; }
-html.dark .bg-gray-100 { background-color: #27272a; }
-html.dark .bg-gray-200 { background-color: #3f3f46; }
-html.dark .bg-gray-900 { background-color: #e4e4e7; color: #09090b; }
-html.dark .hover\:bg-gray-50:hover { background-color: #1f1f22; }
-html.dark .hover\:bg-gray-100:hover { background-color: #27272a; }
-html.dark .hover\:bg-gray-800:hover { background-color: #d4d4d8; }
-
-html.dark .border-gray-100 { border-color: #27272a; }
-html.dark .border-gray-200 { border-color: #27272a; }
-html.dark .border-gray-300 { border-color: #3f3f46; }
-html.dark .border-gray-900 { border-color: #f4f4f5; }
-html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) { border-color: #1f1f22; }
-html.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) { border-color: #27272a; }
-
-html.dark .text-gray-900 { color: #f4f4f5; }
-html.dark .text-gray-800 { color: #e4e4e7; }
-html.dark .text-gray-700 { color: #d4d4d8; }
-html.dark .text-gray-600 { color: #a1a1aa; }
-html.dark .text-gray-500 { color: #a1a1aa; }
-html.dark .text-gray-400 { color: #71717a; }
-html.dark .hover\:text-gray-900:hover { color: #f4f4f5; }
-html.dark .hover\:text-gray-600:hover { color: #a1a1aa; }
-
-/* Primary-Button bleibt in Dark invertiert gut lesbar (bg → hellgrau, text → dunkel) */
-html.dark .text-white { color: inherit; }
-html.dark .bg-gray-900.text-white,
-html.dark .bg-gray-900 .text-white {
-  color: #09090b;
+/* Long-running Text: schoener umbrechen */
+p,
+li {
+  text-wrap: pretty;
 }
 
-/* Flash-/Error-Panels etwas gedaempfter */
-html.dark .bg-red-50 { background-color: #2a1012; }
-html.dark .border-red-200 { border-color: #7f1d1d; }
-html.dark .text-red-700 { color: #fca5a5; }
-
-/* Sidebar bleibt durch ihre eigenen Klassen (bg-zinc-950 etc.) unveraendert.
-   Wir setzen sie in keinem der obigen Remaps. */
+/* ──────────────────────────────────────────────────────────────────────────
+   Legacy Dark-Mode-Remap — fuer Views die noch nicht neu gestaltet sind.
+   Neue Komponenten nutzen direkt CSS-Variablen und brauchen das nicht.
+   ────────────────────────────────────────────────────────────────────────── */
+html.dark .bg-white {
+  background-color: var(--color-bg);
+}
+html.dark .bg-gray-50 {
+  background-color: var(--color-bg-subtle);
+}
+html.dark .bg-gray-100 {
+  background-color: var(--color-bg-muted);
+}
+html.dark .bg-gray-200 {
+  background-color: #3f3f46;
+}
+html.dark .bg-gray-900 {
+  background-color: var(--color-text);
+  color: var(--color-bg);
+}
+html.dark .hover\:bg-gray-50:hover {
+  background-color: var(--color-bg-subtle);
+}
+html.dark .hover\:bg-gray-100:hover {
+  background-color: var(--color-bg-muted);
+}
+html.dark .border-gray-100 {
+  border-color: var(--color-border-subtle);
+}
+html.dark .border-gray-200 {
+  border-color: var(--color-border);
+}
+html.dark .border-gray-300 {
+  border-color: #3f3f46;
+}
+html.dark .text-gray-900 {
+  color: var(--color-text);
+}
+html.dark .text-gray-800,
+html.dark .text-gray-700 {
+  color: var(--color-text-secondary);
+}
+html.dark .text-gray-600,
+html.dark .text-gray-500 {
+  color: var(--color-text-muted);
+}
+html.dark .text-gray-400 {
+  color: var(--color-text-tertiary);
+}
+html.dark .text-white {
+  color: inherit;
+}
+html.dark .bg-gray-900.text-white,
+html.dark .bg-gray-900 .text-white {
+  color: var(--color-bg);
+}
+html.dark .bg-red-50 {
+  background-color: #2a1012;
+}
+html.dark .border-red-200 {
+  border-color: #7f1d1d;
+}
+html.dark .text-red-700 {
+  color: #fca5a5;
+}
