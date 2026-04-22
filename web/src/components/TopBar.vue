@@ -75,7 +75,7 @@ function openPalette() {
       <span style="color: var(--color-text); font-weight: 500">{{ current }}</span>
     </nav>
 
-    <!-- Search button (⌘K) -->
+    <!-- Search button -->
     <button
       @click="openPalette"
       class="flex items-center gap-2"
@@ -92,7 +92,6 @@ function openPalette() {
     >
       <BIcon name="search" :size="14" style="color: var(--color-text-muted)" />
       <span class="flex-1 text-left" style="color: var(--color-text-muted)">Suchen…</span>
-      <span class="kbd">⌘K</span>
     </button>
 
     <!-- Bell -->

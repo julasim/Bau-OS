@@ -589,16 +589,7 @@ onUnmounted(() => {
               <button @click="toggleAttachMenu" :disabled="loading" class="composer-icon" title="Werkzeuge">
                 <BIcon name="plus" :size="14" />
               </button>
-              <button class="composer-icon" disabled title="Anhang">
-                <BIcon name="paperclip" :size="14" />
-              </button>
-              <button class="composer-icon" disabled title="Audio">
-                <BIcon name="mic" :size="14" />
-              </button>
               <div class="flex-1" />
-              <span style="font-size: 10px; color: var(--color-text-tertiary); margin-right: 8px">
-                <span class="kbd">⏎</span> senden · <span class="kbd">⇧⏎</span> neue Zeile
-              </span>
               <button
                 @click="send"
                 :disabled="loading || !input.trim()"

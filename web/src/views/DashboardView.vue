@@ -77,8 +77,12 @@ const upcomingTermine = computed(() =>
     })
     .slice(0, 4),
 );
-const activeProjects = computed(() =>
-  projects.value.filter((p) => !p.status || p.status === "aktiv").slice(0, 3),
+// Letzte 4 Projekte (nach Aktualisierung sortiert) — unabhaengig vom Status.
+// So sieht der Nutzer auf dem Dashboard immer seine juengste Arbeit.
+const recentProjects = computed(() =>
+  [...projects.value]
+    .sort((a, b) => (b.updated ?? "").localeCompare(a.updated ?? ""))
+    .slice(0, 4),
 );
 
 async function load() {
@@ -364,11 +368,11 @@ const statCards = computed(() => [
       </section>
     </div>
 
-    <!-- Aktive Projekte -->
-    <section v-if="activeProjects.length > 0">
+    <!-- Letzte Projekte -->
+    <section>
       <div class="flex items-center justify-between" style="margin-bottom: 12px">
         <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">
-          Aktive Projekte
+          Letzte Projekte
         </h2>
         <router-link
           to="/projects"
@@ -377,9 +381,22 @@ const statCards = computed(() => [
           >Alle Projekte →</router-link
         >
       </div>
-      <div class="grid gap-3" style="grid-template-columns: repeat(3, 1fr)">
+      <div
+        v-if="recentProjects.length === 0"
+        style="
+          border: 1px dashed var(--color-border);
+          border-radius: 8px;
+          padding: 24px;
+          text-align: center;
+          font-size: 13px;
+          color: var(--color-text-tertiary);
+        "
+      >
+        Noch keine Projekte — lege im Chat eines an ("leg ein Projekt … an").
+      </div>
+      <div v-else class="grid gap-3" style="grid-template-columns: repeat(4, 1fr)">
         <router-link
-          v-for="p in activeProjects"
+          v-for="p in recentProjects"
           :key="p.name"
           :to="`/projects/${encodeURIComponent(p.name)}`"
           class="surface-card hover-card"
