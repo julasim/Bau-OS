@@ -9,4 +9,5 @@ export { systemHandlers, systemSchemas } from "./system.js";
 export { webHandlers, webSchemas } from "./web.js";
 export { dyntoolHandlers, dyntoolSchemas } from "./dyntools.js";
 export { mcpHandlers, mcpSchemas } from "./mcp.js";
+export { chatHandlers, chatSchemas } from "./chats.js";
 export type { ToolHandler, ToolArgs, HandlerMap } from "./types.js";

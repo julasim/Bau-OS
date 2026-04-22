@@ -11,6 +11,7 @@ import {
   webSchemas,
   dyntoolSchemas,
   mcpSchemas,
+  chatSchemas,
 } from "./handlers/index.js";
 
 // Antwort-Tool — nicht in Handlern, wird direkt von runtime.ts ausgewertet
@@ -43,4 +44,5 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   ...webSchemas,
   ...dyntoolSchemas,
   ...mcpSchemas,
+  ...chatSchemas,
 ];

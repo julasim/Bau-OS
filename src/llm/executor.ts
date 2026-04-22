@@ -10,6 +10,7 @@ import {
   webHandlers,
   dyntoolHandlers,
   mcpHandlers,
+  chatHandlers,
 } from "./handlers/index.js";
 import type { ToolHandler } from "./handlers/index.js";
 
@@ -43,6 +44,7 @@ for (const map of [
   webHandlers,
   dyntoolHandlers,
   mcpHandlers,
+  chatHandlers,
 ]) {
   for (const [name, handler] of Object.entries(map)) {
     registry.set(name, handler);

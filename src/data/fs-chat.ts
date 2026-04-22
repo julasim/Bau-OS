@@ -246,4 +246,33 @@ export const fsChat: ChatRepository = {
     const s = await this.createSession(agent, `Chat ${today}`, source);
     return s.id;
   },
+
+  async searchMessages(query, limit = 10) {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+
+    const hits: ChatMessage[] = [];
+    for (const f of listAgentFiles()) {
+      const agent = agentFromFile(f);
+      const lines = readLines(agent);
+      for (const l of lines) {
+        if (l.type !== "message") continue;
+        if (l.content.toLowerCase().includes(q)) {
+          hits.push({
+            id: l.id,
+            sessionId: l.sessionId,
+            role: l.role,
+            content: l.content,
+            tools: l.tools,
+            source: l.source,
+            createdAt: l.createdAt,
+          });
+        }
+      }
+    }
+
+    // Neueste zuerst — User sucht meistens nach kuerzlich Gesagtem
+    hits.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return hits.slice(0, limit);
+  },
 };

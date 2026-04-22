@@ -221,6 +221,11 @@ export interface ChatRepository {
   getMessages(sessionId: string, limit?: number): Promise<ChatMessage[]>;
   getRecentHistory(agent?: string, limit?: number): Promise<{ user: string; assistant: string }[]>;
   getOrCreateTodaySession(agent: string, source?: string): Promise<string>;
+  /** Durchsucht alle Chat-Nachrichten (ueber alle Sessions + Agents) nach
+   *  einem Keyword. Liefert die Treffer mit Datum, Rolle und Content — sortiert
+   *  nach Relevanz (Neuheit). Nuetzlich fuer Cross-Session-Referenzen wie
+   *  "der Termin aus gestern" oder "das Projekt ueber das wir geredet haben". */
+  searchMessages(query: string, limit?: number): Promise<ChatMessage[]>;
 }
 
 export interface AgentLogRepository {

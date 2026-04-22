@@ -11,6 +11,7 @@ import {
   webHandlers,
   dyntoolHandlers,
   mcpHandlers,
+  chatHandlers,
   noteSchemas,
   taskSchemas,
   terminSchemas,
@@ -22,6 +23,7 @@ import {
   webSchemas,
   dyntoolSchemas,
   mcpSchemas,
+  chatSchemas,
 } from "../src/llm/handlers/index.js";
 
 const allHandlerMaps = [
@@ -36,6 +38,7 @@ const allHandlerMaps = [
   { name: "web", handlers: webHandlers, schemas: webSchemas },
   { name: "dyntool", handlers: dyntoolHandlers, schemas: dyntoolSchemas },
   { name: "mcp", handlers: mcpHandlers, schemas: mcpSchemas },
+  { name: "chat", handlers: chatHandlers, schemas: chatSchemas },
 ];
 
 describe("Handler-Registry Konsistenz", () => {
