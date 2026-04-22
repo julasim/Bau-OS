@@ -97,8 +97,11 @@ services:
     container_name: bauos-caddy
     restart: always
     environment:
-      # Wird aus .env uebernommen (leer = nur HTTP auf :80)
-      CADDY_DOMAIN: ${CADDY_DOMAIN:-}
+      # CADDY_DOMAIN leer oder unset → fallback auf ":80" (HTTP only).
+      # Caddy expandiert Env-Vars zur Config-Parse-Zeit; ein leerer String
+      # (nicht unset!) wuerde den Caddyfile-Default NICHT ausloesen, daher
+      # hier als Shell-Default ersetzen bevor die Variable den Container erreicht.
+      CADDY_DOMAIN: ${CADDY_DOMAIN:-:80}
     ports:
       - "80:80"
       - "443:443"
