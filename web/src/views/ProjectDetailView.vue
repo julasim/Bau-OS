@@ -6,6 +6,7 @@ import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import BIcon from "../components/BIcon.vue";
 
 interface ProjectInfo {
+  id: string;
   name: string;
   description?: string | null;
   status?: string;
@@ -41,6 +42,37 @@ interface Termin {
   location: string | null;
   assignees: string[];
 }
+interface FileEntry {
+  id: string;
+  name: string;
+  size: number;
+  modified: string;
+  extension: string;
+  analyzed?: boolean;
+}
+interface TeamMember {
+  id: string;
+  name: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  projectId: string | null;
+}
+interface AgentLog {
+  id?: string;
+  sessionId: string;
+  agentName: string;
+  eventType: string;
+  toolName?: string;
+  parameters?: Record<string, unknown>;
+  resultSummary?: string;
+  thought?: string;
+  error?: string;
+  projectId?: string;
+  durationMs?: number;
+  createdAt?: string;
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -49,6 +81,40 @@ const info = ref<ProjectInfo | null>(null);
 const notes = ref<string[]>([]);
 const tasks = ref<Task[]>([]);
 const termine = ref<Termin[]>([]);
+const files = ref<FileEntry[]>([]);
+
+// Datei-Preview im Dateien-Tab (nur fuer Text/Markdown).
+const viewingFile = ref<FileEntry | null>(null);
+const viewingFileContent = ref<string>("");
+const filesLoaded = ref(false); // Lazy-Load: erst laden, wenn Tab geoeffnet wird.
+
+// Upload-State (Drag & Drop + Button)
+const dragging = ref(false);
+const uploading = ref(false);
+const uploadMsg = ref("");
+
+// ── Team-State (Stufe 3c) ──────────────────────────────────
+const allTeam = ref<TeamMember[]>([]);
+const teamLoaded = ref(false);
+const teamAssigning = ref(false);
+const teamError = ref<string | null>(null);
+// Formular fuer Neu-Anlegen-und-Zuordnen (nur Name+Rolle, Rest spaeter im /team-Editor).
+const showNewMemberForm = ref(false);
+const newMemberName = ref("");
+const newMemberRole = ref("");
+// Existierendes Mitglied zuordnen
+const assignMemberId = ref(""); // "" = keine Auswahl
+
+// ── Verlauf-State (Stufe 3d) ──────────────────────────────
+// Der Uebersichts-Tab zeigt nur die letzten 5 Eintraege, der Verlauf-Tab
+// paginiert; beide speisen sich aus /agent-logs?projectId=<uuid>.
+const recentActivity = ref<AgentLog[]>([]);
+const recentActivityLoaded = ref(false);
+const fullActivity = ref<AgentLog[]>([]);
+const fullActivityLoaded = ref(false);
+const fullActivityHasMore = ref(false);
+const fullActivityLoading = ref(false);
+const ACTIVITY_PAGE = 30;
 
 const viewingNote = ref<string | null>(null);
 const noteContent = ref("");
@@ -56,9 +122,9 @@ const newTask = ref("");
 const newDatum = ref("");
 const newUhrzeit = ref("");
 const newTerminText = ref("");
-// "uebersicht" wird spaeter in 3d zum Start-Tab — jetzt bleibt "notes" Default.
-type Tab = "notes" | "tasks" | "termine" | "files" | "team" | "verlauf";
-const tab = ref<Tab>("notes");
+// Stufe 3d: Uebersicht ist jetzt der Start-Tab.
+type Tab = "uebersicht" | "notes" | "tasks" | "termine" | "files" | "team" | "verlauf";
+const tab = ref<Tab>("uebersicht");
 
 // ── Inline-Editor State ────────────────────────────────────
 // editingField: welcher Stammdaten-Key gerade editiert wird (null = nichts).
@@ -122,6 +188,9 @@ const STATUS_OPTIONS = ["aktiv", "pausiert", "archiviert"] as const;
 onMounted(async () => {
   projectName.value = route.params.name as string;
   await loadAll();
+  // Uebersicht ist Default-Tab — Activity erst nach loadAll laden, weil wir
+  // die projekt-UUID (info.id) fuer den Filter brauchen.
+  if (tab.value === "uebersicht") await loadRecentActivity();
 });
 
 async function loadAll() {
@@ -234,6 +303,359 @@ async function removeTermin(t: Termin) {
   const n = encodeURIComponent(projectName.value);
   await api.delete(`/projects/${n}/termine`, { text: t.text });
   await loadAll();
+}
+
+// ── Dateien (Stufe 3b) ─────────────────────────────────────
+
+// API liefert Ordner + Dateien gemischt — wir filtern auf echte DB-Files
+// mit id (Ordner aus dem Filesystem haben keine id).
+interface ApiFile {
+  id?: string;
+  name: string;
+  type: "file" | "folder";
+  size: number;
+  modified: string;
+  extension: string;
+  analyzed?: boolean;
+}
+
+async function loadFiles() {
+  const n = encodeURIComponent(projectName.value);
+  try {
+    const raw = await api.get<ApiFile[]>(`/files?project=${n}`);
+    files.value = raw
+      .filter((f) => f.type === "file" && !!f.id)
+      .map((f) => ({
+        id: String(f.id),
+        name: f.name,
+        size: f.size,
+        modified: f.modified,
+        extension: f.extension,
+        analyzed: f.analyzed,
+      }));
+    filesLoaded.value = true;
+  } catch {
+    files.value = [];
+    filesLoaded.value = true;
+  }
+}
+
+async function openTab(t: Tab) {
+  tab.value = t;
+  viewingNote.value = null;
+  viewingFile.value = null;
+  // Lazy-Load pro Tab — pro Tab max. einmal.
+  if (t === "files" && !filesLoaded.value) await loadFiles();
+  if (t === "team" && !teamLoaded.value) await loadTeam();
+  if (t === "uebersicht" && !recentActivityLoaded.value) await loadRecentActivity();
+  if (t === "verlauf" && !fullActivityLoaded.value) await loadFullActivity(true);
+}
+
+async function openFile(entry: FileEntry) {
+  // Nur Text/Markdown inline anzeigen; alles andere -> Download.
+  const textExts = ["md", "txt", "json", "csv", "yml", "yaml", "log", "ts", "js", "html", "css"];
+  if (!textExts.includes(entry.extension.toLowerCase())) {
+    window.location.href = downloadUrl(entry);
+    return;
+  }
+  try {
+    const resp = await api.get<{ path: string; content: string; filename: string }>(
+      `/files/read?id=${encodeURIComponent(entry.id)}`,
+    );
+    viewingFile.value = entry;
+    viewingFileContent.value = resp.content;
+  } catch {
+    viewingFileContent.value = "[Inhalt konnte nicht gelesen werden]";
+    viewingFile.value = entry;
+  }
+}
+
+async function deleteFile(entry: FileEntry) {
+  if (!confirm(`Datei "${entry.name}" wirklich loeschen?`)) return;
+  try {
+    await api.delete("/files", { id: entry.id });
+    await Promise.all([loadFiles(), loadAll()]);
+  } catch {
+    uploadMsg.value = "Loeschen fehlgeschlagen";
+    setTimeout(() => (uploadMsg.value = ""), 3000);
+  }
+}
+
+function downloadUrl(entry: FileEntry): string {
+  const token = localStorage.getItem("bau-os-token");
+  const base = `/api/files/download?id=${encodeURIComponent(entry.id)}`;
+  return token ? `${base}&token=${encodeURIComponent(token)}` : base;
+}
+
+function onDragOver(e: DragEvent) {
+  e.preventDefault();
+  if (tab.value === "files") dragging.value = true;
+}
+function onDragLeave() {
+  dragging.value = false;
+}
+async function onDrop(e: DragEvent) {
+  e.preventDefault();
+  dragging.value = false;
+  if (tab.value !== "files") return;
+  if (e.dataTransfer?.files?.length) await uploadFiles(e.dataTransfer.files);
+}
+function onFileInput(e: Event) {
+  const input = e.target as HTMLInputElement;
+  if (input.files?.length) {
+    void uploadFiles(input.files);
+    input.value = "";
+  }
+}
+
+async function uploadFiles(fileList: FileList) {
+  if (uploading.value) return;
+  uploading.value = true;
+  uploadMsg.value = "";
+  const formData = new FormData();
+  // Projekt-Zuweisung automatisch — das ist der Zweck des projekt-scoped Tabs.
+  formData.append("project", projectName.value);
+  for (const f of fileList) formData.append("files", f);
+
+  try {
+    const token = localStorage.getItem("bau-os-token");
+    const res = await fetch("/api/files/upload", {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.success) {
+      const count = data.uploaded?.length ?? 0;
+      uploadMsg.value = `${count} Datei${count === 1 ? "" : "en"} hochgeladen`;
+      await Promise.all([loadFiles(), loadAll()]);
+    } else {
+      uploadMsg.value = data.error || "Upload fehlgeschlagen";
+    }
+  } catch {
+    uploadMsg.value = "Upload fehlgeschlagen";
+  } finally {
+    uploading.value = false;
+    setTimeout(() => (uploadMsg.value = ""), 3000);
+  }
+}
+
+function formatSize(bytes: number) {
+  if (!bytes) return "–";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatFileDate(iso: string) {
+  if (!iso) return "–";
+  const d = new Date(iso);
+  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+const viewingFileIsMarkdown = computed(() =>
+  viewingFile.value ? viewingFile.value.extension.toLowerCase() === "md" : false,
+);
+
+// ── Team (Stufe 3c) ────────────────────────────────────────
+//
+// Datenmodell: team_members.project_id ist ein einzelner FK — ein Mitglied
+// gehoert zu MAX EINEM Projekt. "Zuordnen" = projectId auf info.id setzen;
+// "Entfernen" = projectId auf null (Mitglied bleibt global erhalten).
+async function loadTeam() {
+  try {
+    allTeam.value = await api.get<TeamMember[]>("/team");
+    teamLoaded.value = true;
+  } catch {
+    allTeam.value = [];
+    teamLoaded.value = true;
+  }
+}
+
+const projectTeam = computed<TeamMember[]>(() => {
+  if (!info.value) return [];
+  return allTeam.value.filter((m) => m.projectId === info.value!.id);
+});
+
+// Kandidaten zum Zuordnen: alle unassigned oder einem anderen Projekt zugeordnete
+// Mitglieder. Letztere zeigen wir auch an — der Umzug ist ein Klick, und der
+// User sieht sofort, dass es nur eine projectId pro Member gibt.
+const assignableTeam = computed<TeamMember[]>(() => {
+  if (!info.value) return [];
+  return allTeam.value.filter((m) => m.projectId !== info.value!.id);
+});
+
+async function assignExisting() {
+  if (!assignMemberId.value || !info.value || teamAssigning.value) return;
+  teamAssigning.value = true;
+  teamError.value = null;
+  try {
+    // PATCH /team/:id akzeptiert zwar laut Signatur nur name/role/email/...,
+    // aber das ist nur eine Type-Assertion am Body. Der Repo-Update-Pfad
+    // checkt "projectId" in updates und schreibt es korrekt in die Spalte.
+    await api.patch(`/team/${encodeURIComponent(assignMemberId.value)}`, {
+      projectId: info.value.id,
+    });
+    assignMemberId.value = "";
+    await loadTeam();
+  } catch (e) {
+    teamError.value = e instanceof Error ? e.message : "Zuordnung fehlgeschlagen";
+  } finally {
+    teamAssigning.value = false;
+  }
+}
+
+async function createAndAssign() {
+  const name = newMemberName.value.trim();
+  if (!name || !info.value || teamAssigning.value) return;
+  teamAssigning.value = true;
+  teamError.value = null;
+  try {
+    // POST /team akzeptiert aktuell keine projectId (wird serverseitig auf
+    // null gesetzt). Daher zweistufig: erst anlegen, dann PATCH mit projectId.
+    const created = await api.post<TeamMember>("/team", {
+      name,
+      role: newMemberRole.value.trim() || undefined,
+    });
+    await api.patch(`/team/${encodeURIComponent(created.id)}`, {
+      projectId: info.value.id,
+    });
+    newMemberName.value = "";
+    newMemberRole.value = "";
+    showNewMemberForm.value = false;
+    await loadTeam();
+  } catch (e) {
+    teamError.value = e instanceof Error ? e.message : "Anlegen fehlgeschlagen";
+  } finally {
+    teamAssigning.value = false;
+  }
+}
+
+async function unassignMember(m: TeamMember) {
+  if (teamAssigning.value) return;
+  if (!confirm(`"${m.name}" aus diesem Projekt entfernen? (Mitglied bleibt im Team-Verzeichnis.)`)) return;
+  teamAssigning.value = true;
+  teamError.value = null;
+  try {
+    await api.patch(`/team/${encodeURIComponent(m.id)}`, { projectId: null });
+    await loadTeam();
+  } catch (e) {
+    teamError.value = e instanceof Error ? e.message : "Entfernen fehlgeschlagen";
+  } finally {
+    teamAssigning.value = false;
+  }
+}
+
+function initial(name: string): string {
+  return name
+    .split(/\s+/)
+    .map((w) => w[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+}
+
+// ── Verlauf / Aktivitaet (Stufe 3d) ───────────────────────
+// /agent-logs?projectId=<uuid> liefert die vom Agenten ausgefuehrten Tools
+// inkl. Thoughts/Errors fuer genau dieses Projekt. Kein separates "events"-
+// Log noetig — die agent_logs-Tabelle ist das einzige persistente Activity-
+// Signal, das wir pro Projekt haben.
+async function loadRecentActivity() {
+  if (!info.value) return;
+  try {
+    const resp = await api.get<{ enabled: boolean; items: AgentLog[] }>(
+      `/agent-logs?projectId=${encodeURIComponent(info.value.id)}&limit=5`,
+    );
+    recentActivity.value = resp.items || [];
+  } catch {
+    recentActivity.value = [];
+  } finally {
+    recentActivityLoaded.value = true;
+  }
+}
+
+async function loadFullActivity(reset = false) {
+  if (!info.value || fullActivityLoading.value) return;
+  fullActivityLoading.value = true;
+  try {
+    const offset = reset ? 0 : fullActivity.value.length;
+    const resp = await api.get<{ enabled: boolean; items: AgentLog[] }>(
+      `/agent-logs?projectId=${encodeURIComponent(info.value.id)}&limit=${ACTIVITY_PAGE}&offset=${offset}`,
+    );
+    const items = resp.items || [];
+    fullActivity.value = reset ? items : [...fullActivity.value, ...items];
+    // Heuristik: weniger als die Page-Size zurueck → keine weiteren Eintraege.
+    fullActivityHasMore.value = items.length === ACTIVITY_PAGE;
+  } catch {
+    if (reset) fullActivity.value = [];
+    fullActivityHasMore.value = false;
+  } finally {
+    fullActivityLoaded.value = true;
+    fullActivityLoading.value = false;
+  }
+}
+
+// Human-readable Label fuer eventType + toolName. Der Agent schickt Events wie
+// "tool_call", "thought", "error", "agent_spawn" etc. — fuer den Projekt-
+// Verlauf reicht der Tool-Name plus der Result-Summary.
+function activityLabel(log: AgentLog): string {
+  if (log.error) return "Fehler";
+  if (log.toolName) return log.toolName;
+  if (log.eventType === "thought") return "Gedanke";
+  if (log.eventType === "agent_spawn") return "Subagent gestartet";
+  if (log.eventType === "agent_result") return "Subagent fertig";
+  return log.eventType;
+}
+
+function activitySubtext(log: AgentLog): string {
+  if (log.error) return log.error;
+  if (log.resultSummary) return log.resultSummary;
+  if (log.thought) return log.thought;
+  // Parameters als letzte Fallback-Zeile — kompakt gerendert.
+  if (log.parameters && Object.keys(log.parameters).length > 0) {
+    try {
+      return JSON.stringify(log.parameters).slice(0, 120);
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function activityTime(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const now = Date.now();
+  const diffMin = Math.floor((now - d.getTime()) / 60000);
+  if (diffMin < 1) return "gerade eben";
+  if (diffMin < 60) return `vor ${diffMin} Min`;
+  const diffHrs = Math.floor(diffMin / 60);
+  if (diffHrs < 24) return `vor ${diffHrs} Std`;
+  const diffDays = Math.floor(diffHrs / 24);
+  if (diffDays < 7) return `vor ${diffDays} Tg`;
+  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit" });
+}
+
+// ── Uebersicht: Top-Daten aus bestehenden Listen ──────────
+// Kein neuer Fetch noetig — tasks/termine sind schon geladen.
+const openTasksTop = computed(() =>
+  tasks.value.filter((t) => t.status !== "done").slice(0, 5),
+);
+
+const upcomingTermine = computed(() => {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  return [...termine.value]
+    .filter((t) => t.datum >= todayIso)
+    .sort((a, b) => a.datum.localeCompare(b.datum))
+    .slice(0, 3);
+});
+
+// Beschreibung hat auch inline-edit — selbe Mechanik wie Stammdaten,
+// aber mit textarea statt input (mehrzeilig). Wir missbrauchen dafuer das
+// existierende draftValue/editingField-Modell mit key='description'.
+function startEditDescription() {
+  startEdit("description");
 }
 
 // ── Derived ────────────────────────────────────────────────
@@ -448,28 +870,125 @@ const emptyStammCount = computed(() => {
       style="gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); overflow-x: auto"
     >
       <button
-        v-for="t in (['notes', 'tasks', 'termine', 'files', 'team', 'verlauf'] as const)"
+        v-for="t in (['uebersicht', 'notes', 'tasks', 'termine', 'files', 'team', 'verlauf'] as const)"
         :key="t"
-        @click="
-          tab = t;
-          viewingNote = null;
-        "
+        @click="openTab(t)"
         :class="['tab-btn', tab === t ? 'tab-btn-active' : '']"
       >
         {{
-          t === "notes"
-            ? "Notizen"
-            : t === "tasks"
-              ? "Aufgaben"
-              : t === "termine"
-                ? "Termine"
-                : t === "files"
-                  ? "Dateien"
-                  : t === "team"
-                    ? "Team"
-                    : "Verlauf"
+          t === "uebersicht"
+            ? "Übersicht"
+            : t === "notes"
+              ? "Notizen"
+              : t === "tasks"
+                ? "Aufgaben"
+                : t === "termine"
+                  ? "Termine"
+                  : t === "files"
+                    ? "Dateien"
+                    : t === "team"
+                      ? "Team"
+                      : "Verlauf"
         }}
       </button>
+    </div>
+
+    <!-- Uebersicht (Stufe 3d) -->
+    <div v-if="tab === 'uebersicht' && info">
+      <!-- Beschreibung (inline-editable, mehrzeilig) -->
+      <div class="ueb-card" style="margin-bottom: 16px">
+        <div class="flex items-center justify-between" style="margin-bottom: 8px">
+          <div class="eyebrow">Beschreibung</div>
+          <button
+            v-if="editingField !== 'description'"
+            class="desc-edit-btn"
+            @click="startEditDescription"
+          >
+            <BIcon name="pencil" :size="11" />
+            <span style="margin-left: 4px">{{ info.description ? "Bearbeiten" : "Hinzufügen" }}</span>
+          </button>
+        </div>
+        <div v-if="editingField === 'description'">
+          <textarea
+            v-model="draftValue"
+            class="stamm-input"
+            rows="4"
+            placeholder="Kurz beschreiben, worum es bei diesem Projekt geht…"
+            style="resize: vertical; font-family: inherit; line-height: 1.5"
+          ></textarea>
+          <div class="flex items-center" style="gap: 6px; margin-top: 8px">
+            <button class="bauos-btn solid sm" :disabled="saving" @click="saveField('description')">
+              {{ saving ? "…" : "Speichern" }}
+            </button>
+            <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
+            <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">
+              {{ saveError }}
+            </span>
+          </div>
+        </div>
+        <p v-else-if="info.description" class="desc-text">{{ info.description }}</p>
+        <p v-else class="desc-empty">Noch keine Beschreibung. Klicke auf „Hinzufügen", um Kontext zu ergänzen.</p>
+      </div>
+
+      <!-- 3-Spalten-Grid: Termine / Aufgaben / Aktivitaet -->
+      <div class="ueb-grid">
+        <!-- Anstehende Termine -->
+        <div class="ueb-card">
+          <div class="flex items-center justify-between" style="margin-bottom: 8px">
+            <div class="eyebrow">Als nächstes</div>
+            <button class="link-btn" @click="openTab('termine')">Alle →</button>
+          </div>
+          <div v-if="upcomingTermine.length === 0" class="ueb-empty">Keine anstehenden Termine.</div>
+          <div v-for="t in upcomingTermine" :key="t.id" class="ueb-row">
+            <div style="flex: 1; min-width: 0">
+              <div class="ueb-row-title">{{ t.text }}</div>
+              <div class="ueb-row-meta">
+                {{ t.datum }}<span v-if="t.uhrzeit"> · {{ t.uhrzeit }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Offene Aufgaben -->
+        <div class="ueb-card">
+          <div class="flex items-center justify-between" style="margin-bottom: 8px">
+            <div class="eyebrow">Offene Aufgaben</div>
+            <button class="link-btn" @click="openTab('tasks')">Alle →</button>
+          </div>
+          <div v-if="openTasksTop.length === 0" class="ueb-empty">Keine offenen Aufgaben.</div>
+          <div v-for="t in openTasksTop" :key="t.id" class="ueb-row">
+            <input type="checkbox" @change="completeTask(t)" style="accent-color: var(--color-primary)" />
+            <div style="flex: 1; min-width: 0">
+              <div class="ueb-row-title">{{ t.text }}</div>
+              <div v-if="t.assignee || t.date" class="ueb-row-meta">
+                <span v-if="t.assignee">{{ t.assignee }}</span>
+                <span v-if="t.assignee && t.date"> · </span>
+                <span v-if="t.date">{{ t.date }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Letzte Aktivitaet -->
+        <div class="ueb-card">
+          <div class="flex items-center justify-between" style="margin-bottom: 8px">
+            <div class="eyebrow">Letzte Aktivität</div>
+            <button class="link-btn" @click="openTab('verlauf')">Alle →</button>
+          </div>
+          <div v-if="!recentActivityLoaded" class="ueb-empty">Lade…</div>
+          <div v-else-if="recentActivity.length === 0" class="ueb-empty">
+            Noch keine Aktivität für dieses Projekt.
+          </div>
+          <div v-for="log in recentActivity" :key="log.id ?? `${log.sessionId}-${log.createdAt}`" class="ueb-row">
+            <div style="flex: 1; min-width: 0">
+              <div class="ueb-row-title">{{ activityLabel(log) }}</div>
+              <div class="ueb-row-meta">
+                {{ activityTime(log.createdAt) }}<span v-if="log.agentName"> · {{ log.agentName }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Notes -->
@@ -556,18 +1075,235 @@ const emptyStammCount = computed(() => {
       </div>
     </div>
 
-    <!-- Placeholder-Tabs (kommen in Stufen 3b/3c/3d) -->
-    <div v-if="tab === 'files'" class="placeholder-tab">
-      <BIcon name="archive" :size="20" />
-      <p>Datei-Ansicht pro Projekt kommt in Kürze.</p>
+    <!-- Dateien (Stufe 3b) -->
+    <div
+      v-if="tab === 'files'"
+      class="files-tab"
+      :class="{ 'files-dragging': dragging }"
+      @dragover="onDragOver"
+      @dragleave="onDragLeave"
+      @drop="onDrop"
+    >
+      <!-- Inline-Preview fuer Text/Markdown -->
+      <div v-if="viewingFile">
+        <div class="flex items-center justify-between" style="margin-bottom: 12px">
+          <span class="font-mono" style="font-size: 12px; color: var(--color-text-muted)">
+            {{ viewingFile.name }}
+          </span>
+          <div class="flex items-center" style="gap: 8px">
+            <a :href="downloadUrl(viewingFile)" class="bauos-btn ghost sm" download>Download</a>
+            <button @click="viewingFile = null" class="bauos-btn ghost sm">Schließen</button>
+          </div>
+        </div>
+        <div v-if="viewingFileIsMarkdown" class="note-viewer">
+          <MarkdownRenderer :content="viewingFileContent" />
+        </div>
+        <pre v-else class="file-preview-pre">{{ viewingFileContent }}</pre>
+      </div>
+
+      <!-- Upload-Leiste + Liste -->
+      <div v-else>
+        <div class="flex items-center justify-between" style="gap: 8px; margin-bottom: 12px">
+          <span style="font-size: 12px; color: var(--color-text-muted)">
+            {{ files.length }} Datei<span v-if="files.length !== 1">en</span> in diesem Projekt
+          </span>
+          <div class="flex items-center" style="gap: 8px">
+            <span v-if="uploadMsg" style="font-size: 11px; color: var(--color-success-text)">
+              {{ uploadMsg }}
+            </span>
+            <label class="bauos-btn solid sm" :class="{ disabled: uploading }">
+              <BIcon name="paperclip" :size="12" />
+              <span style="margin-left: 4px">{{ uploading ? "Lädt…" : "Hochladen" }}</span>
+              <input type="file" multiple style="display: none" @change="onFileInput" :disabled="uploading" />
+            </label>
+          </div>
+        </div>
+
+        <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+          <button
+            v-for="f in files"
+            :key="f.id"
+            @click="openFile(f)"
+            class="file-row detail-row"
+            style="border-top: 1px solid var(--color-border-subtle)"
+          >
+            <BIcon name="file" :size="14" style="color: var(--color-text-muted)" />
+            <span class="flex-1" style="font-size: 13px; color: var(--color-text)">{{ f.name }}</span>
+            <span class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary); width: 70px; text-align: right">
+              {{ formatSize(f.size) }}
+            </span>
+            <span class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary); width: 90px; text-align: right">
+              {{ formatFileDate(f.modified) }}
+            </span>
+            <button
+              @click.stop="deleteFile(f)"
+              class="file-del-btn"
+              :title="'Datei löschen'"
+              type="button"
+            >
+              <BIcon name="x" :size="12" />
+            </button>
+          </button>
+          <p v-if="filesLoaded && files.length === 0" class="empty-hint">
+            Noch keine Dateien. Datei hierher ziehen oder oben auf „Hochladen“ klicken.
+          </p>
+          <p v-else-if="!filesLoaded" class="empty-hint">Lade Dateien…</p>
+        </div>
+
+        <!-- Drag-Overlay -->
+        <div v-if="dragging" class="drag-overlay">
+          <BIcon name="paperclip" :size="28" />
+          <p>Dateien hier ablegen — werden „{{ projectName }}“ zugeordnet</p>
+        </div>
+      </div>
     </div>
-    <div v-if="tab === 'team'" class="placeholder-tab">
-      <BIcon name="users" :size="20" />
-      <p>Team-Zuordnung kommt in Kürze.</p>
+    <!-- Team (Stufe 3c) -->
+    <div v-if="tab === 'team'" class="team-tab">
+      <!-- Zuordnungs-Bar -->
+      <div class="team-assign-bar">
+        <div v-if="!showNewMemberForm" class="flex items-center flex-wrap" style="gap: 8px">
+          <select
+            v-model="assignMemberId"
+            class="form-input"
+            style="max-width: 260px; flex: 0 1 260px"
+            :disabled="assignableTeam.length === 0 || teamAssigning"
+          >
+            <option value="">
+              {{ assignableTeam.length === 0 ? "Keine weiteren Mitglieder" : "Mitglied zuordnen…" }}
+            </option>
+            <option v-for="m in assignableTeam" :key="m.id" :value="m.id">
+              {{ m.name }}<span v-if="m.role"> · {{ m.role }}</span>
+              <template v-if="m.projectId"> (aktuell: anderes Projekt)</template>
+            </option>
+          </select>
+          <button
+            class="bauos-btn solid sm"
+            :disabled="!assignMemberId || teamAssigning"
+            @click="assignExisting"
+          >
+            Zuordnen
+          </button>
+          <span style="color: var(--color-text-faint); font-size: 12px">oder</span>
+          <button class="bauos-btn ghost sm" @click="showNewMemberForm = true">
+            <BIcon name="plus" :size="12" />
+            <span style="margin-left: 4px">Neu anlegen</span>
+          </button>
+          <span v-if="teamError" style="font-size: 11px; color: var(--color-danger-text)">{{ teamError }}</span>
+        </div>
+
+        <!-- Inline-Formular fuer neues Mitglied -->
+        <div v-else class="flex items-center flex-wrap" style="gap: 8px">
+          <input
+            v-model="newMemberName"
+            placeholder="Name*"
+            class="form-input"
+            style="max-width: 200px; flex: 0 1 200px"
+            @keyup.enter="createAndAssign"
+            autofocus
+          />
+          <input
+            v-model="newMemberRole"
+            placeholder="Rolle (optional)"
+            class="form-input"
+            style="max-width: 200px; flex: 0 1 200px"
+            @keyup.enter="createAndAssign"
+          />
+          <button
+            class="bauos-btn solid sm"
+            :disabled="!newMemberName.trim() || teamAssigning"
+            @click="createAndAssign"
+          >
+            {{ teamAssigning ? "…" : "Anlegen + zuordnen" }}
+          </button>
+          <button
+            class="bauos-btn ghost sm"
+            @click="
+              showNewMemberForm = false;
+              newMemberName = '';
+              newMemberRole = '';
+              teamError = null;
+            "
+          >
+            Abbrechen
+          </button>
+          <span v-if="teamError" style="font-size: 11px; color: var(--color-danger-text)">{{ teamError }}</span>
+        </div>
+      </div>
+
+      <!-- Mitglieder-Liste -->
+      <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+        <div
+          v-for="m in projectTeam"
+          :key="m.id"
+          class="team-row"
+          style="border-top: 1px solid var(--color-border-subtle)"
+        >
+          <div class="team-avatar">{{ initial(m.name) }}</div>
+          <div class="team-main">
+            <div class="team-name">{{ m.name }}</div>
+            <div v-if="m.role || m.company" class="team-sub">
+              <span v-if="m.role">{{ m.role }}</span>
+              <span v-if="m.role && m.company"> · </span>
+              <span v-if="m.company">{{ m.company }}</span>
+            </div>
+          </div>
+          <div class="team-contact">
+            <a v-if="m.email" :href="`mailto:${m.email}`" class="team-chip" :title="m.email">
+              {{ m.email }}
+            </a>
+            <a v-if="m.phone" :href="`tel:${m.phone}`" class="team-chip" :title="m.phone">
+              {{ m.phone }}
+            </a>
+          </div>
+          <button class="team-remove" @click="unassignMember(m)" :title="'Aus Projekt entfernen'">
+            <BIcon name="x" :size="12" />
+          </button>
+        </div>
+        <p v-if="teamLoaded && projectTeam.length === 0" class="empty-hint">
+          Noch keine Mitglieder zugeordnet. Oben auswählen oder neu anlegen.
+        </p>
+        <p v-else-if="!teamLoaded" class="empty-hint">Lade Team…</p>
+      </div>
     </div>
-    <div v-if="tab === 'verlauf'" class="placeholder-tab">
-      <BIcon name="clock" :size="20" />
-      <p>Aktivitäts-Verlauf kommt in Kürze.</p>
+    <!-- Verlauf (Stufe 3d) -->
+    <div v-if="tab === 'verlauf'" class="verlauf-tab">
+      <div v-if="!fullActivityLoaded" class="empty-hint">Lade Verlauf…</div>
+      <div v-else-if="fullActivity.length === 0" class="empty-hint">
+        Noch keine Aktivität. Sobald der Agent etwas in diesem Projekt tut, erscheint es hier.
+      </div>
+      <div v-else style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+        <div
+          v-for="log in fullActivity"
+          :key="log.id ?? `${log.sessionId}-${log.createdAt}`"
+          class="verlauf-row"
+          :class="{ 'verlauf-error': !!log.error }"
+        >
+          <div class="verlauf-bullet">
+            <BIcon
+              :name="log.error ? 'x' : log.toolName ? 'code' : log.eventType === 'thought' ? 'message' : 'clock'"
+              :size="12"
+            />
+          </div>
+          <div style="flex: 1; min-width: 0">
+            <div class="verlauf-head">
+              <span class="verlauf-label">{{ activityLabel(log) }}</span>
+              <span class="verlauf-agent" v-if="log.agentName">· {{ log.agentName }}</span>
+              <span v-if="log.durationMs" class="verlauf-duration">· {{ log.durationMs }} ms</span>
+            </div>
+            <div v-if="activitySubtext(log)" class="verlauf-sub">{{ activitySubtext(log) }}</div>
+          </div>
+          <div class="verlauf-time font-mono">{{ activityTime(log.createdAt) }}</div>
+        </div>
+      </div>
+      <div v-if="fullActivityHasMore" class="flex" style="justify-content: center; margin-top: 12px">
+        <button
+          class="bauos-btn ghost sm"
+          :disabled="fullActivityLoading"
+          @click="loadFullActivity(false)"
+        >
+          {{ fullActivityLoading ? "Lädt…" : "Mehr laden" }}
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -870,5 +1606,352 @@ const emptyStammCount = computed(() => {
 .bauos-btn.sm {
   padding: 4px 10px;
   font-size: 11px;
+}
+.bauos-btn.sm.disabled,
+.bauos-btn.sm input:disabled + * {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Files-Tab ─────────────────────────────────────────── */
+.files-tab {
+  position: relative;
+  min-height: 200px;
+}
+.files-tab.files-dragging {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: 4px;
+  border-radius: 10px;
+}
+
+.file-row {
+  position: relative;
+}
+.file-del-btn {
+  background: transparent;
+  border: none;
+  color: var(--color-text-faint);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 180ms ease;
+}
+.file-row:hover .file-del-btn {
+  opacity: 1;
+}
+.file-del-btn:hover {
+  color: var(--color-danger-text);
+  background: var(--color-bg-subtle);
+}
+
+.file-preview-pre {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  background: var(--color-bg-subtle);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  max-height: 500px;
+  overflow: auto;
+}
+
+.drag-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: color-mix(in srgb, var(--color-bg) 92%, transparent);
+  border: 2px dashed var(--color-primary);
+  border-radius: 10px;
+  color: var(--color-primary);
+  pointer-events: none;
+  font-size: 13px;
+}
+.drag-overlay p {
+  margin: 0;
+  color: var(--color-text);
+}
+
+/* ── Team-Tab ──────────────────────────────────────────── */
+.team-tab {
+  min-height: 200px;
+}
+.team-assign-bar {
+  padding: 12px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg-subtle);
+  margin-bottom: 14px;
+}
+
+.team-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  transition: background 180ms ease;
+}
+.team-row:first-child {
+  border-top: 0 !important;
+}
+.team-row:hover {
+  background: var(--color-bg-subtle);
+}
+
+.team-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  letter-spacing: 0.02em;
+}
+.team-row:hover .team-avatar {
+  background: var(--color-bg);
+}
+
+.team-main {
+  min-width: 0;
+}
+.team-name {
+  font-size: 13px;
+  color: var(--color-text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-sub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+.team-contact {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 320px;
+}
+.team-chip {
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+  white-space: nowrap;
+  transition: all 180ms ease;
+}
+.team-chip:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-faint);
+}
+
+.team-remove {
+  background: transparent;
+  border: none;
+  color: var(--color-text-faint);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: all 180ms ease;
+}
+.team-row:hover .team-remove {
+  opacity: 1;
+}
+.team-remove:hover {
+  color: var(--color-danger-text);
+  background: var(--color-bg);
+}
+
+/* ── Uebersicht-Tab ────────────────────────────────────── */
+.ueb-card {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  background: var(--color-bg);
+  min-width: 0;
+}
+
+.ueb-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 960px) {
+  .ueb-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ueb-empty {
+  font-size: 12px;
+  color: var(--color-text-faint);
+  padding: 6px 0;
+}
+
+.ueb-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.ueb-row:first-of-type {
+  border-top: 0;
+}
+.ueb-row-title {
+  font-size: 13px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ueb-row-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+  font-family: var(--font-mono, monospace);
+}
+
+.link-btn {
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: color 180ms ease;
+}
+.link-btn:hover {
+  color: var(--color-text);
+}
+
+.desc-edit-btn {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 180ms ease;
+}
+.desc-edit-btn:hover {
+  color: var(--color-text);
+  background: var(--color-bg-subtle);
+}
+
+.desc-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+}
+.desc-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text-faint);
+  font-style: italic;
+}
+
+/* ── Verlauf-Tab ───────────────────────────────────────── */
+.verlauf-tab {
+  min-height: 200px;
+}
+.verlauf-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-border-subtle);
+  transition: background 180ms ease;
+}
+.verlauf-row:first-child {
+  border-top: 0;
+}
+.verlauf-row:hover {
+  background: var(--color-bg-subtle);
+}
+.verlauf-error {
+  background: color-mix(in srgb, var(--color-danger-text, #dc2626) 6%, transparent);
+}
+
+.verlauf-bullet {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.verlauf-error .verlauf-bullet {
+  color: var(--color-danger-text);
+  border-color: var(--color-danger-text);
+}
+
+.verlauf-head {
+  font-size: 13px;
+  color: var(--color-text);
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.verlauf-label {
+  font-weight: 500;
+}
+.verlauf-agent,
+.verlauf-duration {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.verlauf-sub {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  margin-top: 3px;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+.verlauf-time {
+  font-size: 11px;
+  color: var(--color-text-faint);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 </style>
