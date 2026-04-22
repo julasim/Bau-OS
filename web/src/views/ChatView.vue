@@ -562,7 +562,7 @@ onUnmounted(() => {
               position: relative;
               border: 1px solid var(--color-border);
               border-radius: 10px;
-              padding: 8px 8px 6px;
+              padding: 4px 8px 4px;
               background: var(--color-bg);
             "
           >
@@ -574,7 +574,7 @@ onUnmounted(() => {
               rows="1"
               style="
                 width: 100%;
-                padding: 6px 8px;
+                padding: 4px 4px;
                 border: none;
                 outline: none;
                 font-size: 14px;
@@ -582,7 +582,9 @@ onUnmounted(() => {
                 background: transparent;
                 color: var(--color-text);
                 font-family: inherit;
-                min-height: 44px;
+                line-height: 1.4;
+                min-height: 24px;
+                max-height: 200px;
               "
             />
             <div class="flex items-center" style="gap: 4px; padding: 0 4px">
