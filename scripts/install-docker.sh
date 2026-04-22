@@ -382,85 +382,15 @@ chmod 600 "$INSTALL_DIR/data/users.json"
 ok "Admin-User '$WEB_USER' erstellt"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 7: LLM-Modell vorbereiten
+# SCHRITT 7: ALLE Container starten
 # ═════════════════════════════════════════════════════════════════════════════
-# Ollama-Service einmal hochziehen (bleibt dann laufen), damit 'signin' und
-# 'pull' ihn direkt erreichen. Postgres brauchen wir hier noch nicht.
-dc up -d ollama < /dev/null || err "Ollama-Container konnte nicht gestartet werden"
-
-# Kurz warten bis Ollama API antwortet
-for i in $(seq 1 30); do
-  if dc exec -T ollama ollama list >/dev/null 2>&1; then break; fi
-  sleep 1
-done
-
-if [ "$LLM_MODE" = "cloud" ]; then
-  step "Ollama Cloud einrichten..."
-  info "Es wird ein Link angezeigt — öffne ihn im Browser oder Handy."
-  info "Melde dich mit deinem Ollama-Konto an (ollama.com)."
-  echo ""
-
-  dc exec ollama ollama signin < /dev/tty || true
-
-  echo ""
-  echo -e "  ${YELLOW}→${NC} Sobald du dich im Browser angemeldet hast, drücke Enter."
-  read -r < /dev/tty
-
-  CLOUD_TEST=$(dc exec -T ollama ollama list 2>&1 < /dev/null || true)
-  if echo "$CLOUD_TEST" | grep -qi "error\|unauthorized\|failed"; then
-    warn "Ollama Cloud-Verbindung konnte nicht bestätigt werden"
-    FAIL_CHOICE=$(select_option "Was möchtest du tun?" \
-      "Auf lokales Modell umstellen (wird heruntergeladen)" \
-      "Installation abbrechen" \
-      "Trotzdem fortfahren (Login später nachholen)")
-
-    case "$FAIL_CHOICE" in
-      1)
-        echo ""
-        LLM_MODE="local"
-        info "Verfügbare: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
-        OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:3b")
-        step "Modell herunterladen ($OLLAMA_MODEL)..."
-        dc exec -T ollama ollama pull "$OLLAMA_MODEL" < /dev/null \
-          || err "Modell-Download fehlgeschlagen"
-        sed -i "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$OLLAMA_MODEL|" "$INSTALL_DIR/.env"
-        ok "Modell '$OLLAMA_MODEL' bereit"
-        ;;
-      2)
-        echo "Abgebrochen."
-        info "Login nachholen: docker compose exec ollama ollama signin"
-        exit 0
-        ;;
-      3)
-        warn "Installation wird fortgesetzt ohne Cloud-Bestätigung"
-        info "Login nachholen: docker compose exec ollama ollama signin"
-        ;;
-    esac
-  else
-    ok "Cloud-Verbindung erfolgreich ($OLLAMA_MODEL)"
-  fi
-else
-  step "Modell herunterladen ($OLLAMA_MODEL)..."
-  warn "Das kann je nach Internetverbindung einige Minuten dauern..."
-
-  dc exec -T ollama ollama pull "$OLLAMA_MODEL" < /dev/null \
-    || err "Modell-Download fehlgeschlagen. Prüfe deine Internetverbindung."
-
-  ok "Modell '$OLLAMA_MODEL' bereit"
-fi
-
-# Embedding-Modell IMMER lokal (auch bei Cloud-LLM):
-# Cloud-Modelle bringen Embeddings nicht verlaesslich mit, nomic-embed-text
-# ist klein (~270 MB), laeuft auf jeder CPU und spart Cloud-Credits.
-step "Embedding-Modell herunterladen (nomic-embed-text)..."
-dc exec -T ollama ollama pull nomic-embed-text < /dev/null \
-  || warn "Embedding-Modell konnte nicht geladen werden — semantische Suche bleibt vorerst aus"
-
-# ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 8: Container starten
-# ═════════════════════════════════════════════════════════════════════════════
-step "Bau-OS Container starten..."
-dc up -d
+# WICHTIG: Wir starten zuerst den kompletten Stack, BEVOR wir Ollama
+# konfigurieren. Dadurch:
+# - faellt das Script bei haengendem signin / abgebrochenem Pull nicht komplett um
+# - die anderen 3 Services (postgres, app, caddy) laufen bereits
+# - der User kann Ollama-Signin/Pull auch spaeter manuell nachholen
+step "Alle Container starten..."
+dc up -d < /dev/null || err "Container konnten nicht gestartet werden. Siehe Fehler oben."
 
 # Health-Check: Caddy proxt auf Port 80 nach app:3000 — egal welcher HTTP-Code.
 # Timeout 180s: Postgres-Init + Extensions + Migrations + App-Start + Caddy-Start
@@ -468,8 +398,9 @@ dc up -d
 echo ""
 info "Warte auf Bau-OS... (erster Start kann bis zu 3 Minuten dauern —"
 info "Postgres init, Migrations, Ollama-Start, Caddy binden)"
+HTTP_PORT_CHECK="${HTTP_PORT:-80}"
 for i in $(seq 1 180); do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost/" 2>/dev/null || echo "000")
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${HTTP_PORT_CHECK}/" 2>/dev/null || echo "000")
   if [ "$HTTP_CODE" != "000" ]; then
     ok "Bau-OS läuft (HTTP $HTTP_CODE via Caddy, nach ${i}s)"
     break
@@ -487,10 +418,58 @@ for i in $(seq 1 180); do
     echo ""
     dc logs --tail 30
     echo ""
-    err "Container konnten nicht gestartet werden. Siehe Logs oben — typische Ursachen: Postgres-Init haengt, Ollama-Modell-Download blockiert, Port 80 belegt."
+    err "Container konnten nicht gestartet werden. Siehe Logs oben — typische Ursachen: Postgres-Init haengt, Port $HTTP_PORT_CHECK belegt, Caddy-Konfig-Fehler."
   fi
   sleep 1
 done
+
+# ═════════════════════════════════════════════════════════════════════════════
+# SCHRITT 8: LLM-Modell vorbereiten (soft-fail — System laeuft auch ohne)
+# ═════════════════════════════════════════════════════════════════════════════
+# Ab hier gilt: Alles was schiefgeht ist optional. Der Stack laeuft bereits,
+# der User kann Signin / Pull spaeter manuell nachholen. Darum warn() statt err().
+
+if [ "$LLM_MODE" = "cloud" ]; then
+  step "Ollama Cloud einrichten..."
+  info "Es wird ein Link angezeigt — öffne ihn im Browser oder Handy."
+  info "Melde dich mit deinem Ollama-Konto an (ollama.com)."
+  info "Falls du das jetzt uebersringen willst, druecke Ctrl+D um in den"
+  info "Signin-Prompt NICHTS einzugeben — dann laeuft das Script weiter."
+  echo ""
+
+  # Signin mit Timeout — wenn User nichts macht, nach 120s abbrechen.
+  # Timeout-Builtin gibt bei Abbruch Exit 124, das ist ok.
+  timeout 120 dc exec ollama ollama signin < /dev/tty 2>&1 || \
+    warn "Signin abgebrochen oder Timeout — holst du spaeter per 'docker compose exec ollama ollama signin' nach"
+
+  # Verbindung antesten
+  CLOUD_TEST=$(dc exec -T ollama ollama list 2>&1 < /dev/null || true)
+  if echo "$CLOUD_TEST" | grep -qi "error\|unauthorized\|failed"; then
+    warn "Ollama Cloud-Verbindung nicht bestaetigt — Modell '$OLLAMA_MODEL' wird beim ersten Chat versucht."
+    info "Login nachholen: docker compose exec ollama ollama signin"
+  else
+    ok "Cloud-Verbindung verifiziert ($OLLAMA_MODEL)"
+  fi
+else
+  step "Modell herunterladen ($OLLAMA_MODEL)..."
+  warn "Das kann je nach Internetverbindung einige Minuten dauern..."
+
+  if ! dc exec -T ollama ollama pull "$OLLAMA_MODEL" < /dev/null; then
+    warn "Modell-Download fehlgeschlagen — holst du spaeter nach mit:"
+    info "  docker compose exec ollama ollama pull $OLLAMA_MODEL"
+  else
+    ok "Modell '$OLLAMA_MODEL' bereit"
+  fi
+fi
+
+# Embedding-Modell IMMER lokal (auch bei Cloud-LLM):
+# Cloud-Modelle bringen Embeddings nicht verlaesslich mit, nomic-embed-text
+# ist klein (~270 MB), laeuft auf jeder CPU und spart Cloud-Credits.
+step "Embedding-Modell herunterladen (nomic-embed-text)..."
+if ! dc exec -T ollama ollama pull nomic-embed-text < /dev/null; then
+  warn "Embedding-Modell nicht geladen — semantische Suche bleibt vorerst aus."
+  info "Nachholen: docker compose exec ollama ollama pull nomic-embed-text"
+fi
 
 # ═════════════════════════════════════════════════════════════════════════════
 # bau-os-update Shortcut installieren
@@ -510,11 +489,20 @@ echo ""
 echo -e "  ${GREEN}▸${NC} Öffne deinen Telegram Bot und schreibe ${BOLD}'Hallo'${NC}"
 echo    "    Der Setup-Wizard führt dich durch die Einrichtung."
 echo ""
-echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>${NC} (Port 80 via Caddy)"
+HTTP_PORT_DISPLAY="${HTTP_PORT:-80}"
+if [ "$HTTP_PORT_DISPLAY" = "80" ]; then
+  echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>${NC} (Port 80 via Caddy)"
+else
+  echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>:${HTTP_PORT_DISPLAY}${NC}"
+fi
 echo    "    Login: ${WEB_USER} / (dein gewähltes Passwort)"
 echo ""
 echo -e "  ${GREEN}▸${NC} HTTPS aktivieren: Setze ${BOLD}CADDY_DOMAIN=deine.domain.at${NC} in der .env"
 echo -e "    und führe ${GREEN}docker compose up -d caddy${NC} aus — Let's Encrypt läuft automatisch."
+echo ""
+echo -e "  ${GREEN}▸${NC} Port aendern (bei HSTS-Browser-Problemen oder belegten 80/443):"
+echo -e "    In .env: ${BOLD}HTTP_PORT=8080${NC} + ${BOLD}HTTPS_PORT=8443${NC}, dann"
+echo -e "    ${GREEN}ufw allow 8080/tcp && docker compose up -d caddy${NC}"
 echo ""
 echo -e "  ${BOLD}Update:${NC}"
 echo -e "    ${GREEN}bau-os-update${NC}                  → Pull + Rebuild + Restart"
