@@ -164,7 +164,7 @@ check_docker() {
 print_logo
 print_header "Bau-OS Installation (Docker)"
 
-echo "Dieses Script installiert Bau-OS als Docker-Container."
+echo "Dieses Script installiert Bau-OS als Docker-Compose-Stack."
 echo "4 Services: postgres (pgvector), ollama, app (Bau-OS), caddy (Reverse-Proxy + HTTPS)."
 echo ""
 
@@ -239,14 +239,12 @@ while true; do
   fi
 done
 echo ""
-API_PORT=$(ask_default "Web-Port" "3000")
-echo ""
 
 # ── Zusammenfassung ───────────────────────────────────────────────────────────
 print_section "Zusammenfassung"
 info "Bot Token:    ${BOT_TOKEN:0:8}...${BOT_TOKEN: -4}"
 info "LLM-Modus:    $LLM_MODE ($OLLAMA_MODEL)"
-info "Web-Admin:    $WEB_USER (Port $API_PORT)"
+info "Web-Admin:    $WEB_USER"
 info "Install-Pfad: $INSTALL_DIR"
 info "Workspace:    $WORKSPACE_DIR"
 echo ""
@@ -309,17 +307,28 @@ WORKSPACE_PATH=/workspace
 WORKSPACE_HOST_DIR=$WORKSPACE_DIR
 OLLAMA_MODEL=$OLLAMA_MODEL
 JWT_SECRET=$JWT_SECRET
-API_PORT=$API_PORT
 
-# PostgreSQL — Container 'postgres' im compose-Netzwerk
+# PostgreSQL — Container 'postgres' im compose-Netzwerk.
+# DATABASE_URL wird von docker-compose.yml automatisch aus diesen
+# drei Variablen zusammengesetzt (siehe services.app.environment).
+# Nur relevant wenn du die App mal OHNE Docker laufen laesst — dann
+# musst du DATABASE_URL=postgres://bauos:<PW>@localhost:5432/bauos
+# zusaetzlich setzen.
 POSTGRES_USER=bauos
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 POSTGRES_DB=bauos
 
 # Caddy Reverse-Proxy — Domain leer = nur HTTP auf Port 80
+# Sobald eine Domain gesetzt ist, holt Caddy automatisch ein Let's
+# Encrypt Zertifikat (Port 80 + 443 muessen vom Internet erreichbar sein).
 # Beispiel: CADDY_DOMAIN=bauos.meine-firma.at
 CADDY_DOMAIN=
 CADDY_EMAIL=admin@example.com
+
+# App-Port INNERHALB des app-Containers. Caddy proxyt von 80/443
+# darauf — hier aendern bringt nichts, weil Caddyfile fest auf
+# app:3000 zeigt. Nur fuer Bare-Metal-Betrieb (ohne Docker) relevant.
+API_PORT=3000
 ENVEOF
 chmod 600 "$INSTALL_DIR/.env"
 
@@ -453,22 +462,32 @@ dc exec -T ollama ollama pull nomic-embed-text < /dev/null \
 step "Bau-OS Container starten..."
 dc up -d
 
-# Health-Check: Caddy proxt auf Port 80 nach app:3000 — egal welcher HTTP-Code
+# Health-Check: Caddy proxt auf Port 80 nach app:3000 — egal welcher HTTP-Code.
+# Timeout 180s: Postgres-Init + Extensions + Migrations + App-Start + Caddy-Start
+# koennen beim allerersten Boot auf langsamen VPS zusammen ueber eine Minute dauern.
 echo ""
-info "Warte auf Bau-OS..."
-for i in $(seq 1 60); do
+info "Warte auf Bau-OS... (erster Start kann bis zu 3 Minuten dauern —"
+info "Postgres init, Migrations, Ollama-Start, Caddy binden)"
+for i in $(seq 1 180); do
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost/" 2>/dev/null || echo "000")
   if [ "$HTTP_CODE" != "000" ]; then
-    ok "Bau-OS läuft (HTTP $HTTP_CODE via Caddy)"
+    ok "Bau-OS läuft (HTTP $HTTP_CODE via Caddy, nach ${i}s)"
     break
   fi
-  if [ "$i" -eq 60 ]; then
+  # Alle 30s ein Lebenszeichen ausgeben, damit der User sieht dass noch gewartet wird
+  if [ $((i % 30)) -eq 0 ]; then
+    info "... noch nicht bereit (${i}s) — pruefe Services:"
+    dc ps --format "table {{.Service}}\t{{.Status}}" 2>/dev/null | tail -n +2 | while read -r line; do
+      info "   $line"
+    done
+  fi
+  if [ "$i" -eq 180 ]; then
     echo ""
-    warn "Health-Check fehlgeschlagen. Logs (letzte 30 Zeilen pro Service):"
+    warn "Health-Check nach 180s fehlgeschlagen. Logs (letzte 30 Zeilen pro Service):"
     echo ""
     dc logs --tail 30
     echo ""
-    err "Container konnte nicht gestartet werden. Siehe Logs oben."
+    err "Container konnten nicht gestartet werden. Siehe Logs oben — typische Ursachen: Postgres-Init haengt, Ollama-Modell-Download blockiert, Port 80 belegt."
   fi
   sleep 1
 done
