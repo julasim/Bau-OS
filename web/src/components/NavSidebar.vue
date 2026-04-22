@@ -43,7 +43,7 @@ const sections: NavSection[] = [
     items: [
       { to: "/notes", label: "Notizen", icon: "file" },
       { to: "/files", label: "Dateien", icon: "archive" },
-      { to: "/search", label: "Suche", icon: "search", kbd: "⌘K" },
+      { to: "/search", label: "Suche", icon: "search" },
     ],
   },
   {

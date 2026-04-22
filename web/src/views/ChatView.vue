@@ -731,13 +731,16 @@ onUnmounted(() => {
 }
 
 .msg-bubble {
-  padding: 10px 14px;
-  border-radius: 10px;
   font-size: 14px;
-  line-height: 1.55;
+  line-height: 1.6;
   word-wrap: break-word;
+  color: var(--color-text);
 }
+
+/* User-Bubble: kompakt, schwarz, klar abgegrenzt */
 .msg-user {
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--color-primary);
   color: var(--color-bg);
   border-bottom-right-radius: 2px;
@@ -745,11 +748,78 @@ onUnmounted(() => {
   max-width: 85%;
   margin-left: auto;
 }
+
+/* Assistant: rahmenlos, reiner Text mit viel Weissraum — wirkt leichter */
 .msg-assistant {
+  padding: 2px 0;
+  background: transparent;
+  border: none;
+}
+
+/* Markdown-Elemente im Assistant-Output feiner darstellen */
+.msg-assistant :deep(p) {
+  margin: 0 0 10px 0;
+}
+.msg-assistant :deep(p:last-child) {
+  margin-bottom: 0;
+}
+.msg-assistant :deep(strong),
+.msg-assistant :deep(b) {
+  font-weight: 600;
+  color: var(--color-text);
+}
+.msg-assistant :deep(h1),
+.msg-assistant :deep(h2),
+.msg-assistant :deep(h3) {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 14px 0 6px 0;
+  color: var(--color-text);
+}
+.msg-assistant :deep(ul),
+.msg-assistant :deep(ol) {
+  margin: 0 0 10px 0;
+  padding-left: 20px;
+}
+.msg-assistant :deep(li) {
+  margin: 2px 0;
+}
+.msg-assistant :deep(li)::marker {
+  color: var(--color-text-tertiary);
+}
+.msg-assistant :deep(code) {
+  font-size: 12px;
+  background: var(--color-bg-subtle);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--color-text);
+}
+.msg-assistant :deep(pre) {
   background: var(--color-bg-subtle);
   border: 1px solid var(--color-border-subtle);
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.msg-assistant :deep(pre code) {
+  background: transparent;
+  padding: 0;
+}
+.msg-assistant :deep(blockquote) {
+  border-left: 2px solid var(--color-border);
+  margin: 0 0 10px 0;
+  padding: 0 0 0 12px;
+  color: var(--color-text-muted);
+}
+.msg-assistant :deep(a) {
   color: var(--color-text);
-  border-bottom-left-radius: 2px;
+  text-decoration: underline;
+  text-decoration-color: var(--color-border);
+  text-underline-offset: 2px;
+}
+.msg-assistant :deep(a:hover) {
+  text-decoration-color: var(--color-text);
 }
 
 .tool-chip {
@@ -757,10 +827,11 @@ onUnmounted(() => {
   align-items: center;
   font-family: "JetBrains Mono", monospace;
   font-size: 10px;
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 9999px;
-  background: var(--color-border-subtle);
-  color: var(--color-text-muted);
+  background: transparent;
+  border: 1px solid var(--color-border-subtle);
+  color: var(--color-text-tertiary);
 }
 
 .chat-spinner {
