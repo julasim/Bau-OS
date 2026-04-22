@@ -67,7 +67,7 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "vault_suchen",
       description:
-        "Schnelle Freitextsuche in allen .md-Dateien des Vaults. Gibt Dateiname und erste Trefferzeile zurueck (max 10 Ergebnisse). Fuer Regex oder alle Dateitypen regex_suchen verwenden.",
+        "Keyword-Textsuche nur in System-Dateien im Workspace (Agent-Workspace: IDENTITY, SOUL, BOOT, TOOLS, AGENTS, MEMORY, HEARTBEAT, USER). NICHT fuer User-Inhalte — Notizen, Dateien (PDF/DOCX), Angebote, Protokolle liegen in der Datenbank und sind nur ueber 'semantisch_suchen' erreichbar. Nutze dieses Tool also nur wenn du etwas ueber dich selbst oder deine eigene Konfiguration wissen willst (z.B. 'Was steht in meiner MEMORY.md?').",
       parameters: {
         type: "object",
         properties: {
@@ -83,7 +83,7 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "semantisch_suchen",
       description:
-        "Semantische Suche im Vault: findet Notizen und Dateien nach Bedeutung, nicht nur nach exaktem Text. Nutzt KI-Embeddings fuer bessere Ergebnisse bei komplexen Fragen. Nur verfuegbar wenn Datenbank aktiv ist — sonst vault_suchen verwenden.",
+        "**HAUPT-SUCHTOOL fuer User-Inhalte**. Findet Notizen, hochgeladene Dateien (PDF, DOCX, MD), Angebote, Protokolle, Baubeschreibungen etc. nach Bedeutung — nicht nur nach exaktem Text. Nutzt KI-Embeddings (pgvector). IMMER dieses Tool verwenden wenn der Nutzer nach etwas Inhaltlichem fragt (Projekte, Kontakte, Termine im Text, technische Details, Zahlen aus Dokumenten). NICHT vault_suchen — das findet nur System-Dateien. Falls keine Embeddings verfuegbar sind, fallback-artig auf Textsuche im Vault.",
       parameters: {
         type: "object",
         properties: {
@@ -141,7 +141,7 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "regex_suchen",
       description:
-        "Durchsucht Dateiinhalte im Vault mit Regex-Mustern (wie grep). Gibt Treffer mit Zeilennummern zurueck. Durchsucht alle Dateitypen, nicht nur .md. Fuer einfache Textsuche in Notizen ist vault_suchen schneller.",
+        "Regex-Suche in System-Dateien des Workspace (Agent-Files, Tools, Configs — NICHT User-Content). Gibt Treffer mit Zeilennummern zurueck. Fuer User-Inhalte (Notizen, Dateien, Dokumente) immer 'semantisch_suchen' verwenden. Nutze regex_suchen nur bei technischen Lookups wie 'alle TODO-Marker' oder 'alle OENORM-Referenzen' in Agent-Config-Files.",
       parameters: {
         type: "object",
         properties: {
@@ -307,13 +307,13 @@ export const fileHandlers: HandlerMap = {
             `Keine semantischen Treffer fuer "${args.frage}". ` +
             `ACHTUNG: ${noteGap} Notiz(en) und ${fileGap} Datei(en) haben kein Embedding ` +
             `(${stats.notes.embedded}/${stats.notes.total} Notizen, ${stats.files.embedded}/${stats.files.total} Dateien indexiert). ` +
-            `Admin muss /api/search/reindex triggern. Als Fallback jetzt vault_suchen verwenden.`
+            `Admin muss /api/search/reindex triggern. Bis dahin: dem Nutzer ehrlich sagen dass die Suche unvollstaendig ist.`
           );
         }
       } catch {
         // Stats-Abruf egal, normal fortfahren
       }
-      return `Keine semantischen Treffer fuer "${args.frage}". Versuche vault_suchen fuer exakte Textsuche.`;
+      return `Keine semantischen Treffer fuer "${args.frage}". Sag dem Nutzer ehrlich dass es keine passenden Notizen/Dateien gibt — bitte nicht vault_suchen als Fallback nutzen, das findet nur System-Dateien.`;
     }
 
     // Output-Format mit mehr Kontext:
