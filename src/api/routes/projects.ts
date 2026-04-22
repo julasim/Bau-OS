@@ -38,6 +38,51 @@ projectsRoutes.get("/projects", async (c) => {
   return c.json(projects);
 });
 
+// Projekt anlegen. Body: { name, description?, projektnummer?, bauherr?,
+// standort?, projektart?, nutzung?, phase?, startDate?, endDate? }.
+// create() ist idempotent — existiert das Projekt schon, werden nur die
+// gesetzten Stammdaten-Felder gepatcht. Wir geben in dem Fall 200 zurueck;
+// bei echter Neuanlage 201.
+projectsRoutes.post("/projects", async (c) => {
+  let body: Record<string, unknown>;
+  try {
+    body = await c.req.json<Record<string, unknown>>();
+  } catch {
+    return c.json({ error: "Ungueltiger JSON-Body" }, 400);
+  }
+
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  if (!name) return c.json({ error: "Name erforderlich" }, 400);
+
+  // Existenz-Check vor create, damit wir 201 vs 200 zurueckgeben koennen.
+  const already = await projectRepo.getInfo(name);
+
+  // Nur erlaubte Stammdaten-Felder an create() weiterreichen. Leere Strings
+  // werden zu null — konsistent mit dem PATCH-Endpoint.
+  const normalize = (v: unknown): string | null => {
+    if (typeof v !== "string") return null;
+    const t = v.trim();
+    return t === "" ? null : t;
+  };
+
+  const ok = await projectRepo.create(name, {
+    description: normalize(body.description),
+    projektnummer: normalize(body.projektnummer),
+    bauherr: normalize(body.bauherr),
+    standort: normalize(body.standort),
+    projektart: normalize(body.projektart),
+    nutzung: normalize(body.nutzung),
+    phase: normalize(body.phase),
+    startDate: normalize(body.startDate),
+    endDate: normalize(body.endDate),
+  });
+  if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
+
+  emit({ type: "project", action: already ? "updated" : "created", id: name });
+  const info = await projectRepo.getInfo(name);
+  return c.json(info, already ? 200 : 201);
+});
+
 // Projekt-Detail
 projectsRoutes.get("/projects/:name", async (c) => {
   const name = c.req.param("name");
