@@ -1,0 +1,67 @@
+// ============================================================
+// Bau-OS — Aktueller User (global singleton)
+// Einmalig /api/auth/me fragen, Ergebnis reaktiv teilen.
+// Fallbacks: displayName -> username -> "Benutzer".
+// Initialen: erste Buchstaben der ersten beiden Worte des Namens.
+// ============================================================
+
+import { ref, computed } from "vue";
+import { api } from "../api";
+
+interface Me {
+  username: string;
+  role: string;
+  displayName: string | null;
+}
+
+const user = ref<Me | null>(null);
+let inflight: Promise<void> | null = null;
+
+async function load(): Promise<void> {
+  if (user.value) return;
+  if (inflight) return inflight;
+  inflight = (async () => {
+    try {
+      user.value = await api.get<Me>("/auth/me");
+    } catch {
+      // Bei Fehler bleibt user null — UI zeigt Fallbacks.
+    } finally {
+      inflight = null;
+    }
+  })();
+  return inflight;
+}
+
+function computeInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+export function useCurrentUser() {
+  // Lazy laden beim ersten Zugriff (ok, weil ref bereits null ist und
+  // die UI mit Fallback rendert, waehrend der Request laeuft).
+  if (!user.value && !inflight) {
+    void load();
+  }
+
+  const displayName = computed(() =>
+    user.value?.displayName?.trim() || user.value?.username || "Benutzer",
+  );
+  const initials = computed(() => computeInitials(displayName.value));
+  const role = computed(() => user.value?.role ?? "");
+  const username = computed(() => user.value?.username ?? "");
+
+  return {
+    user,
+    displayName,
+    initials,
+    role,
+    username,
+    reload: () => {
+      user.value = null;
+      return load();
+    },
+  };
+}

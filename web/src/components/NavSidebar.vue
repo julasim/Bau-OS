@@ -4,12 +4,14 @@ import { useRouter, useRoute } from "vue-router";
 import { clearToken } from "../api";
 import { useTheme } from "../composables/useTheme";
 import { useSidebar } from "../composables/useSidebar";
+import { useCurrentUser } from "../composables/useCurrentUser";
 import BIcon from "./BIcon.vue";
 
 const router = useRouter();
 const route = useRoute();
 const { theme, toggle } = useTheme();
 const { open, close } = useSidebar();
+const { displayName, initials, role } = useCurrentUser();
 
 interface NavItem {
   to: string;
@@ -184,17 +186,21 @@ function onNavClick() {
           font-size: 11px;
         "
       >
-        JS
+        {{ initials }}
       </div>
       <div class="flex-1 min-w-0 leading-tight">
         <div
           class="truncate"
           style="font-size: 12px; font-weight: 500; color: var(--color-text)"
         >
-          Julius Sima
+          {{ displayName }}
         </div>
-        <div class="truncate" style="font-size: 10px; color: var(--color-text-tertiary)">
-          Sima Architektur
+        <div
+          v-if="role"
+          class="truncate"
+          style="font-size: 10px; color: var(--color-text-tertiary); text-transform: capitalize"
+        >
+          {{ role }}
         </div>
       </div>
       <button

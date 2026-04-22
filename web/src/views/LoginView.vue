@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { api, setToken } from "../api";
 
@@ -8,6 +8,11 @@ const username = ref("");
 const password = ref("");
 const error = ref("");
 const loading = ref(false);
+
+// Hostname aus dem Browser uebernehmen — keine hardcoded Firma mehr.
+const hostname = computed(() =>
+  typeof window !== "undefined" ? window.location.host : "bau-os",
+);
 
 async function login() {
   error.value = "";
@@ -123,7 +128,7 @@ async function login() {
           font-family: 'JetBrains Mono', monospace;
         "
       >
-        SIMA ARCHITECTURE · bau-os v1.0 · EU-Central
+        Bau-OS v1.0 · Self-hosted · Open Source
       </div>
     </div>
 
@@ -150,7 +155,7 @@ async function login() {
             margin: 0 0 28px 0;
           "
         >
-          Willkommen zurück, Julius.
+          Willkommen zurück.
         </p>
 
         <form @submit.prevent="login" class="flex flex-col" style="gap: 16px">
@@ -240,7 +245,7 @@ async function login() {
           <span>🔒</span>
           <span>
             Verbindung verschlüsselt · TLS 1.3 · JWT · bcrypt ·
-            <span class="font-mono" style="color: var(--color-text)">bau-os.sima.local</span>
+            <span class="font-mono" style="color: var(--color-text)">{{ hostname }}</span>
           </span>
         </div>
       </div>

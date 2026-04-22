@@ -3,7 +3,13 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
+import { useCurrentUser } from "../composables/useCurrentUser";
 import BIcon from "../components/BIcon.vue";
+
+const { displayName } = useCurrentUser();
+// Die Begruessung nutzt nur den Vornamen (erstes Wort des displayName),
+// damit "Guten Morgen, Julius." lesbarer ist als "Guten Morgen, Julius Sima.".
+const firstName = computed(() => displayName.value.split(/\s+/)[0] || "");
 
 interface DashboardData {
   notes: number;
@@ -180,7 +186,7 @@ const statCards = computed(() => [
             color: var(--color-text);
           "
         >
-          {{ greeting }}, Julius.
+          {{ greeting }}{{ firstName ? `, ${firstName}` : "" }}.
         </h1>
         <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 6px; margin-bottom: 0">
           {{ todayDE }} ·

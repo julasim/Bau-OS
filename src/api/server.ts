@@ -89,9 +89,17 @@ app.post("/api/auth/login", async (c) => {
 app.use("/api/*", authMiddleware);
 
 // ── Auth-Check ───────────────────────────────────────────────────────────────
+// Liefert minimales Profil fuer die Web-UI (Avatar, Begruessung, Settings).
+// displayName kommt aus user.settings.displayName — falls nicht gesetzt,
+// faellt die UI auf den Username zurueck.
 app.get("/api/auth/me", (c) => {
-  const user = c.get("user") as { username: string; role: string };
-  return c.json({ username: user.username, role: user.role });
+  const jwtUser = c.get("user") as { username: string; role: string };
+  const full = findUser(jwtUser.username);
+  return c.json({
+    username: jwtUser.username,
+    role: jwtUser.role,
+    displayName: full?.settings?.displayName ?? null,
+  });
 });
 
 // ── API-Routes ───────────────────────────────────────────────────────────────

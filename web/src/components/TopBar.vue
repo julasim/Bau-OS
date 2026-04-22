@@ -70,8 +70,6 @@ function openPalette() {
 
     <!-- Breadcrumb -->
     <nav class="flex items-center gap-1.5 flex-1 min-w-0" style="font-size: 12px">
-      <span style="color: var(--color-text-tertiary)">Sima Architektur</span>
-      <BIcon name="chevronRight" :size="12" style="color: var(--color-text-faint)" />
       <span style="color: var(--color-text); font-weight: 500">{{ current }}</span>
     </nav>
 
