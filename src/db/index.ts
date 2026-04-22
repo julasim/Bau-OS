@@ -26,6 +26,8 @@ export {
   searchHybrid,
   searchNotesSemantic,
   searchFilesSemantic,
+  searchFilesHybrid,
   searchNotesText,
+  searchFilesText,
 } from "./semantic-search.js";
 export type { SemanticResult } from "./semantic-search.js";
