@@ -156,5 +156,28 @@ const dim = computed(() => props.size);
       <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
       <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
     </template>
+    <template v-else-if="name === 'layers'">
+      <polygon points="12 2 22 8 12 14 2 8 12 2" />
+      <polyline points="2 14 12 20 22 14" />
+    </template>
+    <template v-else-if="name === 'info'">
+      <circle cx="12" cy="12" r="9" />
+      <line x1="12" y1="10" x2="12" y2="17" />
+      <line x1="12" y1="7" x2="12" y2="7.5" />
+    </template>
+    <template v-else-if="name === 'pencil'">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+    </template>
+    <template v-else-if="name === 'users'">
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2 21a7 7 0 0 1 14 0" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M22 19a5 5 0 0 0-6-4.9" />
+    </template>
+    <template v-else-if="name === 'clock'">
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15 14" />
+    </template>
   </svg>
 </template>
