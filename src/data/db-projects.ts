@@ -5,7 +5,28 @@
 // (Notizen, Tasks, Termine, Files als bytea). Der Vault speichert nur
 // noch System-Dateien (Agenten-Workspace, users.json, Tools, Logs).
 import { getDb } from "../db/client.js";
-import type { Project, ProjectRepository } from "./types.js";
+import type { ProjectCreateOptions, ProjectRepository, ProjectUpdate } from "./types.js";
+
+// Mapping: camelCase-API-Feld ↔ snake_case-Spaltenname.
+// Wird beim dynamischen UPDATE genutzt, um tippfest aus dem Patch auf
+// die DB-Spalten zu kommen — ohne dass der Caller snake_case kennen muss.
+const UPDATE_COLUMNS: Record<keyof ProjectUpdate, string> = {
+  description: "description",
+  status: "status",
+  color: "color",
+  projektnummer: "projektnummer",
+  bauherr: "bauherr",
+  standort: "standort",
+  projektart: "projektart",
+  nutzung: "nutzung",
+  phase: "phase",
+  startDate: "start_date",
+  endDate: "end_date",
+};
+
+function isValidName(name: string): boolean {
+  return /^[\p{L}\p{N}_\-. ]+$/u.test(name) && !name.includes("..");
+}
 
 export const dbProjects: ProjectRepository = {
   async list() {
@@ -18,10 +39,14 @@ export const dbProjects: ProjectRepository = {
     const db = getDb();
     const [row] = await db`
       SELECT
-        p.id, p.name, p.description, p.status, p.color, p.created_at, p.updated_at,
+        p.id, p.name, p.description, p.status, p.color,
+        p.projektnummer, p.bauherr, p.standort, p.projektart, p.nutzung,
+        p.phase, p.start_date, p.end_date,
+        p.created_at, p.updated_at,
         (SELECT count(*) FROM notes n WHERE n.project_id = p.id) as notes,
         (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done') as open_tasks,
-        (SELECT count(*) FROM termine te WHERE te.project_id = p.id) as termine
+        (SELECT count(*) FROM termine te WHERE te.project_id = p.id) as termine,
+        (SELECT count(*) FROM files f WHERE f.project_id = p.id) as files
       FROM projects p
       WHERE p.name = ${name}
       LIMIT 1
@@ -33,9 +58,18 @@ export const dbProjects: ProjectRepository = {
       description: row.description ? String(row.description) : null,
       status: String(row.status),
       color: row.color ? String(row.color) : null,
+      projektnummer: row.projektnummer ? String(row.projektnummer) : null,
+      bauherr: row.bauherr ? String(row.bauherr) : null,
+      standort: row.standort ? String(row.standort) : null,
+      projektart: row.projektart ? String(row.projektart) : null,
+      nutzung: row.nutzung ? String(row.nutzung) : null,
+      phase: row.phase ? String(row.phase) : null,
+      startDate: row.start_date ? String(row.start_date) : null,
+      endDate: row.end_date ? String(row.end_date) : null,
       notes: Number(row.notes),
       openTasks: Number(row.open_tasks),
       termine: Number(row.termine),
+      files: Number(row.files),
       createdAt: row.created_at ? String(row.created_at) : undefined,
       updatedAt: row.updated_at ? String(row.updated_at) : undefined,
     };
@@ -63,28 +97,102 @@ export const dbProjects: ProjectRepository = {
     return row ? String(row.content) : null;
   },
 
-  async create(name, description) {
+  async create(name, options) {
     // Gleiche Unicode-Regel wie vorher (Umlaute erlaubt, "..", Slashes nicht).
-    if (!/^[\p{L}\p{N}_\-. ]+$/u.test(name) || name.includes("..")) return false;
+    if (!isValidName(name)) return false;
+
+    // Rueckwaertskompatibilitaet: frueher wurde description als String uebergeben.
+    const opts: ProjectCreateOptions =
+      typeof options === "string" || options === null || options === undefined
+        ? { description: options ?? null }
+        : options;
 
     const db = getDb();
 
     // Idempotent: existiert der Name schon, ist das kein Fehler — "create"
-    // heisst hier "stelle sicher dass es existiert". Kein UNIQUE-Constraint
-    // auf name (siehe migrations/001_init.sql), daher pruefen wir per SELECT.
+    // heisst hier "stelle sicher dass es existiert". Falls bereits vorhanden,
+    // patchen wir die Stammdaten durch (nur Felder die im Patch gesetzt sind).
     const [existing] = await db`SELECT id FROM projects WHERE name = ${name} LIMIT 1`;
-    if (existing) return true;
+    if (existing) {
+      const patch: ProjectUpdate = {
+        description: opts.description,
+        projektnummer: opts.projektnummer,
+        bauherr: opts.bauherr,
+        standort: opts.standort,
+        projektart: opts.projektart,
+        nutzung: opts.nutzung,
+        phase: opts.phase,
+        startDate: opts.startDate,
+        endDate: opts.endDate,
+      };
+      // Nur patchen, wenn mindestens ein Wert gesetzt ist — sonst no-op
+      // (sonst wuerde ein nackter create()-Aufruf alle Spalten auf null
+      // zuruecksetzen, wenn man das aus Versehen wieder bei bestehendem
+      // Projekt aufruft).
+      const hasAny = Object.values(patch).some((v) => v !== undefined);
+      if (hasAny) await this.update(name, patch);
+      return true;
+    }
 
     // folder_path ist seit migration 003 nullable — Projekte sind rein logisch.
     await db`
-      INSERT INTO projects (name, description, status)
-      VALUES (${name}, ${description ?? null}, 'aktiv')
+      INSERT INTO projects (
+        name, description, status,
+        projektnummer, bauherr, standort, projektart, nutzung,
+        phase, start_date, end_date
+      )
+      VALUES (
+        ${name}, ${opts.description ?? null}, 'aktiv',
+        ${opts.projektnummer ?? null}, ${opts.bauherr ?? null}, ${opts.standort ?? null},
+        ${opts.projektart ?? null}, ${opts.nutzung ?? null},
+        ${opts.phase ?? null}, ${opts.startDate ?? null}, ${opts.endDate ?? null}
+      )
     `;
     return true;
   },
 
+  async update(name, patch) {
+    if (!isValidName(name)) return false;
+    const db = getDb();
+
+    // Nur Felder mit explizit gesetztem Wert (inkl. null!) in das UPDATE
+    // aufnehmen. undefined = unveraendert, null = leeren.
+    const entries = Object.entries(patch).filter(([, v]) => v !== undefined) as [
+      keyof ProjectUpdate,
+      ProjectUpdate[keyof ProjectUpdate],
+    ][];
+    if (entries.length === 0) return false;
+
+    // Existenz pruefen (sonst wuerde UPDATE stillschweigend 0 Zeilen aendern).
+    const [existing] = await db`SELECT id FROM projects WHERE name = ${name} LIMIT 1`;
+    if (!existing) return false;
+
+    // Dynamisches UPDATE per postgres.js — fuer jede Spalte ein eigener
+    // Parameter, damit SQL-Injection ausgeschlossen ist. Spaltennamen
+    // kommen aus der fix gemappten UPDATE_COLUMNS-Tabelle (Whitelist).
+    //
+    // postgres.js bietet kein natives "dynamic SET" — wir bauen das manuell
+    // mit db.unsafe fuer die Spaltennamen + geparametrisierte Werte.
+    const setFragments: string[] = [];
+    // postgres.js unsafe() erwartet einen konkreten SQL-Parameter-Typ;
+    // (string | null) deckt alles ab, was wir via ProjectUpdate patchen.
+    const values: (string | null)[] = [];
+    for (const [key, val] of entries) {
+      const col = UPDATE_COLUMNS[key];
+      if (!col) continue; // sollte nicht passieren (Typ-Guard)
+      values.push(val == null ? null : String(val));
+      setFragments.push(`${col} = $${values.length}`);
+    }
+    // updated_at Trigger setzt das Feld automatisch (siehe migration 001).
+    const sql = `UPDATE projects SET ${setFragments.join(", ")} WHERE name = $${values.length + 1}`;
+    values.push(name);
+
+    await db.unsafe(sql, values);
+    return true;
+  },
+
   async delete(name) {
-    if (!/^[\p{L}\p{N}_\-. ]+$/u.test(name) || name.includes("..")) return false;
+    if (!isValidName(name)) return false;
 
     const db = getDb();
     // FK-Verhalten laut migration 001_init.sql:

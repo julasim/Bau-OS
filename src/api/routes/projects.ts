@@ -1,8 +1,35 @@
 import { Hono } from "hono";
 import { projectRepo, taskRepo, terminRepo } from "../../data/index.js";
+import type { ProjectUpdate } from "../../data/types.js";
 import { emit } from "../events.js";
 
 export const projectsRoutes = new Hono();
+
+// Whitelist der Felder, die per PATCH /projects/:name gesetzt werden duerfen.
+// Andere Keys im Body werden stillschweigend verworfen (keine Error), damit
+// Clients robust erweitert werden koennen ohne API-Breaking-Change.
+const PATCHABLE_FIELDS: readonly (keyof ProjectUpdate)[] = [
+  "description",
+  "status",
+  "color",
+  "projektnummer",
+  "bauherr",
+  "standort",
+  "projektart",
+  "nutzung",
+  "phase",
+  "startDate",
+  "endDate",
+] as const;
+
+function normalizePatchValue(v: unknown): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  if (typeof v !== "string") return undefined; // ignoriere falsche Typen
+  const trimmed = v.trim();
+  // Leerer String = explizit leeren (wie null).
+  return trimmed === "" ? null : trimmed;
+}
 
 // Alle Projekte
 projectsRoutes.get("/projects", async (c) => {
@@ -17,6 +44,45 @@ projectsRoutes.get("/projects/:name", async (c) => {
   const info = await projectRepo.getInfo(name);
   if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
   return c.json(info);
+});
+
+// Projekt-Stammdaten patchen (Migration 004).
+// Body: { [field]: string | null }. Whitelist siehe PATCHABLE_FIELDS.
+projectsRoutes.patch("/projects/:name", async (c) => {
+  const name = c.req.param("name");
+
+  let body: Record<string, unknown>;
+  try {
+    body = await c.req.json<Record<string, unknown>>();
+  } catch {
+    return c.json({ error: "Ungueltiger JSON-Body" }, 400);
+  }
+  if (!body || typeof body !== "object") {
+    return c.json({ error: "Body muss ein Objekt sein" }, 400);
+  }
+
+  // Nur erlaubte Felder uebernehmen, leere Strings → null.
+  const patch: ProjectUpdate = {};
+  for (const key of PATCHABLE_FIELDS) {
+    if (key in body) {
+      const normalized = normalizePatchValue(body[key]);
+      if (normalized !== undefined) {
+        (patch as Record<string, string | null>)[key] = normalized;
+      }
+    }
+  }
+  if (Object.keys(patch).length === 0) {
+    return c.json({ error: "Kein patchbares Feld im Body" }, 400);
+  }
+
+  const ok = await projectRepo.update(name, patch);
+  if (!ok) {
+    return c.json({ error: "Projekt nicht gefunden oder Update fehlgeschlagen" }, 404);
+  }
+  emit({ type: "project", action: "updated", id: name });
+
+  const updated = await projectRepo.getInfo(name);
+  return c.json(updated);
 });
 
 // Projekt-Notizen

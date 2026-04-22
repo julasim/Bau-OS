@@ -9,9 +9,21 @@ interface ProjectInfo {
   description?: string | null;
   status?: string;
   color?: string | null;
+  // Stammdaten (Migration 004) — werden in Phase 4 in Karten-Preview + Filter
+  // verwendet. In Phase 1 nur als Typ praesent, damit die Komponente bei den
+  // neuen Feldern aus /api/projects nicht mit "unknown field" crasht.
+  projektnummer?: string | null;
+  bauherr?: string | null;
+  standort?: string | null;
+  projektart?: string | null;
+  nutzung?: string | null;
+  phase?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   notes: number;
   openTasks: number;
   termine: number;
+  files?: number;
   createdAt?: string;
   updatedAt?: string;
 }

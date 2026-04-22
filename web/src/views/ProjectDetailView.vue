@@ -5,7 +5,27 @@ import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import BIcon from "../components/BIcon.vue";
 
-interface ProjectInfo { name: string; notes: number; openTasks: number; termine: number; }
+interface ProjectInfo {
+  name: string;
+  description?: string | null;
+  status?: string;
+  color?: string | null;
+  // Stammdaten (Migration 004) — in Phase 3 im Hero-Bereich dargestellt.
+  projektnummer?: string | null;
+  bauherr?: string | null;
+  standort?: string | null;
+  projektart?: string | null;
+  nutzung?: string | null;
+  phase?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  notes: number;
+  openTasks: number;
+  termine: number;
+  files?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
 interface Task { id: string; text: string; status: string; assignee: string | null; date: string | null; }
 interface Termin { id: string; text: string; datum: string; uhrzeit: string | null; location: string | null; assignees: string[]; }
 

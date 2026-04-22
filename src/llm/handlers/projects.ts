@@ -1,7 +1,50 @@
 import type OpenAI from "openai";
 import { projectRepo } from "../../data/index.js";
 import { emit } from "../../api/events.js";
+import type { ProjectCreateOptions, ProjectUpdate } from "../../data/types.js";
 import type { HandlerMap } from "./types.js";
+
+// Gemeinsame Property-Definitionen fuer Stammdaten — genutzt von
+// projekt_anlegen und projekt_aktualisieren. DRY, damit beide Tools die
+// identische Semantik/Beschreibung haben.
+const stammdatenProps = {
+  projektnummer: {
+    type: "string",
+    description:
+      "Interne fortlaufende Projektnummer, z.B. '2026-037'. Wenn keine bekannt: Nutzer fragen oder weglassen.",
+  },
+  bauherr: {
+    type: "string",
+    description:
+      "Bauherr-Name plus Kontakt, z.B. 'Stefan und Karin Müller — stefan.mueller@example.at, +43 676 1234567'.",
+  },
+  standort: {
+    type: "string",
+    description: "Standort — mindestens Ort/Gemeinde, Adresse wenn vorhanden, z.B. 'Lindenstraße 14, 9020 Klagenfurt'.",
+  },
+  projektart: {
+    type: "string",
+    enum: ["Neubau", "Umbau", "Sanierung", "Zubau"],
+    description: "Art der baulichen Maßnahme.",
+  },
+  nutzung: {
+    type: "string",
+    description: "Geplante Nutzung, z.B. 'Wohnbau', 'Büro', 'Gewerbe', 'Mischnutzung', 'Kindergarten'.",
+  },
+  phase: {
+    type: "string",
+    description:
+      "Projekt-Phase. Typische Werte: 'Vorentwurf', 'Einreichung', 'Ausfuehrung', 'Baubetreuung', 'Abgeschlossen' — andere Bezeichnungen sind erlaubt.",
+  },
+  start_date: {
+    type: "string",
+    description: "Start-Datum im Format YYYY-MM-DD, z.B. '2026-04-01'.",
+  },
+  end_date: {
+    type: "string",
+    description: "Geplantes End-Datum im Format YYYY-MM-DD.",
+  },
+} as const;
 
 export const projectSchemas: OpenAI.Chat.ChatCompletionTool[] = [
   {
@@ -18,7 +61,7 @@ export const projectSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "projekt_info",
       description:
-        "Zeigt eine Uebersicht zu einem Projekt: Anzahl Notizen, offene Aufgaben und anstehende Termine. Nutze den exakten Projektnamen aus projekte_auflisten.",
+        "Zeigt die Stammdaten eines Projekts (Projektnummer, Bauherr, Standort, Projektart, Nutzung, Phase, Start/Ende) sowie Counts (Notizen, offene Aufgaben, Termine, Dateien). Nutze den exakten Projektnamen aus projekte_auflisten.",
       parameters: {
         type: "object",
         properties: { name: { type: "string", description: "Name des Projekts" } },
@@ -31,43 +74,43 @@ export const projectSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "projekt_anlegen",
       description:
-        "Legt ein neues Projekt in der DB an. WICHTIG — bevor du dieses Tool aufrufst, stelle sicher dass du diese 6 Felder hast (durch Nachfrage beim Nutzer ODER durch Extraktion aus hochgeladenen Dokumenten mit semantisch_suchen). Fehlende Felder NICHT erfinden, sondern beim Nutzer nachfragen. Projekte sind rein logische DB-Entities — KEINE Ordner/Dateien werden angelegt, behaupte das niemals. Idempotent: existiert der Name schon, heilt der Call Inkonsistenzen. Name-Regeln: Buchstaben (inkl. Umlaute), Ziffern, Leerzeichen, '-', '_', '.'.",
+        "Legt ein neues Projekt in der DB an. WICHTIG — bevor du dieses Tool aufrufst, stelle sicher dass du diese Felder hast (durch Nachfrage beim Nutzer ODER durch Extraktion aus hochgeladenen Dokumenten mit semantisch_suchen): Projektnummer, Bauherr, Standort, Projektart, Nutzung. Fehlende Felder NICHT erfinden, sondern beim Nutzer nachfragen oder spaeter mit projekt_aktualisieren nachtragen. Projekte sind rein logische DB-Entities — KEINE Ordner/Dateien werden angelegt. Idempotent: existiert der Name schon, werden die Stammdaten auf die neuen Werte gepatcht. Name-Regeln: Buchstaben (inkl. Umlaute), Ziffern, Leerzeichen, '-', '_', '.'.",
       parameters: {
         type: "object",
         properties: {
           name: {
             type: "string",
-            description:
-              "Projektname. Konvention: Bauherr + Ort, z.B. 'EFH Müller Krems' oder 'Umbau Völkendorf 31'. Keine Anführungszeichen im Namen.",
+            description: "Projektname. Konvention: Bauherr + Ort, z.B. 'EFH Müller Krems' oder 'Umbau Völkendorf 31'.",
           },
-          projektnummer: {
-            type: "string",
-            description:
-              "Interne fortlaufende Projektnummer, z.B. '2026-037'. Wenn keine bekannt: Nutzer fragen oder weglassen.",
-          },
-          bauherr: {
-            type: "string",
-            description:
-              "Bauherr-Name plus Kontakt, z.B. 'Stefan und Karin Müller — stefan.mueller@example.at, +43 676 1234567'.",
-          },
-          standort: {
-            type: "string",
-            description:
-              "Standort — mindestens Ort/Gemeinde, Adresse wenn vorhanden, z.B. 'Lindenstraße 14, 9020 Klagenfurt'.",
-          },
-          projektart: {
-            type: "string",
-            enum: ["Neubau", "Umbau", "Sanierung", "Zubau"],
-            description: "Art der baulichen Maßnahme.",
-          },
-          nutzung: {
-            type: "string",
-            description: "Geplante Nutzung, z.B. 'Wohnbau', 'Büro', 'Gewerbe', 'Mischnutzung', 'Kindergarten'.",
-          },
+          ...stammdatenProps,
           beschreibung: {
             type: "string",
-            description:
-              "Optional: freie Kurzbeschreibung (Besonderheiten, Kontext). Wird unter den Stammdaten abgelegt.",
+            description: "Optional: freie Kurzbeschreibung (Besonderheiten, Kontext).",
+          },
+        },
+        required: ["name"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "projekt_aktualisieren",
+      description:
+        "Aktualisiert Stammdaten eines bestehenden Projekts. Nur die im Aufruf gesetzten Felder werden geaendert; weggelassene Felder bleiben unveraendert. Nutze dieses Tool, wenn der Nutzer einen Wert korrigieren oder nachtragen moechte (z.B. 'Bauherr Kontakt hinzufuegen', 'Phase auf Einreichung setzen'). Um ein Feld gezielt zu leeren, gib einen leeren String uebergib.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Exakter Projektname (unveraenderlich)." },
+          ...stammdatenProps,
+          beschreibung: {
+            type: "string",
+            description: "Freie Beschreibung — ueberschreibt das bestehende description-Feld.",
+          },
+          status: {
+            type: "string",
+            enum: ["aktiv", "pausiert", "archiviert"],
+            description: "Projekt-Status aendern.",
           },
         },
         required: ["name"],
@@ -91,6 +134,22 @@ export const projectSchemas: OpenAI.Chat.ChatCompletionTool[] = [
   },
 ];
 
+// Hilfsfunktionen ------------------------------------------------------------
+
+/** String aus Tool-Argumenten sicher trimmen; leeren String → null. */
+function strOrNull(v: unknown): string | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+}
+
+/** Liste der in einem Patch gesetzten Stammdaten-Felder (fuer Rueckmeldung). */
+function listedFields(patch: Record<string, unknown>): string[] {
+  return Object.keys(patch).filter((k) => patch[k] !== undefined);
+}
+
+// Handlers -------------------------------------------------------------------
+
 export const projectHandlers: HandlerMap = {
   projekte_auflisten: async () => {
     const projects = await projectRepo.list();
@@ -99,49 +158,123 @@ export const projectHandlers: HandlerMap = {
 
   projekt_info: async (args) => {
     const info = await projectRepo.getInfo(String(args.name));
-    if (!info)
+    if (!info) {
       return `Projekt "${args.name}" nicht gefunden. Nutze projekte_auflisten um alle verfuegbaren Projektnamen zu sehen.`;
-    return `Projekt: ${info.name}\n\nNotizen: ${info.notes}\nOffene Aufgaben: ${info.openTasks}\nTermine: ${info.termine}`;
+    }
+    // Stammdaten kompakt darstellen — leere Felder explizit als "—", damit
+    // der Agent sieht, was noch fehlt.
+    const dash = "—";
+    const lines = [
+      `Projekt: ${info.name}`,
+      `Status: ${info.status ?? "aktiv"}`,
+      `Projektnummer: ${info.projektnummer ?? dash}`,
+      `Bauherr: ${info.bauherr ?? dash}`,
+      `Standort: ${info.standort ?? dash}`,
+      `Projektart: ${info.projektart ?? dash}`,
+      `Nutzung: ${info.nutzung ?? dash}`,
+      `Phase: ${info.phase ?? dash}`,
+    ];
+    if (info.startDate || info.endDate) {
+      lines.push(`Zeitraum: ${info.startDate ?? dash} bis ${info.endDate ?? dash}`);
+    }
+    lines.push("");
+    lines.push(
+      `Notizen: ${info.notes} · Offene Aufgaben: ${info.openTasks} · Termine: ${info.termine} · Dateien: ${info.files ?? 0}`,
+    );
+    if (info.description) {
+      lines.push("");
+      lines.push(`Beschreibung: ${info.description}`);
+    }
+    return lines.join("\n");
   },
 
   projekt_anlegen: async (args) => {
     const name = String(args.name ?? "").trim();
     if (!name) return "Fehler: Name ist erforderlich.";
 
-    // Stammdaten-Block aus den 5 strukturierten Feldern bauen (Projektnummer,
-    // Bauherr, Standort, Projektart, Nutzung). Reihenfolge ist stabil, damit
-    // der Block vorhersagbar lesbar bleibt.
-    const stammdaten: [string, string | null][] = [
-      ["Projektnummer", args.projektnummer ? String(args.projektnummer).trim() : null],
-      ["Bauherr", args.bauherr ? String(args.bauherr).trim() : null],
-      ["Standort", args.standort ? String(args.standort).trim() : null],
-      ["Projektart", args.projektart ? String(args.projektart).trim() : null],
-      ["Nutzung", args.nutzung ? String(args.nutzung).trim() : null],
-    ];
-    const gesetzt = stammdaten.filter(([, v]) => v && v.length > 0) as [string, string][];
-    const fehlen = stammdaten.filter(([, v]) => !v || v.length === 0).map(([k]) => k);
-    const stammBlock = gesetzt.map(([k, v]) => `${k}: ${v}`).join("\n");
-    const freeText = args.beschreibung ? String(args.beschreibung).trim() : "";
-    const beschreibung = stammBlock && freeText ? `${stammBlock}\n\n${freeText}` : stammBlock || freeText || null;
+    // Strukturierte Stammdaten (Migration 004) — landen ab jetzt in eigenen
+    // Spalten, nicht mehr als Textblock in description.
+    const opts: ProjectCreateOptions = {
+      description: strOrNull(args.beschreibung),
+      projektnummer: strOrNull(args.projektnummer),
+      bauherr: strOrNull(args.bauherr),
+      standort: strOrNull(args.standort),
+      projektart: strOrNull(args.projektart),
+      nutzung: strOrNull(args.nutzung),
+      phase: strOrNull(args.phase),
+      startDate: strOrNull(args.start_date),
+      endDate: strOrNull(args.end_date),
+    };
 
-    // Kein Pre-Check — create() ist idempotent und heilt DB/Vault-
-    // Inkonsistenzen automatisch. Wenn wir hier vorher "existiert bereits"
-    // zurueckgeben, sperren wir uns gegen genau die Inkonsistenz aus, die
-    // wir eigentlich heilen wollen (DB sagt ja, Ordner fehlt — oder umgekehrt).
-    const ok = await projectRepo.create(name, beschreibung);
+    // create() ist idempotent und patcht bei bestehendem Projekt die Felder,
+    // die im Aufruf gesetzt sind — keine Pre-Existenz-Pruefung noetig.
+    const ok = await projectRepo.create(name, opts);
     if (!ok) {
       return `Projekt "${name}" konnte nicht angelegt werden. Erlaubt sind Buchstaben (inkl. Umlaute), Ziffern, Leerzeichen, '-', '_' und '.'.`;
     }
     emit({ type: "project", action: "created", id: name });
 
-    // Rueckmeldung listet explizit, was gesetzt ist und was noch fehlt — so
-    // weiss das LLM, ob es beim Nutzer nachfragen muss. Formulierung bewusst
-    // so, dass das LLM keine FS-Details erfindet: kein "Ordner", keine "README.md".
-    const gesetztLine = gesetzt.length ? `Gesetzt: ${gesetzt.map(([k]) => k).join(", ")}` : "Gesetzt: (nur Name)";
+    // Rueckmeldung: was ist gesetzt, was fehlt noch?
+    const stammdaten = [
+      ["Projektnummer", opts.projektnummer],
+      ["Bauherr", opts.bauherr],
+      ["Standort", opts.standort],
+      ["Projektart", opts.projektart],
+      ["Nutzung", opts.nutzung],
+    ] as const;
+    const gesetzt = stammdaten.filter(([, v]) => v && v.length > 0).map(([k]) => k);
+    const fehlen = stammdaten.filter(([, v]) => !v || v.length === 0).map(([k]) => k);
+    const gesetztLine = gesetzt.length ? `Gesetzt: ${gesetzt.join(", ")}` : "Gesetzt: (nur Name)";
     const fehlenLine = fehlen.length
-      ? `Fehlen noch: ${fehlen.join(", ")} — beim Nutzer nachfragen oder aus Dokumenten extrahieren.`
+      ? `Fehlen noch: ${fehlen.join(", ")} — beim Nutzer nachfragen oder aus Dokumenten extrahieren und mit projekt_aktualisieren nachtragen.`
       : "Alle Stammdaten vollstaendig.";
     return `Projekt "${name}" ist in der Datenbank angelegt. Kein Ordner/keine Datei erzeugt (Projekte sind rein logische DB-Entities).\n\n${gesetztLine}\n${fehlenLine}`;
+  },
+
+  projekt_aktualisieren: async (args) => {
+    const name = String(args.name ?? "").trim();
+    if (!name) return "Fehler: Name ist erforderlich.";
+
+    // Patch-Objekt bauen — nur Felder aufnehmen, die im Aufruf tatsaechlich
+    // gesetzt sind (auch leerer String erlaubt, er bedeutet "leeren").
+    const patch: ProjectUpdate = {};
+    const mapping: [keyof ProjectUpdate, keyof typeof args][] = [
+      ["description", "beschreibung"],
+      ["status", "status"],
+      ["projektnummer", "projektnummer"],
+      ["bauherr", "bauherr"],
+      ["standort", "standort"],
+      ["projektart", "projektart"],
+      ["nutzung", "nutzung"],
+      ["phase", "phase"],
+      ["startDate", "start_date"],
+      ["endDate", "end_date"],
+    ];
+    for (const [patchKey, argKey] of mapping) {
+      if (argKey in args) {
+        // Leerer String → null (Feld leeren). Sonst Trim.
+        const raw = args[argKey];
+        if (raw === null || raw === undefined) {
+          (patch as Record<string, string | null>)[patchKey] = null;
+        } else {
+          const trimmed = String(raw).trim();
+          (patch as Record<string, string | null>)[patchKey] = trimmed === "" ? null : trimmed;
+        }
+      }
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return `Fehler: Kein Feld zum Aktualisieren uebergeben. Nutze projekt_info, um zu sehen welche Felder gesetzt sind.`;
+    }
+
+    const ok = await projectRepo.update(name, patch);
+    if (!ok) {
+      return `Projekt "${name}" nicht gefunden oder Update fehlgeschlagen. Pruefe den Namen mit projekte_auflisten.`;
+    }
+    emit({ type: "project", action: "updated", id: name });
+
+    const fields = listedFields(patch as Record<string, unknown>);
+    return `Projekt "${name}" aktualisiert. Geaenderte Felder: ${fields.join(", ")}.`;
   },
 
   projekt_loeschen: async (args) => {

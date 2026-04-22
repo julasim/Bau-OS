@@ -56,11 +56,54 @@ export interface Project {
   status?: string;
   color?: string | null;
   tags?: string[];
+  // Stammdaten (Migration 004) — strukturiert statt als Textblock in description.
+  projektnummer?: string | null;
+  bauherr?: string | null;
+  standort?: string | null;
+  projektart?: string | null;
+  nutzung?: string | null;
+  phase?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   notes: number;
   openTasks: number;
   termine: number;
+  files?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** Patchable Felder fuer projectRepo.update(). undefined = unveraendert,
+ *  null = explizites Leeren einer Spalte. Der Projektname selbst ist
+ *  NICHT patchable — Namensaenderungen erfordern einen separaten Flow
+ *  (wegen FK-Konsistenz und URL-Stabilitaet im Frontend). */
+export interface ProjectUpdate {
+  description?: string | null;
+  status?: string | null;
+  color?: string | null;
+  projektnummer?: string | null;
+  bauherr?: string | null;
+  standort?: string | null;
+  projektart?: string | null;
+  nutzung?: string | null;
+  phase?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}
+
+/** Stammdaten, die optional bei der Projekt-Erstellung mit uebergeben werden
+ *  koennen. Ab Phase 1 werden sie strukturiert in Spalten persistiert; vorher
+ *  landeten sie als Textblock in description. */
+export interface ProjectCreateOptions {
+  description?: string | null;
+  projektnummer?: string | null;
+  bauherr?: string | null;
+  standort?: string | null;
+  projektart?: string | null;
+  nutzung?: string | null;
+  phase?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
 }
 
 export interface TeamMember {
@@ -150,8 +193,14 @@ export interface ProjectRepository {
   listNotes(name: string): Promise<string[]>;
   readNote(project: string, noteName: string): Promise<string | null>;
   /** Legt ein neues Projekt an. Gibt false zurueck, wenn der Name ungueltig ist
-   *  oder das Projekt bereits existiert. */
-  create(name: string, description?: string | null): Promise<boolean>;
+   *  oder das Projekt bereits existiert. Rueckwaertskompatibilitaet: wenn nur
+   *  ein String als zweites Argument kommt, landet dieser in description. */
+  create(name: string, options?: string | null | ProjectCreateOptions): Promise<boolean>;
+  /** Aktualisiert Stammdaten eines bestehenden Projekts. Nur Felder die im
+   *  Patch gesetzt sind werden geaendert; undefined laesst unveraendert, null
+   *  leert die Spalte explizit. Gibt false zurueck wenn Projekt nicht
+   *  existiert oder Patch leer ist. */
+  update(name: string, patch: ProjectUpdate): Promise<boolean>;
   /** Loescht ein Projekt komplett (DB-Eintrag + Vault-Ordner inkl. Inhalt).
    *  Idempotent: gibt true zurueck, wenn das Projekt am Ende wirklich weg
    *  ist (auch wenn es vorher schon nicht existierte). false nur bei echten
