@@ -28,14 +28,18 @@ RUN npm ci
 # Quellcode kopieren + bauen (Backend-TS + Vue-Frontend)
 COPY . .
 RUN npm run build:all \
+    && cp -r src/db/migrations dist/db/migrations \
     && npm prune --omit=dev
 
 EXPOSE 3000
 
-# Healthcheck — App sollte auf /api/status antworten (ok oder auth-required)
+# Healthcheck — App sollte auf /api/status antworten.
 # Port 3000 ist im Container fix — API_PORT aus .env ist nur das Host-Mapping.
+# WICHTIG: kein -f (fail on HTTP >=400) — /api/status liefert 401 wenn
+# JWT gesetzt ist. 401 bedeutet "Server laeuft und antwortet korrekt",
+# der Healthcheck soll nur auf Connection-Failure (exit != 0) reagieren.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -fsS "http://localhost:3000/api/status" > /dev/null || exit 1
+    CMD curl -sS -o /dev/null "http://localhost:3000/api/status" || exit 1
 
 # Node startet direkt — die App kuemmert sich selbst um DB-Migrationen,
 # wartet wenn noetig auf Postgres, respektiert DB_AUTO_MIGRATE aus .env.
