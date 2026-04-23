@@ -65,6 +65,15 @@ export interface Project {
   phase?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  // Verknuepfungen (Migration 005)
+  /** FK auf team_members.id — wenn gesetzt, ist bauherrName verfuegbar. */
+  bauherrId?: string | null;
+  /** Nur read-only im Response, ausgejoined aus team_members.name. */
+  bauherrName?: string | null;
+  /** FK auf projects.id — uebergeordnetes Projekt (Sub-Projekt/Bauteil). */
+  parentId?: string | null;
+  /** Nur read-only im Response, ausgejoined aus projects.name. */
+  parentName?: string | null;
   notes: number;
   openTasks: number;
   /** Erledigte Aufgaben — zusammen mit openTasks ergibt sich der Fortschritt.
@@ -72,6 +81,8 @@ export interface Project {
   doneTasks?: number;
   termine: number;
   files?: number;
+  /** Anzahl direkter Sub-Projekte (keine rekursive Summe). */
+  childrenCount?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -92,6 +103,8 @@ export interface ProjectUpdate {
   phase?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  bauherrId?: string | null;
+  parentId?: string | null;
 }
 
 /** Stammdaten, die optional bei der Projekt-Erstellung mit uebergeben werden
@@ -195,6 +208,10 @@ export interface ProjectRepository {
   getInfo(name: string): Promise<Project | null>;
   listNotes(name: string): Promise<string[]>;
   readNote(project: string, noteName: string): Promise<string | null>;
+  /** Direkte Unter-Projekte (nicht rekursiv). Optional — fs-projects gibt
+   *  einfach ein leeres Array zurueck, weil im FS-Mode keine Parent-Links
+   *  gespeichert werden. */
+  listChildren?(parentName: string): Promise<Array<{ id: string; name: string; status: string | null }>>;
   /** Legt ein neues Projekt an. Gibt false zurueck, wenn der Name ungueltig ist
    *  oder das Projekt bereits existiert. Rueckwaertskompatibilitaet: wenn nur
    *  ein String als zweites Argument kommt, landet dieser in description. */

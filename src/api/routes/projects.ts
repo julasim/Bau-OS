@@ -20,6 +20,8 @@ const PATCHABLE_FIELDS: readonly (keyof ProjectUpdate)[] = [
   "phase",
   "startDate",
   "endDate",
+  "bauherrId",
+  "parentId",
 ] as const;
 
 function normalizePatchValue(v: unknown): string | null | undefined {
@@ -244,6 +246,14 @@ projectsRoutes.delete("/projects/:name", async (c) => {
   if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
   emit({ type: "project", action: "deleted", id: name });
   return c.body(null, 204);
+});
+
+// Direkte Unter-Projekte eines Projekts (Migration 005).
+projectsRoutes.get("/projects/:name/children", async (c) => {
+  const name = c.req.param("name");
+  if (!projectRepo.listChildren) return c.json([]);
+  const children = await projectRepo.listChildren(name);
+  return c.json(children);
 });
 
 // Projekt-Notizen

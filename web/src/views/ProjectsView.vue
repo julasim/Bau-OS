@@ -19,6 +19,10 @@ interface ProjectInfo {
   phase?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  // Verknuepfungen (Migration 005)
+  parentId?: string | null;
+  parentName?: string | null;
+  childrenCount?: number;
   notes: number;
   openTasks: number;
   doneTasks?: number;

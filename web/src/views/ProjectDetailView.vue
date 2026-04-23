@@ -20,12 +20,29 @@ interface ProjectInfo {
   phase?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  // Verknuepfungen (Migration 005)
+  bauherrId?: string | null;
+  bauherrName?: string | null;
+  parentId?: string | null;
+  parentName?: string | null;
   notes: number;
   openTasks: number;
+  doneTasks?: number;
   termine: number;
   files?: number;
+  childrenCount?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+interface ProjectSummary {
+  id: string;
+  name: string;
+  parentId?: string | null;
+}
+interface ChildProject {
+  id: string;
+  name: string;
+  status: string | null;
 }
 interface Task {
   id: string;
@@ -188,9 +205,11 @@ const STATUS_OPTIONS = ["aktiv", "pausiert", "archiviert"] as const;
 onMounted(async () => {
   projectName.value = route.params.name as string;
   await loadAll();
-  // Uebersicht ist Default-Tab — Activity erst nach loadAll laden, weil wir
-  // die projekt-UUID (info.id) fuer den Filter brauchen.
-  if (tab.value === "uebersicht") await loadRecentActivity();
+  // Uebersicht ist Default-Tab — Activity + Children erst nach loadAll laden,
+  // weil info.id als Filter fuer beides gebraucht wird.
+  if (tab.value === "uebersicht") {
+    await Promise.all([loadRecentActivity(), loadChildren()]);
+  }
   // Click-away-Listener fuer das Aktions-Menue.
   document.addEventListener("mousedown", onGlobalClick);
 });
@@ -337,6 +356,17 @@ const COLOR_PALETTE = [
 ] as const;
 const showColorPicker = ref(false);
 
+// ── Verknuepfungen (Migration 005) ───────────────────────
+// Bauherr-Team-Link
+const showBauherrPicker = ref(false);
+// Parent-Projekt
+const showParentPicker = ref(false);
+const allProjectsForPicker = ref<ProjectSummary[]>([]);
+const allProjectsLoaded = ref(false);
+// Kinder (Unter-Projekte)
+const children = ref<ChildProject[]>([]);
+const childrenLoaded = ref(false);
+
 function toggleActionMenu() {
   showActionMenu.value = !showActionMenu.value;
 }
@@ -348,6 +378,10 @@ function onGlobalClick(ev: MouseEvent) {
   if (!target) return;
   if (!target.closest(".action-menu-wrapper")) showActionMenu.value = false;
   if (!target.closest(".color-picker-wrapper")) showColorPicker.value = false;
+  if (!target.closest(".link-picker-wrapper")) {
+    showBauherrPicker.value = false;
+    showParentPicker.value = false;
+  }
 }
 
 async function setStatus(newStatus: "aktiv" | "pausiert" | "archiviert") {
@@ -443,6 +477,96 @@ async function setColor(value: string | null) {
   }
 }
 
+// ── Bauherr → Team verknuepfen ───────────────────────────
+// Team-Mitglied als Bauherr eintragen: setzt bauherrId UND aktualisiert
+// bauherr-Text auf den Namen, damit Export/Listen-Ansichten stimmig
+// bleiben ohne extra JOIN auf Client-Seite.
+async function openBauherrPicker() {
+  if (!teamLoaded.value) await loadTeam();
+  showBauherrPicker.value = true;
+}
+
+async function linkBauherr(memberId: string, memberName: string) {
+  showBauherrPicker.value = false;
+  if (!info.value) return;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, {
+      bauherrId: memberId,
+      bauherr: memberName,
+    });
+  } catch {
+    // Rueckgaengig: nichts zu tun, Server hat nicht geaendert.
+  }
+}
+async function unlinkBauherr() {
+  showBauherrPicker.value = false;
+  if (!info.value) return;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { bauherrId: null });
+  } catch {
+    /* no-op */
+  }
+}
+
+// ── Parent-Projekt setzen ────────────────────────────────
+async function loadAllProjectsForPicker() {
+  if (allProjectsLoaded.value) return;
+  try {
+    const projs = await api.get<{ id: string; name: string; parentId?: string | null }[]>("/projects");
+    allProjectsForPicker.value = projs.map((p) => ({
+      id: p.id,
+      name: p.name,
+      parentId: p.parentId ?? null,
+    }));
+    allProjectsLoaded.value = true;
+  } catch {
+    allProjectsForPicker.value = [];
+  }
+}
+
+// Kandidaten fuer Parent: alle Projekte, aber NICHT das aktuelle (kein Self-
+// Parent) und NICHT ein direktes Kind (offensichtliche 2-Ebenen-Zyklen).
+// Tiefe Zyklen (A → B → C → A) sind theoretisch moeglich; das ist ein
+// bekanntes Lueckenmodell und wird akzeptiert statt eine rekursive CTE-
+// Pruefung aufzusetzen, die der Datenmenge nicht angemessen waere.
+const parentCandidates = computed<ProjectSummary[]>(() => {
+  if (!info.value) return [];
+  const childIds = new Set(children.value.map((c) => c.id));
+  return allProjectsForPicker.value.filter(
+    (p) => p.id !== info.value!.id && !childIds.has(p.id),
+  );
+});
+
+async function openParentPicker() {
+  await loadAllProjectsForPicker();
+  showParentPicker.value = true;
+}
+async function setParent(parentId: string | null) {
+  showParentPicker.value = false;
+  if (!info.value) return;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { parentId });
+  } catch {
+    /* no-op */
+  }
+}
+
+// ── Kinder laden ─────────────────────────────────────────
+async function loadChildren() {
+  if (!info.value) return;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    children.value = await api.get<ChildProject[]>(`/projects/${n}/children`);
+    childrenLoaded.value = true;
+  } catch {
+    children.value = [];
+    childrenLoaded.value = true;
+  }
+}
+
 // ── Dateien (Stufe 3b) ─────────────────────────────────────
 
 // API liefert Ordner + Dateien gemischt — wir filtern auf echte DB-Files
@@ -485,7 +609,10 @@ async function openTab(t: Tab) {
   // Lazy-Load pro Tab — pro Tab max. einmal.
   if (t === "files" && !filesLoaded.value) await loadFiles();
   if (t === "team" && !teamLoaded.value) await loadTeam();
-  if (t === "uebersicht" && !recentActivityLoaded.value) await loadRecentActivity();
+  if (t === "uebersicht") {
+    if (!recentActivityLoaded.value) await loadRecentActivity();
+    if (!childrenLoaded.value) await loadChildren();
+  }
   if (t === "verlauf" && !fullActivityLoaded.value) await loadFullActivity(true);
 }
 
@@ -858,7 +985,18 @@ const emptyStammCount = computed(() => {
     >
       <div class="flex items-start justify-between" style="gap: 16px; margin-bottom: 16px">
         <div class="min-w-0" style="flex: 1">
-          <div class="eyebrow" style="margin-bottom: 6px">Projekt</div>
+          <!-- Parent-Breadcrumb (Migration 005) — klickbar zum Parent -->
+          <div v-if="info.parentName" class="parent-crumb">
+            <BIcon name="layers" :size="10" />
+            <router-link
+              :to="`/projects/${encodeURIComponent(info.parentName)}`"
+              class="parent-link"
+            >
+              {{ info.parentName }}
+            </router-link>
+            <span style="color: var(--color-text-faint)">/</span>
+          </div>
+          <div v-else class="eyebrow" style="margin-bottom: 6px">Projekt</div>
           <h1
             style="
               font-size: 28px;
@@ -1093,6 +1231,88 @@ const emptyStammCount = computed(() => {
         <BIcon name="info" :size="12" />
         <span>{{ emptyStammCount }} Stammdaten fehlen noch — klicke ein Feld an, um es auszufüllen.</span>
       </div>
+
+      <!-- Verknuepfungen (Migration 005): Bauherr-Team-Link + Parent-Projekt -->
+      <div class="link-row">
+        <!-- Bauherr — Team-Verknuepfung -->
+        <div class="link-picker-wrapper">
+          <button class="link-chip" @click="openBauherrPicker" :title="'Bauherr mit Team-Mitglied verknüpfen'">
+            <BIcon name="user" :size="11" />
+            <span v-if="info.bauherrName">Bauherr: {{ info.bauherrName }}</span>
+            <span v-else style="color: var(--color-text-muted)">Bauherr verknüpfen…</span>
+          </button>
+          <div v-if="showBauherrPicker" class="link-dropdown">
+            <button
+              v-if="info.bauherrId"
+              class="link-dropdown-item link-dropdown-clear"
+              @click="unlinkBauherr"
+            >
+              <BIcon name="x" :size="11" />
+              <span>Verknüpfung aufheben</span>
+            </button>
+            <div v-if="info.bauherrId" class="link-dropdown-divider"></div>
+            <div class="link-dropdown-header">Team-Mitglied wählen</div>
+            <button
+              v-for="m in allTeam"
+              :key="m.id"
+              class="link-dropdown-item"
+              :class="{ 'link-dropdown-active': m.id === info.bauherrId }"
+              @click="linkBauherr(m.id, m.name)"
+            >
+              <div class="team-avatar" style="width: 20px; height: 20px; font-size: 9px">
+                {{ initial(m.name) }}
+              </div>
+              <div style="flex: 1; min-width: 0">
+                <div style="font-size: 12px; color: var(--color-text)">{{ m.name }}</div>
+                <div v-if="m.role" style="font-size: 10px; color: var(--color-text-muted)">
+                  {{ m.role }}
+                </div>
+              </div>
+            </button>
+            <p v-if="allTeam.length === 0" class="link-dropdown-empty">
+              Keine Team-Mitglieder vorhanden.
+            </p>
+          </div>
+        </div>
+
+        <!-- Parent-Projekt -->
+        <div class="link-picker-wrapper">
+          <button
+            class="link-chip"
+            @click="openParentPicker"
+            :title="'Als Sub-Projekt unter anderem Projekt einordnen'"
+          >
+            <BIcon name="layers" :size="11" />
+            <span v-if="info.parentName">Teil von: {{ info.parentName }}</span>
+            <span v-else style="color: var(--color-text-muted)">Sub-Projekt von…</span>
+          </button>
+          <div v-if="showParentPicker" class="link-dropdown">
+            <button
+              v-if="info.parentId"
+              class="link-dropdown-item link-dropdown-clear"
+              @click="setParent(null)"
+            >
+              <BIcon name="x" :size="11" />
+              <span>Verknüpfung aufheben</span>
+            </button>
+            <div v-if="info.parentId" class="link-dropdown-divider"></div>
+            <div class="link-dropdown-header">Übergeordnetes Projekt</div>
+            <button
+              v-for="p in parentCandidates"
+              :key="p.id"
+              class="link-dropdown-item"
+              :class="{ 'link-dropdown-active': p.id === info.parentId }"
+              @click="setParent(p.id)"
+            >
+              <BIcon name="folder" :size="11" style="color: var(--color-text-muted)" />
+              <span style="font-size: 12px; color: var(--color-text)">{{ p.name }}</span>
+            </button>
+            <p v-if="parentCandidates.length === 0" class="link-dropdown-empty">
+              Keine weiteren Projekte vorhanden.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ═══ Quick-Stats (4 Kacheln) ════════════════════════════ -->
@@ -1183,6 +1403,31 @@ const emptyStammCount = computed(() => {
         </div>
         <p v-else-if="info.description" class="desc-text">{{ info.description }}</p>
         <p v-else class="desc-empty">Noch keine Beschreibung. Klicke auf „Hinzufügen", um Kontext zu ergänzen.</p>
+      </div>
+
+      <!-- Unterprojekte — nur wenn welche existieren (Migration 005) -->
+      <div v-if="children.length > 0" class="ueb-card" style="margin-bottom: 16px">
+        <div class="flex items-center justify-between" style="margin-bottom: 8px">
+          <div class="eyebrow">Unterprojekte ({{ children.length }})</div>
+        </div>
+        <div class="children-grid">
+          <router-link
+            v-for="c in children"
+            :key="c.id"
+            :to="`/projects/${encodeURIComponent(c.name)}`"
+            class="child-card"
+          >
+            <BIcon name="folder" :size="12" style="color: var(--color-text-muted); flex-shrink: 0" />
+            <span class="child-name">{{ c.name }}</span>
+            <span
+              v-if="c.status && c.status !== 'aktiv'"
+              :class="['pill', `pill-status-${c.status}`]"
+              style="font-size: 9px"
+            >
+              {{ c.status }}
+            </span>
+          </router-link>
+        </div>
       </div>
 
       <!-- 3-Spalten-Grid: Termine / Aufgaben / Aktivitaet -->
@@ -2597,5 +2842,146 @@ const emptyStammCount = computed(() => {
 .quick-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ── Parent-Breadcrumb ────────────────────────────────── */
+.parent-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+.parent-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+.parent-link:hover {
+  color: var(--color-text);
+  text-decoration: underline;
+}
+
+/* ── Verknuepfungs-Chips + Dropdown ───────────────────── */
+.link-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+.link-picker-wrapper {
+  position: relative;
+}
+.link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+.link-chip:hover {
+  border-color: var(--color-text-faint);
+}
+
+.link-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 240px;
+  max-width: 320px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+}
+.link-dropdown-header {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 8px 10px 4px;
+}
+.link-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+.link-dropdown-item:hover {
+  background: var(--color-bg-subtle);
+}
+.link-dropdown-active {
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+.link-dropdown-clear {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+.link-dropdown-clear svg {
+  color: var(--color-text-muted);
+}
+.link-dropdown-divider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  margin: 4px 2px;
+}
+.link-dropdown-empty {
+  font-size: 11px;
+  color: var(--color-text-faint);
+  padding: 8px 10px;
+  margin: 0;
+  text-align: center;
+}
+
+/* ── Kinder-Liste in Uebersicht ───────────────────────── */
+.children-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
+}
+.child-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  text-decoration: none;
+  color: var(--color-text);
+  transition: all 180ms ease;
+}
+.child-card:hover {
+  border-color: var(--color-text-faint);
+  background: var(--color-bg-subtle);
+}
+.child-name {
+  flex: 1;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

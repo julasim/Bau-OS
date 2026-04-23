@@ -22,6 +22,8 @@ const UPDATE_COLUMNS: Record<keyof ProjectUpdate, string> = {
   phase: "phase",
   startDate: "start_date",
   endDate: "end_date",
+  bauherrId: "bauherr_id",
+  parentId: "parent_id",
 };
 
 function isValidName(name: string): boolean {
@@ -42,13 +44,19 @@ export const dbProjects: ProjectRepository = {
         p.id, p.name, p.description, p.status, p.color,
         p.projektnummer, p.bauherr, p.standort, p.projektart, p.nutzung,
         p.phase, p.start_date, p.end_date,
+        p.bauherr_id, p.parent_id,
+        bm.name as bauherr_name,
+        parent.name as parent_name,
         p.created_at, p.updated_at,
         (SELECT count(*) FROM notes n WHERE n.project_id = p.id) as notes,
         (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done') as open_tasks,
         (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'done') as done_tasks,
         (SELECT count(*) FROM termine te WHERE te.project_id = p.id) as termine,
-        (SELECT count(*) FROM files f WHERE f.project_id = p.id) as files
+        (SELECT count(*) FROM files f WHERE f.project_id = p.id) as files,
+        (SELECT count(*) FROM projects child WHERE child.parent_id = p.id) as children_count
       FROM projects p
+      LEFT JOIN team_members bm ON bm.id = p.bauherr_id
+      LEFT JOIN projects parent ON parent.id = p.parent_id
       WHERE p.name = ${name}
       LIMIT 1
     `;
@@ -67,11 +75,16 @@ export const dbProjects: ProjectRepository = {
       phase: row.phase ? String(row.phase) : null,
       startDate: row.start_date ? String(row.start_date) : null,
       endDate: row.end_date ? String(row.end_date) : null,
+      bauherrId: row.bauherr_id ? String(row.bauherr_id) : null,
+      bauherrName: row.bauherr_name ? String(row.bauherr_name) : null,
+      parentId: row.parent_id ? String(row.parent_id) : null,
+      parentName: row.parent_name ? String(row.parent_name) : null,
       notes: Number(row.notes),
       openTasks: Number(row.open_tasks),
       doneTasks: Number(row.done_tasks),
       termine: Number(row.termine),
       files: Number(row.files),
+      childrenCount: Number(row.children_count),
       createdAt: row.created_at ? String(row.created_at) : undefined,
       updatedAt: row.updated_at ? String(row.updated_at) : undefined,
     };
@@ -169,6 +182,13 @@ export const dbProjects: ProjectRepository = {
     const [existing] = await db`SELECT id FROM projects WHERE name = ${name} LIMIT 1`;
     if (!existing) return false;
 
+    // Loop-Schutz fuer parent_id: ein Projekt darf nicht sein eigenes Parent
+    // werden. Tiefer liegende Zyklen (A → B → A) werden im Frontend vor dem
+    // Auswaehlen verhindert — die DB hat dafuer keine CHECK-Semantik.
+    if (patch.parentId && String(patch.parentId) === String(existing.id)) {
+      return false;
+    }
+
     // Dynamisches UPDATE per postgres.js — fuer jede Spalte ein eigener
     // Parameter, damit SQL-Injection ausgeschlossen ist. Spaltennamen
     // kommen aus der fix gemappten UPDATE_COLUMNS-Tabelle (Whitelist).
@@ -191,6 +211,22 @@ export const dbProjects: ProjectRepository = {
 
     await db.unsafe(sql, values);
     return true;
+  },
+
+  async listChildren(parentName) {
+    const db = getDb();
+    const rows = await db`
+      SELECT child.id, child.name, child.status
+      FROM projects parent
+      JOIN projects child ON child.parent_id = parent.id
+      WHERE parent.name = ${parentName}
+      ORDER BY child.name
+    `;
+    return rows.map((r) => ({
+      id: String(r.id),
+      name: String(r.name),
+      status: r.status ? String(r.status) : null,
+    }));
   },
 
   async rename(oldName, newName) {
