@@ -204,6 +204,14 @@ export interface ProjectRepository {
    *  leert die Spalte explizit. Gibt false zurueck wenn Projekt nicht
    *  existiert oder Patch leer ist. */
   update(name: string, patch: ProjectUpdate): Promise<boolean>;
+  /** Benennt ein Projekt um. Return-Codes:
+   *   - "ok": umbenannt
+   *   - "invalid": ungueltiger Name (Unicode/Slashes)
+   *   - "not-found": altes Projekt existiert nicht
+   *   - "conflict": neues Name-Projekt existiert schon
+   *  Sicher bezueglich FKs: child-Eintraege haengen an projects.id (UUID),
+   *  nicht am Namen — Umbenennung aendert nur die name-Spalte. */
+  rename(oldName: string, newName: string): Promise<"ok" | "invalid" | "not-found" | "conflict">;
   /** Loescht ein Projekt komplett (DB-Eintrag + Vault-Ordner inkl. Inhalt).
    *  Idempotent: gibt true zurueck, wenn das Projekt am Ende wirklich weg
    *  ist (auch wenn es vorher schon nicht existierte). false nur bei echten

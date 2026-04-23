@@ -317,17 +317,37 @@ const deleteConfirmOpen = ref(false);
 const deleting = ref(false);
 const deleteError = ref<string | null>(null);
 
+// Rename-Dialog
+const renameDialogOpen = ref(false);
+const renameDraft = ref("");
+const renaming = ref(false);
+const renameError = ref<string | null>(null);
+
+// Farb-Palette — kuratierte, zurueckhaltende Werte, die sowohl im Light- als
+// auch im Dark-Mode als subtiler Akzent funktionieren.
+const COLOR_PALETTE = [
+  { key: "", label: "Keine", value: null },
+  { key: "slate", label: "Schiefer", value: "#64748b" },
+  { key: "blue", label: "Blau", value: "#3b82f6" },
+  { key: "green", label: "Gruen", value: "#10b981" },
+  { key: "amber", label: "Bernstein", value: "#f59e0b" },
+  { key: "red", label: "Rot", value: "#ef4444" },
+  { key: "purple", label: "Violett", value: "#a855f7" },
+  { key: "pink", label: "Rosa", value: "#ec4899" },
+] as const;
+const showColorPicker = ref(false);
+
 function toggleActionMenu() {
   showActionMenu.value = !showActionMenu.value;
 }
 
-// Click-away schliesst das Menue — wir hoeren global auf mousedown und
-// beenden nur wenn der Klick ausserhalb des Menues war.
+// Click-away schliesst Menues — wir hoeren global auf mousedown und
+// beenden nur wenn der Klick ausserhalb des jeweiligen Wrappers war.
 function onGlobalClick(ev: MouseEvent) {
   const target = ev.target as HTMLElement | null;
   if (!target) return;
-  if (target.closest(".action-menu-wrapper")) return;
-  showActionMenu.value = false;
+  if (!target.closest(".action-menu-wrapper")) showActionMenu.value = false;
+  if (!target.closest(".color-picker-wrapper")) showColorPicker.value = false;
 }
 
 async function setStatus(newStatus: "aktiv" | "pausiert" | "archiviert") {
@@ -364,6 +384,62 @@ async function confirmDelete() {
     deleteError.value = e instanceof Error ? e.message : "Löschen fehlgeschlagen";
   } finally {
     deleting.value = false;
+  }
+}
+
+// ── Rename ───────────────────────────────────────────────
+function openRenameDialog() {
+  if (!info.value) return;
+  showActionMenu.value = false;
+  renameDraft.value = info.value.name;
+  renameError.value = null;
+  renameDialogOpen.value = true;
+}
+async function submitRename() {
+  if (!info.value || renaming.value) return;
+  const newName = renameDraft.value.trim();
+  if (!newName || newName === info.value.name) {
+    renameDialogOpen.value = false;
+    return;
+  }
+  renaming.value = true;
+  renameError.value = null;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    await api.put(`/projects/${n}/rename`, { newName });
+    renameDialogOpen.value = false;
+    // URL wechselt auf neuen Namen — vollstaendige Navigation statt nur
+    // param-update, damit loadAll() garantiert sauber laeuft.
+    router.push(`/projects/${encodeURIComponent(newName)}`);
+  } catch (e) {
+    renameError.value = e instanceof Error ? e.message : "Umbenennen fehlgeschlagen";
+  } finally {
+    renaming.value = false;
+  }
+}
+
+// ── Export ───────────────────────────────────────────────
+function downloadMarkdown() {
+  showActionMenu.value = false;
+  const n = encodeURIComponent(projectName.value);
+  const token = localStorage.getItem("bau-os-token");
+  // Browser-Download kann keine Auth-Header setzen — Token als Query-Param.
+  const base = `/api/projects/${n}/export.md`;
+  const href = token ? `${base}?token=${encodeURIComponent(token)}` : base;
+  window.location.href = href;
+}
+
+// ── Farbe setzen ─────────────────────────────────────────
+async function setColor(value: string | null) {
+  showColorPicker.value = false;
+  if (!info.value) return;
+  const before = info.value.color;
+  info.value.color = value;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { color: value ?? null });
+  } catch {
+    info.value.color = before;
   }
 }
 
@@ -703,6 +779,32 @@ function activityTime(iso?: string): string {
   return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit" });
 }
 
+// ── Quick-Add (Uebersicht) ───────────────────────────────
+// Kleine Inline-Inputs direkt in den Uebersichts-Cards, damit man ohne
+// Tab-Wechsel Aufgaben/Termine hinzufuegen kann.
+const quickTaskText = ref("");
+const quickTerminDate = ref("");
+const quickTerminText = ref("");
+async function quickAddTask() {
+  const txt = quickTaskText.value.trim();
+  if (!txt) return;
+  const n = encodeURIComponent(projectName.value);
+  await api.post(`/projects/${n}/tasks`, { text: txt });
+  quickTaskText.value = "";
+  await loadAll();
+}
+async function quickAddTermin() {
+  if (!quickTerminDate.value || !quickTerminText.value.trim()) return;
+  const n = encodeURIComponent(projectName.value);
+  await api.post(`/projects/${n}/termine`, {
+    datum: quickTerminDate.value,
+    text: quickTerminText.value.trim(),
+  });
+  quickTerminDate.value = "";
+  quickTerminText.value = "";
+  await loadAll();
+}
+
 // ── Uebersicht: Top-Daten aus bestehenden Listen ──────────
 // Kein neuer Fetch noetig — tasks/termine sind schon geladen.
 const openTasksTop = computed(() =>
@@ -748,7 +850,12 @@ const emptyStammCount = computed(() => {
     </button>
 
     <!-- ═══ Hero ═══════════════════════════════════════════════ -->
-    <div v-if="info" class="hero">
+    <div
+      v-if="info"
+      class="hero"
+      :class="{ 'hero-with-accent': !!info.color }"
+      :style="info.color ? { '--accent-color': info.color } : {}"
+    >
       <div class="flex items-start justify-between" style="gap: 16px; margin-bottom: 16px">
         <div class="min-w-0" style="flex: 1">
           <div class="eyebrow" style="margin-bottom: 6px">Projekt</div>
@@ -804,6 +911,33 @@ const emptyStammCount = computed(() => {
             <BIcon name="layers" :size="11" />
             {{ info.phase || "Phase setzen" }}
           </button>
+          <!-- Farbe — runder Swatch, oeffnet Picker -->
+          <div class="color-picker-wrapper">
+            <button
+              class="color-swatch"
+              :style="{ background: info.color || 'transparent' }"
+              :class="{ 'color-swatch-empty': !info.color }"
+              @click="showColorPicker = !showColorPicker"
+              :title="'Projektfarbe wählen'"
+            ></button>
+            <div v-if="showColorPicker" class="color-picker">
+              <button
+                v-for="c in COLOR_PALETTE"
+                :key="c.key"
+                class="color-option"
+                :class="{
+                  'color-option-active': (info.color || '') === (c.value || ''),
+                  'color-option-empty': !c.value,
+                }"
+                :style="{ background: c.value || 'transparent' }"
+                :title="c.label"
+                @click="setColor(c.value)"
+              >
+                <BIcon v-if="!c.value" name="x" :size="10" />
+              </button>
+            </div>
+          </div>
+
           <div class="action-menu-wrapper">
             <button class="action-btn" @click="toggleActionMenu" :title="'Weitere Aktionen'">
               <BIcon name="more" :size="14" />
@@ -832,6 +966,15 @@ const emptyStammCount = computed(() => {
               >
                 <BIcon name="archive" :size="12" />
                 <span>Archivieren</span>
+              </button>
+              <div class="action-menu-divider"></div>
+              <button class="action-menu-item" @click="openRenameDialog">
+                <BIcon name="pencil" :size="12" />
+                <span>Umbenennen…</span>
+              </button>
+              <button class="action-menu-item" @click="downloadMarkdown">
+                <BIcon name="arrowUpRight" :size="12" />
+                <span>Als Markdown exportieren</span>
               </button>
               <div class="action-menu-divider"></div>
               <button class="action-menu-item action-menu-danger" @click="openDeleteConfirm">
@@ -1059,6 +1202,30 @@ const emptyStammCount = computed(() => {
               </div>
             </div>
           </div>
+          <!-- Quick-Add Termin: Datum + Text nebeneinander -->
+          <div class="quick-add">
+            <input
+              v-model="quickTerminDate"
+              type="date"
+              class="quick-input"
+              style="width: 120px"
+            />
+            <input
+              v-model="quickTerminText"
+              placeholder="Termin…"
+              class="quick-input"
+              style="flex: 1"
+              @keyup.enter="quickAddTermin"
+            />
+            <button
+              class="quick-btn"
+              :disabled="!quickTerminDate || !quickTerminText.trim()"
+              @click="quickAddTermin"
+              :title="'Termin anlegen'"
+            >
+              <BIcon name="plus" :size="12" />
+            </button>
+          </div>
         </div>
 
         <!-- Offene Aufgaben -->
@@ -1078,6 +1245,24 @@ const emptyStammCount = computed(() => {
                 <span v-if="t.date">{{ t.date }}</span>
               </div>
             </div>
+          </div>
+          <!-- Quick-Add Aufgabe -->
+          <div class="quick-add">
+            <input
+              v-model="quickTaskText"
+              placeholder="Neue Aufgabe…"
+              class="quick-input"
+              style="flex: 1"
+              @keyup.enter="quickAddTask"
+            />
+            <button
+              class="quick-btn"
+              :disabled="!quickTaskText.trim()"
+              @click="quickAddTask"
+              :title="'Aufgabe anlegen'"
+            >
+              <BIcon name="plus" :size="12" />
+            </button>
           </div>
         </div>
 
@@ -1415,6 +1600,52 @@ const emptyStammCount = computed(() => {
         >
           {{ fullActivityLoading ? "Lädt…" : "Mehr laden" }}
         </button>
+      </div>
+    </div>
+
+    <!-- ═══ Rename-Dialog ═════════════════════════════════════ -->
+    <div v-if="renameDialogOpen" class="modal-overlay" @click.self="renameDialogOpen = false">
+      <div class="modal-card" style="max-width: 440px">
+        <div class="eyebrow" style="margin-bottom: 4px">Umbenennen</div>
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 16px 0">Projektnamen ändern</h2>
+        <input
+          v-model="renameDraft"
+          type="text"
+          class="form-input-lg"
+          style="width: 100%"
+          placeholder="Neuer Projektname"
+          @keyup.enter="submitRename"
+          @keyup.esc="renameDialogOpen = false"
+          autofocus
+        />
+        <p style="font-size: 11px; color: var(--color-text-muted); margin: 8px 0 0 0">
+          Notizen, Aufgaben, Termine und Dateien behalten ihre Zuordnung — die Referenz läuft über eine interne ID.
+        </p>
+        <div
+          v-if="renameError"
+          style="
+            margin-top: 12px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--color-danger-text);
+            background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+            border-radius: 6px;
+          "
+        >
+          {{ renameError }}
+        </div>
+        <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
+          <button class="bauos-btn ghost" @click="renameDialogOpen = false" :disabled="renaming">
+            Abbrechen
+          </button>
+          <button
+            class="bauos-btn solid"
+            @click="submitRename"
+            :disabled="!renameDraft.trim() || renameDraft.trim() === info?.name || renaming"
+          >
+            {{ renaming ? "…" : "Umbenennen" }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2239,5 +2470,132 @@ const emptyStammCount = computed(() => {
 .maps-link:hover {
   color: var(--color-text);
   border-bottom-color: var(--color-primary);
+}
+
+/* ── Projekt-Farbe (Hero-Akzent) ───────────────────────── */
+.hero-with-accent {
+  border-top: 3px solid var(--accent-color);
+}
+
+.color-picker-wrapper {
+  position: relative;
+}
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 180ms ease;
+}
+.color-swatch:hover {
+  transform: scale(1.1);
+  border-color: var(--color-text-faint);
+}
+.color-swatch-empty {
+  background: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    var(--color-border-subtle) 3px,
+    var(--color-border-subtle) 5px
+  ) !important;
+}
+
+.color-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 24px);
+  gap: 6px;
+  padding: 8px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+}
+.color-option {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  transition: transform 120ms ease;
+  padding: 0;
+}
+.color-option:hover {
+  transform: scale(1.15);
+}
+.color-option-active {
+  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 3px var(--color-text);
+}
+.color-option-empty {
+  background: transparent !important;
+}
+
+/* ── Form-Input (lokal fuer Rename-Modal) ───────────────── */
+.form-input-lg {
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  outline: none;
+  transition: border-color 180ms ease;
+}
+.form-input-lg:focus {
+  border-color: var(--color-primary);
+}
+
+/* ── Quick-Add in Uebersichts-Cards ────────────────────── */
+.quick-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--color-border-subtle);
+}
+.quick-input {
+  padding: 4px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 12px;
+  outline: none;
+  min-width: 0;
+  font-family: inherit;
+}
+.quick-input:focus {
+  border-color: var(--color-primary);
+}
+.quick-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 180ms ease;
+}
+.quick-btn:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-text-faint);
+}
+.quick-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 </style>

@@ -31,7 +31,7 @@ interface ProjectInfo {
 const router = useRouter();
 const projects = ref<ProjectInfo[]>([]);
 const searchQuery = ref("");
-const viewMode = ref<"grid" | "list">("grid");
+const viewMode = ref<"grid" | "list" | "kanban">("grid");
 
 // ── Filter (Phase 4) ─────────────────────────────────────
 // Alle Filter sind "alle" = leerer String — matchen ohne Einschraenkung.
@@ -223,6 +223,43 @@ function mapsLink(standort: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(standort)}`;
 }
 
+// ── Kanban: gruppieren nach Phase ────────────────────────
+// Projekte ohne Phase landen in der Spalte "Ohne Phase" — damit nichts
+// "verloren" geht. Spalten-Reihenfolge: erst der "Ohne"-Bucket, dann die
+// vorhandenen Phasen alphabetisch (oder in definierter Reihenfolge).
+const KANBAN_ORDER = ["Vorentwurf", "Einreichung", "Ausführung", "Baubetreuung", "Abgeschlossen"];
+
+const kanbanColumns = computed<{ phase: string; items: ProjectInfo[] }[]>(() => {
+  const map = new Map<string, ProjectInfo[]>();
+  for (const p of filtered.value) {
+    const key = p.phase?.trim() || "Ohne Phase";
+    const arr = map.get(key) ?? [];
+    arr.push(p);
+    map.set(key, arr);
+  }
+  // Sortierung: bekannte Phasen zuerst in vorgegebener Reihenfolge, dann
+  // unbekannte alphabetisch, "Ohne Phase" immer ganz am Ende.
+  const keys = Array.from(map.keys());
+  const known = KANBAN_ORDER.filter((k) => map.has(k));
+  const unknown = keys
+    .filter((k) => k !== "Ohne Phase" && !KANBAN_ORDER.includes(k))
+    .sort((a, b) => a.localeCompare(b, "de"));
+  const ordered = [...known, ...unknown];
+  if (map.has("Ohne Phase")) ordered.push("Ohne Phase");
+  return ordered.map((phase) => ({ phase, items: map.get(phase) ?? [] }));
+});
+
+// Drei-Zustand-Toggle fuer ViewMode
+function cycleViewMode() {
+  viewMode.value = viewMode.value === "grid" ? "list" : viewMode.value === "list" ? "kanban" : "grid";
+}
+function viewModeLabel() {
+  return viewMode.value === "grid" ? "Liste" : viewMode.value === "list" ? "Kanban" : "Kacheln";
+}
+function viewModeIcon() {
+  return viewMode.value === "grid" ? "list" : viewMode.value === "list" ? "kanban" : "grid";
+}
+
 onMounted(async () => {
   projects.value = await api.get<ProjectInfo[]>("/projects");
 });
@@ -240,9 +277,9 @@ onMounted(async () => {
         </p>
       </div>
       <div class="flex items-center" style="gap: 8px">
-        <button @click="viewMode = viewMode === 'grid' ? 'list' : 'grid'" class="bauos-btn ghost">
-          <BIcon :name="viewMode === 'grid' ? 'list' : 'grid'" :size="14" />
-          {{ viewMode === "grid" ? "Liste" : "Kacheln" }}
+        <button @click="cycleViewMode" class="bauos-btn ghost">
+          <BIcon :name="viewModeIcon()" :size="14" />
+          {{ viewModeLabel() }}
         </button>
         <button @click="openCreateDialog" class="bauos-btn solid">
           <BIcon name="plus" :size="14" />
@@ -323,6 +360,8 @@ onMounted(async () => {
         :key="p.name"
         @click="router.push(`/projects/${encodeURIComponent(p.name)}`)"
         class="proj-card"
+        :class="{ 'proj-card-accent': !!p.color }"
+        :style="p.color ? { '--accent-color': p.color } : {}"
       >
         <div class="flex items-center justify-between" style="margin-bottom: 10px">
           <div class="flex items-center" style="gap: 6px; min-width: 0">
@@ -415,6 +454,48 @@ onMounted(async () => {
       >
         {{ searchQuery ? "Keine Treffer." : "Keine Projekte vorhanden." }}
       </p>
+    </div>
+
+    <!-- Kanban (nach Phase) -->
+    <div v-else-if="viewMode === 'kanban'" class="kanban-board">
+      <div v-for="col in kanbanColumns" :key="col.phase" class="kanban-col">
+        <div class="kanban-col-head">
+          <span class="kanban-col-title">{{ col.phase }}</span>
+          <span class="kanban-col-count">{{ col.items.length }}</span>
+        </div>
+        <div
+          v-for="p in col.items"
+          :key="p.name"
+          class="kanban-card"
+          :class="{ 'proj-card-accent': !!p.color }"
+          :style="p.color ? { '--accent-color': p.color } : {}"
+          @click="router.push(`/projects/${encodeURIComponent(p.name)}`)"
+        >
+          <div class="flex items-center justify-between" style="margin-bottom: 6px; gap: 8px">
+            <span v-if="p.projektnummer" class="font-mono" style="font-size: 10px; color: var(--color-text-muted)">
+              #{{ p.projektnummer }}
+            </span>
+            <span v-if="p.status && p.status !== 'aktiv'" :class="['pill', `pill-${p.status}`]" style="font-size: 9px">
+              {{ statusLabel(p.status) }}
+            </span>
+          </div>
+          <div class="kanban-name">{{ p.name }}</div>
+          <div v-if="p.bauherr" class="kanban-sub">{{ p.bauherr }}</div>
+          <div
+            v-if="p.openTasks > 0"
+            class="kanban-meta"
+            :style="{ color: p.openTasks > 0 ? 'var(--color-warning-text)' : 'var(--color-text-muted)' }"
+          >
+            {{ p.openTasks }} offene Aufgabe<span v-if="p.openTasks !== 1">n</span>
+          </div>
+          <div v-if="taskTotal(p) > 0" class="progress-wrap" style="margin-top: 8px">
+            <div class="progress-bar">
+              <div class="progress-fill" :style="{ width: taskProgress(p) + '%' }"></div>
+            </div>
+          </div>
+        </div>
+        <p v-if="col.items.length === 0" class="kanban-empty">—</p>
+      </div>
     </div>
 
     <!-- List -->
@@ -767,6 +848,96 @@ onMounted(async () => {
   font-family: var(--font-mono, monospace);
   min-width: 28px;
   text-align: right;
+}
+
+/* ── Projekt-Farb-Akzent ───────────────────────────────── */
+.proj-card-accent {
+  border-left: 3px solid var(--accent-color);
+}
+
+/* ── Kanban-Board ──────────────────────────────────────── */
+.kanban-board {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 12px;
+  scroll-snap-type: x proximity;
+}
+.kanban-col {
+  flex: 0 0 260px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  padding: 10px;
+  scroll-snap-align: start;
+}
+.kanban-col-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 0 4px;
+}
+.kanban-col-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.kanban-col-count {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  background: var(--color-bg);
+  padding: 2px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+}
+
+.kanban-card {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 180ms ease, transform 120ms ease;
+}
+.kanban-card:hover {
+  border-color: var(--color-text-faint);
+  transform: translateY(-1px);
+}
+.kanban-card:last-child {
+  margin-bottom: 0;
+}
+
+.kanban-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kanban-sub {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kanban-meta {
+  font-size: 11px;
+  margin-top: 6px;
+}
+.kanban-empty {
+  font-size: 11px;
+  color: var(--color-text-faint);
+  text-align: center;
+  font-style: italic;
+  margin: 8px 0 0 0;
 }
 
 /* ── Modal ─────────────────────────────────────────────── */

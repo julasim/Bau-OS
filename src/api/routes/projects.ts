@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { projectRepo, taskRepo, terminRepo } from "../../data/index.js";
+import { projectRepo, taskRepo, terminRepo, teamRepo } from "../../data/index.js";
 import type { ProjectUpdate } from "../../data/types.js";
 import { emit } from "../events.js";
 
@@ -128,6 +128,111 @@ projectsRoutes.patch("/projects/:name", async (c) => {
 
   const updated = await projectRepo.getInfo(name);
   return c.json(updated);
+});
+
+// Projekt umbenennen. Body: { newName: string }. 4 Fehlerfaelle, jeder mit
+// eindeutiger Meldung — damit das Frontend spezifisch reagieren kann.
+projectsRoutes.put("/projects/:name/rename", async (c) => {
+  const oldName = c.req.param("name");
+  let body: Record<string, unknown>;
+  try {
+    body = await c.req.json<Record<string, unknown>>();
+  } catch {
+    return c.json({ error: "Ungueltiger JSON-Body" }, 400);
+  }
+  const newName = typeof body.newName === "string" ? body.newName.trim() : "";
+  if (!newName) return c.json({ error: "newName erforderlich" }, 400);
+
+  const result = await projectRepo.rename(oldName, newName);
+  if (result === "invalid") return c.json({ error: "Ungueltiger Projektname" }, 400);
+  if (result === "not-found") return c.json({ error: "Projekt nicht gefunden" }, 404);
+  if (result === "conflict") return c.json({ error: "Projekt mit diesem Namen existiert bereits" }, 409);
+
+  emit({ type: "project", action: "updated", id: newName });
+  const info = await projectRepo.getInfo(newName);
+  return c.json(info);
+});
+
+// Projekt als Markdown exportieren — kompaktes Projekt-Dossier mit Stammdaten,
+// Team, Aufgaben, Terminen, Notizen-Index. Direkt zum Download via
+// Content-Disposition. Keine PDF-Engine noetig — Markdown ist lesbar, portabel
+// und kann clientseitig in jede andere Form gewandelt werden.
+projectsRoutes.get("/projects/:name/export.md", async (c) => {
+  const name = c.req.param("name");
+  const info = await projectRepo.getInfo(name);
+  if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
+
+  const [notes, tasks, termine, teamList] = await Promise.all([
+    projectRepo.listNotes(name),
+    taskRepo.list(name),
+    terminRepo.list(name),
+    teamRepo.list(),
+  ]);
+  const team = teamList.filter((m) => m.projectId === info.id);
+
+  // Kleine Helfer: markdown-sichere Zeile oder "—" wenn leer.
+  const md = (v: string | null | undefined) => (v && v.trim() ? v.trim() : "—");
+  const lines: string[] = [];
+  lines.push(`# ${info.name}\n`);
+  lines.push(`_Exportiert: ${new Date().toLocaleDateString("de-AT")}_\n`);
+
+  lines.push(`## Stammdaten\n`);
+  lines.push(`| Feld | Wert |`);
+  lines.push(`|---|---|`);
+  lines.push(`| Status | ${md(info.status)} |`);
+  lines.push(`| Projektnummer | ${md(info.projektnummer)} |`);
+  lines.push(`| Bauherr | ${md(info.bauherr)} |`);
+  lines.push(`| Standort | ${md(info.standort)} |`);
+  lines.push(`| Projektart | ${md(info.projektart)} |`);
+  lines.push(`| Nutzung | ${md(info.nutzung)} |`);
+  lines.push(`| Phase | ${md(info.phase)} |`);
+  lines.push(`| Start | ${md(info.startDate)} |`);
+  lines.push(`| Ende | ${md(info.endDate)} |`);
+  lines.push("");
+
+  if (info.description) {
+    lines.push(`## Beschreibung\n`);
+    lines.push(info.description);
+    lines.push("");
+  }
+
+  if (team.length > 0) {
+    lines.push(`## Team (${team.length})\n`);
+    for (const m of team) {
+      const contact = [m.email, m.phone].filter(Boolean).join(" · ");
+      lines.push(`- **${m.name}**${m.role ? ` — ${m.role}` : ""}${contact ? ` (${contact})` : ""}`);
+    }
+    lines.push("");
+  }
+
+  if (termine.length > 0) {
+    lines.push(`## Termine (${termine.length})\n`);
+    for (const t of termine) {
+      const when = t.datum + (t.uhrzeit ? ` ${t.uhrzeit}` : "");
+      lines.push(`- **${when}** — ${t.text}`);
+    }
+    lines.push("");
+  }
+
+  const openTasks = tasks.filter((t) => t.status !== "done");
+  const doneTasks = tasks.filter((t) => t.status === "done");
+  if (tasks.length > 0) {
+    lines.push(`## Aufgaben (${openTasks.length} offen / ${tasks.length} gesamt)\n`);
+    for (const t of openTasks) lines.push(`- [ ] ${t.text}`);
+    for (const t of doneTasks) lines.push(`- [x] ${t.text}`);
+    lines.push("");
+  }
+
+  if (notes.length > 0) {
+    lines.push(`## Notizen (${notes.length})\n`);
+    for (const n of notes) lines.push(`- ${n}`);
+    lines.push("");
+  }
+
+  const body = lines.join("\n");
+  c.header("Content-Type", "text/markdown; charset=utf-8");
+  c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(info.name)}.md"`);
+  return c.body(body);
 });
 
 // Projekt loeschen. projectRepo.delete() ist idempotent — auch wenn das

@@ -64,6 +64,11 @@ export const fsProjects: ProjectRepository = {
     // Gibt false zurueck, damit Caller sehen koennen: hat nicht funktioniert.
     return false;
   },
+  async rename() {
+    // FS-Mode: kein sicheres Rename, weil Ordner-Pfade ueberall zu Hardcoded-
+    // Referenzen werden. User muss in DB-Mode umsteigen oder manuell arbeiten.
+    return "invalid" as const;
+  },
   async delete(name) {
     return vault.deleteProject(name);
   },

@@ -193,6 +193,21 @@ export const dbProjects: ProjectRepository = {
     return true;
   },
 
+  async rename(oldName, newName) {
+    const trimmed = newName.trim();
+    if (!isValidName(trimmed)) return "invalid";
+    if (trimmed === oldName) return "ok"; // No-op
+    const db = getDb();
+    const [existing] = await db`SELECT id FROM projects WHERE name = ${oldName} LIMIT 1`;
+    if (!existing) return "not-found";
+    const [conflict] = await db`SELECT id FROM projects WHERE name = ${trimmed} LIMIT 1`;
+    if (conflict) return "conflict";
+    // id bleibt; FK-Konsistenz ist gewahrt, weil alle Child-Eintraege (notes,
+    // tasks, termine, files, team_members) an projects.id haengen.
+    await db`UPDATE projects SET name = ${trimmed} WHERE name = ${oldName}`;
+    return "ok";
+  },
+
   async delete(name) {
     if (!isValidName(name)) return false;
 
