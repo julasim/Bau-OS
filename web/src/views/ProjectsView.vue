@@ -21,6 +21,7 @@ interface ProjectInfo {
   endDate?: string | null;
   notes: number;
   openTasks: number;
+  doneTasks?: number;
   termine: number;
   files?: number;
   createdAt?: string;
@@ -38,6 +39,10 @@ const filterStatus = ref<string>("aktiv"); // Default: nur aktive — archiviert
 const filterProjektart = ref<string>("");
 const filterPhase = ref<string>("");
 
+// ── Sortierung ───────────────────────────────────────────
+type SortKey = "updated" | "name" | "nummer" | "created";
+const sortKey = ref<SortKey>("updated");
+
 // Eindeutige Werte aus den Projektdaten — so passen sich die Dropdowns
 // automatisch an, was der User wirklich nutzt.
 function uniqueValues(key: keyof ProjectInfo): string[] {
@@ -53,7 +58,7 @@ const phaseOptions = computed(() => uniqueValues("phase"));
 
 const filtered = computed(() => {
   const q = searchQuery.value.toLowerCase().trim();
-  return projects.value.filter((p) => {
+  const list = projects.value.filter((p) => {
     if (filterStatus.value && p.status !== filterStatus.value) return false;
     if (filterProjektart.value && p.projektart !== filterProjektart.value) return false;
     if (filterPhase.value && p.phase !== filterPhase.value) return false;
@@ -67,6 +72,32 @@ const filtered = computed(() => {
       (p.standort?.toLowerCase().includes(q) ?? false)
     );
   });
+
+  // Sortierung — toSorted wuerde nicht alle Browser abdecken, also spread + sort.
+  const sorted = [...list];
+  switch (sortKey.value) {
+    case "name":
+      sorted.sort((a, b) => a.name.localeCompare(b.name, "de"));
+      break;
+    case "nummer":
+      sorted.sort((a, b) => {
+        // Projekte ohne Nummer ans Ende.
+        const an = a.projektnummer?.trim();
+        const bn = b.projektnummer?.trim();
+        if (!an && !bn) return 0;
+        if (!an) return 1;
+        if (!bn) return -1;
+        return an.localeCompare(bn, "de", { numeric: true });
+      });
+      break;
+    case "created":
+      sorted.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+      break;
+    case "updated":
+    default:
+      sorted.sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
+  }
+  return sorted;
 });
 
 const anyFilterActive = computed(
@@ -177,6 +208,21 @@ function statusLabel(s?: string) {
   return map[s] || s;
 }
 
+// ── Fortschritt: openTasks + doneTasks ───────────────────
+// Nur sinnvoll, wenn ueberhaupt Aufgaben da sind.
+function taskTotal(p: ProjectInfo): number {
+  return p.openTasks + (p.doneTasks ?? 0);
+}
+function taskProgress(p: ProjectInfo): number {
+  const total = taskTotal(p);
+  if (total === 0) return 0;
+  return Math.round(((p.doneTasks ?? 0) / total) * 100);
+}
+
+function mapsLink(standort: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(standort)}`;
+}
+
 onMounted(async () => {
   projects.value = await api.get<ProjectInfo[]>("/projects");
 });
@@ -253,6 +299,12 @@ onMounted(async () => {
       <select v-if="phaseOptions.length > 0" v-model="filterPhase" class="filter-select">
         <option value="">Alle Phasen</option>
         <option v-for="opt in phaseOptions" :key="opt" :value="opt">{{ opt }}</option>
+      </select>
+      <select v-model="sortKey" class="filter-select" :title="'Sortieren nach…'">
+        <option value="updated">Zuletzt geändert</option>
+        <option value="created">Neu angelegt</option>
+        <option value="name">Name (A–Z)</option>
+        <option value="nummer">Projektnummer</option>
       </select>
       <button
         v-if="anyFilterActive"
@@ -341,6 +393,14 @@ onMounted(async () => {
             {{ p.openTasks }} Aufgaben
           </span>
           <span>{{ p.termine }} Termine</span>
+        </div>
+
+        <!-- Fortschritts-Balken — nur, wenn ueberhaupt Aufgaben existieren. -->
+        <div v-if="taskTotal(p) > 0" class="progress-wrap" :title="`${p.doneTasks ?? 0} von ${taskTotal(p)} Aufgaben erledigt`">
+          <div class="progress-bar">
+            <div class="progress-fill" :style="{ width: taskProgress(p) + '%' }"></div>
+          </div>
+          <span class="progress-label">{{ taskProgress(p) }}%</span>
         </div>
       </div>
       <p
@@ -677,6 +737,36 @@ onMounted(async () => {
 .card-chip-phase {
   background: transparent;
   color: var(--color-text-secondary);
+}
+
+/* ── Fortschritts-Balken ───────────────────────────────── */
+.progress-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--color-bg-subtle);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--color-border-subtle);
+}
+.progress-fill {
+  height: 100%;
+  background: var(--color-primary, #4f46e5);
+  transition: width 300ms ease;
+  border-radius: 999px;
+}
+.progress-label {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono, monospace);
+  min-width: 28px;
+  text-align: right;
 }
 
 /* ── Modal ─────────────────────────────────────────────── */

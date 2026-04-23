@@ -67,6 +67,9 @@ export interface Project {
   endDate?: string | null;
   notes: number;
   openTasks: number;
+  /** Erledigte Aufgaben — zusammen mit openTasks ergibt sich der Fortschritt.
+   *  Optional fuer Rueckwaertskompatibilitaet mit aelteren Clients. */
+  doneTasks?: number;
   termine: number;
   files?: number;
   createdAt?: string;

@@ -130,6 +130,17 @@ projectsRoutes.patch("/projects/:name", async (c) => {
   return c.json(updated);
 });
 
+// Projekt loeschen. projectRepo.delete() ist idempotent — auch wenn das
+// Projekt nicht existiert, kommt true zurueck. Semantik: "stelle sicher, dass
+// es weg ist". Wir geben 204 No Content zurueck, weil es nichts zu rendern gibt.
+projectsRoutes.delete("/projects/:name", async (c) => {
+  const name = c.req.param("name");
+  const ok = await projectRepo.delete(name);
+  if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
+  emit({ type: "project", action: "deleted", id: name });
+  return c.body(null, 204);
+});
+
 // Projekt-Notizen
 projectsRoutes.get("/projects/:name/notes", async (c) => {
   const name = c.req.param("name");

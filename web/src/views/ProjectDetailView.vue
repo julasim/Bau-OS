@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
@@ -191,6 +191,12 @@ onMounted(async () => {
   // Uebersicht ist Default-Tab — Activity erst nach loadAll laden, weil wir
   // die projekt-UUID (info.id) fuer den Filter brauchen.
   if (tab.value === "uebersicht") await loadRecentActivity();
+  // Click-away-Listener fuer das Aktions-Menue.
+  document.addEventListener("mousedown", onGlobalClick);
+});
+
+onUnmounted(() => {
+  document.removeEventListener("mousedown", onGlobalClick);
 });
 
 async function loadAll() {
@@ -303,6 +309,62 @@ async function removeTermin(t: Termin) {
   const n = encodeURIComponent(projectName.value);
   await api.delete(`/projects/${n}/termine`, { text: t.text });
   await loadAll();
+}
+
+// ── Aktions-Menue (Lifecycle) ─────────────────────────────
+const showActionMenu = ref(false);
+const deleteConfirmOpen = ref(false);
+const deleting = ref(false);
+const deleteError = ref<string | null>(null);
+
+function toggleActionMenu() {
+  showActionMenu.value = !showActionMenu.value;
+}
+
+// Click-away schliesst das Menue — wir hoeren global auf mousedown und
+// beenden nur wenn der Klick ausserhalb des Menues war.
+function onGlobalClick(ev: MouseEvent) {
+  const target = ev.target as HTMLElement | null;
+  if (!target) return;
+  if (target.closest(".action-menu-wrapper")) return;
+  showActionMenu.value = false;
+}
+
+async function setStatus(newStatus: "aktiv" | "pausiert" | "archiviert") {
+  if (!info.value) return;
+  showActionMenu.value = false;
+  // Kurzweg ueber den existierenden saveField-Flow — setzt auch optimistisch.
+  const before = info.value.status;
+  (info.value as Record<string, unknown>).status = newStatus;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { status: newStatus });
+  } catch {
+    (info.value as Record<string, unknown>).status = before;
+  }
+}
+
+function openDeleteConfirm() {
+  showActionMenu.value = false;
+  deleteConfirmOpen.value = true;
+  deleteError.value = null;
+}
+
+async function confirmDelete() {
+  if (deleting.value) return;
+  deleting.value = true;
+  deleteError.value = null;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    await api.delete(`/projects/${n}`);
+    // Erfolgreich geloescht → zurueck zur Liste. Kein loadAll() — das Projekt
+    // existiert nicht mehr.
+    router.push("/projects");
+  } catch (e) {
+    deleteError.value = e instanceof Error ? e.message : "Löschen fehlgeschlagen";
+  } finally {
+    deleting.value = false;
+  }
 }
 
 // ── Dateien (Stufe 3b) ─────────────────────────────────────
@@ -556,6 +618,10 @@ function initial(name: string): string {
     .toUpperCase();
 }
 
+function mapsLink(standort: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(standort)}`;
+}
+
 // ── Verlauf / Aktivitaet (Stufe 3d) ───────────────────────
 // /agent-logs?projectId=<uuid> liefert die vom Agenten ausgefuehrten Tools
 // inkl. Thoughts/Errors fuer genau dieses Projekt. Kein separates "events"-
@@ -697,7 +763,8 @@ const emptyStammCount = computed(() => {
           >
             {{ info.name }}
           </h1>
-          <!-- Kontextzeile: Projektart/Nutzung/Standort inline, falls gesetzt -->
+          <!-- Kontextzeile: Projektart/Nutzung/Standort inline, falls gesetzt.
+               Standort ist klickbar und oeffnet Google Maps in neuem Tab. -->
           <p
             v-if="info.projektart || info.nutzung || info.standort"
             style="
@@ -711,10 +778,19 @@ const emptyStammCount = computed(() => {
             <span v-if="info.projektart && info.nutzung"> · </span>
             <span v-if="info.nutzung">{{ info.nutzung }}</span>
             <span v-if="(info.projektart || info.nutzung) && info.standort"> · </span>
-            <span v-if="info.standort">{{ info.standort }}</span>
+            <a
+              v-if="info.standort"
+              :href="mapsLink(info.standort)"
+              target="_blank"
+              rel="noopener"
+              class="maps-link"
+              :title="'In Google Maps öffnen'"
+            >
+              {{ info.standort }}
+            </a>
           </p>
         </div>
-        <!-- Pills: Status + Phase -->
+        <!-- Pills: Status + Phase + More-Menue -->
         <div class="flex items-center" style="gap: 8px; flex-shrink: 0">
           <button
             class="pill pill-clickable"
@@ -728,6 +804,42 @@ const emptyStammCount = computed(() => {
             <BIcon name="layers" :size="11" />
             {{ info.phase || "Phase setzen" }}
           </button>
+          <div class="action-menu-wrapper">
+            <button class="action-btn" @click="toggleActionMenu" :title="'Weitere Aktionen'">
+              <BIcon name="more" :size="14" />
+            </button>
+            <div v-if="showActionMenu" class="action-menu">
+              <button
+                v-if="info.status !== 'aktiv'"
+                class="action-menu-item"
+                @click="setStatus('aktiv')"
+              >
+                <BIcon name="check" :size="12" />
+                <span>Aktivieren</span>
+              </button>
+              <button
+                v-if="info.status !== 'pausiert'"
+                class="action-menu-item"
+                @click="setStatus('pausiert')"
+              >
+                <BIcon name="clock" :size="12" />
+                <span>Pausieren</span>
+              </button>
+              <button
+                v-if="info.status !== 'archiviert'"
+                class="action-menu-item"
+                @click="setStatus('archiviert')"
+              >
+                <BIcon name="archive" :size="12" />
+                <span>Archivieren</span>
+              </button>
+              <div class="action-menu-divider"></div>
+              <button class="action-menu-item action-menu-danger" @click="openDeleteConfirm">
+                <BIcon name="x" :size="12" />
+                <span>Projekt löschen…</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1303,6 +1415,62 @@ const emptyStammCount = computed(() => {
         >
           {{ fullActivityLoading ? "Lädt…" : "Mehr laden" }}
         </button>
+      </div>
+    </div>
+
+    <!-- ═══ Loesch-Bestaetigung ═══════════════════════════════ -->
+    <div
+      v-if="deleteConfirmOpen"
+      class="modal-overlay"
+      @click.self="deleteConfirmOpen = false"
+    >
+      <div class="modal-card" style="max-width: 480px">
+        <div class="eyebrow" style="color: var(--color-danger-text); margin-bottom: 6px">
+          Achtung
+        </div>
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 12px 0; color: var(--color-text)">
+          Projekt „{{ info?.name }}" wirklich löschen?
+        </h2>
+        <p style="font-size: 13px; color: var(--color-text-muted); line-height: 1.6; margin: 0 0 4px 0">
+          Das Projekt und alle <strong>Notizen</strong> werden dauerhaft entfernt.
+          <br />
+          Aufgaben, Termine, Dateien und Team-Mitglieder bleiben erhalten und sind danach „ohne Projekt".
+        </p>
+        <p style="font-size: 12px; color: var(--color-text-faint); margin: 12px 0 0 0">
+          Alternative: Status auf <em>archiviert</em> setzen — Daten bleiben, Projekt ist aus der Standard-Ansicht raus.
+        </p>
+
+        <div
+          v-if="deleteError"
+          style="
+            margin-top: 12px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--color-danger-text);
+            background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+            border-radius: 6px;
+          "
+        >
+          {{ deleteError }}
+        </div>
+
+        <div class="flex items-center justify-between" style="margin-top: 20px">
+          <button
+            class="bauos-btn ghost"
+            @click="setStatus('archiviert'); deleteConfirmOpen = false"
+            :disabled="deleting || info?.status === 'archiviert'"
+          >
+            Stattdessen archivieren
+          </button>
+          <div class="flex items-center" style="gap: 8px">
+            <button class="bauos-btn ghost" @click="deleteConfirmOpen = false" :disabled="deleting">
+              Abbrechen
+            </button>
+            <button class="bauos-btn danger" @click="confirmDelete" :disabled="deleting">
+              {{ deleting ? "Lösche…" : "Ja, löschen" }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -1953,5 +2121,123 @@ const emptyStammCount = computed(() => {
   color: var(--color-text-faint);
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+/* ── Aktions-Menue ─────────────────────────────────────── */
+.action-menu-wrapper {
+  position: relative;
+}
+.action-btn {
+  width: 28px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 180ms ease;
+}
+.action-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-faint);
+}
+
+.action-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 50;
+}
+.action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+.action-menu-item:hover {
+  background: var(--color-bg-subtle);
+}
+.action-menu-item svg {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.action-menu-danger {
+  color: var(--color-danger-text);
+}
+.action-menu-danger svg {
+  color: var(--color-danger-text);
+}
+.action-menu-danger:hover {
+  background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+}
+.action-menu-divider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  margin: 4px 2px;
+}
+
+/* ── Modal (Loesch-Bestaetigung) ───────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, #000 55%, transparent);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 80px 20px 20px;
+  z-index: 1000;
+  overflow-y: auto;
+}
+.modal-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: 24px 28px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+.bauos-btn.danger {
+  background: var(--color-danger-text, #dc2626);
+  color: #fff;
+  border: 1px solid transparent;
+}
+.bauos-btn.danger:hover {
+  filter: brightness(0.92);
+}
+.bauos-btn.danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Maps-Link ─────────────────────────────────────────── */
+.maps-link {
+  color: inherit;
+  text-decoration: none;
+  border-bottom: 1px dashed var(--color-text-faint);
+  transition: all 180ms ease;
+}
+.maps-link:hover {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
 }
 </style>

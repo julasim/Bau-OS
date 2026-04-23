@@ -45,6 +45,7 @@ export const dbProjects: ProjectRepository = {
         p.created_at, p.updated_at,
         (SELECT count(*) FROM notes n WHERE n.project_id = p.id) as notes,
         (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done') as open_tasks,
+        (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'done') as done_tasks,
         (SELECT count(*) FROM termine te WHERE te.project_id = p.id) as termine,
         (SELECT count(*) FROM files f WHERE f.project_id = p.id) as files
       FROM projects p
@@ -68,6 +69,7 @@ export const dbProjects: ProjectRepository = {
       endDate: row.end_date ? String(row.end_date) : null,
       notes: Number(row.notes),
       openTasks: Number(row.open_tasks),
+      doneTasks: Number(row.done_tasks),
       termine: Number(row.termine),
       files: Number(row.files),
       createdAt: row.created_at ? String(row.created_at) : undefined,
