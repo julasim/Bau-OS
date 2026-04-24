@@ -346,6 +346,68 @@ async function submitRename() {
   }
 }
 
+// ── vCard-Export ─────────────────────────────────────────
+// vCard 3.0 — bewusst nicht 4.0 weil viele aeltere Importer (Outlook 2016,
+// aeltere Android-Versionen) 4.0 nicht lesen. Felder escapen: `,`, `;`,
+// `\`, `\n` muessen mit Backslash prefixt werden (vCard-Spec).
+function vCardEscape(v: string): string {
+  return v.replace(/\\/g, "\\\\").replace(/,/g, "\\,").replace(/;/g, "\\;").replace(/\n/g, "\\n");
+}
+
+function downloadVCard() {
+  showActionMenu.value = false;
+  if (!member.value) return;
+  const m = member.value;
+
+  // Name auf VornameNachname-Pattern splitten — vCard N erwartet
+  // "Nachname;Vorname;;;". Kein Guessing bei >2 Tokens, dann alles in FN.
+  const parts = m.name.trim().split(/\s+/);
+  const first = parts.slice(0, parts.length - 1).join(" ");
+  const last = parts[parts.length - 1] ?? "";
+
+  const lines = ["BEGIN:VCARD", "VERSION:3.0"];
+  lines.push(`FN:${vCardEscape(m.name)}`);
+  if (parts.length >= 2) {
+    lines.push(`N:${vCardEscape(last)};${vCardEscape(first)};;;`);
+  } else {
+    lines.push(`N:${vCardEscape(m.name)};;;;`);
+  }
+  if (m.role) lines.push(`TITLE:${vCardEscape(m.role)}`);
+  const org = m.companyName ?? m.company;
+  if (org) lines.push(`ORG:${vCardEscape(org)}`);
+  if (m.email) lines.push(`EMAIL;TYPE=INTERNET:${vCardEscape(m.email)}`);
+  if (m.phone) lines.push(`TEL;TYPE=CELL:${vCardEscape(m.phone)}`);
+  if (m.memberType) lines.push(`CATEGORIES:${vCardEscape(m.memberType)}`);
+  lines.push("END:VCARD");
+
+  // CRLF fuer vCard-Kompatibilitaet mit Windows-basierten Importern.
+  const blob = new Blob([lines.join("\r\n")], { type: "text/vcard;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${m.name.replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, "_")}.vcf`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Revoke nach dem Download (kleiner Delay, damit der Browser den Blob noch kriegt)
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// ── Visitenkarte drucken ─────────────────────────────────
+// Triggert window.print() und lässt CSS im print-stylesheet die Magic machen.
+function printBusinessCard() {
+  showActionMenu.value = false;
+  // Body-Klasse temporaer setzen, damit das @media print CSS gezielt den
+  // Visitenkarten-Modus aktivieren kann — sonst wuerde der komplette Tab-
+  // Inhalt mitgedruckt.
+  document.body.classList.add("printing-business-card");
+  window.print();
+  // Cleanup nach dem Dialog — afterprint-Event oder Timeout reicht.
+  const cleanup = () => document.body.classList.remove("printing-business-card");
+  window.addEventListener("afterprint", cleanup, { once: true });
+  setTimeout(cleanup, 5000); // Fallback
+}
+
 // ── Delete ───────────────────────────────────────────────
 async function confirmDelete() {
   if (!member.value || deleting.value) return;
@@ -433,6 +495,12 @@ onUnmounted(() => {
               <div v-if="showActionMenu" class="action-menu">
                 <button class="action-menu-item" @click="openRenameDialog">
                   <BIcon name="pencil" :size="12" /><span>Umbenennen…</span>
+                </button>
+                <button class="action-menu-item" @click="downloadVCard">
+                  <BIcon name="arrowUpRight" :size="12" /><span>vCard exportieren</span>
+                </button>
+                <button class="action-menu-item" @click="printBusinessCard">
+                  <BIcon name="file" :size="12" /><span>Visitenkarte drucken…</span>
                 </button>
                 <div class="action-menu-divider"></div>
                 <button
@@ -752,6 +820,23 @@ onUnmounted(() => {
           >
             {{ renaming ? "…" : "Umbenennen" }}
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Visitenkarte (nur im Druck sichtbar) ═══════════════ -->
+    <!-- Erscheint nur wenn body.printing-business-card gesetzt ist und
+         beim Druck (@media print). Format: 85×55mm, klassische Visitenkarte. -->
+    <div v-if="member" class="business-card" aria-hidden="true">
+      <div class="business-card-inner">
+        <div class="bc-name">{{ member.name }}</div>
+        <div v-if="member.role" class="bc-role">{{ member.role }}</div>
+        <div v-if="member.companyName || member.company" class="bc-company">
+          {{ member.companyName ?? member.company }}
+        </div>
+        <div class="bc-contact">
+          <div v-if="member.email">✉ {{ member.email }}</div>
+          <div v-if="member.phone">☏ {{ member.phone }}</div>
         </div>
       </div>
     </div>
@@ -1166,5 +1251,107 @@ onUnmounted(() => {
   border-radius: 12px;
   padding: 24px 28px;
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
+}
+
+/* ── Visitenkarte ──────────────────────────────────────────
+   Standard unsichtbar, wird nur beim Druck aktiviert. Format 85×55mm
+   entspricht ISO 7810 ID-1 (Kreditkarte / klassische Visitenkarte). */
+.business-card {
+  display: none;
+  width: 85mm;
+  height: 55mm;
+  padding: 6mm;
+  background: #fff;
+  color: #000;
+  border: 1px solid #d0d0d0;
+  border-radius: 2mm;
+  box-sizing: border-box;
+  font-family: Helvetica, Arial, sans-serif;
+}
+.business-card-inner {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.bc-name {
+  font-size: 12pt;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.bc-role {
+  font-size: 8pt;
+  color: #555;
+  margin-top: 1mm;
+}
+.bc-company {
+  font-size: 9pt;
+  font-weight: 500;
+  margin-top: 2mm;
+}
+.bc-contact {
+  font-size: 8pt;
+  line-height: 1.4;
+  color: #333;
+}
+</style>
+
+<!-- Globaler Print-Stylesheet — bewusst nicht scoped, damit wir das App-
+     Chrome ausblenden koennen. Zwei Modi:
+       1) normaler Druck (User macht Ctrl+P auf der Detail-Seite)
+       2) Visitenkarten-Druck (body.printing-business-card → nur die Karte) -->
+<style>
+@media print {
+  /* App-Chrome ausblenden */
+  .sidebar-root,
+  .sidebar-backdrop,
+  header,
+  .back-link,
+  .action-menu-wrapper,
+  .tab-btn,
+  .team-picker {
+    display: none !important;
+  }
+  body,
+  html,
+  #app {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  a {
+    color: #000 !important;
+    text-decoration: underline !important;
+  }
+}
+
+/* Nur-Visitenkarten-Modus: alles andere verstecken, Karte zentrieren */
+body.printing-business-card {
+  background: #fff;
+}
+body.printing-business-card .business-card {
+  display: block;
+}
+@media print {
+  body.printing-business-card > #app > *:not(.business-card-root) {
+    display: none !important;
+  }
+  body.printing-business-card .sidebar-root,
+  body.printing-business-card .sidebar-backdrop,
+  body.printing-business-card header {
+    display: none !important;
+  }
+  body.printing-business-card .hero,
+  body.printing-business-card .tab-btn,
+  body.printing-business-card [class*="tab"],
+  body.printing-business-card .back-link,
+  body.printing-business-card .filter-bar,
+  body.printing-business-card .modal-overlay {
+    display: none !important;
+  }
+  body.printing-business-card .business-card {
+    display: block !important;
+    margin: 10mm auto;
+    box-shadow: none;
+  }
 }
 </style>
