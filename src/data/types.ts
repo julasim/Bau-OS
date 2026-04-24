@@ -122,14 +122,58 @@ export interface ProjectCreateOptions {
   endDate?: string | null;
 }
 
+/** Erlaubte Kategorien — konsistent mit dem CHECK-Constraint in Migration 006.
+ *  NULL = unkategorisiert (erlaubt, fuer Legacy-Eintraege). */
+export type MemberType = "Intern" | "Planer" | "Ausführende" | "Behörde" | "Lieferant" | "Bauherr";
+
+/** Eintrag im Kontakt-Log (Phase 4). Wird in team_members.contact_log JSONB
+ *  als Array gehalten; Schreibzugriffe haengen neue Eintraege ans Ende. */
+export interface ContactLogEntry {
+  ts: string;
+  text: string;
+  author?: string;
+}
+
+/** Kurzform der Projekt-Zuordnung eines Mitglieds, wie sie vom Repo-Join
+ *  als Array geliefert wird. `projectRole` ist die projektspezifische Rolle,
+ *  orthogonal zur generischen `role` des Mitglieds. */
+export interface TeamMemberProject {
+  id: string;
+  name: string;
+  projectRole: string | null;
+}
+
 export interface TeamMember {
   id: string;
   name: string;
   role: string | null;
   email: string | null;
   phone: string | null;
+  /** Legacy-Textfeld — seit Migration 006 ist companyId/companyName die
+   *  Source-of-Truth. Bleibt als Fallback bis vollstaendig migriert. */
   company: string | null;
+  /** Legacy-Einzelprojekt — ab Migration 006 M:N ueber project_team_members. */
   projectId: string | null;
+  // Migration 006: neue Felder
+  companyId: string | null;
+  companyName: string | null;
+  memberType: MemberType | null;
+  /** Direkt zugeordnete Projekte (Junction-Array). Leer, wenn noch nichts
+   *  zugeordnet oder Repo die Info nicht laedt. */
+  projects: TeamMemberProject[];
+  contactLog: ContactLogEntry[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  address: string | null;
+  website: string | null;
+  notes: string | null;
+  /** Anzahl zugeordneter Mitglieder — Repo berechnet via Subselect. */
+  memberCount?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -236,12 +280,55 @@ export interface ProjectRepository {
   delete(name: string): Promise<boolean>;
 }
 
+/** Input-Shape fuers Anlegen — erlaubt companyName statt companyId, weil
+ *  Caller oft nur den Namen haben. Das Repo erledigt den Lookup/Insert. */
+export interface TeamMemberCreateInput {
+  name: string;
+  role?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  companyId?: string | null;
+  companyName?: string | null;
+  memberType?: MemberType | null;
+  projectId?: string | null;
+}
+
+export interface TeamMemberUpdateInput {
+  name?: string;
+  role?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  company?: string | null;
+  companyId?: string | null;
+  companyName?: string | null;
+  memberType?: MemberType | null;
+  projectId?: string | null;
+}
+
 export interface TeamRepository {
   list(): Promise<TeamMember[]>;
   get(id: string): Promise<TeamMember | null>;
-  add(member: Omit<TeamMember, "id" | "createdAt" | "updatedAt">): Promise<TeamMember>;
-  update(id: string, updates: Partial<TeamMember>): Promise<TeamMember | null>;
+  add(member: TeamMemberCreateInput): Promise<TeamMember>;
+  update(id: string, updates: TeamMemberUpdateInput): Promise<TeamMember | null>;
   remove(nameOrId: string): Promise<boolean>;
+
+  // Migration 006: Junction-Management + Companies + Log.
+  // Optional weil fs-team.ts das im FS-Mode nicht unterstuetzen muss;
+  // Caller pruefen Verfuegbarkeit ueber ?.()-Operator.
+  assignToProject?(memberId: string, projectId: string, projectRole?: string | null): Promise<boolean>;
+  unassignFromProject?(memberId: string, projectId: string): Promise<boolean>;
+  updateProjectRole?(memberId: string, projectId: string, projectRole: string | null): Promise<boolean>;
+  appendLog?(memberId: string, entry: ContactLogEntry): Promise<boolean>;
+
+  listCompanies?(): Promise<Company[]>;
+  getCompany?(id: string): Promise<Company | null>;
+  addCompany?(input: Omit<Company, "id" | "createdAt" | "updatedAt" | "memberCount">): Promise<Company>;
+  updateCompany?(
+    id: string,
+    updates: Partial<Omit<Company, "id" | "createdAt" | "updatedAt" | "memberCount">>,
+  ): Promise<Company | null>;
+  deleteCompany?(id: string): Promise<boolean>;
 }
 
 export interface FileRepository {

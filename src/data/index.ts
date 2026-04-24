@@ -52,7 +52,20 @@ export function dataMode(): "database" | "filesystem" {
 }
 
 // Re-export types
-export type { Task, Termin, Note, Project, TeamMember, ChatSession, ChatMessage, AgentLog } from "./types.js";
+export type {
+  Task,
+  Termin,
+  Note,
+  Project,
+  TeamMember,
+  TeamMemberProject,
+  Company,
+  MemberType,
+  ContactLogEntry,
+  ChatSession,
+  ChatMessage,
+  AgentLog,
+} from "./types.js";
 export type {
   TaskRepository,
   TerminRepository,

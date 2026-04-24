@@ -1,8 +1,17 @@
 import { Hono } from "hono";
 import { teamRepo } from "../../data/index.js";
+import type { MemberType, ContactLogEntry } from "../../data/types.js";
 import { emit } from "../events.js";
 
 export const teamRoutes = new Hono();
+
+const ALLOWED_MEMBER_TYPES: MemberType[] = ["Intern", "Planer", "Ausführende", "Behörde", "Lieferant", "Bauherr"];
+
+function normalizeMemberType(v: unknown): MemberType | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return (ALLOWED_MEMBER_TYPES as string[]).includes(t) ? (t as MemberType) : null;
+}
 
 // Alle Mitglieder
 teamRoutes.get("/team", async (c) => {
@@ -16,9 +25,19 @@ teamRoutes.get("/team/:id", async (c) => {
   return c.json(member);
 });
 
-// Mitglied hinzufuegen
+// Mitglied hinzufuegen. Body akzeptiert companyId ODER companyName ODER
+// company (Legacy-Freitext) — das Repo macht auto-create-or-find.
 teamRoutes.post("/team", async (c) => {
-  const body = await c.req.json<{ name: string; role?: string; email?: string; phone?: string; company?: string }>();
+  const body = await c.req.json<{
+    name: string;
+    role?: string;
+    email?: string;
+    phone?: string;
+    company?: string;
+    companyId?: string;
+    companyName?: string;
+    memberType?: string;
+  }>();
   if (!body.name) return c.json({ error: "Name erforderlich" }, 400);
 
   try {
@@ -28,6 +47,9 @@ teamRoutes.post("/team", async (c) => {
       email: body.email ?? null,
       phone: body.phone ?? null,
       company: body.company ?? null,
+      companyId: body.companyId ?? null,
+      companyName: body.companyName ?? null,
+      memberType: normalizeMemberType(body.memberType),
       projectId: null,
     });
     emit({ type: "team", action: "created", id: member.id });
@@ -37,11 +59,32 @@ teamRoutes.post("/team", async (c) => {
   }
 });
 
-// Mitglied aktualisieren
+// Mitglied aktualisieren — akzeptiert jetzt auch memberType, companyId, companyName.
 teamRoutes.patch("/team/:id", async (c) => {
   const id = c.req.param("id");
-  const updates =
-    await c.req.json<Partial<{ name: string; role: string; email: string; phone: string; company: string }>>();
+  const body = await c.req.json<
+    Partial<{
+      name: string;
+      role: string | null;
+      email: string | null;
+      phone: string | null;
+      company: string | null;
+      companyId: string | null;
+      companyName: string | null;
+      memberType: string | null;
+      projectId: string | null;
+    }>
+  >();
+
+  const updates: Record<string, unknown> = {};
+  // Nur Felder uebernehmen, die explizit im Body sind (inkl. null = leeren).
+  for (const key of ["name", "role", "email", "phone", "company", "companyId", "companyName", "projectId"] as const) {
+    if (key in body) updates[key] = body[key];
+  }
+  if ("memberType" in body) {
+    updates.memberType = body.memberType ? normalizeMemberType(body.memberType) : null;
+  }
+
   const member = await teamRepo.update(id, updates);
   if (!member) return c.json({ error: "Mitglied nicht gefunden" }, 404);
   emit({ type: "team", action: "updated", id });
@@ -54,4 +97,72 @@ teamRoutes.delete("/team/:name", async (c) => {
   const ok = await teamRepo.remove(name);
   if (ok) emit({ type: "team", action: "deleted" });
   return c.json({ ok });
+});
+
+// ── Projekt-Zuordnungen (Migration 006) ────────────────────────────────────
+
+// Mitglied einem Projekt zuordnen (M:N). Body: { projectId, projectRole? }.
+// Ist idempotent — existierende Zuordnung wird nicht doppelt, bei uebergebener
+// projectRole wird sie aktualisiert.
+teamRoutes.post("/team/:id/projects", async (c) => {
+  const memberId = c.req.param("id");
+  const body = await c.req.json<{ projectId: string; projectRole?: string | null }>();
+  if (!body.projectId) return c.json({ error: "projectId erforderlich" }, 400);
+  if (!teamRepo.assignToProject) return c.json({ error: "Nicht unterstützt" }, 501);
+
+  const ok = await teamRepo.assignToProject(memberId, body.projectId, body.projectRole ?? null);
+  if (!ok) return c.json({ error: "Zuordnung fehlgeschlagen" }, 500);
+  emit({ type: "team", action: "updated", id: memberId });
+  emit({ type: "project", action: "updated", id: body.projectId });
+  const member = await teamRepo.get(memberId);
+  return c.json(member);
+});
+
+// Projekt-Rolle eines Mitglieds aktualisieren. Body: { projectRole }.
+teamRoutes.patch("/team/:id/projects/:projectId", async (c) => {
+  const memberId = c.req.param("id");
+  const projectId = c.req.param("projectId");
+  const body = await c.req.json<{ projectRole?: string | null }>();
+  if (!teamRepo.updateProjectRole) return c.json({ error: "Nicht unterstützt" }, 501);
+
+  const ok = await teamRepo.updateProjectRole(memberId, projectId, body.projectRole ?? null);
+  if (!ok) return c.json({ error: "Zuordnung nicht gefunden" }, 404);
+  emit({ type: "team", action: "updated", id: memberId });
+  return c.json({ ok });
+});
+
+// Mitglied aus Projekt entfernen (Zuordnung aufheben).
+teamRoutes.delete("/team/:id/projects/:projectId", async (c) => {
+  const memberId = c.req.param("id");
+  const projectId = c.req.param("projectId");
+  if (!teamRepo.unassignFromProject) return c.json({ error: "Nicht unterstützt" }, 501);
+
+  const ok = await teamRepo.unassignFromProject(memberId, projectId);
+  if (ok) {
+    emit({ type: "team", action: "updated", id: memberId });
+    emit({ type: "project", action: "updated", id: projectId });
+  }
+  return c.json({ ok });
+});
+
+// ── Kontakt-Log (Phase 4) ──────────────────────────────────────────────────
+
+// Log-Eintrag anhaengen. Body: { text, author? }. Zeitstempel wird
+// serverseitig gesetzt, damit Client-Uhren nicht driften.
+teamRoutes.post("/team/:id/log", async (c) => {
+  const memberId = c.req.param("id");
+  const body = await c.req.json<{ text: string; author?: string }>();
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  if (!text) return c.json({ error: "text erforderlich" }, 400);
+  if (!teamRepo.appendLog) return c.json({ error: "Nicht unterstützt" }, 501);
+
+  const entry: ContactLogEntry = {
+    ts: new Date().toISOString(),
+    text,
+    author: body.author?.trim() || undefined,
+  };
+  const ok = await teamRepo.appendLog(memberId, entry);
+  if (!ok) return c.json({ error: "Mitglied nicht gefunden" }, 404);
+  emit({ type: "team", action: "updated", id: memberId });
+  return c.json(entry, 201);
 });

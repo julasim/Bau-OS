@@ -1,9 +1,50 @@
 // Datenbank-Implementation: PostgreSQL via postgres.js
+//
+// Ab Migration 006 ist dieses Repo hybrid:
+//   - Legacy-Felder (company TEXT, project_id UUID) bleiben fuer
+//     Backward-Compat weiterhin befuellt.
+//   - Neue Quellen sind companies (FK) und project_team_members (M:N).
+// Schreiben: legacy-Felder werden aus den neuen Werten abgeleitet gesetzt,
+//           damit aeltere Queries/UI noch konsistent bleiben.
+// Lesen:    bevorzugt companyName aus Join, projects-Array aus Junction.
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import type { TeamMember, TeamRepository } from "./types.js";
+import type {
+  Company,
+  ContactLogEntry,
+  MemberType,
+  TeamMember,
+  TeamMemberCreateInput,
+  TeamMemberUpdateInput,
+  TeamMemberProject,
+  TeamRepository,
+} from "./types.js";
+
+// ── Row-Mapper ──────────────────────────────────────────────
 
 function rowToMember(row: Record<string, unknown>): TeamMember {
+  // projects_json kommt als json_agg der Junction; kann null sein wenn
+  // keine Projekte zugeordnet (LEFT JOIN + aggregate).
+  const projectsRaw = row.projects_json;
+  const projects: TeamMemberProject[] = Array.isArray(projectsRaw)
+    ? (projectsRaw as Array<Record<string, unknown>>)
+        .filter((p) => p && p.id)
+        .map((p) => ({
+          id: String(p.id),
+          name: String(p.name),
+          projectRole: p.project_role ? String(p.project_role) : null,
+        }))
+    : [];
+
+  const contactLogRaw = row.contact_log;
+  const contactLog: ContactLogEntry[] = Array.isArray(contactLogRaw)
+    ? (contactLogRaw as Array<Record<string, unknown>>).map((e) => ({
+        ts: String(e.ts ?? ""),
+        text: String(e.text ?? ""),
+        author: e.author ? String(e.author) : undefined,
+      }))
+    : [];
+
   return {
     id: String(row.id),
     name: String(row.name),
@@ -12,43 +53,143 @@ function rowToMember(row: Record<string, unknown>): TeamMember {
     phone: row.phone ? String(row.phone) : null,
     company: row.company ? String(row.company) : null,
     projectId: row.project_id ? String(row.project_id) : null,
+    companyId: row.company_id ? String(row.company_id) : null,
+    companyName: row.company_name ? String(row.company_name) : null,
+    memberType: (row.member_type as MemberType | null) ?? null,
+    projects,
+    contactLog,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
 }
 
+function rowToCompany(row: Record<string, unknown>): Company {
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    address: row.address ? String(row.address) : null,
+    website: row.website ? String(row.website) : null,
+    notes: row.notes ? String(row.notes) : null,
+    memberCount: row.member_count !== undefined ? Number(row.member_count) : undefined,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
+  };
+}
+
+// Gemeinsame SELECT-Klausel fuer Members mit Joins + Aggregat.
+// Wird in list()/get() identisch genutzt; als Template-String fuer postgres.js
+// nicht moeglich, deshalb als WHERE-Suffix-Funktion.
+const MEMBER_SELECT = `
+  SELECT
+    tm.id,
+    tm.name,
+    tm.role,
+    tm.email,
+    tm.phone,
+    tm.company,
+    tm.project_id,
+    tm.company_id,
+    tm.member_type,
+    tm.contact_log,
+    tm.created_at,
+    tm.updated_at,
+    c.name as company_name,
+    COALESCE(
+      (SELECT json_agg(
+        json_build_object(
+          'id', p.id,
+          'name', p.name,
+          'project_role', ptm.project_role
+        ) ORDER BY p.name
+      )
+      FROM project_team_members ptm
+      JOIN projects p ON p.id = ptm.project_id
+      WHERE ptm.member_id = tm.id),
+      '[]'::json
+    ) as projects_json
+  FROM team_members tm
+  LEFT JOIN companies c ON c.id = tm.company_id
+`;
+
+// ── Companies-Helper ─────────────────────────────────────────
+
+/** Findet eine Company per Name (case-insensitive, getrimmt). Legt sie an,
+ *  wenn noch nicht vorhanden. Gibt die id zurueck, oder null wenn name leer.*/
+async function resolveCompanyId(db: ReturnType<typeof getDb>, name: string | null | undefined): Promise<string | null> {
+  if (!name) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+
+  const [existing] = await db`
+    SELECT id FROM companies WHERE LOWER(name) = LOWER(${trimmed}) LIMIT 1
+  `;
+  if (existing) return String(existing.id);
+
+  const id = crypto.randomUUID();
+  await db`
+    INSERT INTO companies (id, name) VALUES (${id}, ${trimmed})
+    ON CONFLICT (name) DO NOTHING
+  `;
+  // Re-select, falls in der Zwischenzeit ein paralleler Insert gewonnen hat.
+  const [row] = await db`
+    SELECT id FROM companies WHERE LOWER(name) = LOWER(${trimmed}) LIMIT 1
+  `;
+  return row ? String(row.id) : null;
+}
+
 export const dbTeam: TeamRepository = {
   async list() {
     const db = getDb();
-    const rows = await db`SELECT * FROM team_members ORDER BY name`;
-    return rows.map(rowToMember);
+    const rows = await db.unsafe(`${MEMBER_SELECT} ORDER BY tm.name`);
+    return rows.map((r) => rowToMember(r as Record<string, unknown>));
   },
 
   async get(id) {
     const db = getDb();
-    const [row] = await db`SELECT * FROM team_members WHERE id = ${id}`;
-    return row ? rowToMember(row) : null;
+    const rows = await db.unsafe(`${MEMBER_SELECT} WHERE tm.id = $1 LIMIT 1`, [id]);
+    return rows[0] ? rowToMember(rows[0] as Record<string, unknown>) : null;
   },
 
   async add(member) {
     const db = getDb();
-    // Volle UUID — die team_members.id-Spalte ist UUID-typisiert, ein
-    // .slice(0,8) wuerde PostgresError "invalid input syntax for type uuid" werfen.
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
     const name = member.name;
     const role = member.role ?? null;
     const email = member.email ?? null;
     const phone = member.phone ?? null;
-    const company = member.company ?? null;
     const projectId = member.projectId ?? null;
+    const memberType = member.memberType ?? null;
+
+    // Company-Auflosung: companyId hat Vorrang, dann companyName (auto-create),
+    // dann legacy company-Feld (auto-create).
+    let companyId: string | null = null;
+    let companyText: string | null = member.company ?? null;
+    if (member.companyId) {
+      companyId = member.companyId;
+      const [c] = await db`SELECT name FROM companies WHERE id = ${companyId}`;
+      if (c) companyText = String(c.name);
+    } else {
+      const lookupName = member.companyName ?? member.company ?? null;
+      companyId = await resolveCompanyId(db, lookupName);
+      if (companyId) companyText = lookupName?.trim() ?? companyText;
+    }
 
     const [row] = await db`
-      INSERT INTO team_members (id, name, role, email, phone, company, project_id, created_at, updated_at)
-      VALUES (${id}, ${name}, ${role}, ${email}, ${phone}, ${company}, ${projectId}, ${now}, ${now})
-      RETURNING *
+      INSERT INTO team_members (
+        id, name, role, email, phone, company, project_id,
+        company_id, member_type, contact_log,
+        created_at, updated_at
+      ) VALUES (
+        ${id}, ${name}, ${role}, ${email}, ${phone}, ${companyText}, ${projectId},
+        ${companyId}, ${memberType}, ${"[]"}::jsonb,
+        ${now}, ${now}
+      )
+      RETURNING id
     `;
-    return rowToMember(row);
+    const inserted = await this.get(String(row.id));
+    if (!inserted) throw new Error("Team-Mitglied nach INSERT nicht lesbar");
+    return inserted;
   },
 
   async update(id, updates) {
@@ -56,31 +197,179 @@ export const dbTeam: TeamRepository = {
     const [current] = await db`SELECT * FROM team_members WHERE id = ${id}`;
     if (!current) return null;
 
+    // Company-Auflosung: explizite companyId > companyName > company-Legacy-Feld.
+    // Wenn nichts spezifiziert, bleibt alles unveraendert.
+    let companyId: string | null | undefined = undefined;
+    let companyText: string | null | undefined = undefined;
+    if ("companyId" in updates) {
+      companyId = updates.companyId ?? null;
+      if (companyId) {
+        const [c] = await db`SELECT name FROM companies WHERE id = ${companyId}`;
+        companyText = c ? String(c.name) : null;
+      } else {
+        companyText = null;
+      }
+    } else if ("companyName" in updates) {
+      companyId = await resolveCompanyId(db, updates.companyName);
+      companyText = updates.companyName?.trim() || null;
+    } else if ("company" in updates) {
+      // Legacy-Pfad: Caller setzt company-Text ohne zu wissen dass es eine FK
+      // gibt — wir legen/holen die Company und synchronisieren beides.
+      companyId = await resolveCompanyId(db, updates.company);
+      companyText = updates.company?.trim() || null;
+    }
+
     const name = "name" in updates ? updates.name : current.name;
     const role = "role" in updates ? updates.role : current.role;
     const email = "email" in updates ? updates.email : current.email;
     const phone = "phone" in updates ? updates.phone : current.phone;
-    const company = "company" in updates ? updates.company : current.company;
     const projectId = "projectId" in updates ? updates.projectId : current.project_id;
+    const memberType = "memberType" in updates ? updates.memberType : current.member_type;
 
-    const [row] = await db`
+    const resolvedCompanyText = companyText !== undefined ? companyText : current.company;
+    const resolvedCompanyId = companyId !== undefined ? companyId : current.company_id;
+
+    await db`
       UPDATE team_members SET
-        name = ${name}, role = ${role}, email = ${email},
-        phone = ${phone}, company = ${company}, project_id = ${projectId}
+        name = ${name ?? current.name},
+        role = ${role},
+        email = ${email},
+        phone = ${phone},
+        company = ${resolvedCompanyText},
+        project_id = ${projectId},
+        company_id = ${resolvedCompanyId},
+        member_type = ${memberType}
       WHERE id = ${id}
-      RETURNING *
     `;
-    return row ? rowToMember(row) : null;
+    return this.get(id);
   },
 
   async remove(nameOrId) {
     const db = getDb();
-    // id::text verhindert "invalid input syntax for type uuid" wenn ein Name
-    // statt einer UUID uebergeben wird — sonst crasht die gesamte Query,
-    // bevor die OR-Klausel auf name = ... ueberhaupt ausgewertet wird.
     const result = await db`
       DELETE FROM team_members WHERE id::text = ${nameOrId} OR name = ${nameOrId}
     `;
+    return result.count > 0;
+  },
+
+  // ── Junction (M:N Projekte) ─────────────────────────────────
+
+  async assignToProject(memberId, projectId, projectRole) {
+    const db = getDb();
+    // ON CONFLICT: wenn bereits zugeordnet, nur project_role aktualisieren
+    // (wenn neuer Wert uebergeben wurde). Sonst no-op.
+    if (projectRole !== undefined) {
+      await db`
+        INSERT INTO project_team_members (project_id, member_id, project_role)
+        VALUES (${projectId}, ${memberId}, ${projectRole ?? null})
+        ON CONFLICT (project_id, member_id)
+          DO UPDATE SET project_role = EXCLUDED.project_role
+      `;
+    } else {
+      await db`
+        INSERT INTO project_team_members (project_id, member_id)
+        VALUES (${projectId}, ${memberId})
+        ON CONFLICT (project_id, member_id) DO NOTHING
+      `;
+    }
+    return true;
+  },
+
+  async unassignFromProject(memberId, projectId) {
+    const db = getDb();
+    const result = await db`
+      DELETE FROM project_team_members
+       WHERE member_id = ${memberId} AND project_id = ${projectId}
+    `;
+    return result.count > 0;
+  },
+
+  async updateProjectRole(memberId, projectId, projectRole) {
+    const db = getDb();
+    const result = await db`
+      UPDATE project_team_members
+         SET project_role = ${projectRole}
+       WHERE member_id = ${memberId} AND project_id = ${projectId}
+    `;
+    return result.count > 0;
+  },
+
+  // ── Kontakt-Log (Phase 4) ───────────────────────────────────
+
+  async appendLog(memberId, entry) {
+    const db = getDb();
+    // Append via jsonb concat (|| Operator) — atomar, keine Race-Conditions.
+    const result = await db`
+      UPDATE team_members
+         SET contact_log = COALESCE(contact_log, '[]'::jsonb) || ${JSON.stringify([entry])}::jsonb
+       WHERE id = ${memberId}
+    `;
+    return result.count > 0;
+  },
+
+  // ── Companies ───────────────────────────────────────────────
+
+  async listCompanies() {
+    const db = getDb();
+    const rows = await db`
+      SELECT
+        c.*,
+        (SELECT count(*) FROM team_members tm WHERE tm.company_id = c.id) as member_count
+      FROM companies c
+      ORDER BY c.name
+    `;
+    return rows.map((r) => rowToCompany(r));
+  },
+
+  async getCompany(id) {
+    const db = getDb();
+    const [row] = await db`
+      SELECT
+        c.*,
+        (SELECT count(*) FROM team_members tm WHERE tm.company_id = c.id) as member_count
+      FROM companies c
+      WHERE c.id = ${id}
+      LIMIT 1
+    `;
+    return row ? rowToCompany(row) : null;
+  },
+
+  async addCompany(input) {
+    const db = getDb();
+    const id = crypto.randomUUID();
+    await db`
+      INSERT INTO companies (id, name, address, website, notes)
+      VALUES (${id}, ${input.name}, ${input.address ?? null}, ${input.website ?? null}, ${input.notes ?? null})
+    `;
+    const c = await this.getCompany!(id);
+    if (!c) throw new Error("Company nach INSERT nicht lesbar");
+    return c;
+  },
+
+  async updateCompany(id, updates) {
+    const db = getDb();
+    const [current] = await db`SELECT * FROM companies WHERE id = ${id}`;
+    if (!current) return null;
+    const name = "name" in updates ? updates.name : current.name;
+    const address = "address" in updates ? updates.address : current.address;
+    const website = "website" in updates ? updates.website : current.website;
+    const notes = "notes" in updates ? updates.notes : current.notes;
+    await db`
+      UPDATE companies SET
+        name = ${name ?? current.name},
+        address = ${address},
+        website = ${website},
+        notes = ${notes}
+      WHERE id = ${id}
+    `;
+    return this.getCompany!(id);
+  },
+
+  async deleteCompany(id) {
+    const db = getDb();
+    // ON DELETE SET NULL in team_members.company_id sorgt dafuer, dass
+    // Mitglieder erhalten bleiben, nur die Verknuepfung verschwindet.
+    const result = await db`DELETE FROM companies WHERE id = ${id}`;
     return result.count > 0;
   },
 };
