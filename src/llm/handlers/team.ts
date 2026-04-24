@@ -65,11 +65,20 @@ function formatCandidates(candidates: TeamMember[]): string {
     .join(", ");
 }
 
-// Loest einen Projekt-Namen zu seiner UUID auf. Projekte sind ueber name-
-// Unique eindeutig, hier reicht ein exakter Match.
+// Loest einen Projekt-Namen zu seiner UUID auf. Primaer exakt; wenn kein
+// Treffer, versuchen wir case-insensitive (projekt-namen sind praktisch
+// eindeutig, aber der Agent tippt haeufig kleingeschrieben).
 async function resolveProjectId(query: string): Promise<string | null> {
-  const info = await projectRepo.getInfo(query);
-  return info?.id ?? null;
+  const q = query.trim();
+  if (!q) return null;
+  const info = await projectRepo.getInfo(q);
+  if (info?.id) return info.id;
+  // Fallback: durch alle Namen iterieren (kleine Datenmenge, ok).
+  const names = await projectRepo.list();
+  const match = names.find((n) => n.toLowerCase() === q.toLowerCase());
+  if (!match) return null;
+  const info2 = await projectRepo.getInfo(match);
+  return info2?.id ?? null;
 }
 
 export const teamSchemas: OpenAI.Chat.ChatCompletionTool[] = [

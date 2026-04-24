@@ -36,13 +36,16 @@ ALTER TABLE termine
 
 -- Backfill fuer termine ist komplizierter, weil assignees ein TEXT[] ist:
 -- wir erzeugen fuer jeden Termin das Array der gematchten Member-IDs.
--- array(SELECT ...) ist der postgres-Idiom fuer "Subselect → Array".
+--
+-- WICHTIG: unnest() braucht "AS alias(col_name)", sonst heisst die Spalte
+-- in PostgreSQL "unnest" (Funktions-Default), nicht der Table-Alias. Ohne
+-- die Spalten-Benennung scheitert die Query mit "column does not exist".
 UPDATE termine te
    SET assignee_ids = (
      SELECT COALESCE(array_agg(tm.id) FILTER (WHERE tm.id IS NOT NULL), '{}'::uuid[])
-       FROM unnest(te.assignees) AS assignee_name
+       FROM unnest(te.assignees) AS u(assignee_name)
        LEFT JOIN team_members tm
-              ON LOWER(TRIM(tm.name)) = LOWER(TRIM(assignee_name))
+              ON LOWER(TRIM(tm.name)) = LOWER(TRIM(u.assignee_name))
    )
  WHERE cardinality(COALESCE(te.assignee_ids, '{}'::uuid[])) = 0
    AND cardinality(COALESCE(te.assignees, '{}'::text[])) > 0;
@@ -51,3 +54,23 @@ UPDATE termine te
 CREATE INDEX IF NOT EXISTS idx_tasks_assignee_id ON tasks(assignee_id);
 -- GIN-Index auf dem Array — macht = ANY(assignee_ids) und @> effizient.
 CREATE INDEX IF NOT EXISTS idx_termine_assignee_ids ON termine USING GIN (assignee_ids);
+
+-- 4) Orphan-Schutz fuer termine.assignee_ids --------------------------------
+-- UUID-Arrays unterstuetzen keine FK-Cascade. Wenn ein Team-Mitglied geloescht
+-- wird, bleibt seine UUID in termine.assignee_ids-Arrays als Zombie haengen.
+-- Reads filtern das im JSON-Subselect weg, aber beim naechsten Termin-Update
+-- wuerde der Zombie wieder persistiert. Dieser Trigger raeumt das atomisch
+-- beim Delete auf — setzt auch dauerhafte Daten-Konsistenz sicher.
+CREATE OR REPLACE FUNCTION remove_member_from_termine() RETURNS trigger AS $$
+BEGIN
+  UPDATE termine
+     SET assignee_ids = array_remove(assignee_ids, OLD.id)
+   WHERE OLD.id = ANY(assignee_ids);
+  RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_clean_termine_assignees ON team_members;
+CREATE TRIGGER trg_clean_termine_assignees
+  BEFORE DELETE ON team_members
+  FOR EACH ROW EXECUTE FUNCTION remove_member_from_termine();

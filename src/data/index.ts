@@ -59,6 +59,8 @@ export type {
   Project,
   TeamMember,
   TeamMemberProject,
+  TeamMemberCreateInput,
+  TeamMemberUpdateInput,
   Company,
   MemberType,
   ContactLogEntry,

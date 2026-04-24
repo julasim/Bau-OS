@@ -114,25 +114,32 @@ const MEMBER_SELECT = `
 // ── Companies-Helper ─────────────────────────────────────────
 
 /** Findet eine Company per Name (case-insensitive, getrimmt). Legt sie an,
- *  wenn noch nicht vorhanden. Gibt die id zurueck, oder null wenn name leer.*/
+ *  wenn noch nicht vorhanden. Gibt die id zurueck, oder null wenn name leer.
+ *
+ *  Atomar via "ON CONFLICT DO UPDATE ... RETURNING id" — dadurch gibt es
+ *  keinen Zeitraum zwischen Insert-Versuch und Re-Select, in dem eine
+ *  andere Transaktion ein Duplikat einbauen koennte. DO UPDATE (statt DO
+ *  NOTHING) ist hier wichtig, weil nur bei DO UPDATE das RETURNING den
+ *  Konflikt-Winner-Datensatz liefert. */
 async function resolveCompanyId(db: ReturnType<typeof getDb>, name: string | null | undefined): Promise<string | null> {
   if (!name) return null;
   const trimmed = name.trim();
   if (!trimmed) return null;
 
+  // Fast-Path: exakter case-insensitive Match existiert bereits.
   const [existing] = await db`
     SELECT id FROM companies WHERE LOWER(name) = LOWER(${trimmed}) LIMIT 1
   `;
   if (existing) return String(existing.id);
 
+  // Slow-Path: atomisches Upsert. Bei Konflikt aktualisieren wir updated_at
+  // auf sich selbst (no-op Update), damit RETURNING trotzdem feuert und wir
+  // die ID des Konflikt-Winners zurueckbekommen.
   const id = crypto.randomUUID();
-  await db`
-    INSERT INTO companies (id, name) VALUES (${id}, ${trimmed})
-    ON CONFLICT (name) DO NOTHING
-  `;
-  // Re-select, falls in der Zwischenzeit ein paralleler Insert gewonnen hat.
   const [row] = await db`
-    SELECT id FROM companies WHERE LOWER(name) = LOWER(${trimmed}) LIMIT 1
+    INSERT INTO companies (id, name) VALUES (${id}, ${trimmed})
+    ON CONFLICT (name) DO UPDATE SET updated_at = companies.updated_at
+    RETURNING id
   `;
   return row ? String(row.id) : null;
 }
