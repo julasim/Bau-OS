@@ -10,6 +10,8 @@ function rowToTask(row: Record<string, unknown>): Task {
     status: row.status as Task["status"],
     priority: row.priority ? String(row.priority) : undefined,
     assignee: row.assignee ? String(row.assignee) : null,
+    assigneeId: row.assignee_id ? String(row.assignee_id) : null,
+    assigneeName: row.assignee_name ? String(row.assignee_name) : null,
     date: row.date ? String(row.date) : null,
     dueDate: row.due_date ? String(row.due_date) : null,
     location: row.location ? String(row.location) : null,
@@ -20,6 +22,17 @@ function rowToTask(row: Record<string, unknown>): Task {
     updatedAt: String(row.updated_at),
   };
 }
+
+// Gemeinsame SELECT-Klausel — LEFT JOIN auf team_members, damit assignee_name
+// immer mitgeliefert wird ohne N+1.
+const TASK_SELECT = `
+  SELECT t.*,
+    p.name as project_name,
+    tm.name as assignee_name
+  FROM tasks t
+  LEFT JOIN projects p ON t.project_id = p.id
+  LEFT JOIN team_members tm ON tm.id = t.assignee_id
+`;
 
 export const dbTasks: TaskRepository = {
   async save(text, project) {
@@ -36,33 +49,25 @@ export const dbTasks: TaskRepository = {
       projectId = p?.id ?? null;
     }
 
-    const [row] = await db`
+    await db`
       INSERT INTO tasks (id, text, status, project_id, created_at, updated_at)
       VALUES (${id}, ${text}, 'offen', ${projectId}, ${now}, ${now})
-      RETURNING *, (SELECT name FROM projects WHERE id = project_id) as project_name
     `;
-    return rowToTask(row);
+    const task = await this.get(id);
+    if (!task) throw new Error("Task nach INSERT nicht lesbar");
+    return task;
   },
 
   async list(project) {
     const db = getDb();
     if (project) {
-      return (
-        await db`
-        SELECT t.*, p.name as project_name FROM tasks t
-        LEFT JOIN projects p ON t.project_id = p.id
-        WHERE p.name = ${project}
-        ORDER BY t.sort_order, t.created_at DESC
-      `
-      ).map(rowToTask);
+      const rows = await db.unsafe(`${TASK_SELECT} WHERE p.name = $1 ORDER BY t.sort_order, t.created_at DESC`, [
+        project,
+      ]);
+      return rows.map((r) => rowToTask(r as Record<string, unknown>));
     }
-    return (
-      await db`
-      SELECT t.*, p.name as project_name FROM tasks t
-      LEFT JOIN projects p ON t.project_id = p.id
-      ORDER BY t.sort_order, t.created_at DESC
-    `
-    ).map(rowToTask);
+    const rows = await db.unsafe(`${TASK_SELECT} ORDER BY t.sort_order, t.created_at DESC`);
+    return rows.map((r) => rowToTask(r as Record<string, unknown>));
   },
 
   async listOpen(project) {
@@ -72,12 +77,8 @@ export const dbTasks: TaskRepository = {
 
   async get(id) {
     const db = getDb();
-    const [row] = await db`
-      SELECT t.*, p.name as project_name FROM tasks t
-      LEFT JOIN projects p ON t.project_id = p.id
-      WHERE t.id = ${id}
-    `;
-    return row ? rowToTask(row) : null;
+    const rows = await db.unsafe(`${TASK_SELECT} WHERE t.id = $1 LIMIT 1`, [id]);
+    return rows[0] ? rowToTask(rows[0] as Record<string, unknown>) : null;
   },
 
   async update(id, updates) {
@@ -94,16 +95,30 @@ export const dbTasks: TaskRepository = {
     const date = "date" in updates ? updates.date : current.date;
     const location = "location" in updates ? updates.location : current.location;
     const priority = "priority" in updates ? updates.priority : current.priority;
+    // assigneeId kommt als FK dazu. Wenn gesetzt, denormalisieren wir auch
+    // den assignee-Text auf den Mitglieder-Namen — das haelt Legacy-Reader
+    // konsistent und vermeidet den "Freitext widerspricht FK"-Fall.
+    const assigneeId = "assigneeId" in updates ? updates.assigneeId : current.assignee_id;
+    let finalAssignee = assignee;
+    if ("assigneeId" in updates) {
+      if (assigneeId) {
+        const [tm] = await db`SELECT name FROM team_members WHERE id = ${assigneeId}`;
+        if (tm) finalAssignee = String(tm.name);
+      }
+      // Wenn assigneeId explizit null, bleibt assignee bei dem was der Caller
+      // gesetzt hat (oder current) — erlaubt "Freitext ohne FK" als Zustand.
+    }
 
-    const [row] = await db`
+    await db`
       UPDATE tasks SET
-        text = ${text}, status = ${status}, assignee = ${assignee},
+        text = ${text}, status = ${status},
+        assignee = ${finalAssignee},
+        assignee_id = ${assigneeId ?? null},
         date = ${date}, location = ${location}, priority = ${priority},
         updated_at = ${now}
       WHERE id = ${id}
-      RETURNING *, (SELECT name FROM projects WHERE id = project_id) as project_name
     `;
-    return row ? rowToTask(row) : null;
+    return this.get(id);
   },
 
   async complete(textOrId) {

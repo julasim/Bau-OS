@@ -23,19 +23,21 @@ termineRoutes.post("/termine", async (c) => {
     endzeit?: string;
     location?: string;
     assignees?: string[];
+    assigneeIds?: string[];
     project?: string;
   }>();
   if (!body.datum || !body.text) return c.json({ error: "Datum und Text erforderlich" }, 400);
   const termin = await terminRepo.save(body.datum, body.text, body.uhrzeit, body.project);
   if (typeof termin === "string") return c.json({ error: termin }, 400);
   let result = termin;
-  if (body.endzeit || body.location || body.assignees?.length) {
+  if (body.endzeit || body.location || body.assignees?.length || body.assigneeIds?.length) {
     const updated = await terminRepo.update(
       termin.id,
       {
-        endzeit: body.endzeit || null,
-        location: body.location || null,
-        assignees: body.assignees || [],
+        endzeit: body.endzeit ?? null,
+        location: body.location ?? null,
+        assignees: body.assignees ?? [],
+        assigneeIds: body.assigneeIds ?? [],
       },
       body.project,
     );
@@ -55,6 +57,7 @@ termineRoutes.put("/termine/:id", async (c) => {
       endzeit: string | null;
       location: string | null;
       assignees: string[];
+      assigneeIds: string[];
     }>
   >();
   const termin = await terminRepo.update(id, body);

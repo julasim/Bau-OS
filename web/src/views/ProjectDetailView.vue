@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import BIcon from "../components/BIcon.vue";
+import TeamPicker from "../components/TeamPicker.vue";
 
 interface ProjectInfo {
   id: string;
@@ -49,6 +50,9 @@ interface Task {
   text: string;
   status: string;
   assignee: string | null;
+  // Migration 007
+  assigneeId?: string | null;
+  assigneeName?: string | null;
   date: string | null;
 }
 interface Termin {
@@ -58,6 +62,9 @@ interface Termin {
   uhrzeit: string | null;
   location: string | null;
   assignees: string[];
+  // Migration 007
+  assigneeIds?: string[];
+  assigneesResolved?: { id: string; name: string }[];
 }
 interface FileEntry {
   id: string;
@@ -141,6 +148,11 @@ const newTask = ref("");
 const newDatum = ref("");
 const newUhrzeit = ref("");
 const newTerminText = ref("");
+// Migration 007: Team-Teilnehmer fuer Termin-Quick-Add
+const newTerminAssigneeIds = ref<string[]>([]);
+const newTerminAssigneeFree = ref<string[]>([]);
+// Task-Quick-Add: ein Team-Mitglied als Assignee (Single-Mode)
+const newTaskAssigneeId = ref<string | null>(null);
 // Stufe 3d: Uebersicht ist jetzt der Start-Tab.
 type Tab = "uebersicht" | "notes" | "tasks" | "termine" | "files" | "team" | "verlauf";
 const tab = ref<Tab>("uebersicht");
@@ -301,8 +313,12 @@ async function openNote(name: string) {
 async function addTask() {
   if (!newTask.value.trim()) return;
   const n = encodeURIComponent(projectName.value);
-  await api.post(`/projects/${n}/tasks`, { text: newTask.value });
+  await api.post(`/projects/${n}/tasks`, {
+    text: newTask.value,
+    assigneeId: newTaskAssigneeId.value ?? undefined,
+  });
   newTask.value = "";
+  newTaskAssigneeId.value = null;
   await loadAll();
 }
 
@@ -319,10 +335,13 @@ async function addTermin() {
     datum: newDatum.value,
     text: newTerminText.value,
     uhrzeit: newUhrzeit.value || undefined,
+    assigneeIds: newTerminAssigneeIds.value.length > 0 ? newTerminAssigneeIds.value : undefined,
   });
   newDatum.value = "";
   newUhrzeit.value = "";
   newTerminText.value = "";
+  newTerminAssigneeIds.value = [];
+  newTerminAssigneeFree.value = [];
   await loadAll();
 }
 
@@ -1587,8 +1606,22 @@ const emptyStammCount = computed(() => {
 
     <!-- Tasks -->
     <div v-if="tab === 'tasks'">
-      <div class="flex" style="gap: 8px; margin-bottom: 16px">
-        <input v-model="newTask" placeholder="Neue Aufgabe…" @keyup.enter="addTask" class="form-input" />
+      <div class="flex flex-wrap" style="gap: 8px; margin-bottom: 16px; align-items: stretch">
+        <input
+          v-model="newTask"
+          placeholder="Neue Aufgabe…"
+          @keyup.enter="addTask"
+          class="form-input"
+          style="flex: 1; min-width: 200px"
+        />
+        <div style="flex: 0 0 220px; min-width: 200px">
+          <TeamPicker
+            mode="single"
+            :model-value="newTaskAssigneeId"
+            @update:model-value="(v) => (newTaskAssigneeId = (v as string | null) ?? null)"
+            placeholder="Zuständig…"
+          />
+        </div>
         <button @click="addTask" class="bauos-btn solid">Hinzufügen</button>
       </div>
       <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
@@ -1600,7 +1633,17 @@ const emptyStammCount = computed(() => {
         >
           <input type="checkbox" @change="completeTask(t)" style="accent-color: var(--color-primary)" />
           <span style="flex: 1; font-size: 13px; color: var(--color-text-secondary)">{{ t.text }}</span>
-          <span v-if="t.assignee" style="font-size: 11px; color: var(--color-text-tertiary)">{{ t.assignee }}</span>
+          <router-link
+            v-if="t.assigneeId"
+            :to="`/team/${encodeURIComponent(t.assigneeId)}`"
+            class="assignee-chip"
+            @click.stop
+          >
+            {{ t.assigneeName ?? t.assignee }}
+          </router-link>
+          <span v-else-if="t.assignee" class="assignee-chip assignee-chip-free">
+            {{ t.assignee }}
+          </span>
           <span v-if="t.date" class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary)">{{ t.date }}</span>
         </div>
         <p v-if="tasks.filter((t) => t.status !== 'done').length === 0" class="empty-hint">
@@ -1611,15 +1654,26 @@ const emptyStammCount = computed(() => {
 
     <!-- Termine -->
     <div v-if="tab === 'termine'">
-      <div class="flex" style="gap: 8px; margin-bottom: 16px">
-        <input v-model="newDatum" type="date" class="form-input" style="width: 150px" />
-        <input v-model="newUhrzeit" type="time" class="form-input" style="width: 110px" />
+      <div class="flex flex-wrap" style="gap: 8px; margin-bottom: 16px; align-items: stretch">
+        <input v-model="newDatum" type="date" class="form-input" style="width: 150px; flex: 0 0 auto" />
+        <input v-model="newUhrzeit" type="time" class="form-input" style="width: 110px; flex: 0 0 auto" />
         <input
           v-model="newTerminText"
           placeholder="Beschreibung…"
           @keyup.enter="addTermin"
           class="form-input"
+          style="flex: 1; min-width: 160px"
         />
+        <div style="flex: 0 0 240px; min-width: 200px">
+          <TeamPicker
+            mode="multi"
+            :model-value="newTerminAssigneeIds"
+            :free-text="newTerminAssigneeFree"
+            @update:model-value="(v) => (newTerminAssigneeIds = (v as string[]) ?? [])"
+            @update:free-text="(v) => (newTerminAssigneeFree = v)"
+            placeholder="Teilnehmer…"
+          />
+        </div>
         <button @click="addTermin" class="bauos-btn solid">Erstellen</button>
       </div>
       <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
@@ -2232,6 +2286,28 @@ const emptyStammCount = computed(() => {
 }
 .termin-row .del-btn:hover {
   color: var(--color-danger-text);
+}
+
+/* Assignee-Chip (Migration 007) */
+.assignee-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  border-radius: 999px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: all 180ms ease;
+}
+.assignee-chip:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-faint);
+}
+.assignee-chip-free {
+  border-style: dashed;
+  color: var(--color-text-muted);
 }
 
 .note-viewer {

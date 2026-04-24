@@ -20,19 +20,21 @@ tasksRoutes.post("/tasks", async (c) => {
     text: string;
     project?: string;
     assignee?: string;
+    assigneeId?: string;
     date?: string;
     location?: string;
   }>();
   if (!body.text) return c.json({ error: "Text erforderlich" }, 400);
   const task = await taskRepo.save(body.text, body.project);
-  // Apply optional fields
-  if (body.assignee || body.date || body.location) {
+  // Apply optional fields inkl. assigneeId (Migration 007).
+  if (body.assignee || body.assigneeId || body.date || body.location) {
     const updated = await taskRepo.update(
       task.id,
       {
-        assignee: body.assignee || null,
-        date: body.date || null,
-        location: body.location || null,
+        assignee: body.assignee ?? null,
+        assigneeId: body.assigneeId ?? null,
+        date: body.date ?? null,
+        location: body.location ?? null,
       },
       body.project,
     );
@@ -50,6 +52,7 @@ tasksRoutes.put("/tasks/:id", async (c) => {
       text: string;
       status: "open" | "in_progress" | "done";
       assignee: string | null;
+      assigneeId: string | null;
       date: string | null;
       location: string | null;
     }>

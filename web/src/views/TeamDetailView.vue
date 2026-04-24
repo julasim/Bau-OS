@@ -37,6 +37,25 @@ interface ProjectSummary {
   name: string;
   status?: string;
 }
+interface Task {
+  id: string;
+  text: string;
+  status: string;
+  assignee: string | null;
+  assigneeId?: string | null;
+  assigneeName?: string | null;
+  date: string | null;
+  project: string | null;
+}
+interface Termin {
+  id: string;
+  text: string;
+  datum: string;
+  uhrzeit: string | null;
+  assignees: string[];
+  assigneeIds?: string[];
+  project: string | null;
+}
 
 // ── State ────────────────────────────────────────────────
 const route = useRoute();
@@ -45,8 +64,13 @@ const memberId = ref("");
 const member = ref<TeamMember | null>(null);
 const loading = ref(false);
 
-type Tab = "projekte" | "aufgaben" | "log";
+type Tab = "projekte" | "aufgaben" | "termine" | "log";
 const tab = ref<Tab>("projekte");
+
+// Aufgaben + Termine dieser Person (Phase 3)
+const tasks = ref<Task[]>([]);
+const termine = ref<Termin[]>([]);
+const tasksLoaded = ref(false);
 
 // Projekt-Zuordnung
 const allProjects = ref<ProjectSummary[]>([]);
@@ -142,6 +166,41 @@ async function loadAllProjects() {
     allProjectsLoaded.value = true;
   } catch {
     allProjects.value = [];
+  }
+}
+
+// Laedt Tasks + Termine global und filtert client-seitig auf diese Person.
+// Kein spezifischer Endpoint noetig — die Listen sind klein genug und das
+// erspart uns eine zusaetzliche API-Route nur fuer Team-Detail.
+async function loadAssignedTasksAndTermine() {
+  if (tasksLoaded.value || !memberId.value) return;
+  try {
+    const [allTasks, allTermine] = await Promise.all([
+      api.get<Task[]>("/tasks"),
+      api.get<Termin[]>("/termine"),
+    ]);
+    tasks.value = allTasks.filter((t) => t.assigneeId === memberId.value);
+    termine.value = allTermine.filter((te) => te.assigneeIds?.includes(memberId.value));
+    tasksLoaded.value = true;
+  } catch {
+    tasks.value = [];
+    termine.value = [];
+  }
+}
+
+async function openTab(t: Tab) {
+  tab.value = t;
+  if ((t === "aufgaben" || t === "termine") && !tasksLoaded.value) {
+    await loadAssignedTasksAndTermine();
+  }
+}
+
+async function completeTask(task: Task) {
+  try {
+    await api.patch(`/tasks/${encodeURIComponent(task.id)}/complete`, {});
+    await loadAssignedTasksAndTermine();
+  } catch {
+    /* no-op */
   }
 }
 
@@ -466,12 +525,20 @@ onUnmounted(() => {
         style="gap: 24px; margin-top: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); overflow-x: auto"
       >
         <button
-          v-for="t in (['projekte', 'aufgaben', 'log'] as const)"
+          v-for="t in (['projekte', 'aufgaben', 'termine', 'log'] as const)"
           :key="t"
-          @click="tab = t"
+          @click="openTab(t)"
           :class="['tab-btn', tab === t ? 'tab-btn-active' : '']"
         >
-          {{ t === "projekte" ? "Projekte" : t === "aufgaben" ? "Aufgaben" : "Kontakt-Log" }}
+          {{
+            t === "projekte"
+              ? "Projekte"
+              : t === "aufgaben"
+                ? "Aufgaben"
+                : t === "termine"
+                  ? "Termine"
+                  : "Kontakt-Log"
+          }}
         </button>
       </div>
 
@@ -532,10 +599,90 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- Aufgaben-Tab (Placeholder fuer Phase 3) -->
-      <div v-if="tab === 'aufgaben'" class="placeholder-tab">
-        <BIcon name="check" :size="20" />
-        <p>Zugewiesene Aufgaben kommen in Phase 3.</p>
+      <!-- Aufgaben-Tab (Phase 3): Tasks wo assignee_id = member -->
+      <div v-if="tab === 'aufgaben'">
+        <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+          <div
+            v-for="t in tasks.filter((x) => x.status !== 'done')"
+            :key="t.id"
+            class="flex items-center"
+            style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
+          >
+            <input
+              type="checkbox"
+              @change="completeTask(t)"
+              style="accent-color: var(--color-primary)"
+            />
+            <div style="flex: 1; min-width: 0">
+              <div style="font-size: 13px; color: var(--color-text)">{{ t.text }}</div>
+              <div
+                v-if="t.project || t.date"
+                style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px"
+                class="font-mono"
+              >
+                <router-link
+                  v-if="t.project"
+                  :to="`/projects/${encodeURIComponent(t.project)}`"
+                  style="color: inherit; text-decoration: none"
+                  @click.stop
+                >
+                  {{ t.project }}
+                </router-link>
+                <span v-if="t.project && t.date"> · </span>
+                <span v-if="t.date">{{ t.date }}</span>
+              </div>
+            </div>
+          </div>
+          <div
+            v-for="t in tasks.filter((x) => x.status === 'done')"
+            :key="'done-' + t.id"
+            style="padding: 10px 16px; border-top: 1px solid var(--color-border-subtle); opacity: 0.5"
+          >
+            <div style="font-size: 13px; text-decoration: line-through; color: var(--color-text-muted)">
+              {{ t.text }}
+            </div>
+          </div>
+          <p v-if="tasksLoaded && tasks.length === 0" class="empty-hint">
+            Keine Aufgaben zugewiesen.
+          </p>
+          <p v-else-if="!tasksLoaded" class="empty-hint">Lade Aufgaben…</p>
+        </div>
+      </div>
+
+      <!-- Termine-Tab (Phase 3): Termine wo member in assignee_ids -->
+      <div v-if="tab === 'termine'">
+        <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+          <div
+            v-for="te in termine"
+            :key="te.id"
+            class="flex items-center"
+            style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
+          >
+            <div style="flex: 1; min-width: 0">
+              <div style="font-size: 13px; color: var(--color-text)">{{ te.text }}</div>
+              <div
+                style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px"
+                class="font-mono"
+              >
+                {{ te.datum }}<span v-if="te.uhrzeit"> · {{ te.uhrzeit }}</span>
+                <template v-if="te.project">
+                  ·
+                  <router-link
+                    :to="`/projects/${encodeURIComponent(te.project)}`"
+                    style="color: inherit; text-decoration: none"
+                    @click.stop
+                  >
+                    {{ te.project }}
+                  </router-link>
+                </template>
+              </div>
+            </div>
+          </div>
+          <p v-if="tasksLoaded && termine.length === 0" class="empty-hint">
+            Keine Termine mit dieser Person.
+          </p>
+          <p v-else-if="!tasksLoaded" class="empty-hint">Lade Termine…</p>
+        </div>
       </div>
 
       <!-- Log-Tab -->

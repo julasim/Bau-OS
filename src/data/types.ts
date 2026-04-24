@@ -11,6 +11,10 @@ export interface Task {
   status: "open" | "in_progress" | "done";
   priority?: string;
   assignee: string | null;
+  /** Migration 007: FK auf team_members. Wenn gesetzt, ist assigneeName aus
+   *  dem Join verfuegbar; assignee (Text) bleibt als Legacy-Fallback. */
+  assigneeId?: string | null;
+  assigneeName?: string | null;
   date: string | null;
   dueDate?: string | null;
   location: string | null;
@@ -29,6 +33,12 @@ export interface Termin {
   endzeit: string | null;
   location: string | null;
   assignees: string[];
+  /** Migration 007: UUID-Array der Team-Mitglieder. Entkoppelt von assignees
+   *  (Freitext), damit sowohl Mitglieder als auch externe Namen dabei sein
+   *  koennen. UI zeigt Namen aus assigneesResolved-Join, fallt auf assignees
+   *  zurueck wenn keine Member-ID vorhanden. */
+  assigneeIds?: string[];
+  assigneesResolved?: { id: string; name: string }[];
   project: string | null;
   recurring?: string | null;
   color?: string | null;

@@ -278,8 +278,13 @@ projectsRoutes.get("/projects/:name/tasks", async (c) => {
 
 projectsRoutes.post("/projects/:name/tasks", async (c) => {
   const name = c.req.param("name");
-  const { text } = await c.req.json<{ text: string }>();
-  await taskRepo.save(text, name);
+  const body = await c.req.json<{ text: string; assigneeId?: string | null }>();
+  const task = await taskRepo.save(body.text, name);
+  // Wenn assigneeId mitkommt (Migration 007), direkt setzen — das Repo
+  // denormalisiert auch den assignee-Textnamen.
+  if (body.assigneeId !== undefined) {
+    await taskRepo.update(task.id, { assigneeId: body.assigneeId ?? null }, name);
+  }
   emit({ type: "task", action: "created", project: name });
   return c.json({ ok: true });
 });
@@ -300,8 +305,18 @@ projectsRoutes.get("/projects/:name/termine", async (c) => {
 
 projectsRoutes.post("/projects/:name/termine", async (c) => {
   const name = c.req.param("name");
-  const { datum, text, uhrzeit } = await c.req.json<{ datum: string; text: string; uhrzeit?: string }>();
-  await terminRepo.save(datum, text, uhrzeit, name);
+  const body = await c.req.json<{
+    datum: string;
+    text: string;
+    uhrzeit?: string;
+    assigneeIds?: string[];
+  }>();
+  const termin = await terminRepo.save(body.datum, body.text, body.uhrzeit, name);
+  if (typeof termin === "string") return c.json({ error: termin }, 400);
+  // assigneeIds nachziehen, falls uebergeben (Migration 007).
+  if (body.assigneeIds !== undefined) {
+    await terminRepo.update(termin.id, { assigneeIds: body.assigneeIds }, name);
+  }
   emit({ type: "termin", action: "created", project: name });
   return c.json({ ok: true });
 });

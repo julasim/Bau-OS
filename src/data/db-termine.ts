@@ -5,6 +5,13 @@ import { validateDatum, validateUhrzeit, normalizeDatum } from "../workspace/ter
 import type { Termin, TerminRepository } from "./types.js";
 
 function rowToTermin(row: Record<string, unknown>): Termin {
+  const assigneeIds = Array.isArray(row.assignee_ids) ? (row.assignee_ids as string[]).map(String) : [];
+  const resolvedRaw = row.assignees_resolved;
+  const assigneesResolved = Array.isArray(resolvedRaw)
+    ? (resolvedRaw as Array<Record<string, unknown>>)
+        .filter((r) => r && r.id)
+        .map((r) => ({ id: String(r.id), name: String(r.name) }))
+    : [];
   return {
     id: String(row.id),
     text: String(row.text),
@@ -13,12 +20,30 @@ function rowToTermin(row: Record<string, unknown>): Termin {
     endzeit: row.endzeit ? String(row.endzeit) : null,
     location: row.location ? String(row.location) : null,
     assignees: (row.assignees as string[]) || [],
+    assigneeIds,
+    assigneesResolved,
     project: row.project_name ? String(row.project_name) : null,
     recurring: row.recurring ? String(row.recurring) : null,
     color: row.color ? String(row.color) : null,
     createdAt: String(row.created_at),
   };
 }
+
+// Gemeinsame SELECT-Klausel — LEFT JOIN auf Array-Elemente ueber LATERAL,
+// damit wir die Namen der referenzierten Mitglieder als JSON-Array mit
+// zurueckbekommen, ohne N+1.
+const TERMIN_SELECT = `
+  SELECT t.*,
+    p.name as project_name,
+    COALESCE(
+      (SELECT json_agg(json_build_object('id', tm.id, 'name', tm.name))
+         FROM team_members tm
+        WHERE tm.id = ANY(COALESCE(t.assignee_ids, '{}'::uuid[]))),
+      '[]'::json
+    ) as assignees_resolved
+  FROM termine t
+  LEFT JOIN projects p ON t.project_id = p.id
+`;
 
 export const dbTermine: TerminRepository = {
   async save(datum, text, uhrzeit, project) {
@@ -42,43 +67,29 @@ export const dbTermine: TerminRepository = {
       projectId = p?.id ?? null;
     }
 
-    const [row] = await db`
+    await db`
       INSERT INTO termine (id, text, datum, uhrzeit, project_id, created_at)
       VALUES (${id}, ${text}, ${datum}, ${uhrzeit ?? null}, ${projectId}, ${now})
-      RETURNING *, (SELECT name FROM projects WHERE id = project_id) as project_name
     `;
-    return rowToTermin(row);
+    const termin = await this.get(id);
+    if (!termin) throw new Error("Termin nach INSERT nicht lesbar");
+    return termin;
   },
 
   async list(project) {
     const db = getDb();
     if (project) {
-      return (
-        await db`
-        SELECT t.*, p.name as project_name FROM termine t
-        LEFT JOIN projects p ON t.project_id = p.id
-        WHERE p.name = ${project}
-        ORDER BY t.datum, t.uhrzeit
-      `
-      ).map(rowToTermin);
+      const rows = await db.unsafe(`${TERMIN_SELECT} WHERE p.name = $1 ORDER BY t.datum, t.uhrzeit`, [project]);
+      return rows.map((r) => rowToTermin(r as Record<string, unknown>));
     }
-    return (
-      await db`
-      SELECT t.*, p.name as project_name FROM termine t
-      LEFT JOIN projects p ON t.project_id = p.id
-      ORDER BY t.datum, t.uhrzeit
-    `
-    ).map(rowToTermin);
+    const rows = await db.unsafe(`${TERMIN_SELECT} ORDER BY t.datum, t.uhrzeit`);
+    return rows.map((r) => rowToTermin(r as Record<string, unknown>));
   },
 
   async get(id) {
     const db = getDb();
-    const [row] = await db`
-      SELECT t.*, p.name as project_name FROM termine t
-      LEFT JOIN projects p ON t.project_id = p.id
-      WHERE t.id = ${id}
-    `;
-    return row ? rowToTermin(row) : null;
+    const rows = await db.unsafe(`${TERMIN_SELECT} WHERE t.id = $1 LIMIT 1`, [id]);
+    return rows[0] ? rowToTermin(rows[0] as Record<string, unknown>) : null;
   },
 
   async update(id, updates) {
@@ -99,16 +110,35 @@ export const dbTermine: TerminRepository = {
     const uhrzeit = "uhrzeit" in updates ? updates.uhrzeit : current.uhrzeit;
     const endzeit = "endzeit" in updates ? updates.endzeit : current.endzeit;
     const location = "location" in updates ? updates.location : current.location;
-    const assignees = "assignees" in updates ? updates.assignees : current.assignees;
+    let assignees = "assignees" in updates ? updates.assignees : current.assignees;
+    const assigneeIds = "assigneeIds" in updates ? updates.assigneeIds : (current.assignee_ids as string[]);
 
-    const [row] = await db`
+    // Wenn assigneeIds neu gesetzt werden, denormalisieren wir den assignees-
+    // Freitext-Array analog auf die zugehoerigen Namen, damit Legacy-Reader
+    // konsistent bleiben. Externe Namen (nicht in team_members) gehen nicht
+    // verloren — assignees darf zusaetzlich Eintraege enthalten.
+    if ("assigneeIds" in updates && Array.isArray(assigneeIds) && assigneeIds.length > 0) {
+      const members = await db`
+        SELECT id, name FROM team_members WHERE id = ANY(${assigneeIds})
+      `;
+      const memberNames = members.map((m) => String(m.name));
+      // Beibehalten aller Freitext-Namen die NICHT zu gemappten Mitgliedern
+      // gehoeren (z.B. externe Teilnehmer).
+      const existingText = Array.isArray(assignees) ? (assignees as string[]) : [];
+      const memberNameSet = new Set(memberNames.map((n) => n.toLowerCase()));
+      const extra = existingText.filter((n) => !memberNameSet.has(n.toLowerCase()));
+      assignees = [...memberNames, ...extra];
+    }
+
+    await db`
       UPDATE termine SET
         text = ${text}, datum = ${datum}, uhrzeit = ${uhrzeit},
-        endzeit = ${endzeit}, location = ${location}, assignees = ${assignees}
+        endzeit = ${endzeit}, location = ${location},
+        assignees = ${assignees as string[]},
+        assignee_ids = ${(assigneeIds ?? []) as string[]}
       WHERE id = ${id}
-      RETURNING *, (SELECT name FROM projects WHERE id = project_id) as project_name
     `;
-    return row ? rowToTermin(row) : null;
+    return this.get(id);
   },
 
   async delete(textOrId) {
