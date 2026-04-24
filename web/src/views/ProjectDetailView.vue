@@ -463,6 +463,18 @@ function downloadMarkdown() {
   window.location.href = href;
 }
 
+// ── PDF via Druck-Dialog ─────────────────────────────────
+// window.print() + angepasstes @media print CSS — ohne externe Lib und
+// ohne Server-Roundtrip. "Als PDF speichern" ist im Druckdialog jedes
+// modernen Browsers eingebaut. Wir springen automatisch auf die Uebersicht,
+// damit nicht ein leerer Dateien-Tab gedruckt wird.
+async function printProject() {
+  showActionMenu.value = false;
+  if (tab.value !== "uebersicht") await openTab("uebersicht");
+  // Kurze Pause, damit Vue die Uebersicht rendert bevor der Druckdialog kommt.
+  setTimeout(() => window.print(), 100);
+}
+
 // ── Farbe setzen ─────────────────────────────────────────
 async function setColor(value: string | null) {
   showColorPicker.value = false;
@@ -1113,6 +1125,10 @@ const emptyStammCount = computed(() => {
               <button class="action-menu-item" @click="downloadMarkdown">
                 <BIcon name="arrowUpRight" :size="12" />
                 <span>Als Markdown exportieren</span>
+              </button>
+              <button class="action-menu-item" @click="printProject">
+                <BIcon name="file" :size="12" />
+                <span>Drucken / Als PDF…</span>
               </button>
               <div class="action-menu-divider"></div>
               <button class="action-menu-item action-menu-danger" @click="openDeleteConfirm">
@@ -2983,5 +2999,59 @@ const emptyStammCount = computed(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+</style>
+
+<!-- Global Print-Stylesheet — bewusst nicht scoped, damit wir App-Chrome
+     (Sidebar, TopBar) ausblenden koennen. Selektoren bewusst defensiv und
+     hochspezifisch, um nur bei der ProjectDetailView zu greifen. -->
+<style>
+@media print {
+  /* App-Chrome ausblenden */
+  .sidebar-root,
+  .sidebar-backdrop,
+  header,
+  .back-link,
+  .action-menu-wrapper,
+  .color-picker-wrapper,
+  .tab-btn,
+  .quick-add,
+  .link-row,
+  .del-btn,
+  .file-del-btn,
+  .team-remove {
+    display: none !important;
+  }
+  /* Layout fuer A4: volle Breite, keine Scrollbalken */
+  body,
+  html,
+  #app {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .hero,
+  .ueb-card,
+  .stat-tile {
+    page-break-inside: avoid;
+    border-color: #ccc !important;
+    background: #fff !important;
+    box-shadow: none !important;
+  }
+  /* Tabs-Header-Bar: weg. Nur der aktive Uebersichts-Inhalt wird gedruckt. */
+  .flex[style*="border-bottom"] {
+    display: none !important;
+  }
+  /* Kompaktere Schriften fuer Druck */
+  h1 {
+    font-size: 22px !important;
+  }
+  .stat-number {
+    font-size: 20px !important;
+  }
+  /* Links schwarz, Unterstreichung erhalten */
+  a {
+    color: #000 !important;
+    text-decoration: underline !important;
+  }
 }
 </style>

@@ -264,6 +264,55 @@ function viewModeIcon() {
   return viewMode.value === "grid" ? "list" : viewMode.value === "list" ? "kanban" : "grid";
 }
 
+// ── Drag-&-Drop im Kanban ────────────────────────────────
+// Karten per Drag & Drop zwischen Phasen-Spalten verschieben → Patch der
+// phase-Spalte. "Ohne Phase" als Drop-Ziel setzt phase auf null.
+// Kein externes DnD-Lib — wir brauchen nur das Grundmuster: dragstart auf
+// Karte, dragover auf Spalte (mit preventDefault), drop auf Spalte.
+const draggingProjectName = ref<string | null>(null);
+const dragOverPhase = ref<string | null>(null);
+
+function onCardDragStart(e: DragEvent, p: ProjectInfo) {
+  draggingProjectName.value = p.name;
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "move";
+    // Minimal-Payload fuer Tools, die den Text-Type erwarten.
+    e.dataTransfer.setData("text/plain", p.name);
+  }
+}
+function onCardDragEnd() {
+  draggingProjectName.value = null;
+  dragOverPhase.value = null;
+}
+function onColumnDragOver(e: DragEvent, phase: string) {
+  // preventDefault ist essentiell — sonst erlaubt der Browser kein drop.
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  dragOverPhase.value = phase;
+}
+function onColumnDragLeave(phase: string) {
+  if (dragOverPhase.value === phase) dragOverPhase.value = null;
+}
+async function onColumnDrop(e: DragEvent, phase: string) {
+  e.preventDefault();
+  const name = draggingProjectName.value;
+  draggingProjectName.value = null;
+  dragOverPhase.value = null;
+  if (!name) return;
+  const project = projects.value.find((p) => p.name === name);
+  if (!project) return;
+  const newPhase = phase === "Ohne Phase" ? null : phase;
+  if ((project.phase ?? null) === newPhase) return; // kein Change
+  // Optimistisches Update — Kanban wirkt sofort, Rollback bei Fehler.
+  const before = project.phase;
+  project.phase = newPhase;
+  try {
+    await api.patch(`/projects/${encodeURIComponent(name)}`, { phase: newPhase });
+  } catch {
+    project.phase = before ?? null;
+  }
+}
+
 onMounted(async () => {
   projects.value = await api.get<ProjectInfo[]>("/projects");
 });
@@ -389,6 +438,16 @@ onMounted(async () => {
             >{{ relativeTime(p.updatedAt) }}</span
           >
         </div>
+        <!-- Parent-Breadcrumb, wenn Sub-Projekt. Klick navigiert zum Parent. -->
+        <div
+          v-if="p.parentName"
+          class="card-parent-crumb"
+          @click.stop="router.push(`/projects/${encodeURIComponent(p.parentName)}`)"
+        >
+          <BIcon name="layers" :size="10" />
+          <span>{{ p.parentName }}</span>
+          <span style="opacity: 0.5">/</span>
+        </div>
         <div style="font-size: 15px; font-weight: 600; color: var(--color-text); margin-bottom: 4px">
           {{ p.name }}
         </div>
@@ -436,6 +495,14 @@ onMounted(async () => {
             {{ p.openTasks }} Aufgaben
           </span>
           <span>{{ p.termine }} Termine</span>
+          <span
+            v-if="p.childrenCount && p.childrenCount > 0"
+            style="margin-left: auto; color: var(--color-text-secondary)"
+            :title="'Unterprojekte'"
+          >
+            <BIcon name="layers" :size="10" />
+            {{ p.childrenCount }}
+          </span>
         </div>
 
         <!-- Fortschritts-Balken — nur, wenn ueberhaupt Aufgaben existieren. -->
@@ -462,7 +529,15 @@ onMounted(async () => {
 
     <!-- Kanban (nach Phase) -->
     <div v-else-if="viewMode === 'kanban'" class="kanban-board">
-      <div v-for="col in kanbanColumns" :key="col.phase" class="kanban-col">
+      <div
+        v-for="col in kanbanColumns"
+        :key="col.phase"
+        class="kanban-col"
+        :class="{ 'kanban-col-drop': dragOverPhase === col.phase }"
+        @dragover="onColumnDragOver($event, col.phase)"
+        @dragleave="onColumnDragLeave(col.phase)"
+        @drop="onColumnDrop($event, col.phase)"
+      >
         <div class="kanban-col-head">
           <span class="kanban-col-title">{{ col.phase }}</span>
           <span class="kanban-col-count">{{ col.items.length }}</span>
@@ -471,8 +546,14 @@ onMounted(async () => {
           v-for="p in col.items"
           :key="p.name"
           class="kanban-card"
-          :class="{ 'proj-card-accent': !!p.color }"
+          :class="{
+            'proj-card-accent': !!p.color,
+            'kanban-card-dragging': draggingProjectName === p.name,
+          }"
           :style="p.color ? { '--accent-color': p.color } : {}"
+          draggable="true"
+          @dragstart="onCardDragStart($event, p)"
+          @dragend="onCardDragEnd"
           @click="router.push(`/projects/${encodeURIComponent(p.name)}`)"
         >
           <div class="flex items-center justify-between" style="margin-bottom: 6px; gap: 8px">
@@ -905,8 +986,8 @@ onMounted(async () => {
   border-radius: 6px;
   padding: 10px 12px;
   margin-bottom: 8px;
-  cursor: pointer;
-  transition: border-color 180ms ease, transform 120ms ease;
+  cursor: grab;
+  transition: border-color 180ms ease, transform 120ms ease, opacity 180ms ease;
 }
 .kanban-card:hover {
   border-color: var(--color-text-faint);
@@ -914,6 +995,19 @@ onMounted(async () => {
 }
 .kanban-card:last-child {
   margin-bottom: 0;
+}
+.kanban-card:active {
+  cursor: grabbing;
+}
+.kanban-card-dragging {
+  opacity: 0.4;
+  transform: scale(0.98);
+}
+.kanban-col-drop {
+  background: color-mix(in srgb, var(--color-primary) 8%, var(--color-bg-subtle));
+  border-color: var(--color-primary);
+  outline: 2px dashed var(--color-primary);
+  outline-offset: -4px;
 }
 
 .kanban-name {
@@ -942,6 +1036,24 @@ onMounted(async () => {
   text-align: center;
   font-style: italic;
   margin: 8px 0 0 0;
+}
+
+/* ── Parent-Breadcrumb auf Karten ───────────────────────── */
+.card-parent-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+  margin-bottom: 2px;
+  cursor: pointer;
+  transition: color 180ms ease;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+}
+.card-parent-crumb:hover {
+  color: var(--color-text);
 }
 
 /* ── Modal ─────────────────────────────────────────────── */
