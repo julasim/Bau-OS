@@ -18,6 +18,8 @@ const router = createRouter({
         { path: "termine", redirect: "/calendar" },
         { path: "projects", name: "projects", component: () => import("./views/ProjectsView.vue") },
         { path: "projects/:name", name: "project-detail", component: () => import("./views/ProjectDetailView.vue") },
+        { path: "team", name: "team", component: () => import("./views/TeamView.vue") },
+        { path: "team/:id", name: "team-detail", component: () => import("./views/TeamDetailView.vue") },
         { path: "agents", name: "agents", component: () => import("./views/AgentsView.vue") },
         { path: "agents/:name/:filename", name: "agent-editor", component: () => import("./views/AgentEditorView.vue") },
         { path: "search", name: "search", component: () => import("./views/SearchView.vue") },

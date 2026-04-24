@@ -16,6 +16,8 @@ const titles: Record<string, string> = {
   calendar: "Kalender",
   projects: "Projekte",
   "project-detail": "Projekt",
+  team: "Team",
+  "team-detail": "Team-Mitglied",
   notes: "Notizen",
   "note-editor": "Notiz",
   files: "Dateien",

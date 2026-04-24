@@ -75,6 +75,8 @@ interface TeamMember {
   phone: string | null;
   company: string | null;
   projectId: string | null;
+  // Migration 006 — Junction-Daten
+  projects?: { id: string; name: string; projectRole: string | null }[];
 }
 interface AgentLog {
   id?: string;
@@ -749,17 +751,19 @@ async function loadTeam() {
   }
 }
 
+// Migration 006: M:N-Zuordnung ueber projects-Array im Member.
+// projects enthaelt { id, name, projectRole } fuer jedes zugeordnete Projekt.
 const projectTeam = computed<TeamMember[]>(() => {
   if (!info.value) return [];
-  return allTeam.value.filter((m) => m.projectId === info.value!.id);
+  return allTeam.value.filter((m) => m.projects?.some((p) => p.id === info.value!.id));
 });
 
-// Kandidaten zum Zuordnen: alle unassigned oder einem anderen Projekt zugeordnete
-// Mitglieder. Letztere zeigen wir auch an — der Umzug ist ein Klick, und der
-// User sieht sofort, dass es nur eine projectId pro Member gibt.
+// Kandidaten zum Zuordnen: Mitglieder die diesem Projekt NOCH NICHT zugeordnet
+// sind. Ein Mitglied kann jetzt auf vielen Projekten sein — also kein Umzug,
+// sondern ein Dazu-Legen.
 const assignableTeam = computed<TeamMember[]>(() => {
   if (!info.value) return [];
-  return allTeam.value.filter((m) => m.projectId !== info.value!.id);
+  return allTeam.value.filter((m) => !m.projects?.some((p) => p.id === info.value!.id));
 });
 
 async function assignExisting() {
@@ -767,10 +771,9 @@ async function assignExisting() {
   teamAssigning.value = true;
   teamError.value = null;
   try {
-    // PATCH /team/:id akzeptiert zwar laut Signatur nur name/role/email/...,
-    // aber das ist nur eine Type-Assertion am Body. Der Repo-Update-Pfad
-    // checkt "projectId" in updates und schreibt es korrekt in die Spalte.
-    await api.patch(`/team/${encodeURIComponent(assignMemberId.value)}`, {
+    // Junction-Endpoint (Migration 006) — idempotent, erlaubt parallel mehrere
+    // Projekt-Zuordnungen pro Mitglied.
+    await api.post(`/team/${encodeURIComponent(assignMemberId.value)}/projects`, {
       projectId: info.value.id,
     });
     assignMemberId.value = "";
@@ -788,13 +791,14 @@ async function createAndAssign() {
   teamAssigning.value = true;
   teamError.value = null;
   try {
-    // POST /team akzeptiert aktuell keine projectId (wird serverseitig auf
-    // null gesetzt). Daher zweistufig: erst anlegen, dann PATCH mit projectId.
+    // Zweistufig: anlegen, dann via Junction zuordnen. POST /team legt global
+    // an (keine Projekt-Verknuepfung); POST /team/:id/projects macht die
+    // projektspezifische Zuordnung.
     const created = await api.post<TeamMember>("/team", {
       name,
       role: newMemberRole.value.trim() || undefined,
     });
-    await api.patch(`/team/${encodeURIComponent(created.id)}`, {
+    await api.post(`/team/${encodeURIComponent(created.id)}/projects`, {
       projectId: info.value.id,
     });
     newMemberName.value = "";
@@ -809,12 +813,16 @@ async function createAndAssign() {
 }
 
 async function unassignMember(m: TeamMember) {
-  if (teamAssigning.value) return;
+  if (teamAssigning.value || !info.value) return;
   if (!confirm(`"${m.name}" aus diesem Projekt entfernen? (Mitglied bleibt im Team-Verzeichnis.)`)) return;
   teamAssigning.value = true;
   teamError.value = null;
   try {
-    await api.patch(`/team/${encodeURIComponent(m.id)}`, { projectId: null });
+    // Junction-Delete: Mitglied bleibt erhalten, nur die Zuordnung zu
+    // diesem einen Projekt wird aufgehoben (andere Zuordnungen bleiben).
+    await api.delete(
+      `/team/${encodeURIComponent(m.id)}/projects/${encodeURIComponent(info.value.id)}`,
+    );
     await loadTeam();
   } catch (e) {
     teamError.value = e instanceof Error ? e.message : "Entfernen fehlgeschlagen";

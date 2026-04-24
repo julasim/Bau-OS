@@ -38,6 +38,7 @@ const sections: NavSection[] = [
       { to: "/tasks", label: "Aufgaben", icon: "check" },
       { to: "/calendar", label: "Kalender", icon: "calendar" },
       { to: "/projects", label: "Projekte", icon: "folder" },
+      { to: "/team", label: "Team", icon: "users" },
     ],
   },
   {
