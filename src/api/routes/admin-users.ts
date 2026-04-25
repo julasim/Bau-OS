@@ -1,0 +1,189 @@
+// ============================================================
+// Bau-OS — Admin-User-Verwaltung
+// Nur fuer admins. Erfordert authMiddleware + adminMiddleware.
+//
+// Schutzregeln:
+//  - is_protected-User koennen nicht geloescht werden
+//  - is_protected-User koennen nicht herabgestuft werden
+//  - Andere Admins koennen frei downgraded/geloescht werden — der
+//    geschuetzte Admin garantiert, dass die Firma nie alle Admin-
+//    Konten verliert
+// ============================================================
+
+import { Hono } from "hono";
+import {
+  adminMiddleware,
+  listDbUsers,
+  findDbUserById,
+  findDbUserByUsername,
+  createDbUser,
+  updateDbUser,
+  deleteDbUser,
+  updateDbUserPassword,
+  hashPassword,
+} from "../auth.js";
+import type { AppEnv } from "../server.js";
+import { emit } from "../events.js";
+
+export const adminUsersRoutes = new Hono<AppEnv>();
+
+// Alle Routes hier brauchen Admin-Rechte.
+adminUsersRoutes.use("/admin/users/*", adminMiddleware);
+adminUsersRoutes.use("/admin/users", adminMiddleware);
+
+// Hilfsfunktion: Public-Shape des Users — Passwort-Hash bleibt drin.
+function publicUser(u: Awaited<ReturnType<typeof listDbUsers>>[number]) {
+  return {
+    id: u.id,
+    username: u.username,
+    displayName: u.displayName,
+    role: u.role,
+    isProtected: u.isProtected,
+    hasTelegram: !!u.telegramChatId,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
+  };
+}
+
+// ── Liste ────────────────────────────────────────────────────────────────────
+adminUsersRoutes.get("/admin/users", async (c) => {
+  const users = await listDbUsers();
+  return c.json(users.map(publicUser));
+});
+
+// ── Anlegen ──────────────────────────────────────────────────────────────────
+adminUsersRoutes.post("/admin/users", async (c) => {
+  let body: { username: string; password: string; role?: string; displayName?: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
+
+  const username = (body.username ?? "").trim();
+  const password = body.password ?? "";
+  if (!username || username.length < 3) {
+    return c.json({ error: "Benutzername muss mindestens 3 Zeichen haben" }, 400);
+  }
+  if (!password || password.length < 8) {
+    return c.json({ error: "Passwort muss mindestens 8 Zeichen haben" }, 400);
+  }
+  const role = body.role === "admin" ? "admin" : "user";
+
+  // Duplicate-Check: bevor wir ans bcrypt-Hashing gehen.
+  const existing = await findDbUserByUsername(username);
+  if (existing) return c.json({ error: "Benutzername existiert bereits" }, 409);
+
+  try {
+    const user = await createDbUser({
+      username,
+      password,
+      role,
+      displayName: body.displayName?.trim() || null,
+    });
+    emit({ type: "team", action: "created", id: user.id });
+    return c.json(publicUser(user), 201);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.toLowerCase().includes("unique") || msg.toLowerCase().includes("duplicate")) {
+      return c.json({ error: "Benutzername existiert bereits" }, 409);
+    }
+    return c.json({ error: "Anlegen fehlgeschlagen: " + msg }, 500);
+  }
+});
+
+// ── Aktualisieren (Rolle, Display-Name, Username) ───────────────────────────
+adminUsersRoutes.patch("/admin/users/:id", async (c) => {
+  const id = c.req.param("id");
+  const target = await findDbUserById(id);
+  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
+
+  let body: { username?: string; role?: string; displayName?: string | null };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
+
+  const patch: { username?: string; role?: "admin" | "user"; displayName?: string | null } = {};
+
+  if ("username" in body) {
+    const newUsername = (body.username ?? "").trim();
+    if (newUsername.length < 3) {
+      return c.json({ error: "Benutzername muss mindestens 3 Zeichen haben" }, 400);
+    }
+    if (newUsername !== target.username) {
+      const existing = await findDbUserByUsername(newUsername);
+      if (existing) return c.json({ error: "Benutzername existiert bereits" }, 409);
+    }
+    patch.username = newUsername;
+  }
+
+  if ("role" in body) {
+    const newRole = body.role === "admin" ? "admin" : "user";
+    // Schutzregel: geschuetzter Admin bleibt Admin.
+    if (target.isProtected && newRole !== "admin") {
+      return c.json({ error: "Geschuetzter Admin kann nicht herabgestuft werden" }, 403);
+    }
+    patch.role = newRole;
+  }
+
+  if ("displayName" in body) {
+    const dn = body.displayName;
+    patch.displayName = typeof dn === "string" ? dn.trim() || null : null;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return c.json({ error: "Keine aenderbaren Felder im Body" }, 400);
+  }
+
+  const updated = await updateDbUser(id, patch);
+  if (!updated) return c.json({ error: "Update fehlgeschlagen" }, 500);
+  emit({ type: "team", action: "updated", id });
+  return c.json(publicUser(updated));
+});
+
+// ── Passwort zuruecksetzen ──────────────────────────────────────────────────
+adminUsersRoutes.patch("/admin/users/:id/password", async (c) => {
+  const id = c.req.param("id");
+  const target = await findDbUserById(id);
+  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
+
+  let body: { newPassword: string };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
+  if (!body.newPassword || body.newPassword.length < 8) {
+    return c.json({ error: "Passwort muss mindestens 8 Zeichen haben" }, 400);
+  }
+
+  const hash = await hashPassword(body.newPassword);
+  const ok = await updateDbUserPassword(id, hash);
+  if (!ok) return c.json({ error: "Update fehlgeschlagen" }, 500);
+  emit({ type: "team", action: "updated", id });
+  return c.json({ ok: true });
+});
+
+// ── Loeschen ────────────────────────────────────────────────────────────────
+adminUsersRoutes.delete("/admin/users/:id", async (c) => {
+  const id = c.req.param("id");
+  const target = await findDbUserById(id);
+  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
+
+  if (target.isProtected) {
+    return c.json({ error: "Geschuetzter Admin kann nicht geloescht werden" }, 403);
+  }
+
+  // Schutz: User loescht sich nicht selbst (sonst sofortige Aussperrung).
+  const currentUserId = c.var.userId;
+  if (currentUserId && currentUserId === id) {
+    return c.json({ error: "Du kannst dich nicht selbst loeschen" }, 403);
+  }
+
+  const ok = await deleteDbUser(id);
+  if (!ok) return c.json({ error: "Loeschen fehlgeschlagen" }, 500);
+  emit({ type: "team", action: "deleted", id });
+  return c.json({ ok: true });
+});

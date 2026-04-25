@@ -46,6 +46,7 @@ import { eventsRoutes } from "./routes/events.js";
 import { chatRoutes } from "./routes/chat.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { agentLogsRoutes } from "./routes/agent-logs.js";
+import { adminUsersRoutes } from "./routes/admin-users.js";
 
 const app = new Hono<AppEnv>();
 
@@ -224,6 +225,7 @@ app.route("/api", searchRoutes);
 app.route("/api", filesRoutes);
 app.route("/api", teamRoutes);
 app.route("/api", companiesRoutes);
+app.route("/api", adminUsersRoutes);
 app.route("/api", eventsRoutes);
 app.route("/api", chatRoutes);
 app.route("/api", settingsRoutes);

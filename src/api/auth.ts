@@ -94,6 +94,74 @@ export async function countDbUsers(): Promise<number> {
   return Number(row?.c ?? 0);
 }
 
+/** Liste aller DB-User, fuer Admin-Verwaltung. Sortiert: geschuetzte
+ *  Admins zuerst, dann Admins, dann User, alphabetisch. */
+export async function listDbUsers(): Promise<DbUser[]> {
+  if (!DB_ENABLED) return [];
+  const db = getDb();
+  const rows = await db`
+    SELECT * FROM users
+    ORDER BY is_protected DESC, role DESC, username ASC
+  `;
+  return rows.map(rowToDbUser);
+}
+
+/** Legt einen neuen DB-User an. Throws bei UNIQUE-Konflikt auf username. */
+export async function createDbUser(input: {
+  username: string;
+  password: string;
+  role: "admin" | "user";
+  displayName?: string | null;
+}): Promise<DbUser> {
+  if (!DB_ENABLED) throw new Error("DB-Modus erforderlich");
+  const passwordHash = await hashPassword(input.password);
+  const db = getDb();
+  const [row] = await db`
+    INSERT INTO users (username, password_hash, role, display_name, is_protected, settings)
+    VALUES (
+      ${input.username}, ${passwordHash}, ${input.role},
+      ${input.displayName ?? null}, false, '{}'::jsonb
+    )
+    RETURNING *
+  `;
+  return rowToDbUser(row);
+}
+
+/** Setzt Felder eines DB-Users. NICHT erlaubt: is_protected aufheben/setzen
+ *  (das passiert ausschliesslich beim Initial-Setup). Caller muss separat
+ *  pruefen, ob der Ziel-User geschuetzt ist. */
+export async function updateDbUser(
+  id: string,
+  patch: { username?: string; role?: "admin" | "user"; displayName?: string | null },
+): Promise<DbUser | null> {
+  if (!DB_ENABLED) return null;
+  const db = getDb();
+  const [current] = await db`SELECT * FROM users WHERE id = ${id}`;
+  if (!current) return null;
+
+  const username = "username" in patch ? patch.username : current.username;
+  const role = "role" in patch ? patch.role : current.role;
+  const displayName = "displayName" in patch ? patch.displayName : current.display_name;
+
+  const [row] = await db`
+    UPDATE users SET
+      username = ${username},
+      role = ${role},
+      display_name = ${displayName}
+    WHERE id = ${id}
+    RETURNING *
+  `;
+  return row ? rowToDbUser(row) : null;
+}
+
+/** Loescht einen DB-User. Caller muss is_protected vorher pruefen. */
+export async function deleteDbUser(id: string): Promise<boolean> {
+  if (!DB_ENABLED) return false;
+  const db = getDb();
+  const result = await db`DELETE FROM users WHERE id = ${id}`;
+  return result.count > 0;
+}
+
 /** Aktualisiert Settings eines DB-Users. Settings werden gemerged, nicht
  *  ueberschrieben — kompatibel zur JSON-Variante in updateUser(). */
 export async function updateDbUserSettings(userId: string, patch: UserSettings): Promise<DbUser | null> {

@@ -27,6 +27,7 @@ const router = createRouter({
         { path: "files", name: "files", component: () => import("./views/FileBrowserView.vue") },
         { path: "chat", name: "chat", component: () => import("./views/ChatView.vue") },
         { path: "settings", name: "settings", component: () => import("./views/SettingsView.vue") },
+        { path: "admin/users", name: "admin-users", component: () => import("./views/AdminUsersView.vue") },
       ],
     },
   ],

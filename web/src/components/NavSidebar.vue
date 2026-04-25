@@ -11,7 +11,7 @@ const router = useRouter();
 const route = useRoute();
 const { theme, toggle } = useTheme();
 const { open, close } = useSidebar();
-const { displayName, initials, role } = useCurrentUser();
+const { displayName, initials, role, isAdmin } = useCurrentUser();
 
 interface NavItem {
   to: string;
@@ -19,13 +19,15 @@ interface NavItem {
   icon: string;
   badge?: number;
   kbd?: string;
+  /** Nur fuer Admins sichtbar — Nicht-Admins kriegen den Eintrag nicht. */
+  adminOnly?: boolean;
 }
 interface NavSection {
   title?: string;
   items: NavItem[];
 }
 
-const sections: NavSection[] = [
+const allSections: NavSection[] = [
   {
     items: [
       { to: "/", label: "Dashboard", icon: "grid" },
@@ -53,10 +55,22 @@ const sections: NavSection[] = [
     title: "System",
     items: [
       { to: "/agents", label: "Agenten", icon: "cpu" },
+      { to: "/admin/users", label: "Nutzer", icon: "user", adminOnly: true },
       { to: "/settings", label: "Einstellungen", icon: "settings" },
     ],
   },
 ];
+
+// Filter: adminOnly-Eintraege werden fuer Nicht-Admins entfernt. Wenn alle
+// Eintraege einer Section gefiltert sind, kommt die Section auch raus.
+const sections = computed<NavSection[]>(() =>
+  allSections
+    .map((s) => ({
+      ...s,
+      items: s.items.filter((i) => !i.adminOnly || isAdmin.value),
+    }))
+    .filter((s) => s.items.length > 0),
+);
 
 const currentPath = computed(() => route.path);
 
