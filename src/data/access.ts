@@ -29,20 +29,28 @@ export interface UserCtx {
 export type VisibleScope = string[] | "all";
 
 /** Liefert die UUID-Liste sichtbarer Projekte fuer den User. Admins kriegen
- *  "all". User ohne UUID (Legacy) oder ohne user_projects-Eintrag sehen
- *  einen leeren Scope — d.h. sie sehen NUR ihre persoenlichen Daten. */
+ *  "all".
+ *
+ *  Wichtig: wenn das Repo gar keine ACL-Methode hat (FS-Mode), bekommt der
+ *  User AUCH "all". Begruendung: FS-Mode unterstuetzt keine Multi-User-
+ *  Trennung; Legacy-Verhalten = "alles sichtbar fuer alle authentifizierten".
+ *  Nur im DB-Mode mit aktiviertem Multi-User filtert getVisibleProjectIds
+ *  tatsaechlich.
+ *
+ *  User mit DB-Mode aber ohne UUID (defekte JWTs) kriegen []. */
 export async function getVisibleProjectIds(ctx: UserCtx): Promise<VisibleScope> {
   if (ctx.role === "admin") return "all";
+  if (!projectRepo.listVisibleProjectIds) return "all"; // FS-Mode → keine ACL
   if (!ctx.userId) return [];
-  if (!projectRepo.listVisibleProjectIds) return [];
   return projectRepo.listVisibleProjectIds(ctx.userId);
 }
 
 /** Convenience: darf der User dieses spezifische Projekt sehen? */
 export async function canSeeProject(ctx: UserCtx, projectId: string): Promise<boolean> {
   if (ctx.role === "admin") return true;
+  // FS-Mode hat keine ACL → jeder authentifizierte User darf alles sehen.
+  if (!projectRepo.listVisibleProjectIds) return true;
   if (!ctx.userId) return false;
-  if (!projectRepo.listVisibleProjectIds) return false;
   const ids = await projectRepo.listVisibleProjectIds(ctx.userId);
   return ids.includes(projectId);
 }
