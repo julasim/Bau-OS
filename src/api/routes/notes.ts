@@ -1,15 +1,41 @@
 import { Hono } from "hono";
-import { noteRepo } from "../../data/index.js";
+import { noteRepo, projectRepo } from "../../data/index.js";
+import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 
 export const notesRoutes = new Hono<AppEnv>();
 
+function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+  return { userId: c.var.userId, role: c.var.userRole };
+}
+
 notesRoutes.get("/notes", async (c) => {
   const detailed = c.req.query("detailed");
+  const ctx = userCtx(c);
+
+  // Detailed-Mode: liefert Project-Info pro Notiz, also filtern wir hier.
   if (detailed === "1" && noteRepo.listDetailed) {
     const notes = await noteRepo.listDetailed(50);
-    return c.json(notes);
+    if (ctx.role === "admin") return c.json(notes);
+    const visible = await getVisibleProjectIds(ctx);
+    if (visible === "all") return c.json(notes);
+    const visibleNames = new Set(await projectRepo.list(visible));
+    // Notizen ohne Projekt: nur Admin sieht sie. Nicht-Admin-User sehen
+    // sie aktuell nicht, weil createdBy noch nicht im DTO ist (TODO Phase 5+).
+    const filtered = notes.filter((n) => n.project && visibleNames.has(n.project));
+    return c.json(filtered);
+  }
+
+  // Simple-Mode (nur Titel): wir muessen auch hier den User-Scope respektieren.
+  // Loesung: fuer Non-Admins via listDetailed laufen, dann auf Titles mappen.
+  if (ctx.role !== "admin" && noteRepo.listDetailed) {
+    const visible = await getVisibleProjectIds(ctx);
+    if (visible !== "all") {
+      const visibleNames = new Set(await projectRepo.list(visible));
+      const detailed = await noteRepo.listDetailed(500);
+      return c.json(detailed.filter((n) => n.project && visibleNames.has(n.project)).map((n) => n.title));
+    }
   }
   const notes = await noteRepo.list();
   return c.json(notes);
@@ -25,6 +51,9 @@ notesRoutes.get("/notes/:name", async (c) => {
 notesRoutes.post("/notes", async (c) => {
   const { content, project } = await c.req.json<{ content: string; project?: string }>();
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
+  if (project && !(await canSeeProjectByName(userCtx(c), project))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   const path = await noteRepo.save(content, project);
   emit({ type: "note", action: "created", project });
   return c.json({ path }, 201);

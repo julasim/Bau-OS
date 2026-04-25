@@ -1,18 +1,44 @@
 import { Hono } from "hono";
-import { terminRepo } from "../../data/index.js";
+import { terminRepo, projectRepo } from "../../data/index.js";
+import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 
 export const termineRoutes = new Hono<AppEnv>();
 
+function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+  return { userId: c.var.userId, role: c.var.userRole };
+}
+
 termineRoutes.get("/termine", async (c) => {
   const project = c.req.query("project");
-  return c.json(await terminRepo.list(project));
+  const all = await terminRepo.list(project);
+  const ctx = userCtx(c);
+  if (ctx.role === "admin") return c.json(all);
+
+  const visible = await getVisibleProjectIds(ctx);
+  if (visible === "all") return c.json(all);
+  const visibleNames = new Set(await projectRepo.list(visible));
+  const me = ctx.userId;
+
+  const filtered = all.filter((t) => {
+    if (t.project) return visibleNames.has(t.project);
+    // ohne Projekt: User darf den Termin sehen, wenn er Teilnehmer ist.
+    return !!me && Array.isArray(t.assigneeIds) && t.assigneeIds.includes(me);
+  });
+  return c.json(filtered);
 });
 
 termineRoutes.get("/termine/:id", async (c) => {
   const termin = await terminRepo.get(c.req.param("id"));
   if (!termin) return c.json({ error: "Termin nicht gefunden" }, 404);
+  const ctx = userCtx(c);
+  if (ctx.role !== "admin") {
+    const allowed = termin.project
+      ? await canSeeProjectByName(ctx, termin.project)
+      : !!ctx.userId && Array.isArray(termin.assigneeIds) && termin.assigneeIds.includes(ctx.userId);
+    if (!allowed) return c.json({ error: "Kein Zugriff" }, 403);
+  }
   return c.json(termin);
 });
 
@@ -28,6 +54,9 @@ termineRoutes.post("/termine", async (c) => {
     project?: string;
   }>();
   if (!body.datum || !body.text) return c.json({ error: "Datum und Text erforderlich" }, 400);
+  if (body.project && !(await canSeeProjectByName(userCtx(c), body.project))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   const termin = await terminRepo.save(body.datum, body.text, body.uhrzeit, body.project);
   if (typeof termin === "string") return c.json({ error: termin }, 400);
   let result = termin;

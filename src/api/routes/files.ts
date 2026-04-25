@@ -3,11 +3,16 @@ import fs from "fs";
 import path from "path";
 import { WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../../config.js";
 import { readFile, listFolder } from "../../workspace/index.js";
-import { fileRepo } from "../../data/index.js";
+import { fileRepo, projectRepo } from "../../data/index.js";
+import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import { getDb } from "../../db/client.js";
 import { findDbUserById } from "../auth.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
+
+function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+  return { userId: c.var.userId, role: c.var.userRole };
+}
 
 export const filesRoutes = new Hono<AppEnv>();
 
@@ -27,8 +32,55 @@ filesRoutes.get("/files", async (c) => {
   if (DB_ENABLED && fileRepo && !p && source !== "fs") {
     const project = c.req.query("project");
     const files = await fileRepo.list(project ?? undefined);
+    const ctx = userCtx(c);
+
+    // Phase-4-Filter: Admin sieht alles. User sieht:
+    //   - Dateien in seinen sichtbaren Projekten
+    //   - eigene private Dateien (uploaded_by = me, kein Projekt)
+    //   - direkt mit ihm geshared Dateien (file_shares)
+    let visibleSet: Set<string> | null = null;
+    let sharedFileIds: Set<string> = new Set();
+    if (ctx.role !== "admin" && ctx.userId) {
+      const visible = await getVisibleProjectIds(ctx);
+      if (visible !== "all") {
+        visibleSet = new Set(await projectRepo.list(visible));
+      }
+      // Shared-File-IDs einmalig holen — wir filtern damit Files ohne project,
+      // die der User explizit freigegeben bekommen hat.
+      const db = getDb();
+      const rows = await db`
+        SELECT file_id FROM file_shares WHERE user_id = ${ctx.userId}
+      `;
+      sharedFileIds = new Set(rows.map((r) => String(r.file_id)));
+    }
+
+    // Wir brauchen uploaded_by aus der DB — fileRepo.list() liefert das im
+    // FileEntry-DTO nicht. Lazy-Lookup pro nicht-Admin-Request: einmal
+    // alle uploaded_by der gefundenen IDs holen.
+    let uploadedByMap: Map<string, string | null> = new Map();
+    if (ctx.role !== "admin" && ctx.userId && files.length > 0) {
+      const db = getDb();
+      const ids = files.map((f) => f.id);
+      const rows = await db`
+        SELECT id, uploaded_by FROM files WHERE id = ANY(${ids})
+      `;
+      uploadedByMap = new Map(rows.map((r) => [String(r.id), r.uploaded_by ? String(r.uploaded_by) : null]));
+    }
+
+    const filtered =
+      ctx.role === "admin"
+        ? files
+        : files.filter((f) => {
+            if (visibleSet === null) return true; // role===user but visible="all"-equivalent (no scoping)
+            if (f.project && visibleSet.has(f.project)) return true;
+            if (sharedFileIds.has(f.id)) return true;
+            // Privater Workspace: Datei ohne Projekt + ich bin Uploader.
+            if (!f.project && uploadedByMap.get(f.id) === ctx.userId) return true;
+            return false;
+          });
+
     return c.json(
-      files.map((f) => ({
+      filtered.map((f) => ({
         name: f.filename,
         type: "file" as const,
         size: f.filesize,

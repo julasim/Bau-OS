@@ -1,18 +1,49 @@
 import { Hono } from "hono";
-import { taskRepo } from "../../data/index.js";
+import { taskRepo, projectRepo } from "../../data/index.js";
+import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 
 export const tasksRoutes = new Hono<AppEnv>();
 
+function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+  return { userId: c.var.userId, role: c.var.userRole };
+}
+
+// Tasks-Liste: filtert nach sichtbaren Projekten. Tasks ohne project sind
+// "persoenlich" — User sieht die nur wenn er Ersteller oder Assignee ist.
 tasksRoutes.get("/tasks", async (c) => {
   const project = c.req.query("project");
-  return c.json(await taskRepo.list(project));
+  const all = await taskRepo.list(project);
+  const ctx = userCtx(c);
+  if (ctx.role === "admin") return c.json(all);
+
+  const visible = await getVisibleProjectIds(ctx);
+  if (visible === "all") return c.json(all);
+  const visibleNames = new Set(await projectRepo.list(visible));
+  const me = ctx.userId;
+
+  const filtered = all.filter((t) => {
+    if (t.project) return visibleNames.has(t.project);
+    // ohne Projekt: nur wenn me Assignee oder Ersteller. createdBy haben wir
+    // im Task-DTO nicht — daher fuer Phase 4 nur Assignee-Match. Personal-
+    // Tasks ohne FK (persoenliche Notizen-Tasks) bleiben fuer Non-Admins
+    // unsichtbar bis das Feld exposed wird.
+    return !!me && t.assigneeId === me;
+  });
+  return c.json(filtered);
 });
 
 tasksRoutes.get("/tasks/:id", async (c) => {
   const task = await taskRepo.get(c.req.param("id"));
   if (!task) return c.json({ error: "Aufgabe nicht gefunden" }, 404);
+  const ctx = userCtx(c);
+  if (ctx.role !== "admin") {
+    const allowed = task.project
+      ? await canSeeProjectByName(ctx, task.project)
+      : !!ctx.userId && task.assigneeId === ctx.userId;
+    if (!allowed) return c.json({ error: "Kein Zugriff" }, 403);
+  }
   return c.json(task);
 });
 
@@ -26,6 +57,10 @@ tasksRoutes.post("/tasks", async (c) => {
     location?: string;
   }>();
   if (!body.text) return c.json({ error: "Text erforderlich" }, 400);
+  // Wenn Projekt gesetzt: User muss Zugriff darauf haben.
+  if (body.project && !(await canSeeProjectByName(userCtx(c), body.project))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   const task = await taskRepo.save(body.text, body.project);
   // Apply optional fields inkl. assigneeId (Migration 007).
   if (body.assignee || body.assigneeId || body.date || body.location) {

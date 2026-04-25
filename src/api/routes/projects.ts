@@ -1,9 +1,16 @@
 import { Hono } from "hono";
 import { projectRepo, taskRepo, terminRepo, teamRepo } from "../../data/index.js";
 import { findDbUserById } from "../auth.js";
+import { getVisibleProjectIds, canSeeProjectByName, type UserCtx } from "../../data/access.js";
 import type { ProjectUpdate } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
+
+// Hilfs-Builder: holt UserCtx aus dem Hono-Context — eine Stelle weniger,
+// an der man c.var-Felder vergisst.
+function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+  return { userId: c.var.userId, role: c.var.userRole };
+}
 
 export const projectsRoutes = new Hono<AppEnv>();
 
@@ -35,9 +42,10 @@ function normalizePatchValue(v: unknown): string | null | undefined {
   return trimmed === "" ? null : trimmed;
 }
 
-// Alle Projekte
+// Alle Projekte — Phase 4 scoped: Admin sieht alles, User nur user_projects.
 projectsRoutes.get("/projects", async (c) => {
-  const names = await projectRepo.list();
+  const visible = await getVisibleProjectIds(userCtx(c));
+  const names = await projectRepo.list(visible);
   const projects = (await Promise.all(names.map((name) => projectRepo.getInfo(name)))).filter(Boolean);
   return c.json(projects);
 });
@@ -95,18 +103,30 @@ projectsRoutes.post("/projects", async (c) => {
   return c.json(info, already ? 200 : 201);
 });
 
-// Projekt-Detail
+// Projekt-Detail — Phase 4: Zugriff pruefen.
 projectsRoutes.get("/projects/:name", async (c) => {
   const name = c.req.param("name");
   const info = await projectRepo.getInfo(name);
   if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   return c.json(info);
 });
 
 // Projekt-Stammdaten patchen (Migration 004).
 // Body: { [field]: string | null }. Whitelist siehe PATCHABLE_FIELDS.
+// Phase-4-Schreibschutz: nur Admin oder der Ersteller darf editieren.
 projectsRoutes.patch("/projects/:name", async (c) => {
   const name = c.req.param("name");
+  const ctx = userCtx(c);
+  if (ctx.role !== "admin") {
+    const info = await projectRepo.getInfo(name);
+    if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
+    if (info.createdById !== ctx.userId) {
+      return c.json({ error: "Nur Admin oder Ersteller darf editieren" }, 403);
+    }
+  }
 
   let body: Record<string, unknown>;
   try {
@@ -146,6 +166,14 @@ projectsRoutes.patch("/projects/:name", async (c) => {
 // eindeutiger Meldung — damit das Frontend spezifisch reagieren kann.
 projectsRoutes.put("/projects/:name/rename", async (c) => {
   const oldName = c.req.param("name");
+  const ctx = userCtx(c);
+  if (ctx.role !== "admin") {
+    const info = await projectRepo.getInfo(oldName);
+    if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
+    if (info.createdById !== ctx.userId) {
+      return c.json({ error: "Nur Admin oder Ersteller darf umbenennen" }, 403);
+    }
+  }
   let body: Record<string, unknown>;
   try {
     body = await c.req.json<Record<string, unknown>>();
@@ -250,8 +278,17 @@ projectsRoutes.get("/projects/:name/export.md", async (c) => {
 // Projekt loeschen. projectRepo.delete() ist idempotent — auch wenn das
 // Projekt nicht existiert, kommt true zurueck. Semantik: "stelle sicher, dass
 // es weg ist". Wir geben 204 No Content zurueck, weil es nichts zu rendern gibt.
+// Phase-4-Schreibschutz: nur Admin oder Ersteller.
 projectsRoutes.delete("/projects/:name", async (c) => {
   const name = c.req.param("name");
+  const ctx = userCtx(c);
+  if (ctx.role !== "admin") {
+    const info = await projectRepo.getInfo(name);
+    if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
+    if (info.createdById !== ctx.userId) {
+      return c.json({ error: "Nur Admin oder Ersteller darf loeschen" }, 403);
+    }
+  }
   const ok = await projectRepo.delete(name);
   if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
   emit({ type: "project", action: "deleted", id: name });
@@ -327,6 +364,9 @@ projectsRoutes.get("/projects/:name/tasks", async (c) => {
 
 projectsRoutes.post("/projects/:name/tasks", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   const body = await c.req.json<{ text: string; assigneeId?: string | null }>();
   const task = await taskRepo.save(body.text, name);
   // Wenn assigneeId mitkommt (Migration 007), direkt setzen — das Repo
@@ -354,6 +394,9 @@ projectsRoutes.get("/projects/:name/termine", async (c) => {
 
 projectsRoutes.post("/projects/:name/termine", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   const body = await c.req.json<{
     datum: string;
     text: string;

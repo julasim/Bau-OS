@@ -284,7 +284,9 @@ export interface NoteRepository {
 }
 
 export interface ProjectRepository {
-  list(): Promise<string[]>;
+  /** Liste der Projekt-Namen. Optional: visibleProjectIds als Filter
+   *  ("all" = kein Filter, Array = nur diese IDs). Phase-4-Scoping. */
+  list(visibleIds?: string[] | "all"): Promise<string[]>;
   getInfo(name: string): Promise<Project | null>;
   listNotes(name: string): Promise<string[]>;
   readNote(project: string, noteName: string): Promise<string | null>;

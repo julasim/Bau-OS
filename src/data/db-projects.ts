@@ -31,8 +31,19 @@ function isValidName(name: string): boolean {
 }
 
 export const dbProjects: ProjectRepository = {
-  async list() {
+  async list(visibleIds) {
     const db = getDb();
+    // Phase 4: wenn visibleIds ein Array ist, nur diese Projekte zurueckgeben.
+    // "all" oder undefined = kein Filter (Admin / Legacy-Caller).
+    if (Array.isArray(visibleIds)) {
+      if (visibleIds.length === 0) return [];
+      const rows = await db`
+        SELECT name FROM projects
+        WHERE status = 'aktiv' AND id = ANY(${visibleIds})
+        ORDER BY name
+      `;
+      return rows.map((r) => String(r.name));
+    }
     const rows = await db`SELECT name FROM projects WHERE status = 'aktiv' ORDER BY name`;
     return rows.map((r) => String(r.name));
   },

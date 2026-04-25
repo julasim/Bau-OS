@@ -9,6 +9,7 @@ import type { ProjectCreateOptions, ProjectRepository } from "./types.js";
 
 export const fsProjects: ProjectRepository = {
   async list() {
+    // FS-Mode hat keine ACL — Filter ist no-op, alles wird zurueckgegeben.
     return vault.listProjects();
   },
   async getInfo(name) {
