@@ -11,6 +11,7 @@ import { fmt, stripMarkdown } from "./format.js";
 import { saveChatId } from "./heartbeat.js";
 import { TYPING_INTERVAL_MS, WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "./config.js";
 import { fileRepo } from "./data/index.js";
+import { findDbUserByChatId, redeemPairToken, countDbUsers } from "./api/auth.js";
 import {
   handleHilfe,
   handleStatus,
@@ -71,11 +72,66 @@ export function createBot(token: string): Bot {
   bot.command("restart", (ctx) => handleRestart(ctx));
   bot.command("logs", (ctx) => handleLogs(ctx, ctx.match));
 
+  // --- Telegram-Pairing (Phase 5) ---
+  // /pair <token> verknuepft die Telegram-Chat-ID mit einem User-Konto.
+  // Funktioniert auch fuer noch nicht autorisierte Chats — sonst koennten
+  // sich neue User nie einloggen.
+  bot.command("pair", async (ctx) => {
+    const arg = (ctx.match ?? "").trim();
+    if (!arg) {
+      await ctx.reply(
+        "Nutzung: /pair <code>\n\nDen Code generiert dein Admin in der Web-Oberflaeche unter Nutzer → Telegram pairen. Er ist 10 Minuten gueltig.",
+      );
+      return;
+    }
+    if (!DB_ENABLED) {
+      await ctx.reply("Pairing benoetigt DB-Modus.");
+      return;
+    }
+    const user = await redeemPairToken(arg.toUpperCase(), String(ctx.chat.id));
+    if (!user) {
+      await ctx.reply("Ungueltiger oder abgelaufener Code. Bitte beim Admin einen neuen anfordern.");
+      return;
+    }
+    await ctx.reply(
+      `Erfolgreich verknuepft mit "${user.displayName ?? user.username}".\nAb jetzt antwortet der Bot auf deine Nachrichten. /hilfe zeigt die verfuegbaren Befehle.`,
+    );
+  });
+
+  // Helper: prueft ob die Chat-ID einem User-Konto zugeordnet ist.
+  // Gibt User zurueck oder null bei nicht-autorisierten Chats.
+  // Im Pre-Setup-Modus (keine User in DB) und im FS-Mode wird die Pruefung
+  // uebersprungen — der Bot funktioniert wie vor Phase 5, damit der erste
+  // Setup-Lauf nicht aussperrt.
+  async function checkAuth(ctx: { chat: { id: number }; reply: (msg: string) => Promise<unknown> }): Promise<boolean> {
+    if (!DB_ENABLED) return true;
+    const userCount = await countDbUsers();
+    if (userCount === 0) return true;
+    const user = await findDbUserByChatId(ctx.chat.id);
+    if (!user) {
+      await ctx.reply(
+        "Nicht autorisiert. Bitte deinen Admin um einen Pair-Code (Web → Nutzer → Telegram pairen) und sende dann /pair <code>.",
+      );
+      return false;
+    }
+    return true;
+  }
+
   // --- Textnachrichten -> LLM ---
   bot.on("message:text", (ctx) => {
     enqueue(ctx.chat.id, async () => {
       saveChatId(ctx.chat.id);
       const raw = ctx.message.text;
+
+      // Auth-Gate: Slash-Commands wurden bereits oben verdrahtet (inkl.
+      // /pair). Alles was hier landet ist freier Text fuer das LLM —
+      // gepairte Chats erforderlich. Ausnahmen: /pair selbst (haetten
+      // wir oben behandelt, faellt aber durch grammy auch hierdurch),
+      // /hilfe, /start. Fuer alle non-Command-Texte: Auth-Gate.
+      if (!raw.startsWith("/")) {
+        const authOk = await checkAuth(ctx);
+        if (!authOk) return;
+      }
 
       // Setup-Wizard (Erster Start)
       if (!isMainWorkspaceConfigured() || isSetupActive()) {
@@ -144,6 +200,10 @@ export function createBot(token: string): Bot {
   bot.on("message:document", (ctx) => {
     enqueue(ctx.chat.id, async () => {
       saveChatId(ctx.chat.id);
+      // Auth-Gate auch fuer Datei-Uploads — sonst koennten unautorisierte
+      // Chats Dateien hochladen, die der Bot dann analysieren wuerde.
+      const authOk = await checkAuth(ctx);
+      if (!authOk) return;
       const doc = ctx.message.document;
 
       // Size-Limit VOR dem Download pruefen — sonst laden wir GBs umsonst.

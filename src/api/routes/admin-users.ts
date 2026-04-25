@@ -21,6 +21,7 @@ import {
   deleteDbUser,
   updateDbUserPassword,
   hashPassword,
+  createPairToken,
 } from "../auth.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
@@ -164,6 +165,17 @@ adminUsersRoutes.patch("/admin/users/:id/password", async (c) => {
   if (!ok) return c.json({ error: "Update fehlgeschlagen" }, 500);
   emit({ type: "team", action: "updated", id });
   return c.json({ ok: true });
+});
+
+// ── Telegram-Pair-Token generieren (Phase 5) ───────────────────────────────
+// Admin generiert einen Token, der User schickt /pair <token> dem Bot.
+// 10 Minuten gueltig — danach automatisch ungueltig.
+adminUsersRoutes.post("/admin/users/:id/pair-token", async (c) => {
+  const id = c.req.param("id");
+  const target = await findDbUserById(id);
+  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
+  const result = await createPairToken(id);
+  return c.json(result, 201);
 });
 
 // ── Loeschen ────────────────────────────────────────────────────────────────

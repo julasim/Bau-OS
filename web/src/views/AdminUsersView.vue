@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
@@ -114,6 +114,76 @@ async function submitPasswordReset() {
   }
 }
 
+// ── Telegram-Pair-Token (Phase 5) ───────────────────────
+const showPairDialog = ref(false);
+const pairTarget = ref<AdminUser | null>(null);
+const pairToken = ref<string | null>(null);
+const pairExpiresAt = ref<string | null>(null);
+const pairSaving = ref(false);
+const pairError = ref<string | null>(null);
+const pairCountdown = ref<string>("");
+let pairCountdownTimer: ReturnType<typeof setInterval> | null = null;
+
+async function openPairDialog(user: AdminUser) {
+  pairTarget.value = user;
+  pairToken.value = null;
+  pairExpiresAt.value = null;
+  pairError.value = null;
+  showPairDialog.value = true;
+  pairSaving.value = true;
+  try {
+    const res = await api.post<{ token: string; expiresAt: string }>(
+      `/admin/users/${encodeURIComponent(user.id)}/pair-token`,
+      {},
+    );
+    pairToken.value = res.token;
+    pairExpiresAt.value = res.expiresAt;
+    startPairCountdown();
+  } catch (e) {
+    pairError.value = e instanceof Error ? e.message : "Token konnte nicht generiert werden";
+  } finally {
+    pairSaving.value = false;
+  }
+}
+
+function closePairDialog() {
+  showPairDialog.value = false;
+  if (pairCountdownTimer) {
+    clearInterval(pairCountdownTimer);
+    pairCountdownTimer = null;
+  }
+}
+
+function startPairCountdown() {
+  if (pairCountdownTimer) clearInterval(pairCountdownTimer);
+  const tick = () => {
+    if (!pairExpiresAt.value) return;
+    const diff = new Date(pairExpiresAt.value).getTime() - Date.now();
+    if (diff <= 0) {
+      pairCountdown.value = "abgelaufen";
+      if (pairCountdownTimer) {
+        clearInterval(pairCountdownTimer);
+        pairCountdownTimer = null;
+      }
+      return;
+    }
+    const m = Math.floor(diff / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    pairCountdown.value = `${m}:${String(s).padStart(2, "0")}`;
+  };
+  tick();
+  pairCountdownTimer = setInterval(tick, 1000);
+}
+
+async function copyToken() {
+  if (!pairToken.value) return;
+  try {
+    await navigator.clipboard.writeText(pairToken.value);
+  } catch {
+    /* clipboard API kann fehlen — User markiert manuell */
+  }
+}
+
 // ── Inline-Aktionen ─────────────────────────────────────
 async function toggleRole(user: AdminUser) {
   if (user.isProtected) return;
@@ -159,6 +229,15 @@ async function loadUsers() {
 }
 
 onMounted(loadUsers);
+
+// Timer-Cleanup beim Unmount, falls der Pair-Modal offen war als der User
+// die Seite verlassen hat.
+onUnmounted(() => {
+  if (pairCountdownTimer) {
+    clearInterval(pairCountdownTimer);
+    pairCountdownTimer = null;
+  }
+});
 
 // ── Helpers ─────────────────────────────────────────────
 function initials(name: string): string {
@@ -278,12 +357,11 @@ function formatDate(iso?: string) {
         <div class="font-mono" style="width: 100px; font-size: 11px; color: var(--color-text-tertiary)">
           {{ formatDate(u.createdAt) }}
         </div>
-        <div style="width: 30px; display: flex; justify-content: flex-end; gap: 4px">
-          <button
-            class="row-action"
-            @click="openPasswordReset(u)"
-            :title="'Passwort zurücksetzen'"
-          >
+        <div style="display: flex; justify-content: flex-end; gap: 4px">
+          <button class="row-action" @click="openPairDialog(u)" :title="'Telegram pairen'">
+            <BIcon name="message" :size="12" />
+          </button>
+          <button class="row-action" @click="openPasswordReset(u)" :title="'Passwort zurücksetzen'">
             <BIcon name="lock" :size="12" />
           </button>
           <button
@@ -449,6 +527,54 @@ function formatDate(iso?: string) {
         </div>
       </div>
     </div>
+
+    <!-- Telegram-Pair-Dialog (Phase 5) -->
+    <div v-if="showPairDialog && pairTarget" class="modal-overlay" @click.self="closePairDialog">
+      <div class="modal-card" style="max-width: 480px">
+        <div class="eyebrow" style="margin-bottom: 4px">Telegram</div>
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 4px 0">
+          „{{ pairTarget.username }}" mit Telegram verknüpfen
+        </h2>
+        <p style="font-size: 12px; color: var(--color-text-muted); margin: 0 0 18px 0">
+          Der Code ist 10 Minuten gültig. Der Nutzer schickt
+          <code style="font-family: var(--font-mono, monospace); background: var(--color-bg-subtle); padding: 1px 4px; border-radius: 3px">/pair {{ pairToken ?? "&lt;code&gt;" }}</code>
+          an den Bot.
+        </p>
+
+        <div v-if="pairSaving" style="text-align: center; padding: 24px; color: var(--color-text-muted)">
+          Lade Code…
+        </div>
+        <div
+          v-else-if="pairError"
+          style="
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--color-danger-text);
+            background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+            border-radius: 6px;
+          "
+        >
+          {{ pairError }}
+        </div>
+        <div v-else-if="pairToken" class="pair-token-box">
+          <div class="pair-token-label">Pair-Code</div>
+          <div class="pair-token-value">{{ pairToken }}</div>
+          <div class="pair-token-meta">
+            <span>Gültig noch:</span>
+            <span class="font-mono" :class="{ 'pair-token-expired': pairCountdown === 'abgelaufen' }">
+              {{ pairCountdown }}
+            </span>
+            <button class="bauos-btn ghost sm" @click="copyToken" :title="'In Zwischenablage'">
+              Kopieren
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
+          <button class="bauos-btn solid" @click="closePairDialog">Schließen</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -602,5 +728,46 @@ function formatDate(iso?: string) {
 }
 .form-input-lg:focus {
   border-color: var(--color-primary);
+}
+
+.bauos-btn.sm {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+/* ── Pair-Token-Box ─────────────────────────────────────── */
+.pair-token-box {
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+  background: var(--color-bg-subtle);
+  text-align: center;
+}
+.pair-token-label {
+  font-size: 10px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.pair-token-value {
+  font-family: var(--font-mono, monospace);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--color-text);
+  margin-bottom: 12px;
+  user-select: all;
+}
+.pair-token-meta {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+.pair-token-expired {
+  color: var(--color-danger-text);
 }
 </style>

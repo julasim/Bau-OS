@@ -1,4 +1,5 @@
 import fs from "fs";
+import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET, USERS_FILE, DB_ENABLED } from "../config.js";
@@ -184,6 +185,83 @@ export async function updateDbUserPassword(userId: string, hash: string): Promis
   const db = getDb();
   const result = await db`UPDATE users SET password_hash = ${hash} WHERE id = ${userId}`;
   return result.count > 0;
+}
+
+// ── Telegram-Pair-Tokens (Phase 5) ──────────────────────────────────────────
+
+/** Erzeugt einen 8-stelligen alphanumerischen Pair-Token mit 10-Min-Ablauf
+ *  und schreibt ihn in telegram_pair_tokens. Caller muss admin sein.
+ *  Rueckgabe: {token, expiresAt} fuer das UI. */
+export async function createPairToken(userId: string): Promise<{ token: string; expiresAt: string }> {
+  if (!DB_ENABLED) throw new Error("Pair-Token benoetigt DB-Modus");
+  const db = getDb();
+  // Vorhandene abgelaufene Tokens des Users gleich aufraeumen.
+  await db`DELETE FROM telegram_pair_tokens WHERE user_id = ${userId} OR expires_at < now()`;
+
+  // 8 Bytes random → 11 Base64-Zeichen → wir schneiden auf 8 ASCII-Zeichen
+  // (gross+klein+zahlen) — gut tippbar im Telegram-Chat.
+  const raw = crypto.randomBytes(6).toString("base64").replace(/[/+=]/g, "");
+  const token = raw.slice(0, 8).toUpperCase();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  await db`
+    INSERT INTO telegram_pair_tokens (token, user_id, expires_at)
+    VALUES (${token}, ${userId}, ${expiresAt})
+  `;
+  return { token, expiresAt };
+}
+
+/** Loest einen Pair-Token ein: prueft Existenz + Ablauf, setzt
+ *  users.telegram_chat_id = chatId, loescht den Token. Gibt den verlinkten
+ *  User zurueck oder null bei ungueltigem/abgelaufenem Token.
+ *
+ *  Atomar: der gesamte Validate+UPDATE+DELETE-Zyklus laeuft in einer
+ *  Transaktion. Wuerde der Lookup ausserhalb stattfinden, koennte ein
+ *  paralleler Redeem desselben Tokens beide chat_ids ueberschreiben. */
+export async function redeemPairToken(token: string, chatId: string): Promise<DbUser | null> {
+  if (!DB_ENABLED) return null;
+  const db = getDb();
+  // Lazy-Cleanup von abgelaufenen Tokens — eine Aufraeumstelle reicht.
+  await db`DELETE FROM telegram_pair_tokens WHERE expires_at < now()`;
+
+  // Validate + UPDATE + DELETE in einer Transaktion. Wenn der SELECT 0 Rows
+  // findet (paralleler Redeem hat den Token schon weg), brechen wir sauber ab.
+  let userId: string | null = null;
+  try {
+    await db.begin(async (tx) => {
+      const rows = await tx`
+        SELECT user_id FROM telegram_pair_tokens
+        WHERE token = ${token} AND expires_at >= now()
+        LIMIT 1
+      `;
+      if (rows.length === 0) {
+        throw new Error("__token_invalid__");
+      }
+      userId = String(rows[0]!.user_id);
+      await tx`UPDATE users SET telegram_chat_id = ${chatId} WHERE id = ${userId}`;
+      // Alle Tokens dieses Users werden invalidiert — ein User pairt sich
+      // genau einmal, alte Codes braucht niemand.
+      await tx`DELETE FROM telegram_pair_tokens WHERE user_id = ${userId}`;
+    });
+  } catch (err) {
+    // Sentinel-Fehler aus dem Inneren der TX = "token not found", andere
+    // Fehler bubblen weiter.
+    if (err instanceof Error && err.message === "__token_invalid__") return null;
+    throw err;
+  }
+  return userId ? findDbUserById(userId) : null;
+}
+
+/** Lookup eines Users anhand seiner verknuepften Telegram-Chat-ID.
+ *  Wird vom Bot vor jeder LLM-Antwort genutzt, um nicht-gepairte Chats
+ *  abzulehnen. */
+export async function findDbUserByChatId(chatId: string | number): Promise<DbUser | null> {
+  if (!DB_ENABLED) return null;
+  const db = getDb();
+  const [row] = await db`
+    SELECT * FROM users WHERE telegram_chat_id = ${String(chatId)} LIMIT 1
+  `;
+  return row ? rowToDbUser(row) : null;
 }
 
 /** Setup: legt den Erst-Admin an. Race-sicher — selbst zwei parallele
