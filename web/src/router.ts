@@ -5,6 +5,7 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: "/login", name: "login", component: () => import("./views/LoginView.vue") },
+    { path: "/setup", name: "setup", component: () => import("./views/SetupView.vue") },
     {
       path: "/",
       component: () => import("./components/AppLayout.vue"),
@@ -32,7 +33,10 @@ const router = createRouter({
 });
 
 router.beforeEach((to) => {
-  if (to.name !== "login" && !isAuthenticated()) {
+  // /login und /setup sind die einzigen oeffentlichen Routes — alles andere
+  // braucht ein gueltiges JWT.
+  const publicRoutes = new Set(["login", "setup"]);
+  if (!publicRoutes.has(String(to.name)) && !isAuthenticated()) {
     return { name: "login" };
   }
 });

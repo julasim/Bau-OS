@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api, setToken } from "../api";
 
@@ -13,6 +13,19 @@ const loading = ref(false);
 const hostname = computed(() =>
   typeof window !== "undefined" ? window.location.host : "bau-os",
 );
+
+// Beim Mount: pruefen, ob noch gar kein Admin existiert. In dem Fall fuehrt
+// /setup den User durchs Erstanlegen — die Login-Form macht ohne Admin-Konto
+// keinen Sinn.
+onMounted(async () => {
+  try {
+    const status = await api.get<{ needsSetup: boolean }>("/setup/status");
+    if (status.needsSetup) router.replace("/setup");
+  } catch {
+    // Setup-Endpoint nicht da → Backend ist alt oder im FS-Mode. Kein
+    // Wizard-Redirect, normaler Login wird einfach versucht.
+  }
+});
 
 async function login() {
   error.value = "";

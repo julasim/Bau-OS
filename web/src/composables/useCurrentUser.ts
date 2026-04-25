@@ -9,9 +9,12 @@ import { ref, computed } from "vue";
 import { api } from "../api";
 
 interface Me {
+  id: string | null;
   username: string;
   role: string;
   displayName: string | null;
+  isProtected?: boolean;
+  hasTelegram?: boolean;
 }
 
 const user = ref<Me | null>(null);
@@ -52,6 +55,9 @@ export function useCurrentUser() {
   const initials = computed(() => computeInitials(displayName.value));
   const role = computed(() => user.value?.role ?? "");
   const username = computed(() => user.value?.username ?? "");
+  const userId = computed(() => user.value?.id ?? null);
+  const isAdmin = computed(() => user.value?.role === "admin");
+  const isProtected = computed(() => user.value?.isProtected ?? false);
 
   return {
     user,
@@ -59,6 +65,9 @@ export function useCurrentUser() {
     initials,
     role,
     username,
+    userId,
+    isAdmin,
+    isProtected,
     reload: () => {
       user.value = null;
       return load();
