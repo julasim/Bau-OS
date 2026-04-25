@@ -4,9 +4,12 @@ import path from "path";
 import { WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../../config.js";
 import { readFile, listFolder } from "../../workspace/index.js";
 import { fileRepo } from "../../data/index.js";
+import { getDb } from "../../db/client.js";
+import { findDbUserById } from "../auth.js";
+import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 
-export const filesRoutes = new Hono();
+export const filesRoutes = new Hono<AppEnv>();
 
 // Path-Traversal-Schutz
 function safePath(userPath: string): string | null {
@@ -176,6 +179,9 @@ filesRoutes.post("/files/upload", async (c) => {
           contentText,
           project,
           blob: buffer,
+          // Phase 3: Uploader aus Auth-Context durchreichen, damit der File
+          // im persoenlichen Workspace des Users landet (wenn project leer).
+          uploadedById: c.var.userId ?? null,
         });
         dbEntries.push({ id: entry.id, filename: entry.filename });
         saved.push(safeName);
@@ -239,4 +245,62 @@ filesRoutes.get("/files/download", async (c) => {
   c.header("Content-Type", result.mimeType || "application/octet-stream");
   c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(result.filename)}"`);
   return c.body(new Uint8Array(result.blob));
+});
+
+// ── File-Sharing (Phase 3) ──────────────────────────────────────────────────
+// Owner-Check: nur der Uploader (uploaded_by) oder ein Admin darf Shares
+// einer Datei verwalten. Ohne diese Regel koennte jeder, der eine Datei sieht,
+// sie an andere weitergeben.
+
+// Owner-Check: nur der Uploader oder ein Admin darf Shares verwalten.
+// Wir typen c als any-via Context, weil Hono-Generics in Helper-Funktionen
+// nicht propagieren — die echten Type-Checks kommen in den Handlern selbst.
+async function canManageFileShares(
+  ctx: { var: { userRole: string; userId: string | null } },
+  fileId: string,
+): Promise<boolean> {
+  if (ctx.var.userRole === "admin") return true;
+  if (!fileRepo) return false;
+  const db = getDb();
+  const [row] = await db`SELECT uploaded_by FROM files WHERE id = ${fileId} LIMIT 1`;
+  if (!row) return false;
+  const owner = row.uploaded_by ? String(row.uploaded_by) : null;
+  return !!owner && owner === ctx.var.userId;
+}
+
+filesRoutes.get("/files/:id/shares", async (c) => {
+  if (!fileRepo?.listShares) return c.json([]);
+  const fileId = c.req.param("id");
+  if (!(await canManageFileShares(c, fileId))) {
+    return c.json({ error: "Keine Berechtigung" }, 403);
+  }
+  return c.json(await fileRepo.listShares(fileId));
+});
+
+filesRoutes.post("/files/:id/shares", async (c) => {
+  if (!fileRepo?.addShare) return c.json({ error: "Nicht unterstützt" }, 501);
+  const fileId = c.req.param("id");
+  if (!(await canManageFileShares(c, fileId))) {
+    return c.json({ error: "Keine Berechtigung" }, 403);
+  }
+
+  const body = await c.req.json<{ userId: string; canEdit?: boolean }>();
+  if (!body.userId) return c.json({ error: "userId erforderlich" }, 400);
+  const target = await findDbUserById(body.userId);
+  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
+
+  await fileRepo.addShare(fileId, body.userId, body.canEdit === true);
+  emit({ type: "file", action: "updated", id: fileId });
+  return c.json({ ok: true });
+});
+
+filesRoutes.delete("/files/:id/shares/:userId", async (c) => {
+  if (!fileRepo?.removeShare) return c.json({ error: "Nicht unterstützt" }, 501);
+  const fileId = c.req.param("id");
+  if (!(await canManageFileShares(c, fileId))) {
+    return c.json({ error: "Keine Berechtigung" }, 403);
+  }
+  const ok = await fileRepo.removeShare(fileId, c.req.param("userId"));
+  if (ok) emit({ type: "file", action: "updated", id: fileId });
+  return c.json({ ok });
 });

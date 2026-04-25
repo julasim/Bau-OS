@@ -4,9 +4,10 @@
 // einer Query.
 import { Hono } from "hono";
 import { teamRepo } from "../../data/index.js";
+import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 
-export const companiesRoutes = new Hono();
+export const companiesRoutes = new Hono<AppEnv>();
 
 companiesRoutes.get("/companies", async (c) => {
   if (!teamRepo.listCompanies) return c.json([]);

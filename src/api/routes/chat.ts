@@ -19,8 +19,9 @@ import {
   getAgentModel,
 } from "../../config.js";
 import { logInfo, logError } from "../../logger.js";
+import type { AppEnv } from "../server.js";
 
-export const chatRoutes = new Hono();
+export const chatRoutes = new Hono<AppEnv>();
 
 // ── Sessions auflisten ──────────────────────────────────────────────────────
 chatRoutes.get("/chat/sessions", async (c) => {

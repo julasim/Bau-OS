@@ -23,6 +23,9 @@ interface ProjectInfo {
   parentId?: string | null;
   parentName?: string | null;
   childrenCount?: number;
+  // Phase 3 ACL
+  createdById?: string | null;
+  createdByUsername?: string | null;
   notes: number;
   openTasks: number;
   doneTasks?: number;
@@ -447,6 +450,13 @@ onMounted(async () => {
           <BIcon name="layers" :size="10" />
           <span>{{ p.parentName }}</span>
           <span style="opacity: 0.5">/</span>
+        </div>
+        <!-- Phase 3: angelegt-von kommt nur, wenn Username vorhanden ist. -->
+        <div
+          v-if="p.createdByUsername"
+          style="font-size: 10px; color: var(--color-text-faint); margin-bottom: 4px; letter-spacing: 0.04em; text-transform: uppercase"
+        >
+          von {{ p.createdByUsername }}
         </div>
         <div style="font-size: 15px; font-weight: 600; color: var(--color-text); margin-bottom: 4px">
           {{ p.name }}

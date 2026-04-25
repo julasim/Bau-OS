@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { listAgents } from "../../workspace/index.js";
 import { noteRepo, taskRepo, terminRepo, projectRepo } from "../../data/index.js";
 import { DB_ENABLED } from "../../config.js";
+import type { AppEnv } from "../server.js";
 
-export const dashboardRoutes = new Hono();
+export const dashboardRoutes = new Hono<AppEnv>();
 
 dashboardRoutes.get("/dashboard", async (c) => {
   const [notes, tasks, termine, projects, agents] = await Promise.all([

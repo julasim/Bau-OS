@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { embedFile } from "../db/embeddings.js";
 import { logError } from "../logger.js";
-import type { FileEntry, FileRepository } from "./types.js";
+import type { FileEntry, FileRepository, FileShareEntry } from "./types.js";
 
 function rowToFile(row: Record<string, unknown>): FileEntry {
   return {
@@ -40,8 +40,8 @@ export const dbFiles: FileRepository = {
     //                wir muessen nichts encoden. NULL, wenn kein Blob
     //                uebergeben wurde (Legacy/Metadaten-only).
     const [row] = await db`
-      INSERT INTO files (id, filename, filepath, filetype, filesize, mime_type, content_text, project_id, blob, created_at, updated_at)
-      VALUES (${id}, ${file.filename}, ${file.filepath}, ${ext}, ${file.filesize}, ${file.mimeType ?? null}, ${file.contentText ?? null}, ${projectId}, ${file.blob ?? null}, ${now}, ${now})
+      INSERT INTO files (id, filename, filepath, filetype, filesize, mime_type, content_text, project_id, blob, uploaded_by, created_at, updated_at)
+      VALUES (${id}, ${file.filename}, ${file.filepath}, ${ext}, ${file.filesize}, ${file.mimeType ?? null}, ${file.contentText ?? null}, ${projectId}, ${file.blob ?? null}, ${file.uploadedById ?? null}, ${now}, ${now})
       RETURNING id, filename, filepath, filetype, filesize, mime_type, content_text, summary, tags, analyzed, created_at, updated_at, (SELECT name FROM projects WHERE id = project_id) as project_name
     `;
 
@@ -145,6 +145,46 @@ export const dbFiles: FileRepository = {
     if (result.count > 0) {
       embedFile(id, contentText).catch((err) => logError("[Embedding]", err));
     }
+    return result.count > 0;
+  },
+
+  // ── File-Sharing (Phase 3) ──────────────────────────────────
+
+  async listShares(fileId): Promise<FileShareEntry[]> {
+    const db = getDb();
+    const rows = await db`
+      SELECT u.id, u.username, u.display_name, fs.can_edit, fs.added_at
+      FROM file_shares fs
+      JOIN users u ON u.id = fs.user_id
+      WHERE fs.file_id = ${fileId}
+      ORDER BY u.username
+    `;
+    return rows.map((r) => ({
+      fileId,
+      userId: String(r.id),
+      username: String(r.username),
+      displayName: r.display_name ? String(r.display_name) : null,
+      canEdit: r.can_edit === true,
+      addedAt: String(r.added_at),
+    }));
+  },
+
+  async addShare(fileId, userId, canEdit) {
+    const db = getDb();
+    await db`
+      INSERT INTO file_shares (file_id, user_id, can_edit)
+      VALUES (${fileId}, ${userId}, ${canEdit})
+      ON CONFLICT (file_id, user_id)
+        DO UPDATE SET can_edit = EXCLUDED.can_edit
+    `;
+    return true;
+  },
+
+  async removeShare(fileId, userId) {
+    const db = getDb();
+    const result = await db`
+      DELETE FROM file_shares WHERE file_id = ${fileId} AND user_id = ${userId}
+    `;
     return result.count > 0;
   },
 };

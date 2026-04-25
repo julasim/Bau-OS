@@ -72,4 +72,18 @@ export const fsProjects: ProjectRepository = {
   async delete(name) {
     return vault.deleteProject(name);
   },
+  // ACL ist ein DB-Konzept. FS-Mode hat keine User-Verwaltung — alle Methoden
+  // geben Defaults zurueck, die "kein Filter, alle sehen alles" bedeuten.
+  async listAccess() {
+    return [];
+  },
+  async grantAccess() {
+    return false;
+  },
+  async revokeAccess() {
+    return false;
+  },
+  async listVisibleProjectIds() {
+    return [];
+  },
 };

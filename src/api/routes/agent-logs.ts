@@ -6,8 +6,9 @@
 
 import { Hono } from "hono";
 import { agentLogRepo } from "../../data/index.js";
+import type { AppEnv } from "../server.js";
 
-export const agentLogsRoutes = new Hono();
+export const agentLogsRoutes = new Hono<AppEnv>();
 
 // ── Liste (zuletzt / gefiltert) ─────────────────────────────────────────────
 agentLogsRoutes.get("/agent-logs", async (c) => {

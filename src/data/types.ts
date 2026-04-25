@@ -93,8 +93,34 @@ export interface Project {
   files?: number;
   /** Anzahl direkter Sub-Projekte (keine rekursive Summe). */
   childrenCount?: number;
+  // ── Phase-3-ACL ────────────────────────────────────────
+  /** UUID des Users, der das Projekt angelegt hat. NULL bei Legacy-
+   *  Daten oder wenn der Ersteller geloescht wurde (ON DELETE SET NULL). */
+  createdById?: string | null;
+  /** Username des Erstellers (read-only, Join). */
+  createdByUsername?: string | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+/** Eintrag aus user_projects-Junction — wer hat Zugriff auf welches
+ *  Projekt. addedAt nur informativ. */
+export interface ProjectAccessEntry {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  role: "admin" | "user";
+  addedAt: string;
+}
+
+/** Eintrag aus file_shares — wer darf eine Datei sehen / editieren. */
+export interface FileShareEntry {
+  fileId: string;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  canEdit: boolean;
+  addedAt: string;
 }
 
 /** Patchable Felder fuer projectRepo.update(). undefined = unveraendert,
@@ -266,10 +292,24 @@ export interface ProjectRepository {
    *  einfach ein leeres Array zurueck, weil im FS-Mode keine Parent-Links
    *  gespeichert werden. */
   listChildren?(parentName: string): Promise<Array<{ id: string; name: string; status: string | null }>>;
+
+  // ── Phase-3-ACL (DB-only) ──────────────────────────────
+  /** Liefert alle User mit Zugriff auf ein Projekt. */
+  listAccess?(projectId: string): Promise<Array<import("./types.js").ProjectAccessEntry>>;
+  /** Gibt einem User Zugriff auf ein Projekt. Idempotent. */
+  grantAccess?(projectId: string, userId: string): Promise<boolean>;
+  /** Entzieht den Zugriff. Liefert false wenn kein Eintrag existierte. */
+  revokeAccess?(projectId: string, userId: string): Promise<boolean>;
+  /** Liste der Projekt-IDs, auf die ein User Zugriff hat (Phase-4-Helper). */
+  listVisibleProjectIds?(userId: string): Promise<string[]>;
   /** Legt ein neues Projekt an. Gibt false zurueck, wenn der Name ungueltig ist
    *  oder das Projekt bereits existiert. Rueckwaertskompatibilitaet: wenn nur
-   *  ein String als zweites Argument kommt, landet dieser in description. */
-  create(name: string, options?: string | null | ProjectCreateOptions): Promise<boolean>;
+   *  ein String als zweites Argument kommt, landet dieser in description.
+   *  createdById (Phase 3) wird als users.id-FK gespeichert; im FS-Mode
+   *  ignoriert. Wenn gesetzt, wird der User auch automatisch zur user_projects-
+   *  Junction hinzugefuegt (im DB-Mode), damit der Ersteller sofortigen Zugriff
+   *  hat. */
+  create(name: string, options?: string | null | ProjectCreateOptions, createdById?: string | null): Promise<boolean>;
   /** Aktualisiert Stammdaten eines bestehenden Projekts. Nur Felder die im
    *  Patch gesetzt sind werden geaendert; undefined laesst unveraendert, null
    *  leert die Spalte explizit. Gibt false zurueck wenn Projekt nicht
@@ -353,6 +393,10 @@ export interface FileRepository {
     /** Binaerinhalt — wird in files.blob (bytea) gespeichert. Wenn gesetzt,
      *  liegt die Datei ausschliesslich in der DB (kein Vault-Pfad noetig). */
     blob?: Buffer;
+    /** UUID des Uploaders (Phase 3). Wird in files.uploaded_by-Spalte
+     *  gespeichert; ohne ist's eine "anonyme" Upload (sichtbar fuer alle
+     *  Admins, aber nicht im persoenlichen Workspace eines Users). */
+    uploadedById?: string | null;
   }): Promise<FileEntry>;
   list(project?: string, limit?: number): Promise<FileEntry[]>;
   get(id: string): Promise<FileEntry | null>;
@@ -362,6 +406,11 @@ export interface FileRepository {
   search(query: string, limit?: number): Promise<FileEntry[]>;
   delete(id: string): Promise<boolean>;
   updateContent(id: string, contentText: string): Promise<boolean>;
+
+  // ── File-Sharing (Phase 3) ──────────────────────────
+  listShares?(fileId: string): Promise<FileShareEntry[]>;
+  addShare?(fileId: string, userId: string, canEdit: boolean): Promise<boolean>;
+  removeShare?(fileId: string, userId: string): Promise<boolean>;
 }
 
 // ── Chat ────────────────────────────────────────────────────────────────────

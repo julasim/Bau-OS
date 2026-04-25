@@ -11,8 +11,9 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { subscribe, listenerCount } from "../events.js";
 import type { DataEvent } from "../events.js";
+import type { AppEnv } from "../server.js";
 
-export const eventsRoutes = new Hono();
+export const eventsRoutes = new Hono<AppEnv>();
 
 eventsRoutes.get("/events", (c) => {
   // Optionaler Filter auf Event-Typen

@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { noteRepo } from "../../data/index.js";
+import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 
-export const notesRoutes = new Hono();
+export const notesRoutes = new Hono<AppEnv>();
 
 notesRoutes.get("/notes", async (c) => {
   const detailed = c.req.query("detailed");

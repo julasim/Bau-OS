@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { searchWorkspace } from "../../workspace/index.js";
 import { DB_ENABLED } from "../../config.js";
+import type { AppEnv } from "../server.js";
 
-export const searchRoutes = new Hono();
+export const searchRoutes = new Hono<AppEnv>();
 
 searchRoutes.get("/search", async (c) => {
   const q = c.req.query("q");

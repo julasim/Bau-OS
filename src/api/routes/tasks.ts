@@ -1,8 +1,9 @@
 import { Hono } from "hono";
 import { taskRepo } from "../../data/index.js";
+import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 
-export const tasksRoutes = new Hono();
+export const tasksRoutes = new Hono<AppEnv>();
 
 tasksRoutes.get("/tasks", async (c) => {
   const project = c.req.query("project");

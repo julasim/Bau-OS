@@ -1,9 +1,11 @@
 import { Hono } from "hono";
 import { projectRepo, taskRepo, terminRepo, teamRepo } from "../../data/index.js";
+import { findDbUserById } from "../auth.js";
 import type { ProjectUpdate } from "../../data/types.js";
+import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 
-export const projectsRoutes = new Hono();
+export const projectsRoutes = new Hono<AppEnv>();
 
 // Whitelist der Felder, die per PATCH /projects/:name gesetzt werden duerfen.
 // Andere Keys im Body werden stillschweigend verworfen (keine Error), damit
@@ -67,17 +69,25 @@ projectsRoutes.post("/projects", async (c) => {
     return t === "" ? null : t;
   };
 
-  const ok = await projectRepo.create(name, {
-    description: normalize(body.description),
-    projektnummer: normalize(body.projektnummer),
-    bauherr: normalize(body.bauherr),
-    standort: normalize(body.standort),
-    projektart: normalize(body.projektart),
-    nutzung: normalize(body.nutzung),
-    phase: normalize(body.phase),
-    startDate: normalize(body.startDate),
-    endDate: normalize(body.endDate),
-  });
+  // Phase 3: Ersteller-UUID aus Auth-Context durchreichen. Im FS-Mode oder
+  // bei Legacy-Konten ohne UUID bleibt das Feld einfach NULL — die alte
+  // Semantik bleibt erhalten.
+  const createdById = c.var.userId ?? null;
+  const ok = await projectRepo.create(
+    name,
+    {
+      description: normalize(body.description),
+      projektnummer: normalize(body.projektnummer),
+      bauherr: normalize(body.bauherr),
+      standort: normalize(body.standort),
+      projektart: normalize(body.projektart),
+      nutzung: normalize(body.nutzung),
+      phase: normalize(body.phase),
+      startDate: normalize(body.startDate),
+      endDate: normalize(body.endDate),
+    },
+    createdById,
+  );
   if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
 
   emit({ type: "project", action: already ? "updated" : "created", id: name });
@@ -246,6 +256,45 @@ projectsRoutes.delete("/projects/:name", async (c) => {
   if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
   emit({ type: "project", action: "deleted", id: name });
   return c.body(null, 204);
+});
+
+// ── Projekt-Zugriffs-ACL (Phase 3) ─────────────────────────────────────────
+// Liste, Hinzufuegen, Entfernen — alle Admin-only. Routes sind separat von
+// /admin/users, damit der Admin im Projekt-Kontext arbeitet (Tab "Zugriff").
+
+projectsRoutes.get("/projects/:name/access", async (c) => {
+  if (c.var.userRole !== "admin") return c.json({ error: "Admin-Rechte erforderlich" }, 403);
+  if (!projectRepo.listAccess) return c.json([]);
+  const info = await projectRepo.getInfo(c.req.param("name"));
+  if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
+  return c.json(await projectRepo.listAccess(info.id!));
+});
+
+projectsRoutes.post("/projects/:name/access", async (c) => {
+  if (c.var.userRole !== "admin") return c.json({ error: "Admin-Rechte erforderlich" }, 403);
+  if (!projectRepo.grantAccess) return c.json({ error: "Nicht unterstützt" }, 501);
+  const info = await projectRepo.getInfo(c.req.param("name"));
+  if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
+
+  const body = await c.req.json<{ userId: string }>();
+  if (!body.userId) return c.json({ error: "userId erforderlich" }, 400);
+  const target = await findDbUserById(body.userId);
+  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
+
+  await projectRepo.grantAccess(info.id!, body.userId);
+  emit({ type: "project", action: "updated", id: info.name });
+  return c.json({ ok: true });
+});
+
+projectsRoutes.delete("/projects/:name/access/:userId", async (c) => {
+  if (c.var.userRole !== "admin") return c.json({ error: "Admin-Rechte erforderlich" }, 403);
+  if (!projectRepo.revokeAccess) return c.json({ error: "Nicht unterstützt" }, 501);
+  const info = await projectRepo.getInfo(c.req.param("name"));
+  if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
+
+  const ok = await projectRepo.revokeAccess(info.id!, c.req.param("userId"));
+  if (ok) emit({ type: "project", action: "updated", id: info.name });
+  return c.json({ ok });
 });
 
 // Direkte Unter-Projekte eines Projekts (Migration 005).

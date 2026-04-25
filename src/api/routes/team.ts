@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { teamRepo } from "../../data/index.js";
 import type { MemberType, ContactLogEntry } from "../../data/types.js";
+import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 
-export const teamRoutes = new Hono();
+export const teamRoutes = new Hono<AppEnv>();
 
 const ALLOWED_MEMBER_TYPES: MemberType[] = ["Intern", "Planer", "Ausführende", "Behörde", "Lieferant", "Bauherr"];
 

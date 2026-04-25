@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { listAgents, inspectAgentWorkspace, readAgentFile, writeAgentFile } from "../../workspace/index.js";
+import type { AppEnv } from "../server.js";
 
 const EDITABLE_FILES = [
   "SOUL.md",
@@ -13,7 +14,7 @@ const EDITABLE_FILES = [
   "MEMORY.md",
 ];
 
-export const agentsRoutes = new Hono();
+export const agentsRoutes = new Hono<AppEnv>();
 
 agentsRoutes.get("/agents", (c) => {
   const agents = listAgents();
