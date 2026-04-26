@@ -390,6 +390,70 @@ export async function createInitialAdmin(username: string, password: string): Pr
   return rowToDbUser(rows[0]!);
 }
 
+// ── Auto-Import: Legacy-JSON-User in die DB nachziehen ────────────────────
+//
+// Beim Boot wird einmalig fuer jeden User aus users.json geprueft, ob er
+// schon in der DB ist. Falls nicht, wird der Eintrag importiert — bcrypt-
+// Hash wird 1:1 uebernommen (wurde schon mit derselben bcrypt.hash() Logik
+// erzeugt), Login funktioniert ohne Unterbrechung weiter.
+//
+// Der erste importierte Admin wird is_protected=true, falls in der DB noch
+// kein anderer geschuetzter Admin existiert. Das stellt sicher, dass die
+// Firma nie alle Admin-Konten verlieren kann (siehe Schutzregeln in
+// admin-users.ts).
+//
+// Idempotent: User die schon in der DB existieren, werden uebersprungen.
+// users.json bleibt erhalten — forward-only Kultur, JSON ist Recovery-
+// Fallback. Sobald ein User in DB ist, gewinnt der DB-Pfad (Login-Flow
+// in server.ts prueft DB zuerst).
+export async function importLegacyJsonUsers(): Promise<{ imported: number; skipped: number }> {
+  if (!DB_ENABLED) return { imported: 0, skipped: 0 };
+  const jsonUsers = loadUsers();
+  if (jsonUsers.length === 0) return { imported: 0, skipped: 0 };
+
+  const db = getDb();
+  let imported = 0;
+  let skipped = 0;
+
+  // Wenn die DB noch keinen geschuetzten Admin hat, machen wir den ersten
+  // importierten Admin protected.
+  const [{ c: protectedCount }] = await db`
+    SELECT count(*)::int AS c FROM users WHERE is_protected = true
+  `;
+  let needsProtected = Number(protectedCount) === 0;
+
+  for (const ju of jsonUsers) {
+    const existing = await findDbUserByUsername(ju.username);
+    if (existing) {
+      skipped++;
+      continue;
+    }
+
+    const isAdmin = ju.role === "admin";
+    const role: "admin" | "user" = isAdmin ? "admin" : "user";
+    const shouldProtect = isAdmin && needsProtected;
+    if (shouldProtect) needsProtected = false; // nur den ersten
+
+    await db`
+      INSERT INTO users (
+        username, password_hash, role, display_name,
+        is_protected, settings, created_at
+      ) VALUES (
+        ${ju.username},
+        ${ju.passwordHash},
+        ${role},
+        ${ju.settings?.displayName ?? null},
+        ${shouldProtect},
+        ${JSON.stringify(ju.settings ?? {})}::jsonb,
+        ${ju.createdAt ?? new Date().toISOString()}
+      )
+    `;
+    imported++;
+  }
+
+  return { imported, skipped };
+}
+
 // ── Legacy JSON-Helper (Fallback solange noch keine DB-User) ────────────────
 
 export function loadUsers(): User[] {

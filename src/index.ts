@@ -36,6 +36,19 @@ if (DB_ENABLED) {
     } else {
       logInfo("[DB] DB_AUTO_MIGRATE=false — Migrations uebersprungen");
     }
+
+    // Legacy-JSON-User in die DB nachziehen (idempotent). Nach dem
+    // Migrations-Run, weil das users-Schema dann garantiert bereitsteht.
+    try {
+      const { importLegacyJsonUsers } = await import("./api/auth.js");
+      const result = await importLegacyJsonUsers();
+      if (result.imported > 0) {
+        logInfo(`[DB] ${result.imported} Legacy-JSON-User in die DB importiert (${result.skipped} schon vorhanden)`);
+      }
+    } catch (err) {
+      logError("[DB] Legacy-User-Import fehlgeschlagen", err);
+      // Nicht fatal — Server kann trotzdem starten, JSON-Fallback bleibt aktiv.
+    }
   } catch (err) {
     logError("[DB]", err);
     process.exit(1);
