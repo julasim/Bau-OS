@@ -11,7 +11,9 @@ import { fmt, stripMarkdown } from "./format.js";
 import { saveChatId } from "./heartbeat.js";
 import { TYPING_INTERVAL_MS, WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "./config.js";
 import { fileRepo } from "./data/index.js";
-import { findDbUserByChatId, redeemPairToken, countDbUsers } from "./api/auth.js";
+import { findDbUserByChatId, redeemPairToken, countDbUsers, type DbUser } from "./api/auth.js";
+import { runWithUserCtx } from "./llm/user-context.js";
+import type { UserCtx } from "./data/access.js";
 import {
   handleHilfe,
   handleStatus,
@@ -50,7 +52,18 @@ function startTyping(ctx: { replyWithChatAction: (action: "typing") => Promise<u
   return () => clearInterval(timer);
 }
 
-export function createBot(token: string): Bot {
+/**
+ * Erzeugt eine Bot-Instanz.
+ *   - Ohne ownerUser: Shared-Bot via env BOT_TOKEN. Nutzt Phase-5-Pairing
+ *     (chat_id muss zu einem User-Konto gemapped sein).
+ *   - Mit ownerUser: Per-User-Bot (Phase 6). Bot ist fest an ownerUser.id
+ *     gebunden. Erste Nachricht setzt chat_id automatisch (auto-pair),
+ *     spaetere Nachrichten von anderen Chats werden abgewiesen.
+ *
+ * In beiden Faellen wird processMessage in runWithUserCtx() eingebettet,
+ * damit Tool-Handler den User-Kontext via getCurrentUserCtx() lesen koennen.
+ */
+export function createBot(token: string, ownerUser?: DbUser | null): Bot {
   const bot = new Bot(token);
 
   // --- System ---
@@ -98,23 +111,58 @@ export function createBot(token: string): Bot {
     );
   });
 
-  // Helper: prueft ob die Chat-ID einem User-Konto zugeordnet ist.
-  // Gibt User zurueck oder null bei nicht-autorisierten Chats.
-  // Im Pre-Setup-Modus (keine User in DB) und im FS-Mode wird die Pruefung
-  // uebersprungen — der Bot funktioniert wie vor Phase 5, damit der erste
-  // Setup-Lauf nicht aussperrt.
-  async function checkAuth(ctx: { chat: { id: number }; reply: (msg: string) => Promise<unknown> }): Promise<boolean> {
-    if (!DB_ENABLED) return true;
+  // Helper: identifiziert den User hinter dem Chat. Gibt entweder einen
+  // gefundenen DbUser zurueck oder null (mit User-Hinweis im Reply).
+  //
+  // Drei Modi:
+  //   1) Per-User-Bot (ownerUser gesetzt): Bot gehoert nur diesem User.
+  //      Erste Nachricht: chat_id wird auto-gespeichert. Spaetere Nachrichten
+  //      von anderen Chat-IDs werden abgewiesen.
+  //   2) Shared-Bot (kein ownerUser) im DB-Mode mit Usern: Phase-5-Pairing.
+  //   3) Shared-Bot ohne DB / vor Setup: alles erlaubt (Legacy).
+  async function checkAuth(ctx: {
+    chat: { id: number };
+    reply: (msg: string) => Promise<unknown>;
+  }): Promise<DbUser | null> {
+    if (ownerUser) {
+      // Per-User-Bot.
+      const expectedChat = ownerUser.telegramChatId;
+      if (!expectedChat) {
+        // Erste Nachricht — chat_id auto-pairen via direktem DB-Update.
+        if (DB_ENABLED) {
+          const { getDb } = await import("./db/client.js");
+          await getDb()`UPDATE users SET telegram_chat_id = ${String(ctx.chat.id)} WHERE id = ${ownerUser.id}`;
+          ownerUser.telegramChatId = String(ctx.chat.id);
+        }
+        return ownerUser;
+      }
+      if (expectedChat !== String(ctx.chat.id)) {
+        await ctx.reply("Dieser Bot gehoert einem anderen Konto.");
+        return null;
+      }
+      return ownerUser;
+    }
+
+    // Shared-Bot Pfad.
+    if (!DB_ENABLED) return null; // FS-Mode → kein scoping, processMessage laeuft ohne ctx
     const userCount = await countDbUsers();
-    if (userCount === 0) return true;
+    if (userCount === 0) return null;
     const user = await findDbUserByChatId(ctx.chat.id);
     if (!user) {
       await ctx.reply(
         "Nicht autorisiert. Bitte deinen Admin um einen Pair-Code (Web → Nutzer → Telegram pairen) und sende dann /pair <code>.",
       );
-      return false;
+      return null;
     }
-    return true;
+    return user;
+  }
+
+  // Hilfs-Wrapper: laedt processMessage mit User-Kontext, wenn vorhanden.
+  // Sonst direkt aufrufen (Legacy/FS-Mode).
+  async function runScoped<T>(user: DbUser | null, fn: () => Promise<T>): Promise<T> {
+    if (!user) return fn();
+    const ctx: UserCtx = { userId: user.id, role: user.role };
+    return runWithUserCtx(ctx, fn);
   }
 
   // --- Textnachrichten -> LLM ---
@@ -123,14 +171,16 @@ export function createBot(token: string): Bot {
       saveChatId(ctx.chat.id);
       const raw = ctx.message.text;
 
-      // Auth-Gate: Slash-Commands wurden bereits oben verdrahtet (inkl.
-      // /pair). Alles was hier landet ist freier Text fuer das LLM —
-      // gepairte Chats erforderlich. Ausnahmen: /pair selbst (haetten
-      // wir oben behandelt, faellt aber durch grammy auch hierdurch),
-      // /hilfe, /start. Fuer alle non-Command-Texte: Auth-Gate.
+      // Auth + User-Kontext bestimmen.
+      let scopeUser: DbUser | null = null;
       if (!raw.startsWith("/")) {
-        const authOk = await checkAuth(ctx);
-        if (!authOk) return;
+        scopeUser = await checkAuth(ctx);
+        if (ownerUser && !scopeUser) return; // Per-User-Bot, falscher Chat
+        if (!ownerUser && DB_ENABLED && (await countDbUsers()) > 0 && !scopeUser) return;
+      } else if (ownerUser) {
+        // Auch fuer Slash-Commands an einem Per-User-Bot: nur Owner-Chat erlaubt.
+        scopeUser = await checkAuth(ctx);
+        if (!scopeUser) return;
       }
 
       // Setup-Wizard (Erster Start)
@@ -154,7 +204,7 @@ export function createBot(token: string): Bot {
       if (btwMatch) {
         const stopTyping = startTyping(ctx);
         try {
-          const antwort = await processBtw(btwMatch[1].trim());
+          const antwort = await runScoped(scopeUser, () => processBtw(btwMatch[1].trim()));
           stopTyping();
           await safeReply(ctx, antwort);
         } catch {
@@ -175,7 +225,10 @@ export function createBot(token: string): Bot {
         setSendBufferContext(async (buffer, filename) => {
           await ctx.replyWithDocument(new InputFile(buffer, filename), { caption: filename });
         });
-        const antwort = await processMessage(text);
+        // runScoped umhuellt processMessage mit dem User-AsyncLocalStorage.
+        // Tools wie projekte_auflisten lesen den Kontext und scopen ihre
+        // Repo-Aufrufe entsprechend (User sieht nur seine Daten).
+        const antwort = await runScoped(scopeUser, () => processMessage(text));
         stopTyping();
         await safeReply(ctx, antwort);
       } catch (err: unknown) {
@@ -200,10 +253,11 @@ export function createBot(token: string): Bot {
   bot.on("message:document", (ctx) => {
     enqueue(ctx.chat.id, async () => {
       saveChatId(ctx.chat.id);
-      // Auth-Gate auch fuer Datei-Uploads — sonst koennten unautorisierte
-      // Chats Dateien hochladen, die der Bot dann analysieren wuerde.
-      const authOk = await checkAuth(ctx);
-      if (!authOk) return;
+      // Auth + User-Kontext. Per-User-Bots sind ueber owner gebunden;
+      // Shared-Bot braucht gepairten Chat (siehe checkAuth).
+      const scopeUser = await checkAuth(ctx);
+      if (ownerUser && !scopeUser) return;
+      if (!ownerUser && DB_ENABLED && (await countDbUsers()) > 0 && !scopeUser) return;
       const doc = ctx.message.document;
 
       // Size-Limit VOR dem Download pruefen — sonst laden wir GBs umsonst.
@@ -278,7 +332,7 @@ export function createBot(token: string): Bot {
             : extraction.text || "[Kein Textinhalt extrahierbar]";
 
         const prompt = `Der Nutzer hat die Datei "${safeName}" hochgeladen.\n\nInhalt:\n${extractedInfo}`;
-        const antwort = await processMessage(prompt);
+        const antwort = await runScoped(scopeUser, () => processMessage(prompt));
 
         stopTyping();
         await safeReply(ctx, antwort);

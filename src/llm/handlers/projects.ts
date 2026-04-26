@@ -150,13 +150,25 @@ function listedFields(patch: Record<string, unknown>): string[] {
 
 // Handlers -------------------------------------------------------------------
 
+import { getCurrentUserCtx } from "../user-context.js";
+import { getVisibleProjectIds, canSeeProjectByName } from "../../data/access.js";
+
 export const projectHandlers: HandlerMap = {
   projekte_auflisten: async () => {
-    const projects = await projectRepo.list();
+    // Phase 6: scoped per User. getCurrentUserCtx() liefert null wenn der
+    // Aufrufer keinen Bot/API-Wrapper hat (z.B. Heartbeat) — dann verhaelt
+    // sich projectRepo.list() wie vorher (alles).
+    const ctx = getCurrentUserCtx();
+    const visible = ctx ? await getVisibleProjectIds(ctx) : "all";
+    const projects = await projectRepo.list(visible);
     return projects.length ? projects.join("\n") : "Keine Projekte vorhanden.";
   },
 
   projekt_info: async (args) => {
+    const ctx = getCurrentUserCtx();
+    if (ctx && !(await canSeeProjectByName(ctx, String(args.name)))) {
+      return `Kein Zugriff auf Projekt "${args.name}".`;
+    }
     const info = await projectRepo.getInfo(String(args.name));
     if (!info) {
       return `Projekt "${args.name}" nicht gefunden. Nutze projekte_auflisten um alle verfuegbaren Projektnamen zu sehen.`;

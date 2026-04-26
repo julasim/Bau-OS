@@ -34,6 +34,9 @@ export interface DbUser {
   role: "admin" | "user";
   isProtected: boolean;
   telegramChatId: string | null;
+  // Phase 6: Per-User Bots
+  telegramBotToken: string | null;
+  telegramBotEnabled: boolean;
   settings: UserSettings;
   createdAt: string;
   updatedAt: string;
@@ -61,6 +64,8 @@ function rowToDbUser(row: Record<string, unknown>): DbUser {
     isProtected: row.is_protected === true,
     telegramChatId:
       row.telegram_chat_id !== null && row.telegram_chat_id !== undefined ? String(row.telegram_chat_id) : null,
+    telegramBotToken: row.telegram_bot_token ? String(row.telegram_bot_token) : null,
+    telegramBotEnabled: row.telegram_bot_enabled !== false,
     settings,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
@@ -262,6 +267,58 @@ export async function findDbUserByChatId(chatId: string | number): Promise<DbUse
     SELECT * FROM users WHERE telegram_chat_id = ${String(chatId)} LIMIT 1
   `;
   return row ? rowToDbUser(row) : null;
+}
+
+// ── Per-User Telegram-Bots (Phase 6) ────────────────────────────────────────
+
+/** Setzt das persoenliche Telegram-Bot-Token eines Users.
+ *  - token = null  → Bot wird entfernt (auch chat_id wird gewischt)
+ *  - token gleich altem Wert → no-op (kein Bot-Restart noetig)
+ *  - token != alter Wert → chat_id wird mit gewischt (frischer Bot, frische
+ *    Zuordnung; Phase-6-D-Entscheidung)
+ *
+ *  Returns true bei Erfolg, false wenn kein User mit dieser id existiert.
+ *  Der Bot-Manager pollt diese Aenderungen alle paar Sekunden. */
+export async function setUserBotToken(userId: string, token: string | null): Promise<boolean> {
+  if (!DB_ENABLED) return false;
+  const trimmed = token?.trim() || null;
+  const db = getDb();
+  const [current] = await db`SELECT telegram_bot_token FROM users WHERE id = ${userId} LIMIT 1`;
+  if (!current) return false;
+  const oldToken = current.telegram_bot_token ? String(current.telegram_bot_token) : null;
+  if (oldToken === trimmed) return true; // no-op
+
+  const result = await db`
+    UPDATE users
+       SET telegram_bot_token = ${trimmed},
+           telegram_chat_id = NULL
+     WHERE id = ${userId}
+  `;
+  return result.count > 0;
+}
+
+/** Aktiviert/deaktiviert den Bot eines Users ohne den Token zu loeschen. */
+export async function setUserBotEnabled(userId: string, enabled: boolean): Promise<boolean> {
+  if (!DB_ENABLED) return false;
+  const db = getDb();
+  const result = await db`
+    UPDATE users SET telegram_bot_enabled = ${enabled} WHERE id = ${userId}
+  `;
+  return result.count > 0;
+}
+
+/** Liefert alle User mit aktivem Bot-Token — vom Bot-Manager beim Boot
+ *  und bei Refresh-Polls genutzt. */
+export async function listBotEnabledUsers(): Promise<DbUser[]> {
+  if (!DB_ENABLED) return [];
+  const db = getDb();
+  const rows = await db`
+    SELECT * FROM users
+    WHERE telegram_bot_token IS NOT NULL
+      AND telegram_bot_enabled = true
+    ORDER BY id
+  `;
+  return rows.map(rowToDbUser);
 }
 
 /** Setup: legt den Erst-Admin an. Race-sicher — selbst zwei parallele

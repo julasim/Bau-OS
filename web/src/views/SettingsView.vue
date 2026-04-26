@@ -46,6 +46,66 @@ const confirmPassword = ref("");
 
 const modelInput = ref("");
 
+// ── Telegram-Bot (Phase 6) ───────────────────────────────────────────
+interface BotStatus {
+  loading: boolean;
+  hasToken: boolean;
+  enabled: boolean;
+  chatId: string | null;
+}
+const botStatus = ref<BotStatus>({ loading: true, hasToken: false, enabled: true, chatId: null });
+const botTokenInput = ref("");
+const botSaving = ref(false);
+const botMessage = ref<string | null>(null);
+const botError = ref<string | null>(null);
+
+async function loadBotStatus() {
+  botStatus.value.loading = true;
+  try {
+    const res = await api.get<{ hasToken: boolean; enabled: boolean; chatId: string | null }>(
+      "/me/telegram-bot",
+    );
+    botStatus.value = { loading: false, ...res };
+  } catch {
+    botStatus.value.loading = false;
+  }
+}
+
+async function saveBotToken() {
+  const token = botTokenInput.value.trim();
+  if (!token || botSaving.value) return;
+  botSaving.value = true;
+  botError.value = null;
+  botMessage.value = null;
+  try {
+    await api.put("/me/telegram-bot", { token });
+    botTokenInput.value = "";
+    botMessage.value = "Bot eingerichtet. Schreibe deinem Bot eine kurze Nachricht zum Aktivieren.";
+    setTimeout(() => (botMessage.value = null), 5000);
+    await loadBotStatus();
+  } catch (e) {
+    botError.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+  } finally {
+    botSaving.value = false;
+  }
+}
+
+async function removeBotToken() {
+  if (!confirm("Telegram-Bot wirklich entfernen?")) return;
+  botSaving.value = true;
+  botError.value = null;
+  try {
+    await api.put("/me/telegram-bot", { token: null });
+    botMessage.value = "Bot entfernt.";
+    setTimeout(() => (botMessage.value = null), 3000);
+    await loadBotStatus();
+  } catch (e) {
+    botError.value = e instanceof Error ? e.message : "Entfernen fehlgeschlagen";
+  } finally {
+    botSaving.value = false;
+  }
+}
+
 // ── Cloud-Modelle (Ollama Cloud / Turbo) ─────────────────────────────────────
 // Schnellauswahl fuer Ollama-gehostete Cloud-Modelle. Klick setzt den Input
 // und laesst den User mit "Setzen" bestaetigen.
@@ -181,7 +241,10 @@ async function toggleFast() {
   }
 }
 
-onMounted(loadAll);
+onMounted(() => {
+  void loadAll();
+  void loadBotStatus();
+});
 </script>
 
 <template>
@@ -293,6 +356,74 @@ onMounted(loadAll);
               {{ savingPassword ? "..." : "Passwort aendern" }}
             </button>
           </div>
+        </div>
+      </section>
+
+      <!-- ── Telegram-Bot (Phase 6) ─────────────────────────────────── -->
+      <section>
+        <h3 class="settings-h3 mb-3">Mein Telegram-Bot</h3>
+        <div class="settings-card p-4">
+          <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px 0; line-height: 1.6">
+            Lege deinen eigenen Bot via
+            <a href="https://t.me/BotFather" target="_blank" rel="noopener" style="color: var(--color-primary); text-decoration: underline">@BotFather</a>
+            in Telegram an. Schicke <code style="font-family: var(--font-mono, monospace); background: var(--color-bg-subtle); padding: 1px 4px; border-radius: 3px">/newbot</code>
+            und folge den Anweisungen — am Ende kriegst du ein Token wie <code style="font-family: var(--font-mono, monospace); background: var(--color-bg-subtle); padding: 1px 4px; border-radius: 3px">123456:ABCdef…</code>.
+            Trage es hier ein, dann läuft dein persönlicher Bau-OS-Bot — er kennt nur dich und deine Daten.
+          </p>
+
+          <div v-if="botStatus.loading" class="text-sm" style="color: var(--color-text-muted)">
+            Lade…
+          </div>
+          <template v-else>
+            <div class="flex items-center gap-3 mb-3" style="font-size: 12px">
+              <span
+                class="bot-status-dot"
+                :class="botStatus.hasToken ? 'bot-status-active' : 'bot-status-inactive'"
+              ></span>
+              <span style="color: var(--color-text)">
+                {{ botStatus.hasToken ? "Bot eingerichtet" : "Kein Bot eingerichtet" }}
+              </span>
+              <span v-if="botStatus.chatId" style="color: var(--color-text-muted)">
+                · gepairt mit Chat <span class="font-mono">{{ botStatus.chatId }}</span>
+              </span>
+              <span v-else-if="botStatus.hasToken" style="color: var(--color-text-muted)">
+                · noch keine Nachricht erhalten
+              </span>
+            </div>
+
+            <div class="flex items-center gap-3 mb-2">
+              <input
+                v-model="botTokenInput"
+                type="password"
+                placeholder="Bot-Token aus @BotFather"
+                class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
+                style="min-width: 0"
+              />
+              <button
+                class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+                :disabled="botSaving || !botTokenInput.trim()"
+                :style="{ opacity: (botSaving || !botTokenInput.trim()) ? 0.5 : 1 }"
+                @click="saveBotToken"
+              >
+                {{ botSaving ? "…" : botStatus.hasToken ? "Bot wechseln" : "Bot einrichten" }}
+              </button>
+            </div>
+
+            <div v-if="botStatus.hasToken" class="flex items-center justify-between" style="margin-top: 8px">
+              <button class="settings-ghost-btn px-3 py-1.5 text-sm rounded" @click="removeBotToken" :disabled="botSaving">
+                Bot entfernen
+              </button>
+              <span v-if="botMessage" style="font-size: 12px; color: var(--color-success-text)">
+                {{ botMessage }}
+              </span>
+            </div>
+            <p
+              v-if="botError"
+              style="margin-top: 12px; padding: 8px 12px; font-size: 12px; color: var(--color-danger-text); background: color-mix(in srgb, var(--color-danger-text) 10%, transparent); border-radius: 6px"
+            >
+              {{ botError }}
+            </p>
+          </template>
         </div>
       </section>
 
@@ -546,5 +677,19 @@ onMounted(loadAll);
   border-color: var(--color-danger-border, #fecaca);
   background: var(--color-danger-bg, #fef2f2);
   color: var(--color-danger-text, #b91c1c);
+}
+
+/* ── Bot-Status-Dot ────────────────────────────────────── */
+.bot-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.bot-status-active {
+  background: var(--color-success-text, #16a34a);
+}
+.bot-status-inactive {
+  background: var(--color-text-faint);
 }
 </style>

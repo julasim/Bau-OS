@@ -62,6 +62,18 @@ await initMcp();
 bot.start();
 logInfo("Bau-OS gestartet");
 
+// Phase 6: per-User-Bots aus DB starten (parallel zum env-Bot).
+// Wirft nur Logs, kein process.exit — wenn ein User-Bot kaputt ist,
+// soll der Rest weiterlaufen.
+if (DB_ENABLED) {
+  try {
+    const { startBotManager } = await import("./bot-manager.js");
+    await startBotManager();
+  } catch (err) {
+    logError("[BotManager]", err);
+  }
+}
+
 // Web-API starten (nur wenn JWT_SECRET gesetzt)
 import { API_ENABLED, API_PORT } from "./config.js";
 if (API_ENABLED) {

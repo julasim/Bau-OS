@@ -1,6 +1,8 @@
 import type OpenAI from "openai";
-import { terminRepo } from "../../data/index.js";
+import { terminRepo, projectRepo } from "../../data/index.js";
 import { emit } from "../../api/events.js";
+import { getCurrentUserCtx } from "../user-context.js";
+import { getVisibleProjectIds } from "../../data/access.js";
 import type { HandlerMap } from "./types.js";
 
 export const terminSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -72,7 +74,20 @@ export const terminHandlers: HandlerMap = {
   },
 
   termine_auflisten: async (args) => {
-    const termine = await terminRepo.list(args.projekt ? String(args.projekt) : undefined);
+    const all = await terminRepo.list(args.projekt ? String(args.projekt) : undefined);
+    // Phase 6: User-Scope. Termin sichtbar wenn Projekt erlaubt ODER
+    // (kein Projekt UND ich bin Teilnehmer).
+    const ctx = getCurrentUserCtx();
+    let termine = all;
+    if (ctx && ctx.role !== "admin") {
+      const visible = await getVisibleProjectIds(ctx);
+      const visibleNames = visible === "all" ? null : new Set(await projectRepo.list(visible));
+      termine = all.filter((t) => {
+        if (visibleNames === null) return true;
+        if (t.project) return visibleNames.has(t.project);
+        return ctx.userId !== null && Array.isArray(t.assigneeIds) && t.assigneeIds.includes(ctx.userId);
+      });
+    }
     return termine.length
       ? termine
           .map(

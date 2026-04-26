@@ -1,6 +1,8 @@
 import type OpenAI from "openai";
-import { taskRepo } from "../../data/index.js";
+import { taskRepo, projectRepo } from "../../data/index.js";
 import { emit } from "../../api/events.js";
+import { getCurrentUserCtx } from "../user-context.js";
+import { getVisibleProjectIds } from "../../data/access.js";
 import type { HandlerMap } from "./types.js";
 
 export const taskSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -60,7 +62,20 @@ export const taskHandlers: HandlerMap = {
 
   aufgaben_auflisten: async (args) => {
     const tasks = await taskRepo.list(args.projekt ? String(args.projekt) : undefined);
-    const open = tasks.filter((t) => t.status !== "done");
+    // Phase 6: User-Scope. Aufgaben nur sichtbar wenn Projekt erlaubt
+    // ODER (kein Projekt UND ich bin Assignee).
+    const ctx = getCurrentUserCtx();
+    let scoped = tasks;
+    if (ctx && ctx.role !== "admin") {
+      const visible = await getVisibleProjectIds(ctx);
+      const visibleNames = visible === "all" ? null : new Set(await projectRepo.list(visible));
+      scoped = tasks.filter((t) => {
+        if (visibleNames === null) return true;
+        if (t.project) return visibleNames.has(t.project);
+        return ctx.userId !== null && t.assigneeId === ctx.userId;
+      });
+    }
+    const open = scoped.filter((t) => t.status !== "done");
     return open.length
       ? open
           .map((t) => `\u2022 ${t.text}${t.assignee ? ` (@${t.assignee})` : ""}${t.date ? ` [${t.date}]` : ""}`)

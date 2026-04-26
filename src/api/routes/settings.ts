@@ -12,6 +12,9 @@ import {
   verifyPassword,
   updateDbUserSettings,
   updateDbUserPassword,
+  setUserBotToken,
+  setUserBotEnabled,
+  findDbUserById,
   type UserSettings,
   type DbUser,
   type JwtPayload,
@@ -187,4 +190,44 @@ settingsRoutes.post("/settings/fast", (c) => {
   const active = toggleFast();
   logInfo(`[Settings] Fast-Mode via Web-UI: ${active ? "AN" : "AUS"}`);
   return c.json({ ok: true, fastMode: active, currentModel: getModel() });
+});
+
+// ── /me/telegram-bot — Self-Service Bot-Token (Phase 6) ──────────────────────
+// User kann seinen eigenen Bot via @BotFather anlegen und das Token hier
+// eintragen. Bot-Manager spawnt sofort einen neuen Bot fuer dieses Token.
+//
+// GET liefert minimalen Status (ob Token gesetzt + enabled). Token selbst
+// wird NIE im Response zurueckgegeben — der User muss ihn neu eingeben um
+// zu aendern.
+settingsRoutes.get("/me/telegram-bot", async (c) => {
+  const dbUser = c.get("dbUser");
+  if (!dbUser) return c.json({ error: "DB-User erforderlich" }, 400);
+  const fresh = await findDbUserById(dbUser.id);
+  if (!fresh) return c.json({ error: "User nicht gefunden" }, 404);
+  return c.json({
+    hasToken: !!fresh.telegramBotToken,
+    enabled: fresh.telegramBotEnabled,
+    chatId: fresh.telegramChatId,
+  });
+});
+
+settingsRoutes.put("/me/telegram-bot", async (c) => {
+  const dbUser = c.get("dbUser");
+  if (!dbUser) return c.json({ error: "DB-User erforderlich" }, 400);
+
+  const body = await c.req.json<{ token?: string | null; enabled?: boolean }>();
+  if ("token" in body) {
+    await setUserBotToken(dbUser.id, body.token ?? null);
+  }
+  if ("enabled" in body) {
+    await setUserBotEnabled(dbUser.id, body.enabled === true);
+  }
+  // Bot-Manager refreshen — alter Bot stoppt, neuer startet sofort.
+  try {
+    const { refresh } = await import("../../bot-manager.js");
+    await refresh();
+  } catch {
+    /* Manager nicht aktiv (FS-Mode) — kein Fehler */
+  }
+  return c.json({ ok: true });
 });

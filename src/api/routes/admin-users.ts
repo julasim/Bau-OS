@@ -22,6 +22,8 @@ import {
   updateDbUserPassword,
   hashPassword,
   createPairToken,
+  setUserBotToken,
+  setUserBotEnabled,
 } from "../auth.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
@@ -176,6 +178,32 @@ adminUsersRoutes.post("/admin/users/:id/pair-token", async (c) => {
   if (!target) return c.json({ error: "User nicht gefunden" }, 404);
   const result = await createPairToken(id);
   return c.json(result, 201);
+});
+
+// ── Telegram-Bot eines Users setzen/entfernen (Phase 6) ───────────────────
+// Admin-Override: kann fuer jeden User den Bot-Token setzen/loeschen.
+// Self-Service-Variante laeuft ueber /me/telegram-bot (settings.ts).
+adminUsersRoutes.put("/admin/users/:id/telegram-bot", async (c) => {
+  const id = c.req.param("id");
+  const target = await findDbUserById(id);
+  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
+
+  const body = await c.req.json<{ token?: string | null; enabled?: boolean }>();
+  if ("token" in body) {
+    await setUserBotToken(id, body.token ?? null);
+  }
+  if ("enabled" in body) {
+    await setUserBotEnabled(id, body.enabled === true);
+  }
+  // Bot-Manager neu synchronisieren — alter Bot stoppt, neuer startet.
+  try {
+    const { refresh } = await import("../../bot-manager.js");
+    await refresh();
+  } catch {
+    /* Manager ist evtl. nicht aktiv (FS-Mode) — kein Fehler */
+  }
+  emit({ type: "team", action: "updated", id });
+  return c.json({ ok: true });
 });
 
 // ── Loeschen ────────────────────────────────────────────────────────────────
