@@ -3,6 +3,7 @@ import { taskRepo, projectRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
+import { notifyTaskAssigned, resolveUserIdFromMember } from "../../notifications.js";
 
 export const tasksRoutes = new Hono<AppEnv>();
 
@@ -75,6 +76,21 @@ tasksRoutes.post("/tasks", async (c) => {
       body.project,
     );
     emit({ type: "task", action: "created", id: task.id, project: body.project });
+    // Notification: assigneeId ist team_members.id → wir resolven zuerst
+    // den verlinkten User und schicken nur, wenn es nicht ich selbst bin.
+    if (body.assigneeId) {
+      void (async () => {
+        const targetUserId = await resolveUserIdFromMember(body.assigneeId!);
+        if (targetUserId && targetUserId !== c.var.userId) {
+          const actor = c.var.dbUser?.displayName ?? c.var.dbUser?.username ?? null;
+          await notifyTaskAssigned(
+            targetUserId,
+            { text: body.text, project: body.project ?? null, date: body.date ?? null },
+            actor,
+          );
+        }
+      })();
+    }
     return c.json(updated, 201);
   }
   emit({ type: "task", action: "created", id: task.id, project: body.project });
@@ -93,9 +109,25 @@ tasksRoutes.put("/tasks/:id", async (c) => {
       location: string | null;
     }>
   >();
+  // Vorherigen Stand laden, damit wir nur bei echter Assignee-Aenderung
+  // benachrichtigen (kein Spam wenn nur Datum aktualisiert wird).
+  const prev = await taskRepo.get(id);
   const task = await taskRepo.update(id, body);
   if (!task) return c.json({ error: "Aufgabe nicht gefunden" }, 404);
   emit({ type: "task", action: "updated", id });
+  if ("assigneeId" in body && body.assigneeId && body.assigneeId !== prev?.assigneeId) {
+    void (async () => {
+      const targetUserId = await resolveUserIdFromMember(body.assigneeId!);
+      if (targetUserId && targetUserId !== c.var.userId) {
+        const actor = c.var.dbUser?.displayName ?? c.var.dbUser?.username ?? null;
+        await notifyTaskAssigned(
+          targetUserId,
+          { text: task.text, project: task.project, date: task.dueDate ?? task.date },
+          actor,
+        );
+      }
+    })();
+  }
   return c.json(task);
 });
 

@@ -3,6 +3,9 @@ import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
+import { useCurrentUser } from "../composables/useCurrentUser";
+
+const { isAdmin } = useCurrentUser();
 
 // ── Typen ────────────────────────────────────────────────
 type MemberType = "Intern" | "Planer" | "Ausführende" | "Behörde" | "Lieferant" | "Bauherr";
@@ -29,8 +32,17 @@ interface TeamMember {
   memberType: MemberType | null;
   projects: TeamMemberProject[];
   contactLog: ContactLogEntry[];
+  // Migration 013: Verknuepfter User-Account fuer Notifications.
+  userId: string | null;
+  username?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+interface AdminUserMini {
+  id: string;
+  username: string;
+  displayName: string | null;
+  role: "admin" | "user";
 }
 interface ProjectSummary {
   id: string;
@@ -88,6 +100,33 @@ const logSaving = ref(false);
 const showActionMenu = ref(false);
 const deleteConfirmOpen = ref(false);
 const deleting = ref(false);
+
+// User-Verknuepfung (Migration 013) — nur fuer Admins.
+const allUsers = ref<AdminUserMini[]>([]);
+const allUsersLoaded = ref(false);
+const linkingUser = ref(false);
+
+async function loadAllUsersIfAdmin() {
+  if (!isAdmin.value || allUsersLoaded.value) return;
+  try {
+    allUsers.value = await api.get<AdminUserMini[]>("/admin/users");
+  } catch {
+    allUsers.value = [];
+  } finally {
+    allUsersLoaded.value = true;
+  }
+}
+
+async function setUserLink(userId: string | null) {
+  if (!member.value || linkingUser.value) return;
+  linkingUser.value = true;
+  try {
+    const updated = await api.patch<TeamMember>(`/team/${member.value.id}`, { userId });
+    member.value = updated;
+  } finally {
+    linkingUser.value = false;
+  }
+}
 
 // Inline-Edit Stammdaten
 type EditableKey = "role" | "companyName" | "email" | "phone" | "memberType";
@@ -434,6 +473,7 @@ onMounted(async () => {
   memberId.value = route.params.id as string;
   await loadMember();
   await loadAllProjects();
+  await loadAllUsersIfAdmin();
   document.addEventListener("mousedown", onGlobalClick);
 });
 onUnmounted(() => {
@@ -584,6 +624,39 @@ onUnmounted(() => {
               <BIcon name="pencil" :size="11" class="stamm-edit-icon" />
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- User-Verknuepfung (Migration 013) — nur fuer Admins sichtbar.
+           Erlaubt einem Team-Mitglied einen Login-Account zuzuordnen,
+           damit Notifications fuer Tasks/Termine/Meetings ankommen. -->
+      <div v-if="isAdmin" class="link-card">
+        <div class="flex items-center" style="gap: 8px; margin-bottom: 8px">
+          <BIcon name="link" :size="13" />
+          <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted)">
+            Verknüpfung mit Benutzer-Account
+          </span>
+        </div>
+        <p style="font-size: 12px; color: var(--color-text-muted); margin: 0 0 10px 0; line-height: 1.4">
+          Damit Aufgaben, Termine und Meetings, die dieser Person zugewiesen werden,
+          automatisch eine Telegram-Benachrichtigung auslösen.
+        </p>
+        <div class="flex items-center" style="gap: 8px; flex-wrap: wrap">
+          <select
+            class="stamm-input"
+            style="max-width: 280px"
+            :value="member.userId ?? ''"
+            :disabled="linkingUser"
+            @change="setUserLink(($event.target as HTMLSelectElement).value || null)"
+          >
+            <option value="">— Kein Account verknüpft —</option>
+            <option v-for="u in allUsers" :key="u.id" :value="u.id">
+              {{ u.displayName ?? u.username }} ({{ u.username }})
+            </option>
+          </select>
+          <span v-if="member.username" style="font-size: 11px; color: var(--color-text-muted)">
+            ✓ verknüpft mit @{{ member.username }}
+          </span>
         </div>
       </div>
 
@@ -938,6 +1011,14 @@ onUnmounted(() => {
   gap: 10px 18px;
   padding-top: 14px;
   border-top: 1px solid var(--color-border-subtle);
+}
+
+.link-card {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: var(--color-bg-subtle);
 }
 @media (max-width: 720px) {
   .stamm-grid {

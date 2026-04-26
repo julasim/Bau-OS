@@ -58,6 +58,8 @@ function rowToMember(row: Record<string, unknown>): TeamMember {
     memberType: (row.member_type as MemberType | null) ?? null,
     projects,
     contactLog,
+    userId: row.user_id ? String(row.user_id) : null,
+    username: row.username ? String(row.username) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -91,9 +93,11 @@ const MEMBER_SELECT = `
     tm.company_id,
     tm.member_type,
     tm.contact_log,
+    tm.user_id,
     tm.created_at,
     tm.updated_at,
     c.name as company_name,
+    u.username,
     COALESCE(
       (SELECT json_agg(
         json_build_object(
@@ -109,6 +113,7 @@ const MEMBER_SELECT = `
     ) as projects_json
   FROM team_members tm
   LEFT JOIN companies c ON c.id = tm.company_id
+  LEFT JOIN users u ON u.id = tm.user_id
 `;
 
 // ── Companies-Helper ─────────────────────────────────────────
@@ -182,14 +187,16 @@ export const dbTeam: TeamRepository = {
       if (companyId) companyText = lookupName?.trim() ?? companyText;
     }
 
+    const userId = member.userId ?? null;
+
     const [row] = await db`
       INSERT INTO team_members (
         id, name, role, email, phone, company, project_id,
-        company_id, member_type, contact_log,
+        company_id, member_type, contact_log, user_id,
         created_at, updated_at
       ) VALUES (
         ${id}, ${name}, ${role}, ${email}, ${phone}, ${companyText}, ${projectId},
-        ${companyId}, ${memberType}, ${"[]"}::jsonb,
+        ${companyId}, ${memberType}, ${"[]"}::jsonb, ${userId},
         ${now}, ${now}
       )
       RETURNING id
@@ -232,6 +239,7 @@ export const dbTeam: TeamRepository = {
     const phone = "phone" in updates ? updates.phone : current.phone;
     const projectId = "projectId" in updates ? updates.projectId : current.project_id;
     const memberType = "memberType" in updates ? updates.memberType : current.member_type;
+    const userId = "userId" in updates ? updates.userId : current.user_id;
 
     const resolvedCompanyText = companyText !== undefined ? companyText : current.company;
     const resolvedCompanyId = companyId !== undefined ? companyId : current.company_id;
@@ -245,7 +253,8 @@ export const dbTeam: TeamRepository = {
         company = ${resolvedCompanyText},
         project_id = ${projectId},
         company_id = ${resolvedCompanyId},
-        member_type = ${memberType}
+        member_type = ${memberType},
+        user_id = ${userId}
       WHERE id = ${id}
     `;
     return this.get(id);

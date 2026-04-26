@@ -22,6 +22,7 @@ function emptyMember(name: string, id: string): TeamMember {
     memberType: null,
     projects: [],
     contactLog: [],
+    userId: null,
     createdAt: "",
     updatedAt: "",
   };

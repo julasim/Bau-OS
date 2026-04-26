@@ -25,6 +25,19 @@ interface BotEntry {
 const bots = new Map<string, BotEntry>();
 let started = false;
 
+/** Default-Bot aus Env BOT_TOKEN. Wird von index.ts beim Boot per
+ *  setDefaultBot() registriert und vom Notifications-Modul als Fallback
+ *  benutzt, wenn ein User keinen eigenen Bot hat. */
+let defaultBot: Bot | null = null;
+
+export function setDefaultBot(bot: Bot): void {
+  defaultBot = bot;
+}
+
+export function getDefaultBot(): Bot | null {
+  return defaultBot;
+}
+
 /** Initialer Start: alle aktiven User-Bots aus der DB laden und spawnen. */
 export async function startBotManager(): Promise<void> {
   if (started) return;
@@ -108,4 +121,11 @@ export function getBotStatus(userId: string): "running" | "stopped" | "unknown" 
 /** Anzahl aktuell laufender per-User-Bots — fuer das Dashboard / Healthcheck. */
 export function getRunningBotCount(): number {
   return bots.size;
+}
+
+/** Liefert den grammy-Bot fuer einen User (oder null). Wird vom
+ *  Notifications-Modul verwendet, um DMs ueber den User-eigenen Bot
+ *  zu schicken — falls der laeuft. */
+export function getBot(userId: string): Bot | null {
+  return bots.get(userId)?.bot ?? null;
 }

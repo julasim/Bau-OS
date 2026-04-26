@@ -21,6 +21,7 @@ import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../d
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import type { MeetingInput } from "../../data/types.js";
+import { notifyMeetingInvited, resolveUserIdsFromMembers } from "../../notifications.js";
 
 export const meetingsRoutes = new Hono<AppEnv>();
 
@@ -76,6 +77,27 @@ meetingsRoutes.post("/projects/:projectName/meetings", async (c) => {
   const result = await meetingRepo!.create(proj.id, body, c.var.userId);
   if (typeof result === "string") return c.json({ error: result }, 400);
   emit({ type: "meeting", action: "created", id: result.id, project: proj.name });
+  if (Array.isArray(body.attendeeIds) && body.attendeeIds.length > 0) {
+    void (async () => {
+      const userIds = await resolveUserIdsFromMembers(body.attendeeIds!);
+      if (userIds.length > 0) {
+        const actor = c.var.dbUser?.displayName ?? c.var.dbUser?.username ?? null;
+        await notifyMeetingInvited(
+          userIds,
+          {
+            title: result.title,
+            date: result.date,
+            startTime: result.startTime,
+            location: result.location,
+            meetingType: result.meetingType,
+            project: proj.name,
+          },
+          c.var.userId,
+          actor,
+        );
+      }
+    })();
+  }
   return c.json(result, 201);
 });
 
@@ -116,6 +138,32 @@ meetingsRoutes.patch("/meetings/:id", async (c) => {
   if (typeof result === "string") return c.json({ error: result }, 400);
   if (!result) return c.json({ error: "Meeting nicht gefunden" }, 404);
   emit({ type: "meeting", action: "updated", id, project: meeting.projectName ?? null });
+  // Nur NEUE Teilnehmer benachrichtigen.
+  if (Array.isArray(body.attendeeIds)) {
+    const prevIds = new Set(meeting.attendeeIds);
+    const added = body.attendeeIds.filter((mid) => !prevIds.has(mid));
+    if (added.length > 0) {
+      void (async () => {
+        const userIds = await resolveUserIdsFromMembers(added);
+        if (userIds.length > 0) {
+          const actor = c.var.dbUser?.displayName ?? c.var.dbUser?.username ?? null;
+          await notifyMeetingInvited(
+            userIds,
+            {
+              title: result.title,
+              date: result.date,
+              startTime: result.startTime,
+              location: result.location,
+              meetingType: result.meetingType,
+              project: meeting.projectName,
+            },
+            c.var.userId,
+            actor,
+          );
+        }
+      })();
+    }
+  }
   return c.json(result);
 });
 

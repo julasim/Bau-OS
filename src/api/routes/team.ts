@@ -74,6 +74,9 @@ teamRoutes.patch("/team/:id", async (c) => {
       companyName: string | null;
       memberType: string | null;
       projectId: string | null;
+      // Migration 013: User-Account-Verknuepfung. Nur Admin darf
+      // setzen — sonst koennten User sich gegenseitig "uebernehmen".
+      userId: string | null;
     }>
   >();
 
@@ -84,6 +87,10 @@ teamRoutes.patch("/team/:id", async (c) => {
   }
   if ("memberType" in body) {
     updates.memberType = body.memberType ? normalizeMemberType(body.memberType) : null;
+  }
+  // userId nur fuer Admins. Non-Admins kriegen einfach keinen Update auf das Feld.
+  if ("userId" in body && c.var.userRole === "admin") {
+    updates.userId = body.userId;
   }
 
   const member = await teamRepo.update(id, updates);

@@ -8,6 +8,7 @@ import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../d
 import { getDb } from "../../db/client.js";
 import { findDbUserById } from "../auth.js";
 import type { AppEnv } from "../server.js";
+import { notifyFileShared } from "../../notifications.js";
 import { emit } from "../events.js";
 
 function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
@@ -378,6 +379,21 @@ filesRoutes.post("/files/:id/shares", async (c) => {
 
   await fileRepo.addShare(fileId, body.userId, body.canEdit === true);
   emit({ type: "file", action: "updated", id: fileId });
+  // Notification an den Empfaenger (nicht ich selbst).
+  if (body.userId !== c.var.userId) {
+    void (async () => {
+      const file = await fileRepo!.get!(fileId);
+      const actor = c.var.dbUser?.displayName ?? c.var.dbUser?.username ?? null;
+      if (file) {
+        await notifyFileShared(
+          body.userId,
+          { filename: file.filename, project: file.project },
+          body.canEdit === true,
+          actor,
+        );
+      }
+    })();
+  }
   return c.json({ ok: true });
 });
 

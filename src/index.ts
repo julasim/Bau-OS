@@ -46,6 +46,11 @@ if (DB_ENABLED) {
 
 const bot = createBot(token) as Bot;
 
+// Default-Bot bei Bot-Manager registrieren — Notifications-Modul nutzt
+// ihn als Fallback fuer User ohne eigenen Bot.
+const { setDefaultBot } = await import("./bot-manager.js");
+setDefaultBot(bot);
+
 const { fmt } = await import("./format.js");
 startHeartbeat(async (chatId, text) => {
   try {

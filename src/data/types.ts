@@ -198,6 +198,12 @@ export interface TeamMember {
    *  zugeordnet oder Repo die Info nicht laedt. */
   projects: TeamMemberProject[];
   contactLog: ContactLogEntry[];
+  /** Migration 013: Verknuepfung zum User-Account. Wenn gesetzt, kann
+   *  das Mitglied per Telegram benachrichtigt werden. NULL = externes
+   *  Mitglied ohne Login (Subunternehmer, externer Planer). */
+  userId: string | null;
+  /** Read-only Join. */
+  username?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -495,6 +501,7 @@ export interface TeamMemberCreateInput {
   companyName?: string | null;
   memberType?: MemberType | null;
   projectId?: string | null;
+  userId?: string | null;
 }
 
 export interface TeamMemberUpdateInput {
@@ -507,6 +514,7 @@ export interface TeamMemberUpdateInput {
   companyName?: string | null;
   memberType?: MemberType | null;
   projectId?: string | null;
+  userId?: string | null;
 }
 
 export interface TeamRepository {
