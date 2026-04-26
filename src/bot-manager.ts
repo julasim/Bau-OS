@@ -54,7 +54,16 @@ export async function refresh(): Promise<void> {
 
   // 2) Spawnen, was noch nicht laeuft.
   for (const user of enabled) {
-    if (!user.telegramBotToken) continue;
+    if (!user.telegramBotToken) {
+      // user_id war in DB-Liste (mit telegram_bot_token IS NOT NULL), aber
+      // nach Decryption ist Token null — typisch nach JWT_SECRET-Wechsel
+      // oder beschaedigten Daten. User muss Token neu eintragen.
+      logError(
+        `[BotManager] Bot-Token fuer "${user.username}" ist nicht entschluesselbar — User muss Token neu eintragen.`,
+        new Error("decrypt failed"),
+      );
+      continue;
+    }
     if (bots.has(user.id)) continue;
     await spawnBot(user);
   }

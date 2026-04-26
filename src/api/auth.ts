@@ -4,6 +4,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET, USERS_FILE, DB_ENABLED } from "../config.js";
 import { getDb } from "../db/client.js";
+import { encryptString, decryptString } from "./crypto.js";
 import type { Context, Next } from "hono";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -64,7 +65,10 @@ function rowToDbUser(row: Record<string, unknown>): DbUser {
     isProtected: row.is_protected === true,
     telegramChatId:
       row.telegram_chat_id !== null && row.telegram_chat_id !== undefined ? String(row.telegram_chat_id) : null,
-    telegramBotToken: row.telegram_bot_token ? String(row.telegram_bot_token) : null,
+    // Phase-6-Cleanup: bot_token kann encrypted oder Legacy-plaintext sein.
+    // decryptString erkennt das am "enc:v1:"-Prefix und gibt im Plaintext-Fall
+    // den Wert unveraendert zurueck.
+    telegramBotToken: decryptString(row.telegram_bot_token ? String(row.telegram_bot_token) : null),
     telegramBotEnabled: row.telegram_bot_enabled !== false,
     settings,
     createdAt: String(row.created_at),
@@ -135,11 +139,15 @@ export async function createDbUser(input: {
 
 /** Setzt Felder eines DB-Users. NICHT erlaubt: is_protected aufheben/setzen
  *  (das passiert ausschliesslich beim Initial-Setup). Caller muss separat
- *  pruefen, ob der Ziel-User geschuetzt ist. */
+ *  pruefen, ob der Ziel-User geschuetzt ist.
+ *
+ *  Race-sicher (Loose-End-Cleanup): wenn die Aenderung den letzten Admin
+ *  herabstufen wuerde, wird die Query atomar mit einem WHERE-Subselect
+ *  geguardet. Die Route ueberprueft das Ergebnis (rows == 0 → "letzter Admin"). */
 export async function updateDbUser(
   id: string,
   patch: { username?: string; role?: "admin" | "user"; displayName?: string | null },
-): Promise<DbUser | null> {
+): Promise<DbUser | null | "last-admin"> {
   if (!DB_ENABLED) return null;
   const db = getDb();
   const [current] = await db`SELECT * FROM users WHERE id = ${id}`;
@@ -148,6 +156,23 @@ export async function updateDbUser(
   const username = "username" in patch ? patch.username : current.username;
   const role = "role" in patch ? patch.role : current.role;
   const displayName = "displayName" in patch ? patch.displayName : current.display_name;
+
+  // Atomarer Last-Admin-Schutz: wenn das ein Admin-Demote ist, MUSS noch
+  // mindestens ein anderer Admin uebrig bleiben. Sonst RETURNING bleibt leer.
+  const isDemote = current.role === "admin" && role !== "admin";
+  if (isDemote) {
+    const rows = await db`
+      UPDATE users SET
+        username = ${username},
+        role = ${role},
+        display_name = ${displayName}
+      WHERE id = ${id}
+        AND EXISTS (SELECT 1 FROM users WHERE role = 'admin' AND id <> ${id})
+      RETURNING *
+    `;
+    if (rows.length === 0) return "last-admin";
+    return rowToDbUser(rows[0]!);
+  }
 
   const [row] = await db`
     UPDATE users SET
@@ -160,10 +185,27 @@ export async function updateDbUser(
   return row ? rowToDbUser(row) : null;
 }
 
-/** Loescht einen DB-User. Caller muss is_protected vorher pruefen. */
-export async function deleteDbUser(id: string): Promise<boolean> {
+/** Loescht einen DB-User. Caller muss is_protected vorher pruefen.
+ *
+ *  Race-sicher (Loose-End-Cleanup): wenn das Ziel ein Admin ist, MUSS noch
+ *  mindestens ein weiterer Admin existieren. Atomic via WHERE-Subselect.
+ *  Returns "last-admin" wenn die Query nichts geloescht hat, weil der
+ *  Last-Admin-Schutz gegriffen hat. */
+export async function deleteDbUser(id: string): Promise<boolean | "last-admin"> {
   if (!DB_ENABLED) return false;
   const db = getDb();
+  const [target] = await db`SELECT role FROM users WHERE id = ${id}`;
+  if (!target) return false;
+
+  if (String(target.role) === "admin") {
+    const result = await db`
+      DELETE FROM users
+       WHERE id = ${id}
+         AND EXISTS (SELECT 1 FROM users WHERE role = 'admin' AND id <> ${id})
+    `;
+    if (result.count === 0) return "last-admin";
+    return true;
+  }
   const result = await db`DELETE FROM users WHERE id = ${id}`;
   return result.count > 0;
 }
@@ -285,12 +327,16 @@ export async function setUserBotToken(userId: string, token: string | null): Pro
   const db = getDb();
   const [current] = await db`SELECT telegram_bot_token FROM users WHERE id = ${userId} LIMIT 1`;
   if (!current) return false;
-  const oldToken = current.telegram_bot_token ? String(current.telegram_bot_token) : null;
-  if (oldToken === trimmed) return true; // no-op
 
+  // Vergleich auf Plaintext-Ebene (current kann encrypted sein → erst entschluesseln).
+  const oldPlain = decryptString(current.telegram_bot_token ? String(current.telegram_bot_token) : null);
+  if (oldPlain === trimmed) return true; // no-op
+
+  // Phase-6-Cleanup: ab jetzt verschluesselt in der DB. Bei null bleibt's null.
+  const encrypted = trimmed ? encryptString(trimmed) : null;
   const result = await db`
     UPDATE users
-       SET telegram_bot_token = ${trimmed},
+       SET telegram_bot_token = ${encrypted},
            telegram_chat_id = NULL
      WHERE id = ${userId}
   `;

@@ -1,6 +1,8 @@
 import type OpenAI from "openai";
-import { noteRepo } from "../../data/index.js";
+import { noteRepo, projectRepo } from "../../data/index.js";
 import { emit } from "../../api/events.js";
+import { getCurrentUserCtx } from "../user-context.js";
+import { getVisibleProjectIds, canSeeProjectByName } from "../../data/access.js";
 import type { HandlerMap } from "./types.js";
 
 export const noteSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -86,19 +88,69 @@ export const noteHandlers: HandlerMap = {
   },
 
   notizen_auflisten: async (args) => {
-    const notes = await noteRepo.list(Number(args.anzahl) || 5);
-    return notes.length ? notes.join("\n") : "Keine Notizen gefunden.";
+    const limit = Number(args.anzahl) || 5;
+    // Phase-6-Cleanup: User-Scope. Wenn der Caller einen User-Kontext hat,
+    // filtern wir auf seine sichtbaren Projekte. Notizen ohne Projekt sind
+    // weiterhin nur fuer Admin sichtbar (Notizen haben kein assignee/owner-
+    // Konzept im DTO).
+    const ctx = getCurrentUserCtx();
+    if (!ctx || ctx.role === "admin") {
+      const notes = await noteRepo.list(limit);
+      return notes.length ? notes.join("\n") : "Keine Notizen gefunden.";
+    }
+    const visible = await getVisibleProjectIds(ctx);
+    if (visible === "all") {
+      const notes = await noteRepo.list(limit);
+      return notes.length ? notes.join("\n") : "Keine Notizen gefunden.";
+    }
+    if (!noteRepo.listDetailed) {
+      // Im FS-Mode haben wir kein listDetailed — fall back auf "alles" weil
+      // FS keine Multi-User-Trennung unterstuetzt.
+      const notes = await noteRepo.list(limit);
+      return notes.length ? notes.join("\n") : "Keine Notizen gefunden.";
+    }
+    const visibleNames = new Set(await projectRepo.list(visible));
+    const detailed = await noteRepo.listDetailed(2000);
+    const filtered = detailed
+      .filter((n) => n.project && visibleNames.has(n.project))
+      .slice(0, limit)
+      .map((n) => n.title);
+    return filtered.length ? filtered.join("\n") : "Keine Notizen gefunden.";
   },
 
   notiz_lesen: async (args) => {
+    // Wir muessen die Notiz selbst lesen, um project_id zu erfahren — und
+    // dann pruefen ob der User Zugriff auf das Projekt hat. Bei project=null
+    // (persoenliche Notiz): nur Admin sieht.
     const content = await noteRepo.read(String(args.dateiname));
-    return (
-      content ??
-      `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`
-    );
+    if (content === null) {
+      return `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;
+    }
+    const ctx = getCurrentUserCtx();
+    if (ctx && ctx.role !== "admin" && noteRepo.listDetailed) {
+      // Project-Lookup ueber listDetailed — kein get(name)-API verfuegbar.
+      const detailed = await noteRepo.listDetailed(2000);
+      const meta = detailed.find((n) => n.title === String(args.dateiname));
+      if (!meta || !meta.project) return `Kein Zugriff auf "${args.dateiname}".`;
+      if (!(await canSeeProjectByName(ctx, meta.project))) {
+        return `Kein Zugriff auf "${args.dateiname}".`;
+      }
+    }
+    return content;
   },
 
   notiz_loeschen: async (args) => {
+    // Schreibschutz: nur Admin oder Mitglied des Projekts der Notiz darf
+    // loeschen. Im FS-Mode ohne listDetailed: nur Admin.
+    const ctx = getCurrentUserCtx();
+    if (ctx && ctx.role !== "admin") {
+      if (!noteRepo.listDetailed) return `Kein Zugriff zum Loeschen von "${args.dateiname}".`;
+      const detailed = await noteRepo.listDetailed(2000);
+      const meta = detailed.find((n) => n.title === String(args.dateiname));
+      if (!meta?.project || !(await canSeeProjectByName(ctx, meta.project))) {
+        return `Kein Zugriff zum Loeschen von "${args.dateiname}".`;
+      }
+    }
     const deleted = await noteRepo.delete(String(args.dateiname));
     if (!deleted) {
       return `Notiz "${args.dateiname}" nicht gefunden. Nutze notizen_auflisten um den genauen Dateinamen zu finden.`;

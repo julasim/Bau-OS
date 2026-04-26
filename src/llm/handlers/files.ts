@@ -10,10 +10,44 @@ import {
   searchWorkspace,
 } from "../../workspace/index.js";
 import { safePath } from "../../workspace/helpers.js";
-import { fileRepo } from "../../data/index.js";
+import { fileRepo, projectRepo } from "../../data/index.js";
 import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED, TOOL_OUTPUT_MAX_CHARS, WORKSPACE_PATH } from "../../config.js";
 import { sendFile, sendBuffer } from "../context.js";
+import { getCurrentUserCtx } from "../user-context.js";
+import { getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import { getDb } from "../../db/client.js";
+import type { FileEntry } from "../../data/types.js";
 import type { HandlerMap } from "./types.js";
+
+/** Scoped-Filter fuer eine bereits gefetchte Datei-Liste. Filtert nach
+ *  Sichtbarkeitsregeln aus Phase 3:
+ *    - Datei in einem sichtbaren Projekt → ja
+ *    - Datei ohne Projekt + ich bin uploaded_by → ja
+ *    - Datei explizit mit mir geshared via file_shares → ja
+ *  Lazy-Lookup von uploaded_by und file_shares (nur fuer Non-Admins). */
+async function scopeFilesForUser(files: FileEntry[], ctx: UserCtx): Promise<FileEntry[]> {
+  if (!ctx.userId) return [];
+  const visible = await getVisibleProjectIds(ctx);
+  const visibleNames = visible === "all" ? null : new Set(await projectRepo.list(visible));
+  if (visibleNames === null) return files;
+  if (files.length === 0) return [];
+
+  const db = getDb();
+  const ids = files.map((f) => f.id);
+  const [ownerRows, shareRows] = await Promise.all([
+    db`SELECT id, uploaded_by FROM files WHERE id = ANY(${ids})`,
+    db`SELECT file_id FROM file_shares WHERE user_id = ${ctx.userId} AND file_id = ANY(${ids})`,
+  ]);
+  const ownerMap = new Map(ownerRows.map((r) => [String(r.id), r.uploaded_by ? String(r.uploaded_by) : null]));
+  const sharedSet = new Set(shareRows.map((r) => String(r.file_id)));
+
+  return files.filter((f) => {
+    if (f.project && visibleNames.has(f.project)) return true;
+    if (sharedSet.has(f.id)) return true;
+    if (!f.project && ownerMap.get(f.id) === ctx.userId) return true;
+    return false;
+  });
+}
 
 const DOCUMENT_EXTS = new Set(["pdf", "docx", "doc"]);
 
@@ -215,6 +249,14 @@ export const fileHandlers: HandlerMap = {
     if (DB_ENABLED && fileRepo) {
       const file = await fileRepo.get(pfad);
       if (file) {
+        // Phase-6-Cleanup: Access-Check via scopeFilesForUser auf einer
+        // Mini-Liste mit nur dieser Datei. Wenn der User nicht darf, kommt
+        // ein leeres Array zurueck.
+        const ctx = getCurrentUserCtx();
+        if (ctx && ctx.role !== "admin") {
+          const allowed = await scopeFilesForUser([file], ctx);
+          if (allowed.length === 0) return `Kein Zugriff auf Datei "${file.filename}".`;
+        }
         // Extrahierter Text vorhanden → direkt zurueckgeben
         if (file.contentText) {
           return file.contentText.slice(0, TOOL_OUTPUT_MAX_CHARS);
@@ -368,8 +410,14 @@ export const fileHandlers: HandlerMap = {
         ? await fileRepo.search(searchTerm, limit)
         : await fileRepo.list(args.ordner ? String(args.ordner) : undefined, limit);
 
-      if (dbFiles.length) {
-        return dbFiles.map((f) => f.filepath).join("\n") + `\n\n[${dbFiles.length} Datei(en)]`;
+      // Phase-6-Cleanup: User-Scope. Wenn der Caller einen User-Kontext
+      // hat, filtern wir auf Dateien in seinen sichtbaren Projekten ODER
+      // eigene private Dateien ODER per file_shares freigegebene.
+      const ctx = getCurrentUserCtx();
+      const scopedFiles = ctx && ctx.role !== "admin" ? await scopeFilesForUser(dbFiles, ctx) : dbFiles;
+
+      if (scopedFiles.length) {
+        return scopedFiles.map((f) => f.filepath).join("\n") + `\n\n[${scopedFiles.length} Datei(en)]`;
       }
     }
 

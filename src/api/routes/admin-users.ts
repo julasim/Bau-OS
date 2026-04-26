@@ -24,6 +24,7 @@ import {
   createPairToken,
   setUserBotToken,
   setUserBotEnabled,
+  countDbAdmins,
 } from "../auth.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
@@ -124,9 +125,17 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
 
   if ("role" in body) {
     const newRole = body.role === "admin" ? "admin" : "user";
-    // Schutzregel: geschuetzter Admin bleibt Admin.
+    // Schutzregel A: geschuetzter Admin bleibt Admin.
     if (target.isProtected && newRole !== "admin") {
       return c.json({ error: "Geschuetzter Admin kann nicht herabgestuft werden" }, 403);
+    }
+    // Schutzregel B: Last-Admin-Schutz. Pre-Check als schneller Pfad,
+    // der echte Race-sichere Check passiert atomar in updateDbUser().
+    if (target.role === "admin" && newRole !== "admin") {
+      const adminCount = await countDbAdmins();
+      if (adminCount <= 1) {
+        return c.json({ error: "Letzter Admin kann nicht herabgestuft werden" }, 403);
+      }
     }
     patch.role = newRole;
   }
@@ -141,6 +150,9 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
   }
 
   const updated = await updateDbUser(id, patch);
+  if (updated === "last-admin") {
+    return c.json({ error: "Letzter Admin kann nicht herabgestuft werden" }, 403);
+  }
   if (!updated) return c.json({ error: "Update fehlgeschlagen" }, 500);
   emit({ type: "team", action: "updated", id });
   return c.json(publicUser(updated));
@@ -222,8 +234,20 @@ adminUsersRoutes.delete("/admin/users/:id", async (c) => {
     return c.json({ error: "Du kannst dich nicht selbst loeschen" }, 403);
   }
 
-  const ok = await deleteDbUser(id);
-  if (!ok) return c.json({ error: "Loeschen fehlgeschlagen" }, 500);
+  // Schutzregel: Last-Admin-Schutz. Schneller Pre-Check, der echte
+  // Race-sichere Check passiert atomar in deleteDbUser().
+  if (target.role === "admin") {
+    const adminCount = await countDbAdmins();
+    if (adminCount <= 1) {
+      return c.json({ error: "Letzter Admin kann nicht geloescht werden" }, 403);
+    }
+  }
+
+  const result = await deleteDbUser(id);
+  if (result === "last-admin") {
+    return c.json({ error: "Letzter Admin kann nicht geloescht werden" }, 403);
+  }
+  if (!result) return c.json({ error: "Loeschen fehlgeschlagen" }, 500);
   emit({ type: "team", action: "deleted", id });
   return c.json({ ok: true });
 });

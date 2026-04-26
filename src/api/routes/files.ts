@@ -14,6 +14,32 @@ function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" }
   return { userId: c.var.userId, role: c.var.userRole };
 }
 
+/** Pruefen, ob ein User eine bestimmte Datei sehen darf. Identisch zur
+ *  Filter-Logik in GET /files (Project-Sichtbarkeit ODER Uploader ODER
+ *  file_shares-Match). Liefert true fuer Admins immer. */
+async function canSeeFile(ctx: UserCtx, file: { id: string; project: string | null }): Promise<boolean> {
+  if (ctx.role === "admin") return true;
+  if (!ctx.userId) return false;
+
+  // Projekt-Sichtbarkeit
+  if (file.project && (await canSeeProjectByName(ctx, file.project))) return true;
+
+  // file_shares-Eintrag pruefen
+  const db = getDb();
+  const [share] = await db`
+    SELECT 1 FROM file_shares
+    WHERE file_id = ${file.id} AND user_id = ${ctx.userId} LIMIT 1
+  `;
+  if (share) return true;
+
+  // Privater Workspace: Datei ohne Projekt UND ich bin Uploader
+  if (!file.project) {
+    const [row] = await db`SELECT uploaded_by FROM files WHERE id = ${file.id} LIMIT 1`;
+    if (row && row.uploaded_by && String(row.uploaded_by) === ctx.userId) return true;
+  }
+  return false;
+}
+
 export const filesRoutes = new Hono<AppEnv>();
 
 // Path-Traversal-Schutz
@@ -108,6 +134,9 @@ filesRoutes.get("/files/read", async (c) => {
   if (id && DB_ENABLED && fileRepo) {
     const file = await fileRepo.get(id);
     if (!file) return c.json({ error: "Datei nicht gefunden" }, 404);
+    if (!(await canSeeFile(userCtx(c), file))) {
+      return c.json({ error: "Kein Zugriff" }, 403);
+    }
     // Text-Inhalt aus DB zurueckgeben wenn vorhanden
     if (file.contentText) {
       return c.json({ path: file.filepath, content: file.contentText, filename: file.filename });
@@ -278,19 +307,25 @@ filesRoutes.get("/files/download", async (c) => {
   if (!id) return c.json({ error: "id erforderlich (?id=...)" }, 400);
   if (!DB_ENABLED || !fileRepo) return c.json({ error: "DB nicht aktiv" }, 500);
 
+  // Phase-6-Cleanup: vor jedem Download Zugriff pruefen. Sonst koennte
+  // jeder authentifizierte User mit einer fremden UUID jede Datei runterladen.
+  const fileMeta = await fileRepo.get(id);
+  if (!fileMeta) return c.json({ error: "Nicht gefunden" }, 404);
+  if (!(await canSeeFile(userCtx(c), fileMeta))) {
+    return c.json({ error: "Kein Zugriff" }, 403);
+  }
+
   const result = await fileRepo.readBlob(id);
   if (!result) {
     // Kein Blob in DB — pruefen ob die Datei als Legacy-Eintrag noch im
     // Vault liegt (filepath-Feld). Damit brechen bestehende Downloads nicht.
-    const file = await fileRepo.get(id);
-    if (!file) return c.json({ error: "Nicht gefunden" }, 404);
-    const legacyPath = path.resolve(WORKSPACE_PATH, file.filepath);
+    const legacyPath = path.resolve(WORKSPACE_PATH, fileMeta.filepath);
     if (!legacyPath.startsWith(WORKSPACE_PATH) || !fs.existsSync(legacyPath)) {
       return c.json({ error: "Datei-Blob nicht gefunden" }, 404);
     }
     const buf = fs.readFileSync(legacyPath);
-    c.header("Content-Type", file.mimeType || "application/octet-stream");
-    c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(file.filename)}"`);
+    c.header("Content-Type", fileMeta.mimeType || "application/octet-stream");
+    c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(fileMeta.filename)}"`);
     return c.body(new Uint8Array(buf));
   }
 
