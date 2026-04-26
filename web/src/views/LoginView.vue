@@ -31,8 +31,10 @@ async function login() {
   error.value = "";
   loading.value = true;
   try {
+    // Username trimmen — Browser-Autofill schmuggelt gern Leerzeichen rein.
+    // Passwort bleibt unangetastet (Whitespace darf Teil sein).
     const res = await api.post<{ token: string }>("/auth/login", {
-      username: username.value,
+      username: username.value.trim(),
       password: password.value,
     });
     setToken(res.token);

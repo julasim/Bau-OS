@@ -86,6 +86,12 @@ app.post("/api/auth/login", async (c) => {
     return c.json({ error: "Benutzername und Passwort erforderlich" }, 400);
   }
 
+  // Username trimmen — sonst schlaegt der Lookup fehl wenn der Browser
+  // (z.B. via Autofill) ein Leerzeichen am Ende mitschickt. Konsistent
+  // mit createDbUser/createInitialAdmin/Setup-Wizard, die schon trimmen.
+  // Passwort bewusst NICHT trimmen — Whitespace darf Teil des Passworts sein.
+  const usernameInput = body.username.trim();
+
   // Login-Strategie:
   //   1. DB-User (Migration 008) hat Vorrang. Sobald irgendein DB-User
   //      existiert, ist die JSON-Datei nur noch Read-Fallback fuer
@@ -93,7 +99,7 @@ app.post("/api/auth/login", async (c) => {
   //   2. JSON-User (legacy) bleibt als Fallback solange noch nichts in
   //      der DB steht. Danach kann der Admin ihn via /admin/users in die
   //      DB nachimportieren (Phase 2).
-  const dbUser = DB_ENABLED ? await findDbUserByUsername(body.username) : null;
+  const dbUser = DB_ENABLED ? await findDbUserByUsername(usernameInput) : null;
 
   let pwHash: string | undefined;
   let username: string | undefined;
@@ -105,7 +111,7 @@ app.post("/api/auth/login", async (c) => {
     role = dbUser.role;
     userId = dbUser.id;
   } else {
-    const jsonUser = findUser(body.username);
+    const jsonUser = findUser(usernameInput);
     if (jsonUser) {
       pwHash = jsonUser.passwordHash;
       username = jsonUser.username;
