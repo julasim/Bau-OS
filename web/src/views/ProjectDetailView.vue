@@ -190,9 +190,75 @@ type Tab =
   | "files"
   | "team"
   | "bautagebuch"
+  | "meetings"
   | "verlauf"
   | "zugriff";
 const tab = ref<Tab>("uebersicht");
+
+// ── Meetings (Migration 012) ──────────────────────────────
+type MeetingType =
+  | "Bauherrenmeeting"
+  | "Baubesprechung"
+  | "Subunternehmer"
+  | "Planung"
+  | "Behoerde"
+  | "Abnahme"
+  | "Sonstiges";
+const MEETING_TYPES: MeetingType[] = [
+  "Bauherrenmeeting",
+  "Baubesprechung",
+  "Subunternehmer",
+  "Planung",
+  "Behoerde",
+  "Abnahme",
+  "Sonstiges",
+];
+interface MeetingActionItem {
+  text: string;
+  assigneeId?: string | null;
+  dueDate?: string | null;
+  done?: boolean;
+}
+interface Meeting {
+  id: string;
+  projectId: string;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  title: string;
+  meetingType: MeetingType | null;
+  location: string | null;
+  attendeeIds: string[];
+  attendeesResolved?: { id: string; name: string }[];
+  attendeesExternal: string[];
+  agenda: string | null;
+  minutes: string | null;
+  decisions: string | null;
+  actionItems: MeetingActionItem[];
+  nextMeetingDate: string | null;
+}
+interface MeetingDraft {
+  id: string | null; // null = neu
+  date: string;
+  startTime: string;
+  endTime: string;
+  title: string;
+  meetingType: MeetingType | "";
+  location: string;
+  attendeeIds: string[];
+  attendeesExternal: string[];
+  agenda: string;
+  minutes: string;
+  decisions: string;
+  actionItems: MeetingActionItem[];
+  nextMeetingDate: string;
+}
+const meetings = ref<Meeting[]>([]);
+const meetingsLoaded = ref(false);
+const meetingDraft = ref<MeetingDraft | null>(null);
+const meetingSaving = ref(false);
+const meetingError = ref<string | null>(null);
+const newActionItemText = ref("");
 
 // ── Bautagebuch (Migration 011) ───────────────────────────
 type WeatherKey = "sonnig" | "bewoelkt" | "regen" | "schnee" | "sturm" | "nebel" | "frost" | "hagel";
@@ -741,6 +807,11 @@ async function openTab(t: Tab) {
     // Team brauchen wir fuer den Personal-Picker.
     if (!teamLoaded.value) await loadTeam();
     if (!bautagebuchLoaded.value) await loadBautagebuch();
+  }
+  if (t === "meetings") {
+    // Team brauchen wir fuer den Teilnehmer-Picker.
+    if (!teamLoaded.value) await loadTeam();
+    if (!meetingsLoaded.value) await loadMeetings();
   }
   if (t === "uebersicht") {
     if (!recentActivityLoaded.value) await loadRecentActivity();
@@ -1318,6 +1389,152 @@ async function deleteBautagebuch() {
     bautagebuchError.value = e instanceof Error ? e.message : "Löschen fehlgeschlagen";
   }
 }
+
+// ── Meetings (Migration 012) ─────────────────────────────────────────────
+function emptyMeetingDraft(): MeetingDraft {
+  return {
+    id: null,
+    date: todayIso(),
+    startTime: "",
+    endTime: "",
+    title: "",
+    meetingType: "",
+    location: "",
+    attendeeIds: [],
+    attendeesExternal: [],
+    agenda: "",
+    minutes: "",
+    decisions: "",
+    actionItems: [],
+    nextMeetingDate: "",
+  };
+}
+
+function meetingDraftFrom(m: Meeting): MeetingDraft {
+  return {
+    id: m.id,
+    date: m.date,
+    startTime: m.startTime ?? "",
+    endTime: m.endTime ?? "",
+    title: m.title,
+    meetingType: m.meetingType ?? "",
+    location: m.location ?? "",
+    attendeeIds: [...m.attendeeIds],
+    attendeesExternal: [...m.attendeesExternal],
+    agenda: m.agenda ?? "",
+    minutes: m.minutes ?? "",
+    decisions: m.decisions ?? "",
+    actionItems: m.actionItems.map((a) => ({ ...a })),
+    nextMeetingDate: m.nextMeetingDate ?? "",
+  };
+}
+
+async function loadMeetings() {
+  try {
+    const n = encodeURIComponent(projectName.value);
+    meetings.value = await api.get<Meeting[]>(`/projects/${n}/meetings?limit=100`);
+    meetingsLoaded.value = true;
+  } catch (e) {
+    meetingError.value = e instanceof Error ? e.message : "Meetings nicht ladbar (DB-Modus erforderlich)";
+    meetingsLoaded.value = true;
+  }
+}
+
+function newMeeting() {
+  meetingError.value = null;
+  meetingDraft.value = emptyMeetingDraft();
+}
+
+function selectMeeting(m: Meeting) {
+  meetingError.value = null;
+  meetingDraft.value = meetingDraftFrom(m);
+}
+
+function cancelMeetingEdit() {
+  meetingDraft.value = null;
+  meetingError.value = null;
+}
+
+function addActionItem() {
+  if (!meetingDraft.value || !newActionItemText.value.trim()) return;
+  meetingDraft.value.actionItems.push({
+    text: newActionItemText.value.trim(),
+    done: false,
+  });
+  newActionItemText.value = "";
+}
+
+function removeActionItem(idx: number) {
+  if (!meetingDraft.value) return;
+  meetingDraft.value.actionItems.splice(idx, 1);
+}
+
+async function saveMeeting() {
+  if (!meetingDraft.value || meetingSaving.value) return;
+  if (!meetingDraft.value.title.trim()) {
+    meetingError.value = "Titel ist erforderlich";
+    return;
+  }
+  if (!meetingDraft.value.date) {
+    meetingError.value = "Datum ist erforderlich";
+    return;
+  }
+
+  meetingSaving.value = true;
+  meetingError.value = null;
+  try {
+    const d = meetingDraft.value;
+    const body = {
+      date: d.date,
+      title: d.title.trim(),
+      startTime: d.startTime || null,
+      endTime: d.endTime || null,
+      meetingType: d.meetingType || null,
+      location: d.location.trim() || null,
+      attendeeIds: d.attendeeIds,
+      attendeesExternal: d.attendeesExternal.filter((s) => s.trim()),
+      agenda: d.agenda.trim() || null,
+      minutes: d.minutes.trim() || null,
+      decisions: d.decisions.trim() || null,
+      actionItems: d.actionItems.filter((a) => a.text.trim()),
+      nextMeetingDate: d.nextMeetingDate || null,
+    };
+
+    let saved: Meeting;
+    if (d.id) {
+      saved = await api.patch<Meeting>(`/meetings/${d.id}`, body);
+      const idx = meetings.value.findIndex((m) => m.id === d.id);
+      if (idx >= 0) meetings.value[idx] = saved;
+    } else {
+      const n = encodeURIComponent(projectName.value);
+      saved = await api.post<Meeting>(`/projects/${n}/meetings`, body);
+      meetings.value.unshift(saved);
+      // Sortieren nach Datum (desc) + Startzeit (desc)
+      meetings.value.sort((a, b) => {
+        const dateCmp = b.date.localeCompare(a.date);
+        if (dateCmp !== 0) return dateCmp;
+        return (b.startTime ?? "").localeCompare(a.startTime ?? "");
+      });
+    }
+    meetingDraft.value = meetingDraftFrom(saved);
+  } catch (e) {
+    meetingError.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+  } finally {
+    meetingSaving.value = false;
+  }
+}
+
+async function deleteMeeting() {
+  if (!meetingDraft.value?.id || !confirm("Meeting wirklich löschen?")) return;
+  try {
+    const id = meetingDraft.value.id;
+    await api.delete(`/meetings/${id}`);
+    meetings.value = meetings.value.filter((m) => m.id !== id);
+    meetingDraft.value = null;
+  } catch (e) {
+    meetingError.value = e instanceof Error ? e.message : "Löschen fehlgeschlagen";
+  }
+}
 </script>
 
 <template>
@@ -1708,7 +1925,7 @@ async function deleteBautagebuch() {
       style="gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); overflow-x: auto"
     >
       <template
-        v-for="t in (['uebersicht', 'notes', 'tasks', 'termine', 'files', 'team', 'bautagebuch', 'verlauf', 'zugriff'] as const)"
+        v-for="t in (['uebersicht', 'notes', 'tasks', 'termine', 'files', 'team', 'bautagebuch', 'meetings', 'verlauf', 'zugriff'] as const)"
         :key="t"
       >
         <!-- "zugriff" nur fuer Admins. Alle anderen Tabs immer sichtbar. -->
@@ -1732,9 +1949,11 @@ async function deleteBautagebuch() {
                         ? "Team"
                         : t === "bautagebuch"
                           ? "Bautagebuch"
-                          : t === "verlauf"
-                            ? "Verlauf"
-                            : "Zugriff"
+                          : t === "meetings"
+                            ? "Meetings"
+                            : t === "verlauf"
+                              ? "Verlauf"
+                              : "Zugriff"
           }}
         </button>
       </template>
@@ -2378,6 +2597,209 @@ async function deleteBautagebuch() {
 
           <div v-else class="bt-editor empty-hint" style="display: flex; align-items: center; justify-content: center">
             Eintrag links auswählen oder „Heute eintragen" klicken.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Meetings (Migration 012) -->
+    <div v-if="tab === 'meetings'" class="mt-tab">
+      <div v-if="!meetingsLoaded" class="empty-hint">Lade Meetings…</div>
+      <div v-else>
+        <!-- Action-Bar -->
+        <div class="flex items-center" style="gap: 8px; margin-bottom: 14px; flex-wrap: wrap">
+          <button class="bauos-btn solid sm" @click="newMeeting">
+            <BIcon name="plus" :size="11" />
+            <span style="margin-left: 4px">Neues Meeting</span>
+          </button>
+          <span class="empty-hint" style="margin-left: auto">
+            {{ meetings.length }}
+            {{ meetings.length === 1 ? "Meeting" : "Meetings" }}
+          </span>
+        </div>
+
+        <div v-if="meetings.length === 0 && !meetingDraft" class="empty-hint">
+          Noch keine Meetings. Klicke „Neues Meeting", um ein Protokoll anzulegen.
+        </div>
+
+        <div v-else class="mt-grid">
+          <!-- Linke Spalte: Liste -->
+          <div class="mt-list">
+            <div
+              v-for="m in meetings"
+              :key="m.id"
+              :class="['mt-list-row', meetingDraft?.id === m.id ? 'mt-list-row-active' : '']"
+              @click="selectMeeting(m)"
+            >
+              <div class="mt-row-head">
+                <span class="mt-row-date">{{ m.date }}{{ m.startTime ? " " + m.startTime : "" }}</span>
+                <span v-if="m.meetingType" class="mt-row-type">{{ m.meetingType }}</span>
+              </div>
+              <div class="mt-row-title">{{ m.title }}</div>
+              <div v-if="m.attendeesResolved && m.attendeesResolved.length > 0 || m.attendeesExternal.length > 0" class="mt-row-attendees">
+                {{ (m.attendeesResolved ?? []).length + m.attendeesExternal.length }} Teilnehmer
+              </div>
+            </div>
+          </div>
+
+          <!-- Rechte Spalte: Editor -->
+          <div class="mt-editor" v-if="meetingDraft">
+            <div class="flex items-center" style="gap: 8px; margin-bottom: 14px">
+              <h3 style="margin: 0; font-size: 16px; font-weight: 600">
+                {{ meetingDraft.id ? "Meeting bearbeiten" : "Neues Meeting" }}
+              </h3>
+              <button
+                v-if="meetingDraft.id"
+                class="bauos-btn ghost sm"
+                style="margin-left: auto"
+                @click="deleteMeeting"
+              >
+                <BIcon name="trash" :size="11" />
+                <span style="margin-left: 4px">Löschen</span>
+              </button>
+              <button
+                v-else
+                class="bauos-btn ghost sm"
+                style="margin-left: auto"
+                @click="cancelMeetingEdit"
+              >
+                Abbrechen
+              </button>
+            </div>
+
+            <!-- Titel -->
+            <div class="mt-field">
+              <label class="mt-label">Titel <span style="color: var(--color-danger-text)">*</span></label>
+              <input v-model="meetingDraft.title" class="stamm-input" placeholder="z.B. Bauherrenmeeting KW 17" />
+            </div>
+
+            <!-- Datum + Zeit + Typ -->
+            <div class="mt-row-fields">
+              <div class="mt-field">
+                <label class="mt-label">Datum <span style="color: var(--color-danger-text)">*</span></label>
+                <input v-model="meetingDraft.date" type="date" class="stamm-input" />
+              </div>
+              <div class="mt-field">
+                <label class="mt-label">Von</label>
+                <input v-model="meetingDraft.startTime" type="time" class="stamm-input" />
+              </div>
+              <div class="mt-field">
+                <label class="mt-label">Bis</label>
+                <input v-model="meetingDraft.endTime" type="time" class="stamm-input" />
+              </div>
+              <div class="mt-field">
+                <label class="mt-label">Typ</label>
+                <select v-model="meetingDraft.meetingType" class="stamm-input">
+                  <option value="">— wählen —</option>
+                  <option v-for="t in MEETING_TYPES" :key="t" :value="t">{{ t }}</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Ort -->
+            <div class="mt-field">
+              <label class="mt-label">Ort</label>
+              <input v-model="meetingDraft.location" class="stamm-input" placeholder="Baustelle, Büro, Online…" />
+            </div>
+
+            <!-- Teilnehmer (TeamPicker + Freitext) -->
+            <div class="mt-field">
+              <label class="mt-label">Teilnehmer</label>
+              <TeamPicker
+                mode="multi"
+                :model-value="meetingDraft.attendeeIds"
+                :free-text="meetingDraft.attendeesExternal"
+                @update:model-value="(v) => meetingDraft && (meetingDraft.attendeeIds = (v as string[]) ?? [])"
+                @update:free-text="(v) => meetingDraft && (meetingDraft.attendeesExternal = v)"
+                placeholder="Mitarbeiter wählen oder externen Namen eintragen…"
+              />
+            </div>
+
+            <!-- Agenda -->
+            <div class="mt-field">
+              <label class="mt-label">Agenda</label>
+              <textarea
+                v-model="meetingDraft.agenda"
+                class="stamm-input"
+                rows="3"
+                placeholder="Tagesordnung (Markdown erlaubt)"
+                style="resize: vertical; font-family: inherit; line-height: 1.5"
+              ></textarea>
+            </div>
+
+            <!-- Protokoll -->
+            <div class="mt-field">
+              <label class="mt-label">Protokoll</label>
+              <textarea
+                v-model="meetingDraft.minutes"
+                class="stamm-input"
+                rows="6"
+                placeholder="Was wurde besprochen?"
+                style="resize: vertical; font-family: inherit; line-height: 1.5"
+              ></textarea>
+            </div>
+
+            <!-- Beschluesse -->
+            <div class="mt-field">
+              <label class="mt-label">Beschlüsse</label>
+              <textarea
+                v-model="meetingDraft.decisions"
+                class="stamm-input"
+                rows="3"
+                placeholder="Getroffene Entscheidungen…"
+                style="resize: vertical; font-family: inherit; line-height: 1.5"
+              ></textarea>
+            </div>
+
+            <!-- Action-Items -->
+            <div class="mt-field">
+              <label class="mt-label">To-Dos</label>
+              <div v-if="meetingDraft.actionItems.length > 0" class="mt-todo-list">
+                <div v-for="(item, idx) in meetingDraft.actionItems" :key="idx" class="mt-todo-item">
+                  <input type="checkbox" v-model="item.done" class="mt-todo-check" />
+                  <input
+                    v-model="item.text"
+                    class="stamm-input"
+                    style="flex: 1"
+                    :class="{ 'mt-todo-done': item.done }"
+                  />
+                  <button class="action-btn" @click="removeActionItem(idx)" title="Entfernen">
+                    <BIcon name="x" :size="11" />
+                  </button>
+                </div>
+              </div>
+              <div class="flex items-center" style="gap: 6px; margin-top: 6px">
+                <input
+                  v-model="newActionItemText"
+                  class="stamm-input"
+                  style="flex: 1"
+                  placeholder="Neues To-Do…"
+                  @keyup.enter="addActionItem"
+                />
+                <button class="bauos-btn ghost sm" @click="addActionItem">+ Hinzufügen</button>
+              </div>
+            </div>
+
+            <!-- Folgetermin -->
+            <div class="mt-field">
+              <label class="mt-label">Folgetermin</label>
+              <input v-model="meetingDraft.nextMeetingDate" type="date" class="stamm-input" style="max-width: 200px" />
+            </div>
+
+            <!-- Speichern -->
+            <div class="flex items-center" style="gap: 8px; margin-top: 14px">
+              <button class="bauos-btn solid sm" :disabled="meetingSaving" @click="saveMeeting">
+                {{ meetingSaving ? "…" : "Speichern" }}
+              </button>
+              <button class="bauos-btn ghost sm" @click="cancelMeetingEdit">Abbrechen</button>
+              <span v-if="meetingError" style="font-size: 11px; color: var(--color-danger-text)">
+                {{ meetingError }}
+              </span>
+            </div>
+          </div>
+
+          <div v-else class="mt-editor empty-hint" style="display: flex; align-items: center; justify-content: center">
+            Meeting links auswählen oder „Neues Meeting" klicken.
           </div>
         </div>
       </div>
@@ -3349,6 +3771,131 @@ async function deleteBautagebuch() {
   }
   .bt-list {
     max-height: 280px;
+  }
+}
+
+/* ── Meetings (Migration 012) ──────────────────────────── */
+.mt-tab {
+  padding-top: 4px;
+}
+.mt-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.mt-list {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 600px;
+  overflow-y: auto;
+}
+.mt-list-row {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.mt-list-row:last-child {
+  border-bottom: none;
+}
+.mt-list-row:hover {
+  background: var(--color-bg-subtle);
+}
+.mt-list-row-active {
+  background: var(--color-bg-subtle);
+  border-left: 3px solid var(--color-accent, var(--color-text));
+  padding-left: 9px;
+}
+.mt-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+.mt-row-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono, monospace);
+}
+.mt-row-type {
+  font-size: 10px;
+  padding: 1px 6px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+}
+.mt-row-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  word-break: break-word;
+  line-height: 1.3;
+}
+.mt-row-attendees {
+  font-size: 11px;
+  color: var(--color-text-faint);
+  margin-top: 3px;
+}
+.mt-editor {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 400px;
+}
+.mt-field {
+  margin-bottom: 14px;
+}
+.mt-row-fields {
+  display: grid;
+  grid-template-columns: 1fr 100px 100px 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.mt-row-fields .mt-field {
+  margin-bottom: 0;
+}
+.mt-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.mt-todo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.mt-todo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mt-todo-check {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.mt-todo-done {
+  text-decoration: line-through;
+  color: var(--color-text-faint);
+}
+
+@media (max-width: 768px) {
+  .mt-grid {
+    grid-template-columns: 1fr;
+  }
+  .mt-list {
+    max-height: 280px;
+  }
+  .mt-row-fields {
+    grid-template-columns: 1fr 1fr;
   }
 }
 

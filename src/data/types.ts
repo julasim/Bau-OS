@@ -284,6 +284,87 @@ export interface BautagebuchRepository {
   listRecent(visibleProjectIds: string[] | "all", limit?: number): Promise<BautagebuchEntry[]>;
 }
 
+/** Meeting (Migration 012): Bauherrenmeetings, Baubesprechungen,
+ *  Subunternehmer-Abstimmungen etc. Eigene Tabelle, NICHT Teil des
+ *  Bautagebuchs — mehrere Meetings pro Tag moeglich, eigener Lifecycle. */
+export type MeetingType =
+  | "Bauherrenmeeting"
+  | "Baubesprechung"
+  | "Subunternehmer"
+  | "Planung"
+  | "Behoerde"
+  | "Abnahme"
+  | "Sonstiges";
+
+/** Action-Item / To-Do aus einem Meeting. assigneeId optional → wird
+ *  vom Trigger geleert wenn das referenzierte team_members geloescht
+ *  wird. Action-Items ohne assigneeId zeigen nur den Text. */
+export interface MeetingActionItem {
+  text: string;
+  assigneeId?: string | null;
+  dueDate?: string | null; // YYYY-MM-DD
+  done?: boolean;
+}
+
+export interface Meeting {
+  id: string;
+  projectId: string;
+  projectName?: string | null;
+  date: string; // YYYY-MM-DD
+  startTime: string | null; // HH:MM
+  endTime: string | null;
+  title: string;
+  meetingType: MeetingType | null;
+  location: string | null;
+  attendeeIds: string[];
+  /** Read-only Join — Namen der referenzierten team_members. */
+  attendeesResolved?: { id: string; name: string }[];
+  /** Externe Teilnehmer ohne Team-Eintrag (Freitext, parallel zu termine). */
+  attendeesExternal: string[];
+  agenda: string | null;
+  minutes: string | null;
+  decisions: string | null;
+  actionItems: MeetingActionItem[];
+  nextMeetingDate: string | null;
+  createdById: string | null;
+  createdByUsername?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Patch-Shape fuer create/update. id wird beim create vergeben, beim
+ *  update separat als Pfad-Param uebergeben. project_id ebenfalls
+ *  separat (URL bestimmt das Projekt, nicht der Body). */
+export interface MeetingInput {
+  date: string; // YYYY-MM-DD, required
+  title: string; // required
+  startTime?: string | null;
+  endTime?: string | null;
+  meetingType?: MeetingType | null;
+  location?: string | null;
+  attendeeIds?: string[];
+  attendeesExternal?: string[];
+  agenda?: string | null;
+  minutes?: string | null;
+  decisions?: string | null;
+  actionItems?: MeetingActionItem[];
+  nextMeetingDate?: string | null;
+}
+
+export interface MeetingRepository {
+  /** Liste fuer ein Projekt, neueste zuerst. */
+  list(projectId: string, limit?: number): Promise<Meeting[]>;
+  get(id: string): Promise<Meeting | null>;
+  /** Legt ein neues Meeting an. Validation-Fehler kommen als String
+   *  zurueck (analog zu terminRepo.save). */
+  create(projectId: string, input: MeetingInput, createdById?: string | null): Promise<Meeting | string>;
+  /** Aktualisiert ein bestehendes Meeting. project_id ist nicht aenderbar. */
+  update(id: string, input: Partial<MeetingInput>): Promise<Meeting | null | string>;
+  delete(id: string): Promise<boolean>;
+  /** Cross-Projekt-Liste fuer Dashboard / "naechste Meetings". */
+  listRecent(visibleProjectIds: string[] | "all", limit?: number): Promise<Meeting[]>;
+}
+
 export interface FileEntry {
   id: string;
   filename: string;

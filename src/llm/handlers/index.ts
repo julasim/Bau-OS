@@ -5,6 +5,7 @@ export { fileHandlers, fileSchemas } from "./files.js";
 export { projectHandlers, projectSchemas } from "./projects.js";
 export { teamHandlers, teamSchemas } from "./team.js";
 export { bautagebuchHandlers, bautagebuchSchemas } from "./bautagebuch.js";
+export { meetingHandlers, meetingSchemas } from "./meetings.js";
 export { agentHandlers, agentSchemas } from "./agents.js";
 export { systemHandlers, systemSchemas } from "./system.js";
 export { webHandlers, webSchemas } from "./web.js";
