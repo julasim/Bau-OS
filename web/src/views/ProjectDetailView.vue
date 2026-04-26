@@ -182,8 +182,68 @@ const newTerminAssigneeFree = ref<string[]>([]);
 // Task-Quick-Add: ein Team-Mitglied als Assignee (Single-Mode)
 const newTaskAssigneeId = ref<string | null>(null);
 // Stufe 3d: Uebersicht ist jetzt der Start-Tab.
-type Tab = "uebersicht" | "notes" | "tasks" | "termine" | "files" | "team" | "verlauf" | "zugriff";
+type Tab =
+  | "uebersicht"
+  | "notes"
+  | "tasks"
+  | "termine"
+  | "files"
+  | "team"
+  | "bautagebuch"
+  | "verlauf"
+  | "zugriff";
 const tab = ref<Tab>("uebersicht");
+
+// ── Bautagebuch (Migration 011) ───────────────────────────
+type WeatherKey = "sonnig" | "bewoelkt" | "regen" | "schnee" | "sturm" | "nebel" | "frost" | "hagel";
+const WEATHER_OPTIONS: { value: WeatherKey; label: string; icon: string }[] = [
+  { value: "sonnig", label: "Sonnig", icon: "☀" },
+  { value: "bewoelkt", label: "Bewölkt", icon: "☁" },
+  { value: "regen", label: "Regen", icon: "🌧" },
+  { value: "schnee", label: "Schnee", icon: "❄" },
+  { value: "sturm", label: "Sturm", icon: "🌪" },
+  { value: "nebel", label: "Nebel", icon: "🌫" },
+  { value: "frost", label: "Frost", icon: "❄" },
+  { value: "hagel", label: "Hagel", icon: "🌨" },
+];
+interface BautagebuchPersonnel {
+  memberId?: string | null;
+  name: string;
+  hours?: number | null;
+  role?: string | null;
+  removed?: boolean;
+}
+interface BautagebuchEntry {
+  id: string;
+  projectId: string;
+  date: string; // YYYY-MM-DD
+  weather: WeatherKey | null;
+  temperatureMin: number | null;
+  temperatureMax: number | null;
+  personnel: BautagebuchPersonnel[];
+  machines: string | null;
+  activities: string | null;
+  incidents: string | null;
+  createdById: string | null;
+  createdByUsername?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+const bautagebuchEntries = ref<BautagebuchEntry[]>([]);
+const bautagebuchLoaded = ref(false);
+const bautagebuchSelectedDate = ref<string>(""); // YYYY-MM-DD oder "" = nichts ausgewählt
+const bautagebuchDraft = ref<{
+  weather: WeatherKey | "";
+  temperatureMin: string;
+  temperatureMax: string;
+  personnelIds: string[];
+  personnelFree: string[];
+  machines: string;
+  activities: string;
+  incidents: string;
+} | null>(null);
+const bautagebuchSaving = ref(false);
+const bautagebuchError = ref<string | null>(null);
 
 // ── Inline-Editor State ────────────────────────────────────
 // editingField: welcher Stammdaten-Key gerade editiert wird (null = nichts).
@@ -677,6 +737,11 @@ async function openTab(t: Tab) {
   // Lazy-Load pro Tab — pro Tab max. einmal.
   if (t === "files" && !filesLoaded.value) await loadFiles();
   if (t === "team" && !teamLoaded.value) await loadTeam();
+  if (t === "bautagebuch") {
+    // Team brauchen wir fuer den Personal-Picker.
+    if (!teamLoaded.value) await loadTeam();
+    if (!bautagebuchLoaded.value) await loadBautagebuch();
+  }
   if (t === "uebersicht") {
     if (!recentActivityLoaded.value) await loadRecentActivity();
     if (!childrenLoaded.value) await loadChildren();
@@ -1101,6 +1166,158 @@ const emptyStammCount = computed(() => {
   const keys: (keyof ProjectInfo)[] = ["projektnummer", "bauherr", "standort", "projektart", "nutzung"];
   return keys.filter((k) => !info.value![k]).length;
 });
+
+// ── Bautagebuch (Migration 011) ───────────────────────────────────────────
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function formatBautagDate(iso: string): string {
+  // YYYY-MM-DD → "Mi 24.04.2024"
+  const d = new Date(iso + "T00:00:00");
+  const wochentage = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+  return `${wochentage[d.getDay()]} ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
+}
+function weatherIcon(w: WeatherKey | null | undefined): string {
+  if (!w) return "·";
+  return WEATHER_OPTIONS.find((o) => o.value === w)?.icon ?? "·";
+}
+
+async function loadBautagebuch() {
+  try {
+    const n = encodeURIComponent(projectName.value);
+    bautagebuchEntries.value = await api.get<BautagebuchEntry[]>(`/projects/${n}/bautagebuch?limit=60`);
+    bautagebuchLoaded.value = true;
+    // Wenn nichts ausgewählt: Heute, falls Eintrag vorhanden — sonst neu für heute.
+    if (!bautagebuchSelectedDate.value) {
+      const today = todayIso();
+      const todayEntry = bautagebuchEntries.value.find((e) => e.date === today);
+      if (todayEntry) selectBautagebuch(today);
+    } else {
+      // re-sync draft if still selected
+      const sel = bautagebuchEntries.value.find((e) => e.date === bautagebuchSelectedDate.value);
+      if (sel) draftFromEntry(sel);
+    }
+  } catch (e) {
+    bautagebuchError.value = e instanceof Error ? e.message : "Bautagebuch nicht ladbar (DB-Modus erforderlich)";
+    bautagebuchLoaded.value = true;
+  }
+}
+
+function emptyDraft(): NonNullable<typeof bautagebuchDraft.value> {
+  return {
+    weather: "",
+    temperatureMin: "",
+    temperatureMax: "",
+    personnelIds: [],
+    personnelFree: [],
+    machines: "",
+    activities: "",
+    incidents: "",
+  };
+}
+
+function draftFromEntry(e: BautagebuchEntry) {
+  const memberIds = e.personnel.filter((p) => p.memberId).map((p) => p.memberId as string);
+  const freeNames = e.personnel.filter((p) => !p.memberId).map((p) => p.name);
+  bautagebuchDraft.value = {
+    weather: e.weather ?? "",
+    temperatureMin: e.temperatureMin === null ? "" : String(e.temperatureMin),
+    temperatureMax: e.temperatureMax === null ? "" : String(e.temperatureMax),
+    personnelIds: memberIds,
+    personnelFree: freeNames,
+    machines: e.machines ?? "",
+    activities: e.activities ?? "",
+    incidents: e.incidents ?? "",
+  };
+}
+
+function selectBautagebuch(date: string) {
+  bautagebuchSelectedDate.value = date;
+  bautagebuchError.value = null;
+  const e = bautagebuchEntries.value.find((x) => x.date === date);
+  if (e) {
+    draftFromEntry(e);
+  } else {
+    bautagebuchDraft.value = emptyDraft();
+  }
+}
+
+function newBautagebuchToday() {
+  bautagebuchSelectedDate.value = todayIso();
+  bautagebuchError.value = null;
+  const existing = bautagebuchEntries.value.find((x) => x.date === bautagebuchSelectedDate.value);
+  if (existing) {
+    draftFromEntry(existing);
+  } else {
+    bautagebuchDraft.value = emptyDraft();
+  }
+}
+
+function newBautagebuchPickDate(date: string) {
+  if (!date) return;
+  bautagebuchSelectedDate.value = date;
+  bautagebuchError.value = null;
+  const existing = bautagebuchEntries.value.find((x) => x.date === date);
+  if (existing) draftFromEntry(existing);
+  else bautagebuchDraft.value = emptyDraft();
+}
+
+async function saveBautagebuch() {
+  if (!bautagebuchSelectedDate.value || !bautagebuchDraft.value || bautagebuchSaving.value) return;
+  bautagebuchSaving.value = true;
+  bautagebuchError.value = null;
+  try {
+    const d = bautagebuchDraft.value;
+    // Personnel: kombinieren — zuerst zugeordnete Member (mit Name aus allTeam-Lookup),
+    // dann Freitext-Eintraege.
+    const memberLookup = new Map(allTeam.value.map((m) => [m.id, m.name]));
+    const personnel: BautagebuchPersonnel[] = [
+      ...d.personnelIds.map((id) => ({ memberId: id, name: memberLookup.get(id) ?? "Unbekannt" })),
+      ...d.personnelFree.filter((n) => n.trim()).map((name) => ({ name })),
+    ];
+
+    const body = {
+      weather: d.weather || null,
+      temperatureMin: d.temperatureMin === "" ? null : Number(d.temperatureMin),
+      temperatureMax: d.temperatureMax === "" ? null : Number(d.temperatureMax),
+      personnel,
+      machines: d.machines.trim() || null,
+      activities: d.activities.trim() || null,
+      incidents: d.incidents.trim() || null,
+    };
+
+    const n = encodeURIComponent(projectName.value);
+    const date = bautagebuchSelectedDate.value;
+    const saved = await api.put<BautagebuchEntry>(`/projects/${n}/bautagebuch/${date}`, body);
+
+    // Liste in-place aktualisieren statt komplett neu zu laden.
+    const idx = bautagebuchEntries.value.findIndex((e) => e.date === date);
+    if (idx >= 0) bautagebuchEntries.value[idx] = saved;
+    else {
+      bautagebuchEntries.value.unshift(saved);
+      bautagebuchEntries.value.sort((a, b) => b.date.localeCompare(a.date));
+    }
+    draftFromEntry(saved);
+  } catch (e) {
+    bautagebuchError.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+  } finally {
+    bautagebuchSaving.value = false;
+  }
+}
+
+async function deleteBautagebuch() {
+  if (!bautagebuchSelectedDate.value || !confirm("Eintrag wirklich löschen?")) return;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    const date = bautagebuchSelectedDate.value;
+    await api.delete(`/projects/${n}/bautagebuch/${date}`);
+    bautagebuchEntries.value = bautagebuchEntries.value.filter((e) => e.date !== date);
+    bautagebuchSelectedDate.value = "";
+    bautagebuchDraft.value = null;
+  } catch (e) {
+    bautagebuchError.value = e instanceof Error ? e.message : "Löschen fehlgeschlagen";
+  }
+}
 </script>
 
 <template>
@@ -1491,7 +1708,7 @@ const emptyStammCount = computed(() => {
       style="gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); overflow-x: auto"
     >
       <template
-        v-for="t in (['uebersicht', 'notes', 'tasks', 'termine', 'files', 'team', 'verlauf', 'zugriff'] as const)"
+        v-for="t in (['uebersicht', 'notes', 'tasks', 'termine', 'files', 'team', 'bautagebuch', 'verlauf', 'zugriff'] as const)"
         :key="t"
       >
         <!-- "zugriff" nur fuer Admins. Alle anderen Tabs immer sichtbar. -->
@@ -1513,9 +1730,11 @@ const emptyStammCount = computed(() => {
                       ? "Dateien"
                       : t === "team"
                         ? "Team"
-                        : t === "verlauf"
-                          ? "Verlauf"
-                          : "Zugriff"
+                        : t === "bautagebuch"
+                          ? "Bautagebuch"
+                          : t === "verlauf"
+                            ? "Verlauf"
+                            : "Zugriff"
           }}
         </button>
       </template>
@@ -1995,6 +2214,175 @@ const emptyStammCount = computed(() => {
         <p v-else-if="!teamLoaded" class="empty-hint">Lade Team…</p>
       </div>
     </div>
+    <!-- Bautagebuch (Migration 011) -->
+    <div v-if="tab === 'bautagebuch'" class="bt-tab">
+      <div v-if="!bautagebuchLoaded" class="empty-hint">Lade Bautagebuch…</div>
+      <div v-else>
+        <!-- Action-Bar -->
+        <div class="flex items-center" style="gap: 8px; margin-bottom: 14px; flex-wrap: wrap">
+          <button class="bauos-btn solid sm" @click="newBautagebuchToday">
+            <BIcon name="plus" :size="11" />
+            <span style="margin-left: 4px">Heute eintragen</span>
+          </button>
+          <input
+            type="date"
+            class="stamm-input"
+            style="width: 170px"
+            :value="''"
+            @change="newBautagebuchPickDate(($event.target as HTMLInputElement).value)"
+          />
+          <span class="empty-hint" style="margin-left: auto">
+            {{ bautagebuchEntries.length }}
+            {{ bautagebuchEntries.length === 1 ? "Eintrag" : "Einträge" }}
+          </span>
+        </div>
+
+        <div v-if="bautagebuchEntries.length === 0 && !bautagebuchSelectedDate" class="empty-hint">
+          Noch keine Bautagebuch-Einträge. Klicke „Heute eintragen", um zu starten.
+        </div>
+
+        <div v-else class="bt-grid">
+          <!-- Linke Spalte: Liste -->
+          <div class="bt-list">
+            <div
+              v-for="e in bautagebuchEntries"
+              :key="e.id"
+              :class="['bt-list-row', e.date === bautagebuchSelectedDate ? 'bt-list-row-active' : '']"
+              @click="selectBautagebuch(e.date)"
+            >
+              <div class="bt-row-date">
+                <span class="bt-row-icon">{{ weatherIcon(e.weather) }}</span>
+                <span>{{ formatBautagDate(e.date) }}</span>
+              </div>
+              <div class="bt-row-summary">
+                {{ e.activities ? e.activities.split("\n")[0].slice(0, 80) : "(keine Tätigkeiten)" }}
+              </div>
+              <div v-if="e.incidents" class="bt-row-incident">⚠ {{ e.incidents.split("\n")[0].slice(0, 60) }}</div>
+            </div>
+          </div>
+
+          <!-- Rechte Spalte: Editor -->
+          <div class="bt-editor" v-if="bautagebuchDraft && bautagebuchSelectedDate">
+            <div class="flex items-center" style="gap: 8px; margin-bottom: 14px">
+              <h3 style="margin: 0; font-size: 16px; font-weight: 600">
+                {{ formatBautagDate(bautagebuchSelectedDate) }}
+              </h3>
+              <span
+                v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
+                class="empty-hint"
+                style="font-size: 11px"
+              >
+                · gespeichert
+              </span>
+              <button
+                v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
+                class="bauos-btn ghost sm"
+                style="margin-left: auto"
+                @click="deleteBautagebuch"
+              >
+                <BIcon name="trash" :size="11" />
+                <span style="margin-left: 4px">Löschen</span>
+              </button>
+            </div>
+
+            <!-- Wetter -->
+            <div class="bt-field">
+              <label class="bt-label">Wetter</label>
+              <select v-model="bautagebuchDraft.weather" class="stamm-input" style="max-width: 220px">
+                <option value="">— wählen —</option>
+                <option v-for="w in WEATHER_OPTIONS" :key="w.value" :value="w.value">
+                  {{ w.icon }} {{ w.label }}
+                </option>
+              </select>
+            </div>
+
+            <!-- Temperatur -->
+            <div class="bt-field">
+              <label class="bt-label">Temperatur (°C)</label>
+              <div class="flex items-center" style="gap: 8px">
+                <input
+                  v-model="bautagebuchDraft.temperatureMin"
+                  type="number"
+                  class="stamm-input"
+                  style="width: 90px"
+                  placeholder="Min"
+                />
+                <span class="empty-hint">bis</span>
+                <input
+                  v-model="bautagebuchDraft.temperatureMax"
+                  type="number"
+                  class="stamm-input"
+                  style="width: 90px"
+                  placeholder="Max"
+                />
+              </div>
+            </div>
+
+            <!-- Personal über TeamPicker (wieder­verwendet aus Phase 3 Team-Feature) -->
+            <div class="bt-field">
+              <label class="bt-label">Personal vor Ort</label>
+              <TeamPicker
+                mode="multi"
+                :model-value="bautagebuchDraft.personnelIds"
+                :free-text="bautagebuchDraft.personnelFree"
+                @update:model-value="(v) => bautagebuchDraft && (bautagebuchDraft.personnelIds = (v as string[]) ?? [])"
+                @update:free-text="(v) => bautagebuchDraft && (bautagebuchDraft.personnelFree = v)"
+                placeholder="Mitarbeiter auswählen oder Trupp eintragen…"
+              />
+            </div>
+
+            <!-- Maschinen -->
+            <div class="bt-field">
+              <label class="bt-label">Maschinen / Geräte</label>
+              <input
+                v-model="bautagebuchDraft.machines"
+                class="stamm-input"
+                placeholder="z.B. Bagger CAT 320, Mobilkran 50t, Walze BW213"
+              />
+            </div>
+
+            <!-- Tätigkeiten -->
+            <div class="bt-field">
+              <label class="bt-label">Tätigkeiten</label>
+              <textarea
+                v-model="bautagebuchDraft.activities"
+                class="stamm-input"
+                rows="5"
+                placeholder="Was wurde heute gemacht? (Markdown erlaubt)"
+                style="resize: vertical; font-family: inherit; line-height: 1.5"
+              ></textarea>
+            </div>
+
+            <!-- Vorkommnisse -->
+            <div class="bt-field">
+              <label class="bt-label">Besondere Vorkommnisse</label>
+              <textarea
+                v-model="bautagebuchDraft.incidents"
+                class="stamm-input"
+                rows="3"
+                placeholder="Behinderungen, Stoerungen, Unfaelle, Entscheidungen…"
+                style="resize: vertical; font-family: inherit; line-height: 1.5"
+              ></textarea>
+            </div>
+
+            <!-- Speichern -->
+            <div class="flex items-center" style="gap: 8px; margin-top: 14px">
+              <button class="bauos-btn solid sm" :disabled="bautagebuchSaving" @click="saveBautagebuch">
+                {{ bautagebuchSaving ? "…" : "Speichern" }}
+              </button>
+              <span v-if="bautagebuchError" style="font-size: 11px; color: var(--color-danger-text)">
+                {{ bautagebuchError }}
+              </span>
+            </div>
+          </div>
+
+          <div v-else class="bt-editor empty-hint" style="display: flex; align-items: center; justify-content: center">
+            Eintrag links auswählen oder „Heute eintragen" klicken.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Verlauf (Stufe 3d) -->
     <div v-if="tab === 'verlauf'" class="verlauf-tab">
       <div v-if="!fullActivityLoaded" class="empty-hint">Lade Verlauf…</div>
@@ -2877,6 +3265,91 @@ const emptyStammCount = computed(() => {
   color: var(--color-text-faint);
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+/* ── Bautagebuch (Migration 011) ───────────────────────── */
+.bt-tab {
+  padding-top: 4px;
+}
+.bt-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.bt-list {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 600px;
+  overflow-y: auto;
+}
+.bt-list-row {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.bt-list-row:last-child {
+  border-bottom: none;
+}
+.bt-list-row:hover {
+  background: var(--color-bg-subtle);
+}
+.bt-list-row-active {
+  background: var(--color-bg-subtle);
+  border-left: 3px solid var(--color-accent, var(--color-text));
+  padding-left: 9px;
+}
+.bt-row-date {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.bt-row-icon {
+  font-size: 14px;
+}
+.bt-row-summary {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+.bt-row-incident {
+  font-size: 11px;
+  color: var(--color-warning-text, #b45309);
+  margin-top: 3px;
+}
+.bt-editor {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 400px;
+}
+.bt-field {
+  margin-bottom: 14px;
+}
+.bt-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 768px) {
+  .bt-grid {
+    grid-template-columns: 1fr;
+  }
+  .bt-list {
+    max-height: 280px;
+  }
 }
 
 /* ── Aktions-Menue ─────────────────────────────────────── */

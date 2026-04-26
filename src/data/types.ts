@@ -214,6 +214,76 @@ export interface Company {
   updatedAt: string;
 }
 
+/** Bautagebuch (Migration 011): Tageseintrag pro Projekt mit Wetter,
+ *  Personal, Maschinen, Taetigkeiten und Vorkommnissen. UNIQUE(project_id,
+ *  entry_date) → genau ein Eintrag pro Projekt pro Tag. */
+export type WeatherType = "sonnig" | "bewoelkt" | "regen" | "schnee" | "sturm" | "nebel" | "frost" | "hagel";
+
+/** Personal-Eintrag im Bautagebuch. Entweder mit `memberId`-Verknuepfung
+ *  zu team_members (bevorzugt) oder rein als Freitext-Name. `removed`
+ *  wird vom DB-Trigger gesetzt, wenn das referenzierte team_members
+ *  geloescht wurde — Eintrag bleibt dokumentarisch sichtbar. */
+export interface BautagebuchPersonnel {
+  memberId?: string | null;
+  name: string;
+  hours?: number | null;
+  role?: string | null;
+  removed?: boolean;
+}
+
+export interface BautagebuchEntry {
+  id: string;
+  projectId: string;
+  projectName?: string | null;
+  date: string; // YYYY-MM-DD
+  weather: WeatherType | null;
+  temperatureMin: number | null;
+  temperatureMax: number | null;
+  personnel: BautagebuchPersonnel[];
+  machines: string | null;
+  activities: string | null;
+  incidents: string | null;
+  createdById: string | null;
+  createdByUsername?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Patch-Shape fuer upsert(). project + date identifizieren den Eintrag,
+ *  alle anderen Felder sind optional und werden nur ueberschrieben wenn
+ *  im Patch enthalten. */
+export interface BautagebuchUpsertInput {
+  weather?: WeatherType | null;
+  temperatureMin?: number | null;
+  temperatureMax?: number | null;
+  personnel?: BautagebuchPersonnel[];
+  machines?: string | null;
+  activities?: string | null;
+  incidents?: string | null;
+}
+
+export interface BautagebuchRepository {
+  /** Liste aller Eintraege fuer ein Projekt, neueste zuerst.
+   *  limit default = 30 (rund ein Monat). */
+  list(projectId: string, limit?: number): Promise<BautagebuchEntry[]>;
+  /** Einzelner Eintrag per Projekt+Datum (YYYY-MM-DD). */
+  get(projectId: string, date: string): Promise<BautagebuchEntry | null>;
+  /** UPSERT: legt neuen Eintrag an oder aktualisiert vorhandenen. Aus dem
+   *  CHECK-Constraint resultierende Validation-Fehler kommen als String
+   *  zurueck (genauso wie save() bei termine). */
+  upsert(
+    projectId: string,
+    date: string,
+    patch: BautagebuchUpsertInput,
+    createdById?: string | null,
+  ): Promise<BautagebuchEntry | string>;
+  /** Loescht einen Eintrag. */
+  delete(projectId: string, date: string): Promise<boolean>;
+  /** Cross-Projekt-Liste fuer Dashboard / "letzte Aktivitaeten". Optional
+   *  auf eine Menge sichtbarer Projekt-IDs gefiltert. */
+  listRecent(visibleProjectIds: string[] | "all", limit?: number): Promise<BautagebuchEntry[]>;
+}
+
 export interface FileEntry {
   id: string;
   filename: string;
