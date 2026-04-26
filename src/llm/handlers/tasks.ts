@@ -4,6 +4,8 @@ import { emit } from "../../api/events.js";
 import { getCurrentUserCtx } from "../user-context.js";
 import { getVisibleProjectIds } from "../../data/access.js";
 import type { HandlerMap } from "./types.js";
+import { resolveMember, formatCandidates } from "./team.js";
+import { notifyTaskAssigned, resolveUserIdFromMember } from "../../notifications.js";
 
 export const taskSchemas: OpenAI.Chat.ChatCompletionTool[] = [
   {
@@ -11,12 +13,21 @@ export const taskSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "aufgabe_speichern",
       description:
-        "Speichert eine neue Aufgabe (Todo) im Vault. Aufgaben immer mit konkretem Verb beginnen (z.B. 'Angebot fuer Fenster einholen'). Optional einem Projekt zuordnen. Nutze vault_suchen vorher um Duplikate zu vermeiden.",
+        "Speichert eine neue Aufgabe (Todo). Aufgaben immer mit konkretem Verb beginnen (z.B. 'Angebot fuer Fenster einholen'). Optional einem Projekt und einem Team-Mitglied zuordnen. Wenn ein Mitglied zugewiesen wird, bekommt es automatisch eine Telegram-Benachrichtigung (sofern verlinkt).",
       parameters: {
         type: "object",
         properties: {
           text: { type: "string", description: "Beschreibung der Aufgabe" },
           projekt: { type: "string", description: "Optionaler Projektname" },
+          zuweisung: {
+            type: "string",
+            description:
+              "Optional: Team-Mitglied dem die Aufgabe zugewiesen wird (Name oder Teilname). Wird ueber das Team aufgeloest. Beispiel: 'Polier Schmidt' oder 'Mueller'.",
+          },
+          faellig: {
+            type: "string",
+            description: "Optional: Faelligkeitsdatum im Format TT.MM.JJJJ",
+          },
         },
         required: ["text"],
       },
@@ -55,9 +66,59 @@ export const taskSchemas: OpenAI.Chat.ChatCompletionTool[] = [
 
 export const taskHandlers: HandlerMap = {
   aufgabe_speichern: async (args) => {
-    await taskRepo.save(String(args.text), args.projekt ? String(args.projekt) : undefined);
-    emit({ type: "task", action: "created", project: args.projekt ? String(args.projekt) : null });
-    return `Aufgabe gespeichert: ${args.text}`;
+    const text = String(args.text);
+    const projekt = args.projekt ? String(args.projekt) : undefined;
+    const fallig = args.faellig ? String(args.faellig) : undefined;
+
+    // Optional: Team-Mitglied resolven (fuzzy match auf Name/Teilname).
+    let assigneeId: string | null = null;
+    let assigneeName: string | null = null;
+    if (args.zuweisung) {
+      const r = await resolveMember(String(args.zuweisung));
+      if (!r.ok && r.reason === "ambiguous") {
+        return `Mehrere Team-Mitglieder passen auf "${args.zuweisung}": ${formatCandidates(r.candidates ?? [])}. Bitte genauer angeben.`;
+      }
+      if (!r.ok) {
+        return `Team-Mitglied "${args.zuweisung}" nicht gefunden. Mit team_anlegen zuerst hinzufuegen oder Zuweisung weglassen.`;
+      }
+      assigneeId = r.member.id;
+      assigneeName = r.member.name;
+    }
+
+    const task = await taskRepo.save(text, projekt);
+    if (assigneeId || fallig) {
+      // db-tasks update schreibt nur `date` — nicht dueDate. Wir mappen
+      // beide auf das gleiche Feld; das DTO unterscheidet das in der UI.
+      await taskRepo.update(
+        task.id,
+        {
+          assigneeId,
+          assignee: assigneeName,
+          date: fallig ?? null,
+        },
+        projekt,
+      );
+    }
+    emit({ type: "task", action: "created", id: task.id, project: projekt ?? null });
+
+    // Notification feuern, wenn ein Mitglied zugewiesen wurde + es einen
+    // verlinkten User-Account hat + es nicht der aktuelle User ist.
+    if (assigneeId) {
+      void (async () => {
+        const ctx = getCurrentUserCtx();
+        const targetUserId = await resolveUserIdFromMember(assigneeId);
+        if (targetUserId && targetUserId !== ctx?.userId) {
+          await notifyTaskAssigned(
+            targetUserId,
+            { text, project: projekt ?? null, date: fallig ?? null },
+            null, // Akteur ist der LLM-Agent — kein "von"-Hinweis
+          );
+        }
+      })();
+    }
+
+    const tail = assigneeName ? ` (zugewiesen an ${assigneeName})` : "";
+    return `Aufgabe gespeichert: ${text}${tail}`;
   },
 
   aufgaben_auflisten: async (args) => {

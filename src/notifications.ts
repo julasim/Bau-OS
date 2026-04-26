@@ -24,10 +24,20 @@
 // ============================================================
 
 import { findDbUserById } from "./api/auth.js";
-import { getBot, getDefaultBot } from "./bot-manager.js";
 import { logError, logInfo } from "./logger.js";
 import { getDb } from "./db/client.js";
 import { DB_ENABLED } from "./config.js";
+
+// Lazy-Import von bot-manager via dynamic import. Direkt-Import wuerde
+// zu einem ESM-Zirkulaerverweis fuehren:
+//   notifications → bot-manager → bot → llm/runtime → llm/tools →
+//   handlers/index → handlers/tasks → notifications
+// Beim ersten Aufruf von notifyUser() ist der Modul-Graph fertig
+// initialisiert; ab dann ist das dynamic import gecached und gratis.
+async function loadBotAccess() {
+  const mod = await import("./bot-manager.js");
+  return { getBot: mod.getBot, getDefaultBot: mod.getDefaultBot };
+}
 
 interface NotifyOptions {
   /** "Markdown" macht *fett* + _kursiv_ + `code` lesbar. Default: kein
@@ -48,6 +58,7 @@ export async function notifyUser(userId: string, message: string, opts: NotifyOp
     if (user.settings?.notificationsEnabled === false) return false;
 
     // Bot-Auswahl: User-eigener Bot zuerst, sonst Default.
+    const { getBot, getDefaultBot } = await loadBotAccess();
     const bot = getBot(userId) ?? getDefaultBot();
     if (!bot) {
       logInfo(`[Notify] Kein Bot verfuegbar fuer User ${user.username}`);

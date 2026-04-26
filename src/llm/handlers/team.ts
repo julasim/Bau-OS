@@ -20,7 +20,7 @@ function normalizeMemberType(v: unknown): MemberType | null {
 //   3. contains
 // Bei >1 Treffer in Stufe 2/3 wird "ambiguous" zurueckgegeben, damit der
 // Agent nachfragen kann. UUID-Strings werden direkt durchgereicht.
-async function resolveMember(
+export async function resolveMember(
   query: string,
 ): Promise<
   { ok: true; member: TeamMember } | { ok: false; reason: "not-found" | "ambiguous"; candidates?: TeamMember[] }
@@ -56,7 +56,7 @@ async function resolveMember(
 
 // Formatiert eine Liste gefundener Kandidaten fuer den Agenten — damit der
 // eine klare Rueckfrage formulieren kann ("meinst du X oder Y?").
-function formatCandidates(candidates: TeamMember[]): string {
+export function formatCandidates(candidates: TeamMember[]): string {
   return candidates
     .map((m) => {
       const extras = [m.role, m.companyName ?? m.company, m.email].filter(Boolean).join(" · ");

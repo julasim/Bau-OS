@@ -19,6 +19,8 @@ import { getCurrentUserCtx } from "../user-context.js";
 import { canSeeProjectByName } from "../../data/access.js";
 import type { HandlerMap } from "./types.js";
 import type { MeetingType, MeetingInput } from "../../data/types.js";
+import { resolveMember, formatCandidates } from "./team.js";
+import { notifyMeetingInvited, resolveUserIdsFromMembers } from "../../notifications.js";
 
 const ALLOWED_TYPES: MeetingType[] = [
   "Bauherrenmeeting",
@@ -82,7 +84,7 @@ export const meetingSchemas: OpenAI.Chat.ChatCompletionTool[] = [
           teilnehmer: {
             type: "string",
             description:
-              "Teilnehmer als Freitext (komma-getrennt). Beispiel: 'Bauherr Mueller, Architekt Schmidt, Polier Maier'",
+              "Teilnehmer (komma-getrennt). Beispiel: 'Bauherr Mueller, Architekt Schmidt, Polier Maier'. Erkannte Team-Mitglieder werden als interne Teilnehmer verlinkt und benachrichtigt; nicht erkannte Namen bleiben als Freitext.",
           },
           agenda: { type: "string", description: "Tagesordnung (Markdown erlaubt)" },
           protokoll: { type: "string", description: "Protokoll der Sitzung (Markdown erlaubt)" },
@@ -168,11 +170,25 @@ export const meetingHandlers: HandlerMap = {
     }
     if ("ort" in args) input.location = String(args.ort);
     if ("teilnehmer" in args) {
-      const list = String(args.teilnehmer)
+      // Resolver-Pattern wie bei termin_speichern: Treffer → attendeeIds,
+      // nicht erkannte Namen → attendeesExternal. Mehrdeutige Treffer
+      // brechen ab und fragen nach.
+      const names = String(args.teilnehmer)
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
-      input.attendeesExternal = list;
+      const ids: string[] = [];
+      const ext: string[] = [];
+      for (const name of names) {
+        const r = await resolveMember(name);
+        if (!r.ok && r.reason === "ambiguous") {
+          return `Mehrere Team-Mitglieder passen auf "${name}": ${formatCandidates(r.candidates ?? [])}. Bitte genauer angeben.`;
+        }
+        if (r.ok) ids.push(r.member.id);
+        else ext.push(name);
+      }
+      input.attendeeIds = ids;
+      input.attendeesExternal = ext;
     }
     if ("agenda" in args) input.agenda = String(args.agenda);
     if ("protokoll" in args) input.minutes = String(args.protokoll);
@@ -187,6 +203,29 @@ export const meetingHandlers: HandlerMap = {
     const result = await meetingRepo.create(proj.id, input, ctx?.userId ?? null);
     if (typeof result === "string") return result;
     emit({ type: "meeting", action: "created", id: result.id, project: proj.name });
+
+    // Notification an verlinkte Teilnehmer.
+    if (result.attendeeIds.length > 0) {
+      void (async () => {
+        const userIds = await resolveUserIdsFromMembers(result.attendeeIds);
+        if (userIds.length > 0) {
+          await notifyMeetingInvited(
+            userIds,
+            {
+              title: result.title,
+              date: result.date,
+              startTime: result.startTime,
+              location: result.location,
+              meetingType: result.meetingType,
+              project: proj.name,
+            },
+            ctx?.userId ?? null,
+            null,
+          );
+        }
+      })();
+    }
+
     return `Meeting "${result.title}" am ${result.date} fuer ${proj.name} angelegt.`;
   },
 
