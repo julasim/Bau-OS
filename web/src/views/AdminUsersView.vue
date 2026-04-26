@@ -118,25 +118,35 @@ async function submitPasswordReset() {
 const showPairDialog = ref(false);
 const pairTarget = ref<AdminUser | null>(null);
 const pairToken = ref<string | null>(null);
+const pairBotUsername = ref<string | null>(null);
 const pairExpiresAt = ref<string | null>(null);
 const pairSaving = ref(false);
 const pairError = ref<string | null>(null);
 const pairCountdown = ref<string>("");
 let pairCountdownTimer: ReturnType<typeof setInterval> | null = null;
 
+// Voller Befehl, den der User in Telegram an den Bot schickt — als Block
+// fuers Copy-to-Clipboard. Inkl. /pair-Praefix damit nichts vergessen wird.
+const pairCommand = computed(() => (pairToken.value ? `/pair ${pairToken.value}` : ""));
+const pairBotLink = computed(() =>
+  pairBotUsername.value ? `https://t.me/${pairBotUsername.value}` : null,
+);
+
 async function openPairDialog(user: AdminUser) {
   pairTarget.value = user;
   pairToken.value = null;
+  pairBotUsername.value = null;
   pairExpiresAt.value = null;
   pairError.value = null;
   showPairDialog.value = true;
   pairSaving.value = true;
   try {
-    const res = await api.post<{ token: string; expiresAt: string }>(
+    const res = await api.post<{ token: string; expiresAt: string; botUsername: string | null }>(
       `/admin/users/${encodeURIComponent(user.id)}/pair-token`,
       {},
     );
     pairToken.value = res.token;
+    pairBotUsername.value = res.botUsername ?? null;
     pairExpiresAt.value = res.expiresAt;
     startPairCountdown();
   } catch (e) {
@@ -179,6 +189,20 @@ async function copyToken() {
   if (!pairToken.value) return;
   try {
     await navigator.clipboard.writeText(pairToken.value);
+  } catch {
+    /* clipboard API kann fehlen — User markiert manuell */
+  }
+}
+
+// Kopiert den vollstaendigen "/pair CODE"-Befehl (haeufiger Wunsch: einfach
+// in Telegram pasten ohne nochmal zu tippen).
+const copyMessage = ref<string | null>(null);
+async function copyPairCommand() {
+  if (!pairCommand.value) return;
+  try {
+    await navigator.clipboard.writeText(pairCommand.value);
+    copyMessage.value = "Befehl kopiert";
+    setTimeout(() => (copyMessage.value = null), 2000);
   } catch {
     /* clipboard API kann fehlen — User markiert manuell */
   }
@@ -530,16 +554,11 @@ function formatDate(iso?: string) {
 
     <!-- Telegram-Pair-Dialog (Phase 5) -->
     <div v-if="showPairDialog && pairTarget" class="modal-overlay" @click.self="closePairDialog">
-      <div class="modal-card" style="max-width: 480px">
+      <div class="modal-card" style="max-width: 520px">
         <div class="eyebrow" style="margin-bottom: 4px">Telegram</div>
-        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 4px 0">
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 14px 0">
           „{{ pairTarget.username }}" mit Telegram verknüpfen
         </h2>
-        <p style="font-size: 12px; color: var(--color-text-muted); margin: 0 0 18px 0">
-          Der Code ist 10 Minuten gültig. Der Nutzer schickt
-          <code style="font-family: var(--font-mono, monospace); background: var(--color-bg-subtle); padding: 1px 4px; border-radius: 3px">/pair {{ pairToken ?? "&lt;code&gt;" }}</code>
-          an den Bot.
-        </p>
 
         <div v-if="pairSaving" style="text-align: center; padding: 24px; color: var(--color-text-muted)">
           Lade Code…
@@ -556,19 +575,61 @@ function formatDate(iso?: string) {
         >
           {{ pairError }}
         </div>
-        <div v-else-if="pairToken" class="pair-token-box">
-          <div class="pair-token-label">Pair-Code</div>
-          <div class="pair-token-value">{{ pairToken }}</div>
-          <div class="pair-token-meta">
+        <template v-else-if="pairToken">
+          <!-- Schritt 1: Welcher Bot? -->
+          <div class="pair-step">
+            <div class="pair-step-label"><span class="pair-step-num">1</span> Bot in Telegram öffnen</div>
+            <div class="pair-step-body">
+              <template v-if="pairBotUsername">
+                <a
+                  :href="pairBotLink ?? '#'"
+                  target="_blank"
+                  rel="noopener"
+                  class="bauos-btn solid sm"
+                  style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none"
+                >
+                  <BIcon name="message" :size="11" />
+                  @{{ pairBotUsername }} öffnen
+                </a>
+                <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 6px">
+                  Falls noch nie genutzt: erst <code class="inline-cmd">/start</code> schicken.
+                </div>
+              </template>
+              <div v-else style="font-size: 12px; color: var(--color-warning-text, #b45309)">
+                ⚠ Kein Bot bekannt. Wenn der User einen <strong>eigenen Bot</strong> nutzen soll,
+                muss er sich erst einloggen → Settings → „Mein Telegram-Bot" einrichten. Sonst
+                muss der <code class="inline-cmd">BOT_TOKEN</code> in der <code class="inline-cmd">.env</code> gesetzt sein.
+              </div>
+            </div>
+          </div>
+
+          <!-- Schritt 2: Befehl senden -->
+          <div class="pair-step">
+            <div class="pair-step-label"><span class="pair-step-num">2</span> Diesen Befehl in den Chat kopieren</div>
+            <div class="pair-step-body">
+              <div class="pair-cmd-box">
+                <code class="pair-cmd">{{ pairCommand }}</code>
+                <button class="bauos-btn ghost sm" @click="copyPairCommand" title="Befehl kopieren">
+                  Kopieren
+                </button>
+              </div>
+              <div v-if="copyMessage" style="font-size: 11px; color: var(--color-success-text); margin-top: 4px">
+                ✓ {{ copyMessage }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Meta: Gültigkeit -->
+          <div class="pair-meta">
             <span>Gültig noch:</span>
             <span class="font-mono" :class="{ 'pair-token-expired': pairCountdown === 'abgelaufen' }">
               {{ pairCountdown }}
             </span>
-            <button class="bauos-btn ghost sm" @click="copyToken" :title="'In Zwischenablage'">
-              Kopieren
+            <button class="bauos-btn ghost sm" @click="copyToken" :title="'Nur Code kopieren'" style="margin-left: auto">
+              Nur Code
             </button>
           </div>
-        </div>
+        </template>
 
         <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
           <button class="bauos-btn solid" @click="closePairDialog">Schließen</button>
@@ -769,5 +830,68 @@ function formatDate(iso?: string) {
 }
 .pair-token-expired {
   color: var(--color-danger-text);
+}
+
+/* Neuer step-by-step Pair-Dialog */
+.pair-step {
+  margin-bottom: 14px;
+}
+.pair-step-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 6px;
+}
+.pair-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-size: 11px;
+  font-weight: 700;
+}
+.pair-step-body {
+  padding-left: 26px;
+}
+.pair-cmd-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+.pair-cmd {
+  font-family: var(--font-mono, monospace);
+  font-size: 14px;
+  color: var(--color-text);
+  flex: 1;
+  user-select: all;
+  word-break: break-all;
+}
+.pair-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.inline-cmd {
+  font-family: var(--font-mono, monospace);
+  background: var(--color-bg-subtle);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
 }
 </style>

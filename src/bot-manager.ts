@@ -20,6 +20,8 @@ interface BotEntry {
   bot: Bot;
   /** Promise des bot.start()-Calls. Wird beim stop() awaited. */
   running: Promise<void>;
+  /** Telegram-Username (ohne @) — fuer UI-Anzeige (t.me/<username>). */
+  username?: string | null;
 }
 
 const bots = new Map<string, BotEntry>();
@@ -29,13 +31,35 @@ let started = false;
  *  setDefaultBot() registriert und vom Notifications-Modul als Fallback
  *  benutzt, wenn ein User keinen eigenen Bot hat. */
 let defaultBot: Bot | null = null;
+let defaultBotUsername: string | null = null;
 
-export function setDefaultBot(bot: Bot): void {
+/** Registriert den Default-Bot. Versucht parallel, den Telegram-Username
+ *  per getMe() zu laden — Fehler sind harmlos (UI faellt dann auf
+ *  generischen Hinweis zurueck). */
+export async function setDefaultBot(bot: Bot): Promise<void> {
   defaultBot = bot;
+  try {
+    const me = await bot.api.getMe();
+    defaultBotUsername = me.username ?? null;
+    if (defaultBotUsername) logInfo(`[BotManager] Default-Bot ist @${defaultBotUsername}`);
+  } catch (err) {
+    logError("[BotManager] getMe fuer Default-Bot fehlgeschlagen", err);
+  }
 }
 
 export function getDefaultBot(): Bot | null {
   return defaultBot;
+}
+
+export function getDefaultBotUsername(): string | null {
+  return defaultBotUsername;
+}
+
+/** Username des Bots, ueber den ein User benachrichtigt / gepairt wird:
+ *  bevorzugt sein eigener Bot, sonst der Default. Fuer das UI wichtig,
+ *  damit der Pair-Dialog den richtigen Bot-Namen anzeigt. */
+export function getBotUsernameForUser(userId: string): string | null {
+  return bots.get(userId)?.username ?? defaultBotUsername;
 }
 
 /** Initialer Start: alle aktiven User-Bots aus der DB laden und spawnen. */
@@ -86,6 +110,21 @@ async function spawnBot(user: DbUser): Promise<void> {
   if (!user.telegramBotToken) return;
   try {
     const bot = createBot(user.telegramBotToken, user);
+    // Username vorm Polling-Start abfragen — getMe() ist eine eigenstaendige
+    // Telegram-API-Anfrage, braucht weder bot.start() noch eine offene
+    // Connection. Wenn der Token ungueltig ist, kommt hier ein Fehler — wir
+    // brechen dann ab und zeigen den Token gar nicht erst als "aktiv" an.
+    let username: string | null = null;
+    try {
+      const me = await bot.api.getMe();
+      username = me.username ?? null;
+    } catch (err) {
+      logError(
+        `[BotManager] Bot-Token von "${user.username}" ist ungueltig (getMe fehlgeschlagen). Bot wird NICHT gestartet.`,
+        err,
+      );
+      return;
+    }
     // grammy bot.start() ist long-running (poll loop) — wir wollen es nicht
     // awaiten, sondern als Promise speichern, damit wir es spaeter sauber
     // abbrechen koennen via bot.stop().
@@ -93,8 +132,8 @@ async function spawnBot(user: DbUser): Promise<void> {
       logError(`[BotManager] Bot fuer ${user.username} ist abgestuerzt`, err);
       bots.delete(user.id);
     });
-    bots.set(user.id, { user, bot, running });
-    logInfo(`[BotManager] Bot fuer "${user.username}" gestartet`);
+    bots.set(user.id, { user, bot, running, username });
+    logInfo(`[BotManager] Bot fuer "${user.username}" gestartet (@${username ?? "?"})`);
   } catch (err) {
     logError(`[BotManager] Konnte Bot fuer "${user.username}" nicht starten`, err);
   }

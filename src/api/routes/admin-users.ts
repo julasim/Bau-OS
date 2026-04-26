@@ -184,12 +184,26 @@ adminUsersRoutes.patch("/admin/users/:id/password", async (c) => {
 // ── Telegram-Pair-Token generieren (Phase 5) ───────────────────────────────
 // Admin generiert einen Token, der User schickt /pair <token> dem Bot.
 // 10 Minuten gueltig — danach automatisch ungueltig.
+//
+// Response enthaelt zusaetzlich botUsername — das ist der Telegram-Username
+// (ohne @) des Bots, an den der Pair-Befehl geschickt werden muss. UI baut
+// daraus einen t.me/<username>-Link, damit der User direkt in den richtigen
+// Chat gelangt. Wenn der Ziel-User einen eigenen Bot hat, ist das sein Bot —
+// sonst der Default-Bot. Kann null sein wenn weder eigener Bot laeuft noch
+// Default-Bot gesetzt ist.
 adminUsersRoutes.post("/admin/users/:id/pair-token", async (c) => {
   const id = c.req.param("id");
   const target = await findDbUserById(id);
   if (!target) return c.json({ error: "User nicht gefunden" }, 404);
   const result = await createPairToken(id);
-  return c.json(result, 201);
+  let botUsername: string | null = null;
+  try {
+    const { getBotUsernameForUser } = await import("../../bot-manager.js");
+    botUsername = getBotUsernameForUser(id);
+  } catch {
+    /* BotManager nicht aktiv (FS-Mode) — UI faellt auf generische Anzeige zurueck */
+  }
+  return c.json({ ...result, botUsername }, 201);
 });
 
 // ── Telegram-Bot eines Users setzen/entfernen (Phase 6) ───────────────────

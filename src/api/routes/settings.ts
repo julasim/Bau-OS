@@ -199,15 +199,34 @@ settingsRoutes.post("/settings/fast", (c) => {
 // GET liefert minimalen Status (ob Token gesetzt + enabled). Token selbst
 // wird NIE im Response zurueckgegeben — der User muss ihn neu eingeben um
 // zu aendern.
+// botUsername ist der Telegram-Username (ohne @) des Bots, an den der
+// User /pair schickt — sein eigener Bot wenn vorhanden, sonst Default.
+// botRunning sagt, ob der Bot tatsaechlich gestartet ist (wichtig: User
+// kann hasToken=true haben, aber der Bot scheiterte beim Spawn wegen
+// ungueltigem Token → botRunning=false → UI zeigt Warnung).
+async function getBotMeta(userId: string): Promise<{ botUsername: string | null; botRunning: boolean }> {
+  try {
+    const { getBotUsernameForUser, getBotStatus } = await import("../../bot-manager.js");
+    return {
+      botUsername: getBotUsernameForUser(userId),
+      botRunning: getBotStatus(userId) === "running",
+    };
+  } catch {
+    return { botUsername: null, botRunning: false };
+  }
+}
+
 settingsRoutes.get("/me/telegram-bot", async (c) => {
   const dbUser = c.get("dbUser");
   if (!dbUser) return c.json({ error: "DB-User erforderlich" }, 400);
   const fresh = await findDbUserById(dbUser.id);
   if (!fresh) return c.json({ error: "User nicht gefunden" }, 404);
+  const meta = await getBotMeta(fresh.id);
   return c.json({
     hasToken: !!fresh.telegramBotToken,
     enabled: fresh.telegramBotEnabled,
     chatId: fresh.telegramChatId,
+    ...meta,
   });
 });
 
@@ -216,8 +235,17 @@ settingsRoutes.put("/me/telegram-bot", async (c) => {
   if (!dbUser) return c.json({ error: "DB-User erforderlich" }, 400);
 
   const body = await c.req.json<{ token?: string | null; enabled?: boolean }>();
-  if ("token" in body) {
-    await setUserBotToken(dbUser.id, body.token ?? null);
+  // Token-Format-Validation am Backend — Frontend validiert auch, aber
+  // hier doppelt damit z.B. cURL-Calls oder LLM-Tools nichts Schmutziges
+  // einschmuggeln.
+  if ("token" in body && body.token != null) {
+    const token = String(body.token).trim();
+    if (!/^\d+:[A-Za-z0-9_-]+$/.test(token)) {
+      return c.json({ error: "Bot-Token hat falsches Format. Erwartet: '123456789:ABC...' (von @BotFather)" }, 400);
+    }
+    await setUserBotToken(dbUser.id, token);
+  } else if ("token" in body) {
+    await setUserBotToken(dbUser.id, null);
   }
   if ("enabled" in body) {
     await setUserBotEnabled(dbUser.id, body.enabled === true);
@@ -229,5 +257,7 @@ settingsRoutes.put("/me/telegram-bot", async (c) => {
   } catch {
     /* Manager nicht aktiv (FS-Mode) — kein Fehler */
   }
-  return c.json({ ok: true });
+  // Frischen Status zurueckgeben, damit UI sofort sieht ob Bot startet.
+  const meta = await getBotMeta(dbUser.id);
+  return c.json({ ok: true, ...meta });
 });
