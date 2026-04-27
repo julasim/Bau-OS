@@ -75,23 +75,14 @@ function openPalette() {
       <span style="color: var(--color-text); font-weight: 500">{{ current }}</span>
     </nav>
 
-    <!-- Search button -->
+    <!-- Search button — auf Mobile nur Icon, ab 768px volles Suchfeld -->
     <button
       @click="openPalette"
-      class="flex items-center gap-2"
-      style="
-        width: 240px;
-        padding: 6px 10px 6px 12px;
-        border: 1px solid var(--color-border);
-        border-radius: 6px;
-        background: var(--color-bg-subtle);
-        font-size: 12px;
-        cursor: pointer;
-      "
+      class="topbar-search flex items-center gap-2"
       aria-label="Suche oeffnen"
     >
       <BIcon name="search" :size="14" style="color: var(--color-text-muted)" />
-      <span class="flex-1 text-left" style="color: var(--color-text-muted)">Suchen…</span>
+      <span class="topbar-search-label flex-1 text-left" style="color: var(--color-text-muted)">Suchen…</span>
     </button>
 
     <!-- Bell -->
@@ -138,6 +129,30 @@ function openPalette() {
 @media (max-width: 1023.98px) {
   .topbar-hamburger {
     display: inline-flex;
+  }
+}
+
+/* Search-Button: ab 768px volles Suchfeld (240px), darunter nur Icon
+   damit die TopBar auf 375px-Phone-Viewport nicht ueberlaeuft. */
+.topbar-search {
+  width: 240px;
+  padding: 6px 10px 6px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-subtle);
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+@media (max-width: 767.98px) {
+  .topbar-search {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    justify-content: center;
+  }
+  .topbar-search-label {
+    display: none;
   }
 }
 </style>

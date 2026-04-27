@@ -242,10 +242,15 @@ const kanbanColumns = computed(() => [
     </div>
 
     <!-- LIST VIEW -->
+    <!-- Mobile: outer wrapper scrollt horizontal, innerer Container hat
+         min-width damit die Spalten nicht zerquetscht werden. Ab 768px
+         normales Verhalten ohne Scroll. -->
     <div
       v-if="viewMode === 'list'"
+      class="task-list-wrap"
       style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden"
     >
+     <div class="task-list-inner">
       <!-- Header -->
       <div
         class="flex items-center"
@@ -327,10 +332,11 @@ const kanbanColumns = computed(() => [
           </button>
         </div>
       </div>
+     </div>
     </div>
 
     <!-- KANBAN VIEW -->
-    <div v-else-if="viewMode === 'kanban'" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px">
+    <div v-else-if="viewMode === 'kanban'" class="grid kanban-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px">
       <div
         v-for="col in kanbanColumns"
         :key="col.key"
@@ -615,5 +621,23 @@ const kanbanColumns = computed(() => [
 }
 .timeline-pill:hover {
   transform: translateX(2px);
+}
+
+/* ── Mobile: List + Kanban responsiv ─────────────────────────── */
+.task-list-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.task-list-inner {
+  /* min-width damit die Spalten nicht zerquetscht werden;
+     Wert grob = Summe aller Spaltenbreiten + Padding. */
+  min-width: 600px;
+}
+
+@media (max-width: 767.98px) {
+  /* Kanban auf Phone: 1 Spalte statt 3 (sonst je ~120px = unbedienbar) */
+  .kanban-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 </style>

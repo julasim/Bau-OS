@@ -330,7 +330,8 @@ onMounted(async () => {
     </div>
 
     <!-- List -->
-    <div v-else style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+    <div v-else class="team-list-wrap" style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+     <div class="team-list-inner">
       <div
         class="flex items-center"
         style="gap: 12px; padding: 10px 16px; background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-border)"
@@ -378,6 +379,7 @@ onMounted(async () => {
       >
         {{ anyFilterActive ? "Keine Treffer." : "Noch keine Team-Mitglieder." }}
       </p>
+     </div>
     </div>
 
     <!-- Neu-anlegen-Dialog -->
@@ -663,5 +665,14 @@ onMounted(async () => {
   .form-field-span-2 {
     grid-column: span 1;
   }
+}
+
+/* ── Mobile (Phase 1A) ─────────────────────────────────────── */
+.team-list-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.team-list-inner {
+  min-width: 600px;
 }
 </style>

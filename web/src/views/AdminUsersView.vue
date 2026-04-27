@@ -311,7 +311,8 @@ function formatDate(iso?: string) {
     </p>
 
     <!-- Liste -->
-    <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+    <div class="users-list-wrap" style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+     <div class="users-list-inner">
       <div
         class="flex items-center"
         style="
@@ -416,6 +417,7 @@ function formatDate(iso?: string) {
       >
         Lade…
       </p>
+     </div>
     </div>
 
     <!-- Anlegen-Dialog -->
@@ -893,5 +895,14 @@ function formatDate(iso?: string) {
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 11px;
+}
+
+/* ── Mobile (Phase 1A) ─────────────────────────────────────── */
+.users-list-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.users-list-inner {
+  min-width: 600px;
 }
 </style>

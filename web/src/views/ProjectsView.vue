@@ -410,7 +410,7 @@ onMounted(async () => {
     </div>
 
     <!-- Grid -->
-    <div v-if="viewMode === 'grid'" class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px">
+    <div v-if="viewMode === 'grid'" class="grid proj-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px">
       <div
         v-for="p in filtered"
         :key="p.name"
@@ -594,7 +594,9 @@ onMounted(async () => {
     </div>
 
     <!-- List -->
-    <div v-else style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+    <!-- Mobile: outer wrapper scrollt horizontal, inner mit min-width -->
+    <div v-else class="proj-list-wrap" style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+     <div class="proj-list-inner">
       <div
         class="flex items-center"
         style="
@@ -666,6 +668,7 @@ onMounted(async () => {
       >
         {{ anyFilterActive ? "Keine Treffer." : "Keine Projekte vorhanden." }}
       </p>
+     </div>
     </div>
 
     <!-- ═══ Neues-Projekt-Dialog (Phase 4) ═══════════════ -->
@@ -1143,6 +1146,26 @@ onMounted(async () => {
   }
   .form-field-span-2 {
     grid-column: span 1;
+  }
+}
+
+/* ── Mobile-Anpassungen (Phase 1A) ─────────────────────────── */
+.proj-list-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.proj-list-inner {
+  /* min-width damit die Spalten nicht kollabieren */
+  min-width: 800px;
+}
+@media (max-width: 1023.98px) {
+  .proj-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+@media (max-width: 640px) {
+  .proj-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 </style>
