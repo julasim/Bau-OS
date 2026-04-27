@@ -205,12 +205,16 @@ useEvents(["note"], () => load());
           <span class="font-mono">{{ formatSize(note.size) }}</span>
         </div>
       </div>
-      <p
-        v-if="filtered.length === 0"
-        style="grid-column: 1 / -1; font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
-      >
-        {{ searchQuery ? "Keine Treffer." : "Keine Notizen vorhanden." }}
-      </p>
+      <div v-if="filtered.length === 0" class="empty-state" style="grid-column: 1 / -1">
+        <div class="empty-state-icon">📝</div>
+        <div class="empty-state-text">
+          {{ searchQuery ? "Keine Treffer." : "Noch keine Notizen." }}
+        </div>
+        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="showCreate = true">
+          <BIcon name="plus" :size="11" :stroke-width="2" />
+          Erste Notiz anlegen
+        </button>
+      </div>
     </div>
 
     <!-- List View -->
@@ -278,12 +282,16 @@ useEvents(["note"], () => load());
           <BIcon name="x" :size="12" />
         </button>
       </div>
-      <p
-        v-if="filtered.length === 0"
-        style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
-      >
-        {{ searchQuery ? "Keine Treffer." : "Keine Notizen vorhanden." }}
-      </p>
+      <div v-if="filtered.length === 0" class="empty-state">
+        <div class="empty-state-icon">📝</div>
+        <div class="empty-state-text">
+          {{ searchQuery ? "Keine Treffer." : "Noch keine Notizen." }}
+        </div>
+        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="showCreate = true">
+          <BIcon name="plus" :size="11" :stroke-width="2" />
+          Erste Notiz anlegen
+        </button>
+      </div>
     </div>
   </div>
 </template>

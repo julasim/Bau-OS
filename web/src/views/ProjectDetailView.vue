@@ -218,6 +218,10 @@ interface MeetingActionItem {
   assigneeId?: string | null;
   dueDate?: string | null;
   done?: boolean;
+  /** Wenn aus dem Action-Item per "→ Aufgabe"-Button eine echte Task
+   *  angelegt wurde, zeigt taskId darauf. UI rendert dann statt
+   *  "Anlegen" einen Link zur Aufgabe + "Erledigt"-Sync. */
+  taskId?: string | null;
 }
 interface Meeting {
   id: string;
@@ -259,6 +263,11 @@ const meetingDraft = ref<MeetingDraft | null>(null);
 const meetingSaving = ref(false);
 const meetingError = ref<string | null>(null);
 const newActionItemText = ref("");
+// Convert-Action-Item-To-Task State (Block-A #1):
+// convertingActionIdx zeigt während des API-Calls den Spinner-Status,
+// convertError sammelt Fehlermeldung pro Meeting-Editor.
+const convertingActionIdx = ref<number | null>(null);
+const convertError = ref<string | null>(null);
 
 // ── Bautagebuch (Migration 011) ───────────────────────────
 type WeatherKey = "sonnig" | "bewoelkt" | "regen" | "schnee" | "sturm" | "nebel" | "frost" | "hagel";
@@ -1376,6 +1385,19 @@ async function saveBautagebuch() {
   }
 }
 
+// Tagesnavigation im Bautagebuch — direction: -1 = einen Tag zurueck,
+// +1 = einen Tag vor. Setzt das selectedDate, lädt vorhandenen Eintrag
+// oder leert den Draft (User kann gleich neu eintragen).
+function navigateBautagebuch(direction: -1 | 1) {
+  if (!bautagebuchSelectedDate.value) return;
+  const d = new Date(bautagebuchSelectedDate.value + "T00:00:00");
+  d.setDate(d.getDate() + direction);
+  // Zurueck zu YYYY-MM-DD — keine Timezone-Probleme weil wir local-Date
+  // verwenden.
+  const newDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  selectBautagebuch(newDate);
+}
+
 async function deleteBautagebuch() {
   if (!bautagebuchSelectedDate.value || !confirm("Eintrag wirklich löschen?")) return;
   try {
@@ -1467,6 +1489,45 @@ function addActionItem() {
 function removeActionItem(idx: number) {
   if (!meetingDraft.value) return;
   meetingDraft.value.actionItems.splice(idx, 1);
+}
+
+// Wandelt ein Action-Item in eine echte Task um. Workflow:
+//   1. Meeting muss schon gespeichert sein (sonst gibts keine ID).
+//   2. POST /tasks mit text + project + assigneeId + faellig.
+//   3. PATCH /meetings/:id mit aktualisiertem actionItems-Array
+//      (taskId nachgepflegt).
+//   4. UI re-rendert: aus Button wird "Aufgabe"-Indicator.
+async function convertActionItemToTask(idx: number) {
+  if (!meetingDraft.value || !meetingDraft.value.id) {
+    convertError.value = "Meeting erst speichern, dann Action-Items als Aufgaben anlegen.";
+    return;
+  }
+  const item = meetingDraft.value.actionItems[idx];
+  if (!item || !item.text.trim() || item.taskId) return;
+
+  convertingActionIdx.value = idx;
+  convertError.value = null;
+  try {
+    // 1) Task anlegen (Backend resolvt Project via Name)
+    const task = await api.post<{ id: string }>("/tasks", {
+      text: item.text.trim(),
+      project: projectName.value,
+      assigneeId: item.assigneeId ?? null,
+      date: item.dueDate ?? null,
+    });
+    // 2) taskId im action_items-Array nachpflegen
+    item.taskId = task.id;
+    // Komplettes actionItems-Array zurueck schreiben — Backend persistiert
+    // dann das ganze JSONB-Feld (Patch ist atomar).
+    await api.patch(`/meetings/${meetingDraft.value.id}`, {
+      actionItems: meetingDraft.value.actionItems.map((a) => ({ ...a })),
+    });
+  } catch (e) {
+    item.taskId = undefined; // Rollback im Frontend
+    convertError.value = e instanceof Error ? e.message : "Anlegen fehlgeschlagen";
+  } finally {
+    convertingActionIdx.value = null;
+  }
 }
 
 async function saveMeeting() {
@@ -2483,9 +2544,26 @@ async function deleteMeeting() {
           <!-- Rechte Spalte: Editor -->
           <div class="bt-editor" v-if="bautagebuchDraft && bautagebuchSelectedDate">
             <div class="flex items-center" style="gap: 8px; margin-bottom: 14px">
+              <!-- Tagesnavigation: vorheriger / nächster Tag -->
+              <button
+                class="bt-day-nav"
+                @click="navigateBautagebuch(-1)"
+                title="Vorheriger Tag"
+                aria-label="Vorheriger Tag"
+              >
+                <BIcon name="chevronLeft" :size="14" />
+              </button>
               <h3 style="margin: 0; font-size: 16px; font-weight: 600">
                 {{ formatBautagDate(bautagebuchSelectedDate) }}
               </h3>
+              <button
+                class="bt-day-nav"
+                @click="navigateBautagebuch(1)"
+                title="Nächster Tag"
+                aria-label="Nächster Tag"
+              >
+                <BIcon name="chevronRight" :size="14" />
+              </button>
               <span
                 v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
                 class="empty-hint"
@@ -2763,6 +2841,20 @@ async function deleteMeeting() {
                     style="flex: 1"
                     :class="{ 'mt-todo-done': item.done }"
                   />
+                  <!-- "Als Aufgabe anlegen" — wenn schon angelegt: Link statt Button -->
+                  <button
+                    v-if="!item.taskId"
+                    class="bauos-btn ghost sm"
+                    :disabled="!item.text.trim() || convertingActionIdx === idx"
+                    @click="convertActionItemToTask(idx)"
+                    title="Als Aufgabe anlegen"
+                  >
+                    {{ convertingActionIdx === idx ? "…" : "→ Aufgabe" }}
+                  </button>
+                  <span v-else class="mt-todo-task-link" title="Bereits als Aufgabe angelegt">
+                    <BIcon name="check" :size="10" />
+                    Aufgabe
+                  </span>
                   <button class="action-btn" @click="removeActionItem(idx)" title="Entfernen">
                     <BIcon name="x" :size="11" />
                   </button>
@@ -2778,6 +2870,9 @@ async function deleteMeeting() {
                 />
                 <button class="bauos-btn ghost sm" @click="addActionItem">+ Hinzufügen</button>
               </div>
+              <p v-if="convertError" style="font-size: 11px; color: var(--color-danger-text); margin-top: 6px">
+                {{ convertError }}
+              </p>
             </div>
 
             <!-- Folgetermin -->
@@ -3794,6 +3889,25 @@ async function deleteMeeting() {
   letter-spacing: 0.04em;
   margin-bottom: 6px;
 }
+.bt-day-nav {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: all 180ms ease;
+  flex-shrink: 0;
+}
+.bt-day-nav:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-faint);
+  background: var(--color-bg);
+}
 
 @media (max-width: 768px) {
   .bt-grid {
@@ -3915,6 +4029,17 @@ async function deleteMeeting() {
 .mt-todo-done {
   text-decoration: line-through;
   color: var(--color-text-faint);
+}
+.mt-todo-task-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--color-success-text, #16a34a);
+  padding: 4px 8px;
+  background: var(--color-success-bg, color-mix(in srgb, #16a34a 10%, transparent));
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {

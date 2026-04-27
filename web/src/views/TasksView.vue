@@ -25,6 +25,13 @@ const team = ref<string[]>([]);
 const editing = ref<Task | null>(null);
 const newText = ref("");
 const filter = ref<"all" | "open" | "in_progress" | "done">("all");
+
+// Ref auf Quick-Add-Input — wird vom Empty-State-CTA fokussiert.
+const quickAddInput = ref<HTMLInputElement | null>(null);
+function focusQuickAdd() {
+  quickAddInput.value?.focus();
+  quickAddInput.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
 const viewMode = ref<ViewMode>("list");
 
 const filtered = computed(() => {
@@ -161,6 +168,7 @@ const kanbanColumns = computed(() => [
     <!-- Quick-Add -->
     <div class="flex gap-2" style="margin-bottom: 20px">
       <input
+        ref="quickAddInput"
         v-model="newText"
         placeholder="Neue Aufgabe…"
         @keyup.enter="create"
@@ -267,8 +275,15 @@ const kanbanColumns = computed(() => [
         <span class="eyebrow" style="width: 100px">Person</span>
         <span class="eyebrow" style="width: 90px">Fällig</span>
       </div>
-      <div v-if="filtered.length === 0" style="padding: 24px; font-size: 13px; color: var(--color-text-tertiary); text-align: center">
-        Keine Aufgaben in dieser Ansicht.
+      <div v-if="filtered.length === 0" class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div class="empty-state-text">
+          {{ filter === "all" ? "Noch keine Aufgaben." : "Keine Aufgaben in dieser Ansicht." }}
+        </div>
+        <button v-if="filter === 'all'" class="bauos-btn solid sm" @click="focusQuickAdd">
+          <BIcon name="plus" :size="11" :stroke-width="2" />
+          Erste Aufgabe anlegen
+        </button>
       </div>
       <div
         v-for="task in filtered"

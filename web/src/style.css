@@ -224,6 +224,28 @@ html.dark .text-red-700 {
   opacity: 0.9;
 }
 
+/* ── Empty-State (mit Icon + CTA) ─────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 20px;
+  text-align: center;
+}
+.empty-state-icon {
+  font-size: 32px;
+  opacity: 0.5;
+  line-height: 1;
+}
+.empty-state-text {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  max-width: 320px;
+  line-height: 1.5;
+}
+
 /* ============================================================
    Mobile Override (Phase 2): Modal-Overlays + Modal-Cards
    ============================================================

@@ -258,8 +258,19 @@ const statCards = computed(() => [
             >Alle →</router-link
           >
         </div>
-        <div v-if="openTasks.length === 0" style="font-size: 12px; color: var(--color-text-tertiary)">
-          Keine offenen Aufgaben.
+        <div
+          v-if="openTasks.length === 0"
+          class="flex items-center"
+          style="gap: 10px; padding: 8px 0"
+        >
+          <span style="font-size: 12px; color: var(--color-text-tertiary)">Keine offenen Aufgaben.</span>
+          <router-link
+            to="/tasks"
+            class="bauos-btn ghost sm"
+            style="text-decoration: none; margin-left: auto"
+          >
+            <BIcon name="plus" :size="11" :stroke-width="2" /> Anlegen
+          </router-link>
         </div>
         <div v-else class="divide-y" style="--tw-divide-opacity: 1">
           <div
@@ -382,16 +393,17 @@ const statCards = computed(() => [
       </div>
       <div
         v-if="recentProjects.length === 0"
-        style="
-          border: 1px dashed var(--color-border);
-          border-radius: 8px;
-          padding: 24px;
-          text-align: center;
-          font-size: 13px;
-          color: var(--color-text-tertiary);
-        "
+        class="empty-state"
+        style="border: 1px dashed var(--color-border); border-radius: 8px"
       >
-        Noch keine Projekte — lege im Chat eines an ("leg ein Projekt … an").
+        <div class="empty-state-icon">📂</div>
+        <div class="empty-state-text">
+          Noch keine Projekte. Im Chat ("leg ein Projekt … an") oder direkt anlegen.
+        </div>
+        <router-link to="/projects" class="bauos-btn solid sm" style="text-decoration: none">
+          <BIcon name="plus" :size="11" :stroke-width="2" />
+          Erstes Projekt anlegen
+        </router-link>
       </div>
       <div v-else class="grid gap-3 dash-projects-grid" style="grid-template-columns: repeat(4, 1fr)">
         <router-link

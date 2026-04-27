@@ -310,6 +310,11 @@ export interface MeetingActionItem {
   assigneeId?: string | null;
   dueDate?: string | null; // YYYY-MM-DD
   done?: boolean;
+  /** Wenn das Action-Item per Web-UI in eine echte Aufgabe (tasks-Tabelle)
+   *  uebernommen wurde, zeigt taskId auf diese. UI rendert dann "→ Aufgabe
+   *  angelegt" statt einen weiteren "Anlegen"-Button. Optional: vor diesem
+   *  Feature-Add waren alle bestehenden Items ohne taskId. */
+  taskId?: string | null;
 }
 
 export interface Meeting {

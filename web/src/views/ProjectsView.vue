@@ -523,18 +523,20 @@ onMounted(async () => {
           <span class="progress-label">{{ taskProgress(p) }}%</span>
         </div>
       </div>
-      <p
+      <div
         v-if="filtered.length === 0"
-        style="
-          grid-column: 1 / -1;
-          font-size: 13px;
-          color: var(--color-text-tertiary);
-          text-align: center;
-          padding: 32px 0;
-        "
+        class="empty-state"
+        style="grid-column: 1 / -1"
       >
-        {{ searchQuery ? "Keine Treffer." : "Keine Projekte vorhanden." }}
-      </p>
+        <div class="empty-state-icon">📂</div>
+        <div class="empty-state-text">
+          {{ searchQuery ? "Keine Treffer." : "Noch keine Projekte." }}
+        </div>
+        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="openCreateDialog">
+          <BIcon name="plus" :size="11" :stroke-width="2" />
+          Erstes Projekt anlegen
+        </button>
+      </div>
     </div>
 
     <!-- Kanban (nach Phase) -->
@@ -662,12 +664,16 @@ onMounted(async () => {
           {{ formatDate(p.updatedAt) }}
         </span>
       </div>
-      <p
-        v-if="filtered.length === 0"
-        style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
-      >
-        {{ anyFilterActive ? "Keine Treffer." : "Keine Projekte vorhanden." }}
-      </p>
+      <div v-if="filtered.length === 0" class="empty-state">
+        <div class="empty-state-icon">📂</div>
+        <div class="empty-state-text">
+          {{ anyFilterActive ? "Keine Treffer." : "Noch keine Projekte." }}
+        </div>
+        <button v-if="!anyFilterActive" class="bauos-btn solid sm" @click="openCreateDialog">
+          <BIcon name="plus" :size="11" :stroke-width="2" />
+          Erstes Projekt anlegen
+        </button>
+      </div>
      </div>
     </div>
 
