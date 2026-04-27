@@ -308,58 +308,44 @@ const VIEWS: { id: ViewMode; label: string }[] = [
     </div>
 
     <!-- ── Header ─────────────────────────────────────────────── -->
-    <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
-      <div class="min-w-0">
+    <div class="cal-header">
+      <div class="cal-title min-w-0">
         <div class="eyebrow" style="margin-bottom: 6px">Arbeit</div>
-        <h1
-          style="
-            font-size: 24px;
-            font-weight: 600;
-            margin: 0;
-            letter-spacing: -0.01em;
-            color: var(--color-text);
-          "
-        >
-          Kalender
-        </h1>
+        <h1 class="cal-h1">Kalender</h1>
         <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
           {{ termine.length }} Termine insgesamt
         </p>
       </div>
-      <div class="flex items-center" style="gap: 12px">
+      <div class="cal-toolbar">
         <!-- Navigation (nur in Grid-Ansichten) -->
-        <template v-if="view !== 'list'">
+        <div v-if="view !== 'list'" class="cal-nav">
           <button @click="prev" class="cal-nav-btn" aria-label="Zurück">‹</button>
-          <span
-            style="
-              font-size: 13px;
-              font-weight: 500;
-              color: var(--color-text);
-              min-width: 180px;
-              text-align: center;
-            "
-            >{{ rangeLabel }}</span
-          >
+          <span class="cal-range-label">{{ rangeLabel }}</span>
           <button @click="next" class="cal-nav-btn" aria-label="Vor">›</button>
-          <button @click="goToday" class="bauos-btn ghost">Heute</button>
-        </template>
-
-        <!-- Segmented View-Switcher -->
-        <div
-          class="flex"
-          style="border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden"
-        >
-          <button
-            v-for="(v, i) in VIEWS"
-            :key="v.id"
-            @click="view = v.id"
-            :class="['seg-btn', view === v.id ? 'seg-btn-active' : '', i > 0 ? 'seg-divider' : '']"
-          >
-            {{ v.label }}
-          </button>
+          <button @click="goToday" class="bauos-btn ghost cal-today-btn">Heute</button>
         </div>
 
-        <button @click="startCreate()" class="bauos-btn solid">+ Termin</button>
+        <div class="cal-actions">
+          <!-- Segmented View-Switcher -->
+          <div
+            class="flex"
+            style="border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden"
+          >
+            <button
+              v-for="(v, i) in VIEWS"
+              :key="v.id"
+              @click="view = v.id"
+              :class="['seg-btn', view === v.id ? 'seg-btn-active' : '', i > 0 ? 'seg-divider' : '']"
+            >
+              {{ v.label }}
+            </button>
+          </div>
+
+          <button @click="startCreate()" class="bauos-btn solid cal-add-btn">
+            <span class="cal-add-icon">+</span>
+            <span class="cal-add-label">Termin</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -926,5 +912,113 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 }
 .cal-del-btn:hover {
   color: var(--color-danger-text);
+}
+
+/* ── Header (Phase 2 Mobile-Fix) ────────────────────────── */
+.cal-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.cal-h1 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+.cal-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cal-range-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text);
+  min-width: 180px;
+  text-align: center;
+}
+.cal-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.cal-add-icon {
+  display: none;
+}
+
+@media (max-width: 1023.98px) {
+  /* Tablet: Header bleibt 1 Zeile, Range-Label wird kompakter */
+  .cal-range-label {
+    min-width: 120px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  /* Mobile: Title oben, Toolbar darunter — alles wrap */
+  .cal-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .cal-h1 {
+    font-size: 20px;
+  }
+  .cal-title p {
+    margin-top: 2px !important;
+  }
+  .cal-toolbar {
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .cal-nav {
+    flex: 1;
+    justify-content: space-between;
+    width: 100%;
+  }
+  .cal-range-label {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .cal-today-btn {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+  .cal-actions {
+    width: 100%;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  /* "+ Termin" auf Mobile auf reines Plus-Icon (spart Platz) */
+  .cal-add-btn {
+    padding: 6px 12px !important;
+  }
+  .cal-add-label {
+    display: none;
+  }
+  .cal-add-icon {
+    display: inline;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  /* Segmented View-Switcher: kleinere Padding */
+  .seg-btn {
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
 }
 </style>

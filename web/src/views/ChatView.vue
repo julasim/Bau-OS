@@ -27,7 +27,9 @@ const toolCalls = ref<string[]>([]);
 const chatContainer = ref<HTMLElement | null>(null);
 const sessions = ref<SessionInfo[]>([]);
 const activeSessionId = ref<string | null>(null);
-const sidebarOpen = ref(true);
+// Mobile-Default: Sidebar geschlossen — User oeffnet sie via Hamburger
+// im Conversation-Header. Desktop: standardmaessig offen.
+const sidebarOpen = ref(typeof window !== "undefined" ? window.innerWidth >= 768 : true);
 const abortCtrl = ref<AbortController | null>(null);
 
 // ── Dateisuche-Mode ──────────────────────────────────────────────────────────
@@ -109,6 +111,11 @@ async function loadSessions() {
 async function selectSession(id: string) {
   activeSessionId.value = id;
   messages.value = [];
+  // Auf Mobile (Drawer-Mode): Sidebar nach Auswahl schliessen, sonst
+  // verdeckt sie die Conversation.
+  if (typeof window !== "undefined" && window.innerWidth < 768) {
+    sidebarOpen.value = false;
+  }
   try {
     const msgs = await api.get<{ role: string; content: string; tools: string[] }[]>(
       `/chat/sessions/${id}/messages`,
@@ -132,6 +139,10 @@ async function newChat() {
   activeSessionId.value = null;
   messages.value = [];
   input.value = "";
+  // Mobile: Sidebar zu, damit der Eingabe-Fokus auf der Conversation liegt.
+  if (typeof window !== "undefined" && window.innerWidth < 768) {
+    sidebarOpen.value = false;
+  }
 }
 
 async function deleteSession(id: string) {
@@ -271,10 +282,17 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full" style="background: var(--color-bg)">
+    <!-- Mobile-Backdrop fuer Sidebar-Drawer (nur auf <768px sichtbar via CSS) -->
+    <div
+      v-if="sidebarOpen"
+      class="chat-sidebar-backdrop"
+      @click="sidebarOpen = false"
+    ></div>
+
     <!-- Session-Sidebar -->
     <aside
       v-if="sidebarOpen"
-      class="flex flex-col flex-shrink-0"
+      class="chat-sidebar flex flex-col flex-shrink-0"
       style="
         width: 260px;
         border-right: 1px solid var(--color-border);
@@ -888,5 +906,32 @@ onUnmounted(() => {
 .send-btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+/* ── Mobile (Phase 2): Sidebar als Drawer ─────────────── */
+.chat-sidebar-backdrop {
+  display: none;
+}
+@media (max-width: 767.98px) {
+  .chat-sidebar {
+    /* Position fixed = Drawer, der ueber die Conversation gleitet */
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 50;
+    width: min(280px, 85vw) !important;
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
+  }
+  .chat-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 40;
+  }
 }
 </style>
