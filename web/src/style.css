@@ -247,3 +247,65 @@ html.dark .text-red-700 {
     overflow-y: auto;
   }
 }
+
+/* ============================================================
+   Mobile Touch-Polish (Phase 3)
+   ============================================================
+   Apple/Material Empfehlung: min 44x44px Touch-Target. Wir gehen
+   konservativ auf 40px (ergonomisch ausreichend, ohne dass Layouts
+   auseinanderbrechen). Gilt nur fuer <768px.
+   - .bauos-btn  → groessere Padding fuer min 40px Hoehe
+   - .icon-btn   → 36x36 statt was kleineres
+   - .row-action → 36x36
+   - inputs      → 10-12px Padding statt 6-8 (ergibt ~42px Hoehe)
+   - 16px Schrift verhindert iOS-Auto-Zoom beim Fokus
+*/
+@media (max-width: 767.98px) {
+  .bauos-btn {
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+    min-height: 40px;
+  }
+  .bauos-btn.sm {
+    padding: 8px 12px !important;
+    min-height: 36px;
+  }
+  .icon-btn {
+    min-width: 36px !important;
+    min-height: 36px !important;
+  }
+  .row-action {
+    width: 36px !important;
+    height: 36px !important;
+  }
+  /* Form-Inputs: 16px Schrift verhindert auto-zoom auf iOS Safari beim Fokus */
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="tel"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="search"],
+  input[type="url"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+  /* Standard-Form-Klassen padding-mässig groesser */
+  .form-input,
+  .form-input-lg,
+  .stamm-input,
+  .settings-input,
+  .login-input {
+    padding: 10px 12px !important;
+  }
+
+  /* Page-Container: 10+ Views haben "padding: 28px 32px 48px" inline.
+     Statt alle einzeln zu fixen — via Attribut-Selektor global kuerzen.
+     Frisst sonst 64px Page-Breite (32px links + 32px rechts) auf 375px-
+     Phone, was ein Drittel des Viewports waere. */
+  div[style*="padding: 28px 32px 48px"] {
+    padding: 16px 14px 32px !important;
+  }
+}

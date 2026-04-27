@@ -1898,7 +1898,7 @@ async function deleteMeeting() {
     <!-- ═══ Quick-Stats (4 Kacheln) ════════════════════════════ -->
     <div
       v-if="info"
-      class="grid"
+      class="grid proj-quick-stats"
       style="grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; margin-top: 24px"
     >
       <div class="stat-tile">
@@ -3248,6 +3248,10 @@ async function deleteMeeting() {
   .tab-btn {
     font-size: 12px;
     padding-bottom: 8px;
+  }
+  /* Quick-Stats: 4 → 2 Spalten auf Phone */
+  .proj-quick-stats {
+    grid-template-columns: repeat(2, 1fr) !important;
   }
 }
 .tab-btn:hover {
