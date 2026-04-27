@@ -223,3 +223,27 @@ html.dark .text-red-700 {
 .bauos-btn.solid:hover {
   opacity: 0.9;
 }
+
+/* ============================================================
+   Mobile Override (Phase 2): Modal-Overlays + Modal-Cards
+   ============================================================
+   Die meisten Views haben .modal-overlay + .modal-card als
+   *scoped* CSS — d.h. <style scoped> mit data-v-Suffix. Das
+   uebersieht aber Mobile-Anpassungen. Hier global mit !important
+   ein Mobile-Fallback fuer alle gleichermaßen.
+   Der Selektor matcht auch scoped-Variants (`.modal-overlay`
+   ohne data-v-Suffix; Vue's scoped fuegt das nur HINZU). */
+@media (max-width: 767.98px) {
+  .modal-overlay {
+    padding: 16px 12px !important;
+    align-items: flex-start !important;
+  }
+  .modal-card {
+    padding: 18px 16px !important;
+    max-width: calc(100vw - 24px) !important;
+    border-radius: 10px !important;
+    /* Lange Inhalte sollen scrollen statt rauszustehen */
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+  }
+}

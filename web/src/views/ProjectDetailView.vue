@@ -1538,7 +1538,7 @@ async function deleteMeeting() {
 </script>
 
 <template>
-  <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div class="proj-detail-page" style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
     <!-- Back-Link -->
     <button @click="router.push('/projects')" class="back-link">
       <BIcon name="arrowLeft" :size="12" />
@@ -1921,7 +1921,7 @@ async function deleteMeeting() {
 
     <!-- ═══ Tab-Nav ════════════════════════════════════════════ -->
     <div
-      class="flex"
+      class="flex tab-nav"
       style="gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); overflow-x: auto"
     >
       <template
@@ -3211,6 +3211,18 @@ async function deleteMeeting() {
 }
 
 /* ── Tabs ──────────────────────────────────────────────── */
+.tab-nav {
+  -webkit-overflow-scrolling: touch;
+  /* Scrollbar dezent verstecken auf modernen Browsern */
+  scrollbar-width: thin;
+}
+.tab-nav::-webkit-scrollbar {
+  height: 2px;
+}
+.tab-nav::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+}
+
 .tab-btn {
   padding-bottom: 10px;
   background: transparent;
@@ -3223,6 +3235,20 @@ async function deleteMeeting() {
   margin-bottom: -1px;
   transition: all 180ms ease;
   white-space: nowrap;
+}
+
+@media (max-width: 767.98px) {
+  /* Aussen-Padding kleiner auf Phone (sonst frisst es zu viel Breite) */
+  .proj-detail-page {
+    padding: 16px 14px 32px !important;
+  }
+  .tab-nav {
+    gap: 16px !important;
+  }
+  .tab-btn {
+    font-size: 12px;
+    padding-bottom: 8px;
+  }
 }
 .tab-btn:hover {
   color: var(--color-text);

@@ -48,10 +48,10 @@ async function login() {
 </script>
 
 <template>
-  <div class="flex" style="min-height: 100vh; background: var(--color-bg)">
-    <!-- Linke Hälfte: dunkel, Brand-Panel -->
+  <div class="login-container">
+    <!-- Linke Hälfte: dunkel, Brand-Panel — auf Mobile (<768px) hidden -->
     <div
-      class="flex flex-col"
+      class="login-hero flex flex-col"
       style="
         flex: 1;
         background: var(--color-login-bg);
@@ -147,9 +147,9 @@ async function login() {
       </div>
     </div>
 
-    <!-- Rechte Hälfte: Login-Form -->
+    <!-- Rechte Hälfte: Login-Form (auf Mobile: einzige sichtbare Sektion) -->
     <div
-      class="flex items-center justify-center"
+      class="login-form-wrap flex items-center justify-center"
       style="flex: 1; padding: 48px; background: var(--color-bg)"
     >
       <div style="width: 100%; max-width: 320px">
@@ -269,6 +269,12 @@ async function login() {
 </template>
 
 <style scoped>
+.login-container {
+  display: flex;
+  min-height: 100vh;
+  background: var(--color-bg);
+}
+
 .login-input {
   width: 100%;
   padding: 8px 12px;
@@ -282,5 +288,21 @@ async function login() {
 }
 .login-input:focus {
   border-color: var(--color-text);
+}
+
+/* Mobile: Hero-Panel ausblenden, Form in voller Breite */
+@media (max-width: 767.98px) {
+  .login-hero {
+    display: none !important;
+  }
+  .login-form-wrap {
+    padding: 32px 20px !important;
+    /* Form klebt nicht oben — auf Phones mit hoher Toolbar passt das besser */
+  }
+  .login-input {
+    /* Etwas groesser auf Touch — sonst schwierig zu treffen */
+    padding: 10px 12px;
+    font-size: 14px;
+  }
 }
 </style>

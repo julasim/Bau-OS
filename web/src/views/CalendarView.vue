@@ -22,10 +22,20 @@ const termine = ref<Termin[]>([]);
 const team = ref<string[]>([]);
 
 const VIEW_KEY = "bau-os-calendar-view";
+// Auf Phone (<768px): Default auf "list" — Monats-/Wochengrid ist auf
+// 375px schlicht unbenutzbar (5px-Spalten, ueberlappende Events).
+// User kann via View-Switcher trotzdem auf Monat umschalten.
+const isMobileViewport =
+  typeof window !== "undefined" && window.innerWidth < 768;
 const view = ref<ViewMode>(
   ((): ViewMode => {
     const v = localStorage.getItem(VIEW_KEY);
-    return v === "week" || v === "day" || v === "list" ? v : "month";
+    if (v === "week" || v === "day" || v === "list" || v === "month") {
+      // Stored-Wert respektieren, ausser User ist auf Mobile + hat noch nichts
+      // gewaehlt: dann list als sinnvoller Default.
+      return v as ViewMode;
+    }
+    return isMobileViewport ? "list" : "month";
   })(),
 );
 watch(view, (v) => localStorage.setItem(VIEW_KEY, v));
@@ -289,7 +299,7 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 </script>
 
 <template>
-  <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div class="cal-page" style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
     <!-- ── Flash-Message ──────────────────────────────────────── -->
     <div
       v-if="message"
@@ -1019,6 +1029,22 @@ const VIEWS: { id: ViewMode; label: string }[] = [
   .seg-btn {
     padding: 6px 10px !important;
     font-size: 11px !important;
+  }
+
+  /* Monats-Zellen: kompakter auf Phone, falls User trotzdem Monat waehlt */
+  .cal-day-cell {
+    min-height: 56px !important;
+    padding: 3px 4px !important;
+  }
+  .cal-day-num {
+    width: 22px !important;
+    height: 22px !important;
+    font-size: 10px !important;
+  }
+
+  /* Aussen-Padding der Page reduzieren (war 28px 32px) */
+  .cal-page {
+    padding: 16px 14px 32px !important;
   }
 }
 </style>
