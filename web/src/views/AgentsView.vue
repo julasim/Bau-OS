@@ -45,7 +45,7 @@ onMounted(loadAgents);
       </p>
     </div>
 
-    <div class="grid" style="grid-template-columns: 280px 1fr; gap: 20px">
+    <div class="grid agents-grid" style="grid-template-columns: 280px 1fr; gap: 20px">
       <!-- Agent-Liste -->
       <div class="flex flex-col" style="gap: 6px">
         <div
@@ -216,5 +216,12 @@ onMounted(loadAgents);
 }
 .agent-file-row:hover {
   background: var(--color-bg-subtle);
+}
+
+/* ── Mobile: 2-Spalter (Sidebar + Detail) → 1-Spalter ─── */
+@media (max-width: 767.98px) {
+  .agents-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 </style>

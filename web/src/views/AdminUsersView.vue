@@ -326,7 +326,8 @@ function formatDate(iso?: string) {
         <span class="eyebrow" style="width: 90px">Rolle</span>
         <span class="eyebrow" style="width: 70px">Telegram</span>
         <span class="eyebrow" style="width: 100px">Angelegt</span>
-        <span class="eyebrow" style="width: 30px"></span>
+        <!-- Aktionen-Spalte: matcht 3 row-action-Buttons (32px) + Gaps -->
+        <span class="eyebrow" style="width: 112px; text-align: right">Aktionen</span>
       </div>
       <div
         v-for="u in users"
@@ -903,6 +904,17 @@ function formatDate(iso?: string) {
   -webkit-overflow-scrolling: touch;
 }
 .users-list-inner {
-  min-width: 600px;
+  /* Summe: 1fr Name + 90 Rolle + 70 Tg + 100 Datum + 112 Aktionen + Gaps + Padding */
+  min-width: 660px;
+}
+/* Action-Buttons in der Tabelle: 32x32 statt globaler 36x36 — passt
+   sonst nicht in die kompakte Aktionen-Spalte. Touch ist trotzdem ok. */
+@media (max-width: 767.98px) {
+  .users-list-inner .row-action {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
 }
 </style>

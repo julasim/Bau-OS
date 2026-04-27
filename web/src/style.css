@@ -275,8 +275,11 @@ html.dark .text-red-700 {
     min-height: 36px !important;
   }
   .row-action {
-    width: 36px !important;
-    height: 36px !important;
+    /* 32px statt 36 — passt besser in dichte Listen-Tabellen, ohne Layouts
+       zu sprengen die mit 24-30px Spalten-Headern designt sind. Daumen
+       trifft 32px immer noch zuverlaessig. */
+    width: 32px !important;
+    height: 32px !important;
   }
   /* Form-Inputs: 16px Schrift verhindert auto-zoom auf iOS Safari beim Fokus */
   input[type="text"],

@@ -719,6 +719,31 @@ onMounted(() => {
   color: var(--color-text);
 }
 
+/* Mobile: settings-rows duerfen wrappen statt zu quetschen.
+   Label oben, Wert/Input darunter — sonst passt nichts auf 375px. */
+@media (max-width: 767.98px) {
+  .settings-row {
+    flex-wrap: wrap !important;
+    gap: 6px 12px !important;
+  }
+  .settings-row.flex.items-center.gap-3 {
+    /* Input-Rows (Label + Input + Button): vertikal stapeln */
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .settings-row .settings-label.w-40 {
+    width: auto !important;
+  }
+  .settings-value {
+    word-break: break-word;
+    text-align: left;
+  }
+  .settings-row.justify-between .settings-value {
+    text-align: right;
+    margin-left: auto;
+  }
+}
+
 .settings-input {
   border: 1px solid var(--color-border);
   background: var(--color-bg);
