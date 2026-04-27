@@ -174,18 +174,10 @@ const statCards = computed(() => [
     "
   >
     <!-- Header -->
-    <div class="flex items-end justify-between gap-4" style="margin-bottom: 28px">
+    <div class="dash-header">
       <div class="min-w-0">
         <div class="eyebrow" style="margin-bottom: 6px">Dashboard</div>
-        <h1
-          style="
-            font-size: 28px;
-            font-weight: 600;
-            margin: 0;
-            letter-spacing: -0.01em;
-            color: var(--color-text);
-          "
-        >
+        <h1 class="dash-greeting">
           {{ greeting }}{{ firstName ? `, ${firstName}` : "" }}.
         </h1>
         <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 6px; margin-bottom: 0">
@@ -196,27 +188,28 @@ const statCards = computed(() => [
           · {{ stats.termine }} Termine diese Woche
         </p>
       </div>
-      <div class="flex flex-shrink-0" style="gap: 8px">
-        <button class="bauos-btn ghost" @click="router.push('/notes')">
-          <BIcon name="file" :size="14" /> Notiz
+      <!-- Quick-Actions: auf Mobile wrappen + Text unter Icon verstecken -->
+      <div class="dash-actions">
+        <button class="bauos-btn ghost dash-action-btn" @click="router.push('/notes')" title="Notiz">
+          <BIcon name="file" :size="14" /> <span class="dash-action-label">Notiz</span>
         </button>
-        <button class="bauos-btn ghost" @click="router.push('/calendar')">
-          <BIcon name="calendar" :size="14" /> Termin
+        <button class="bauos-btn ghost dash-action-btn" @click="router.push('/calendar')" title="Termin">
+          <BIcon name="calendar" :size="14" /> <span class="dash-action-label">Termin</span>
         </button>
-        <button class="bauos-btn ghost" @click="openPalette">
-          <BIcon name="search" :size="14" /> Suche
+        <button class="bauos-btn ghost dash-action-btn" @click="openPalette" title="Suche">
+          <BIcon name="search" :size="14" /> <span class="dash-action-label">Suche</span>
         </button>
-        <button class="bauos-btn ghost" @click="router.push('/chat')">
-          <BIcon name="message" :size="14" /> Neuer Chat
+        <button class="bauos-btn ghost dash-action-btn" @click="router.push('/chat')" title="Neuer Chat">
+          <BIcon name="message" :size="14" /> <span class="dash-action-label">Neuer Chat</span>
         </button>
-        <button class="bauos-btn solid" @click="router.push('/tasks')">
-          <BIcon name="plus" :size="14" :stroke-width="2" /> Aufgabe
+        <button class="bauos-btn solid dash-action-btn" @click="router.push('/tasks')" title="Aufgabe">
+          <BIcon name="plus" :size="14" :stroke-width="2" /> <span class="dash-action-label">Aufgabe</span>
         </button>
       </div>
     </div>
 
     <!-- Stat-Grid (4 cards) -->
-    <div class="grid gap-3" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 28px">
+    <div class="grid gap-3 dash-stat-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 28px">
       <router-link
         v-for="s in statCards"
         :key="s.key"
@@ -249,7 +242,7 @@ const statCards = computed(() => [
 
     <!-- Two-Column: Aufgaben | Termine -->
     <div
-      class="grid gap-5"
+      class="grid gap-5 dash-two-col"
       style="grid-template-columns: 1.3fr 1fr; margin-bottom: 28px"
     >
       <!-- Aufgaben -->
@@ -400,7 +393,7 @@ const statCards = computed(() => [
       >
         Noch keine Projekte — lege im Chat eines an ("leg ein Projekt … an").
       </div>
-      <div v-else class="grid gap-3" style="grid-template-columns: repeat(4, 1fr)">
+      <div v-else class="grid gap-3 dash-projects-grid" style="grid-template-columns: repeat(4, 1fr)">
         <router-link
           v-for="p in recentProjects"
           :key="p.name"
@@ -504,5 +497,77 @@ const statCards = computed(() => [
   background: var(--color-success-bg);
   color: var(--color-success-text);
   border-color: var(--color-success-border);
+}
+
+/* ── Mobile (Phase 1B) — Header + Grids stapeln ─────────── */
+.dash-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.dash-greeting {
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+.dash-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 1023.98px) {
+  /* Tasks/Termine 2-Col → 1-Col */
+  .dash-two-col {
+    grid-template-columns: 1fr !important;
+  }
+  /* Projekte: 4 → 2 */
+  .dash-projects-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 767.98px) {
+  /* Header: Quick-Actions unter den Greeting-Block stapeln */
+  .dash-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  .dash-greeting {
+    font-size: 22px;
+  }
+  .dash-actions {
+    flex-wrap: wrap;
+  }
+  /* Action-Buttons: Text raus, nur Icons (kompakt) */
+  .dash-action-btn {
+    padding: 8px 10px;
+    min-width: 38px;
+    justify-content: center;
+  }
+  .dash-action-label {
+    display: none;
+  }
+  /* Stat-Grid 4 → 2 */
+  .dash-stat-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+  /* Projekte 2 → 1 */
+  .dash-projects-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 380px) {
+  /* Auf super-kleinen Phones: Stat-Grid in 1 Spalte */
+  .dash-stat-grid {
+    grid-template-columns: 1fr !important;
+  }
 }
 </style>
