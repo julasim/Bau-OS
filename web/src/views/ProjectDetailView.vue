@@ -173,6 +173,18 @@ const ACTIVITY_PAGE = 30;
 const viewingNote = ref<string | null>(null);
 const noteContent = ref("");
 const newTask = ref("");
+// Refs auf die Quick-Add-Inputs in Tasks- und Termine-Tab — werden vom
+// jeweiligen Empty-State-CTA fokussiert + smooth-scrolled.
+const newTaskInputRef = ref<HTMLInputElement | null>(null);
+const newTerminInputRef = ref<HTMLInputElement | null>(null);
+function focusNewTaskInput() {
+  newTaskInputRef.value?.focus();
+  newTaskInputRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+function focusNewTerminInput() {
+  newTerminInputRef.value?.focus();
+  newTerminInputRef.value?.scrollIntoView({ behavior: "smooth", block: "center" });
+}
 const newDatum = ref("");
 const newUhrzeit = ref("");
 const newTerminText = ref("");
@@ -2510,18 +2522,34 @@ async function deleteMeeting() {
           <MarkdownRenderer :content="noteContent" />
         </div>
       </div>
-      <div v-else style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-        <button
-          v-for="n in notes"
-          :key="n"
-          @click="openNote(n)"
-          class="detail-row"
-          style="border-top: 1px solid var(--color-border-subtle)"
+      <div v-else>
+        <div
+          v-if="notes.length > 0"
+          style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden"
         >
-          <BIcon name="file" :size="14" style="color: var(--color-text-muted)" />
-          <span class="flex-1" style="font-size: 13px; color: var(--color-text)">{{ n }}</span>
-        </button>
-        <p v-if="notes.length === 0" class="empty-hint">Keine Notizen in diesem Projekt.</p>
+          <button
+            v-for="n in notes"
+            :key="n"
+            @click="openNote(n)"
+            class="detail-row"
+            style="border-top: 1px solid var(--color-border-subtle)"
+          >
+            <BIcon name="file" :size="14" style="color: var(--color-text-muted)" />
+            <span class="flex-1" style="font-size: 13px; color: var(--color-text)">{{ n }}</span>
+          </button>
+        </div>
+        <div v-else class="empty-state">
+          <div class="empty-state-icon">📝</div>
+          <div class="empty-state-text">Noch keine Notizen für dieses Projekt.</div>
+          <router-link
+            :to="`/notes?project=${encodeURIComponent(projectName)}`"
+            class="bauos-btn solid sm"
+            style="text-decoration: none"
+          >
+            <BIcon name="plus" :size="11" :stroke-width="2" />
+            Erste Notiz anlegen
+          </router-link>
+        </div>
       </div>
     </div>
 
@@ -2529,6 +2557,7 @@ async function deleteMeeting() {
     <div v-if="tab === 'tasks'">
       <div class="flex flex-wrap" style="gap: 8px; margin-bottom: 16px; align-items: stretch">
         <input
+          ref="newTaskInputRef"
           v-model="newTask"
           placeholder="Neue Aufgabe…"
           @keyup.enter="addTask"
@@ -2545,7 +2574,10 @@ async function deleteMeeting() {
         </div>
         <button @click="addTask" class="bauos-btn solid">Hinzufügen</button>
       </div>
-      <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+      <div
+        v-if="tasks.filter((t) => t.status !== 'done').length > 0"
+        style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden"
+      >
         <div
           v-for="t in tasks.filter((t) => t.status !== 'done')"
           :key="t.id"
@@ -2567,9 +2599,16 @@ async function deleteMeeting() {
           </span>
           <span v-if="t.date" class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary)">{{ t.date }}</span>
         </div>
-        <p v-if="tasks.filter((t) => t.status !== 'done').length === 0" class="empty-hint">
-          Keine offenen Aufgaben.
-        </p>
+      </div>
+      <div v-else class="empty-state">
+        <div class="empty-state-icon">📋</div>
+        <div class="empty-state-text">
+          Noch keine offenen Aufgaben in diesem Projekt.
+        </div>
+        <button class="bauos-btn solid sm" @click="focusNewTaskInput">
+          <BIcon name="plus" :size="11" :stroke-width="2" />
+          Erste Aufgabe anlegen
+        </button>
       </div>
     </div>
 
@@ -2579,6 +2618,7 @@ async function deleteMeeting() {
         <input v-model="newDatum" type="date" class="form-input" style="width: 150px; flex: 0 0 auto" />
         <input v-model="newUhrzeit" type="time" class="form-input" style="width: 110px; flex: 0 0 auto" />
         <input
+          ref="newTerminInputRef"
           v-model="newTerminText"
           placeholder="Beschreibung…"
           @keyup.enter="addTermin"
@@ -2597,7 +2637,10 @@ async function deleteMeeting() {
         </div>
         <button @click="addTermin" class="bauos-btn solid">Erstellen</button>
       </div>
-      <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
+      <div
+        v-if="termine.length > 0"
+        style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden"
+      >
         <div
           v-for="t in termine"
           :key="t.id"
@@ -2612,7 +2655,14 @@ async function deleteMeeting() {
           </div>
           <button @click="removeTermin(t)" class="del-btn">Löschen</button>
         </div>
-        <p v-if="termine.length === 0" class="empty-hint">Keine Termine.</p>
+      </div>
+      <div v-else class="empty-state">
+        <div class="empty-state-icon">📅</div>
+        <div class="empty-state-text">Noch keine Termine in diesem Projekt.</div>
+        <button class="bauos-btn solid sm" @click="focusNewTerminInput">
+          <BIcon name="plus" :size="11" :stroke-width="2" />
+          Ersten Termin anlegen
+        </button>
       </div>
     </div>
 
