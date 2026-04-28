@@ -1554,7 +1554,10 @@ async function convertActionItemToTask(idx: number) {
   convertingActionIdx.value = idx;
   convertError.value = null;
   try {
-    // 1) Task anlegen (Backend resolvt Project via Name)
+    // 1) Task anlegen via /tasks (gibt die volle Task mit id zurueck —
+    //    /projects/:name/tasks gibt nur {ok:true}, taugt fuer das
+    //    Backlinking nicht). Backend resolvt das Projekt aus dem
+    //    project-Feld.
     const task = await api.post<{ id: string }>("/tasks", {
       text: item.text.trim(),
       project: projectName.value,
@@ -1568,6 +1571,17 @@ async function convertActionItemToTask(idx: number) {
     await api.patch(`/meetings/${meetingDraft.value.id}`, {
       actionItems: meetingDraft.value.actionItems.map((a) => ({ ...a })),
     });
+    // 3) Tasks-Liste lokal aktualisieren — sonst sieht User die neue
+    //    Aufgabe erst beim naechsten Page-Reload (loadAll wird nur einmal
+    //    am Mount aufgerufen). GET /projects/:name/tasks ist billig.
+    try {
+      const n = encodeURIComponent(projectName.value);
+      const refreshed = await api.get<Task[]>(`/projects/${n}/tasks`);
+      tasks.value = refreshed;
+    } catch {
+      /* Refresh-Fehler ignorieren — der Task wurde trotzdem angelegt,
+         der User sieht ihn beim naechsten Page-Reload. */
+    }
   } catch (e) {
     item.taskId = undefined; // Rollback im Frontend
     convertError.value = e instanceof Error ? e.message : "Anlegen fehlgeschlagen";
