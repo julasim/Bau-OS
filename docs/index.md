@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Bau-OS
-  text: KI-Plattform für Büros und Bauunternehmen
-  tagline: Obsidian als Brain. Telegram als Interface. Self-hosted und DSGVO-konform.
+  text: KI-Plattform für Architekturbüros und Büros in der Baubranche
+  tagline: Büro-Werkzeug für Planung, Bauleitung und Projektsteuerung — nicht für die Baustelle. Self-hosted, DSGVO-konform, lokales LLM.
   actions:
     - theme: brand
       text: Schnellstart

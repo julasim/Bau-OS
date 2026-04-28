@@ -1,7 +1,7 @@
 {
   "name": "bau-os",
   "version": "0.1.0",
-  "description": "KI-Plattform fuer Bauunternehmen",
+  "description": "KI-Plattform fuer Architekturbueros und Bueros in der Baubranche (Planung, Bauleitung, Projektsteuerung). Buero-Werkzeug — nicht fuer die Baustelle.",
   "type": "module",
   "main": "dist/index.js",
   "scripts": {

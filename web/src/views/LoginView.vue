@@ -104,7 +104,7 @@ async function login() {
             margin: 0 0 16px 0;
           "
         >
-          KI-Plattform für Büros und Bauunternehmen.
+          KI-Plattform für Architekturbüros und Büros in der Baubranche.
         </h1>
         <p
           style="
@@ -114,8 +114,8 @@ async function login() {
             margin: 0 0 24px 0;
           "
         >
-          Self-hosted. DSGVO-konform. Obsidian + Telegram.
-          Deine Daten bleiben auf deinem Server.
+          Büro-Werkzeug für Planung, Bauleitung und Projektsteuerung —
+          nicht für die Baustelle. Self-hosted, DSGVO-konform, lokales LLM.
         </p>
         <div class="flex flex-wrap" style="gap: 8px">
           <span

@@ -1,3 +1,16 @@
+// ============================================================
+// Bau-OS — Boot-Entrypoint
+// ============================================================
+// Bau-OS ist eine KI-Plattform fuer ARCHITEKTURBUEROS und Bueros in der
+// BAUBRANCHE (Planung, Bauleitung, Projektsteuerung). Es ist KEIN
+// Werkzeug fuer die Baustelle — Zielnutzer sind Architekten, Bauleiter,
+// Statiker und Sachbearbeiter im Buero, nicht der Polier auf dem Geruest.
+//
+// Stundenerfassung, Bautagebuch und Meetings dienen der Doku IM BUERO,
+// retrospektiv (abends, nach der Begehung, am Schreibtisch). Echtzeit-
+// Schnelleingabe vom Bauwagen ist nicht das Designziel.
+// ============================================================
+
 import "dotenv/config";
 import { createBot } from "./bot.js";
 import { startHeartbeat } from "./heartbeat.js";

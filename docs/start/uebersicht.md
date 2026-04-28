@@ -1,6 +1,10 @@
 # Was ist Bau-OS?
 
-Bau-OS ist eine KI-Plattform die als "Operating System" für Büros und Bauunternehmen funktioniert. Der Kern: Ein intelligenter Assistent der über **Telegram** erreichbar ist und sein Wissen in einem **Obsidian Vault** speichert.
+Bau-OS ist eine KI-Plattform für **Architekturbüros und Büros in der Baubranche** (Planung, Bauleitung, Statik, Projektsteuerung). Der Kern: Ein intelligenter Assistent der über **Web-UI und Telegram** erreichbar ist und sein Wissen in einer **PostgreSQL-Datenbank** plus einem **Obsidian Vault** als Markdown-Backup speichert.
+
+::: warning Wichtige Abgrenzung
+Bau-OS ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe sind Architekten, Bauleiter, Projektsteuerer, Statiker und Sachbearbeiter im Büro — nicht der Polier oder Maurer auf dem Gerüst. Stundenerfassung, Bautagebuch und Meeting-Protokolle dienen der **Doku im Büro** (in der Regel abends/retrospektiv erfasst), nicht der Echtzeit-Eingabe von der Baustelle.
+:::
 
 ## Wie funktioniert es?
 
@@ -18,10 +22,17 @@ Antwortet dir in Telegram
 
 ## Für wen?
 
-- **Kleine und mittlere Unternehmen** die einen digitalen Assistenten wollen
-- **Bauunternehmen** die Termine, Aufgaben und Projekte zentral verwalten wollen
-- **Teams** die einen gemeinsamen KI-Assistenten über Telegram nutzen wollen
+- **Architekturbüros** für Projektsteuerung, Termine, Bauakte
+- **Planungs- und Statikbüros** für Aufgabenverteilung im Team
+- **Projektsteuerer und Bauleiter** (im Büro, nicht auf der Baustelle) für
+  Bautagebuch, Meeting-Protokolle, Stundenerfassung
 - **Datenschutz-bewusste Firmen** die keine Cloud-KI nutzen wollen
+
+**NICHT für:** Echtzeit-Bedienung von der Baustelle, Polier-Schnellein-
+gabe vom Gerüst, gewerbliches Personal als primäre Bediener. Diese
+Personen werden als `team_members` im System abgebildet und können per
+Telegram zugewiesen / benachrichtigt werden, sind aber nicht die
+Hauptzielgruppe.
 
 ## Was macht es besonders?
 
@@ -36,7 +47,7 @@ Antwortet dir in Telegram
 
 ## Geschäftsmodell
 
-Jeder Kunde bekommt eine eigene Instanz auf einem EU-Server (Hetzner). Der Techniker richtet den Server ein, der Kunde startet den Setup-Wizard selbst über Telegram. Monatliche Miete: ca. 100–150 EUR pro Firma.
+Jeder Kunde (Architekturbüro, Planungsbüro, Bauleitungs-Office) bekommt eine eigene Instanz auf einem EU-Server (Hetzner). Der Techniker richtet den Server ein, der Kunde startet den Setup-Wizard selbst. Monatliche Miete: ca. 100–150 EUR pro Büro.
 
 ## Nächste Schritte
 

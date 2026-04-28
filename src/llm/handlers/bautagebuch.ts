@@ -1,7 +1,13 @@
 // ============================================================
 // Bau-OS — LLM-Handler: Bautagebuch
 // ============================================================
-// Drei Tools fuer den klassischen Baustellen-Tageseintrag:
+// Zielgruppe: Architekturbuero / Buero in der Baubranche.
+// Wer benutzt das? Bauleiter / Sachbearbeiter im Buero, der den
+// Tagesbericht der Baustelle dokumentiert — ueblich abends oder am
+// naechsten Vormittag, zur Bauakte. NICHT der Polier auf dem Geruest
+// in Echtzeit.
+//
+// Drei Tools fuer den Tageseintrag pro Projekt:
 //   - bautagebuch_eintrag: Schreibt/aktualisiert einen Eintrag (UPSERT).
 //   - bautagebuch_woche:   Letzte 7 Eintraege eines Projekts (Ueberblick).
 //   - bautagebuch_lesen:   Einzelner Eintrag fuer ein Datum.
@@ -61,7 +67,7 @@ export const bautagebuchSchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "bautagebuch_eintrag",
       description:
-        "Speichert einen Bautagebuch-Eintrag fuer einen Tag und ein Projekt. Pro Projekt+Datum gibt es genau einen Eintrag — wird ein vorhandener Eintrag aktualisiert. Nutze dieses Tool fuer den taeglichen Baubericht: Wetter, eingesetzte Personen/Trupps, Maschinen, durchgefuehrte Arbeiten und besondere Vorkommnisse.",
+        "Dokumentiert einen Bautagebuch-Eintrag fuer einen Tag und ein Projekt — ueblich vom Buero aus, retrospektiv (abends oder am naechsten Vormittag). Pro Projekt+Datum gibt es genau einen Eintrag — wird ein vorhandener Eintrag aktualisiert. Inhalt: Wetter, eingesetzte Personen/Trupps, Maschinen, durchgefuehrte Arbeiten und besondere Vorkommnisse.",
       parameters: {
         type: "object",
         properties: {

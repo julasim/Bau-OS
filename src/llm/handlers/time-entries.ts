@@ -1,6 +1,12 @@
 // ============================================================
 // Bau-OS — LLM-Handler: Stundenerfassung
 // ============================================================
+// Zielgruppe: Architekturbuero / Buero in der Baubranche.
+// Wer benutzt das? Bauleiter / Sachbearbeiter im Buero, der retrospektiv
+// die Stunden seiner Mitarbeiter und Subunternehmer dokumentiert (z.B.
+// abends nach dem Baustellen-Tag, oder per Telegram aus dem Auto auf dem
+// Heimweg). NICHT der Polier auf dem Geruest in Echtzeit.
+//
 // Drei Tools fuer den Stunden-Workflow:
 //   - stunden_eintragen: Schreibt einen Stunden-Eintrag.
 //   - stunden_woche:     Liste der letzten Eintraege eines Projekts.
@@ -54,7 +60,7 @@ export const timeEntrySchemas: OpenAI.Chat.ChatCompletionTool[] = [
     function: {
       name: "stunden_eintragen",
       description:
-        "Erfasst Arbeitsstunden pro Mitarbeiter, Tag und Projekt. Standardfall: 'Polier Schmidt heute 8.5h auf Hofweg, Schalung'. Optional Beginn/Ende fuer rechtskonforme Erfassung. Mitarbeiter wird per Name-Match auf das Team aufgeloest — externe Personen ohne Stammdatensatz koennen nur als Freitext-Name angegeben werden.",
+        "Erfasst Arbeitsstunden pro Mitarbeiter, Tag und Projekt — vom Buero aus, nicht von der Baustelle. Typischer Workflow: Bauleiter dokumentiert abends die Stunden seiner Mitarbeiter und Subunternehmer. Beispiel: 'Mitarbeiter Schmidt heute 8.5h auf Projekt Hofweg, Schalung'. Optional Beginn/Ende fuer rechtskonforme Erfassung. Mitarbeiter wird per Name-Match auf das Team aufgeloest — externe Personen ohne Stammdatensatz werden als Freitext-Name uebernommen.",
       parameters: {
         type: "object",
         properties: {
