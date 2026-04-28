@@ -258,15 +258,27 @@ export async function createPairToken(userId: string): Promise<{ token: string; 
   return { token, expiresAt };
 }
 
-/** Loest einen Pair-Token ein: prueft Existenz + Ablauf, setzt
- *  users.telegram_chat_id = chatId, loescht den Token. Gibt den verlinkten
- *  User zurueck oder null bei ungueltigem/abgelaufenem Token.
+/** Result-Object fuer redeemPairToken — drei Zustaende statt nur null/User. */
+export type PairResult =
+  | { ok: true; user: DbUser }
+  | { ok: false; reason: "token-invalid" }
+  | { ok: false; reason: "chat-id-taken"; existingUsername: string };
+
+/** Loest einen Pair-Token ein: prueft Existenz + Ablauf, prueft
+ *  Uniqueness der chat_id, setzt users.telegram_chat_id = chatId,
+ *  loescht den Token.
  *
  *  Atomar: der gesamte Validate+UPDATE+DELETE-Zyklus laeuft in einer
  *  Transaktion. Wuerde der Lookup ausserhalb stattfinden, koennte ein
- *  paralleler Redeem desselben Tokens beide chat_ids ueberschreiben. */
-export async function redeemPairToken(token: string, chatId: string): Promise<DbUser | null> {
-  if (!DB_ENABLED) return null;
+ *  paralleler Redeem desselben Tokens beide chat_ids ueberschreiben.
+ *
+ *  Uniqueness: jeder User braucht eine eigene Telegram-ID. Wenn die
+ *  chat_id bereits einem anderen User zugewiesen ist, wird abgebrochen
+ *  (chat-id-taken) — sonst koennte jemand mit eigenem Telegram-Account
+ *  einen abgefangenen Pair-Code einloesen und damit den urspruenglichen
+ *  User abkoppeln. */
+export async function redeemPairToken(token: string, chatId: string): Promise<PairResult> {
+  if (!DB_ENABLED) return { ok: false, reason: "token-invalid" };
   const db = getDb();
   // Lazy-Cleanup von abgelaufenen Tokens — eine Aufraeumstelle reicht.
   await db`DELETE FROM telegram_pair_tokens WHERE expires_at < now()`;
@@ -274,6 +286,7 @@ export async function redeemPairToken(token: string, chatId: string): Promise<Db
   // Validate + UPDATE + DELETE in einer Transaktion. Wenn der SELECT 0 Rows
   // findet (paralleler Redeem hat den Token schon weg), brechen wir sauber ab.
   let userId: string | null = null;
+  let conflictUsername: string | null = null;
   try {
     await db.begin(async (tx) => {
       const rows = await tx`
@@ -285,18 +298,38 @@ export async function redeemPairToken(token: string, chatId: string): Promise<Db
         throw new Error("__token_invalid__");
       }
       userId = String(rows[0]!.user_id);
+
+      // Uniqueness-Pruefung: ist die chat_id bereits einem ANDEREN User
+      // zugewiesen? Dann brechen wir ab statt den anderen abzukoppeln.
+      const conflictRows = await tx`
+        SELECT username FROM users
+         WHERE telegram_chat_id = ${chatId} AND id <> ${userId}
+         LIMIT 1
+      `;
+      if (conflictRows.length > 0) {
+        conflictUsername = String(conflictRows[0]!.username);
+        throw new Error("__chat_id_taken__");
+      }
+
       await tx`UPDATE users SET telegram_chat_id = ${chatId} WHERE id = ${userId}`;
       // Alle Tokens dieses Users werden invalidiert — ein User pairt sich
       // genau einmal, alte Codes braucht niemand.
       await tx`DELETE FROM telegram_pair_tokens WHERE user_id = ${userId}`;
     });
   } catch (err) {
-    // Sentinel-Fehler aus dem Inneren der TX = "token not found", andere
-    // Fehler bubblen weiter.
-    if (err instanceof Error && err.message === "__token_invalid__") return null;
+    // Sentinel-Fehler aus dem Inneren der TX, andere Fehler bubblen weiter.
+    if (err instanceof Error && err.message === "__token_invalid__") {
+      return { ok: false, reason: "token-invalid" };
+    }
+    if (err instanceof Error && err.message === "__chat_id_taken__") {
+      return { ok: false, reason: "chat-id-taken", existingUsername: conflictUsername ?? "?" };
+    }
     throw err;
   }
-  return userId ? findDbUserById(userId) : null;
+  if (!userId) return { ok: false, reason: "token-invalid" };
+  const user = await findDbUserById(userId);
+  if (!user) return { ok: false, reason: "token-invalid" };
+  return { ok: true, user };
 }
 
 /** Lookup eines Users anhand seiner verknuepften Telegram-Chat-ID.

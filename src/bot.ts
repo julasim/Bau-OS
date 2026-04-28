@@ -101,11 +101,18 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       await ctx.reply("Pairing benoetigt DB-Modus.");
       return;
     }
-    const user = await redeemPairToken(arg.toUpperCase(), String(ctx.chat.id));
-    if (!user) {
+    const result = await redeemPairToken(arg.toUpperCase(), String(ctx.chat.id));
+    if (!result.ok) {
+      if (result.reason === "chat-id-taken") {
+        await ctx.reply(
+          `Dieser Telegram-Account ist bereits mit dem Bau-OS-User "${result.existingUsername}" verknuepft. Pro Bau-OS-Konto braucht es einen eigenen Telegram-Account. Falls das ein Versehen war: Admin kann das alte Pairing aufloesen.`,
+        );
+        return;
+      }
       await ctx.reply("Ungueltiger oder abgelaufener Code. Bitte beim Admin einen neuen anfordern.");
       return;
     }
+    const user = result.user;
     await ctx.reply(
       `Erfolgreich verknuepft mit "${user.displayName ?? user.username}".\nAb jetzt antwortet der Bot auf deine Nachrichten. /hilfe zeigt die verfuegbaren Befehle.`,
     );
@@ -129,9 +136,24 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       const expectedChat = ownerUser.telegramChatId;
       if (!expectedChat) {
         // Erste Nachricht — chat_id auto-pairen via direktem DB-Update.
+        // Aber: nur wenn die chat_id NICHT schon einem anderen User gehoert.
+        // Sonst wuerde der UNIQUE-Index aus Migration 015 einen Fehler werfen.
         if (DB_ENABLED) {
           const { getDb } = await import("./db/client.js");
-          await getDb()`UPDATE users SET telegram_chat_id = ${String(ctx.chat.id)} WHERE id = ${ownerUser.id}`;
+          const db = getDb();
+          // Pruefen ob chat_id schon vergeben ist.
+          const conflict = await db`
+            SELECT username FROM users
+             WHERE telegram_chat_id = ${String(ctx.chat.id)} AND id <> ${ownerUser.id}
+             LIMIT 1
+          `;
+          if (conflict.length > 0) {
+            await ctx.reply(
+              `Dieser Telegram-Account ist bereits mit "${conflict[0]!.username}" verknuepft. Bitte einen eigenen Telegram-Account fuer dein Bau-OS-Konto verwenden.`,
+            );
+            return null;
+          }
+          await db`UPDATE users SET telegram_chat_id = ${String(ctx.chat.id)} WHERE id = ${ownerUser.id}`;
           ownerUser.telegramChatId = String(ctx.chat.id);
         }
         return ownerUser;
