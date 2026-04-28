@@ -5,7 +5,7 @@
 // ============================================================
 
 export interface DataEvent {
-  type: "task" | "termin" | "note" | "project" | "file" | "team" | "bautagebuch" | "meeting";
+  type: "task" | "termin" | "note" | "project" | "file" | "team" | "bautagebuch" | "meeting" | "time";
   action: "created" | "updated" | "deleted" | "completed" | "saved";
   id?: string;
   data?: Record<string, unknown>;

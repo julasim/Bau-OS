@@ -16,6 +16,7 @@ import type {
   AgentLogRepository,
   BautagebuchRepository,
   MeetingRepository,
+  TimeEntryRepository,
 } from "./types.js";
 
 // Statische Imports — DB-Module verbinden sich erst beim ersten Aufruf (lazy)
@@ -32,6 +33,7 @@ import { fsTeam } from "./fs-team.js";
 import { dbTeam } from "./db-team.js";
 import { dbBautagebuch } from "./db-bautagebuch.js";
 import { dbMeetings } from "./db-meetings.js";
+import { dbTimeEntries } from "./db-time-entries.js";
 import { fsChat } from "./fs-chat.js";
 import { fsAgentLogs } from "./fs-agent-logs.js";
 
@@ -51,6 +53,7 @@ export const fileRepo: FileRepository | null = DB_ENABLED ? dbFiles : null;
 // ?-Operator und blenden das Feature im FS-Mode aus.
 export const bautagebuchRepo: BautagebuchRepository | null = DB_ENABLED ? dbBautagebuch : null;
 export const meetingRepo: MeetingRepository | null = DB_ENABLED ? dbMeetings : null;
+export const timeEntryRepo: TimeEntryRepository | null = DB_ENABLED ? dbTimeEntries : null;
 export const chatRepo: ChatRepository = fsChat;
 export const agentLogRepo: AgentLogRepository = fsAgentLogs;
 
@@ -83,6 +86,9 @@ export type {
   MeetingActionItem,
   MeetingInput,
   MeetingType,
+  TimeEntry,
+  TimeEntryInput,
+  TimeSummary,
 } from "./types.js";
 export type {
   TaskRepository,
@@ -94,4 +100,5 @@ export type {
   AgentLogRepository,
   BautagebuchRepository,
   MeetingRepository,
+  TimeEntryRepository,
 } from "./types.js";

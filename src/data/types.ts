@@ -376,6 +376,66 @@ export interface MeetingRepository {
   listRecent(visibleProjectIds: string[] | "all", limit?: number): Promise<Meeting[]>;
 }
 
+/** Stundenerfassung (Migration 014): pro Mitarbeiter, pro Tag, pro
+ *  Projekt. memberId optional → externer Trupp moeglich, dann nur
+ *  memberName. start/end/break optional fuer rechtskonforme Variante. */
+export interface TimeEntry {
+  id: string;
+  projectId: string;
+  projectName?: string | null;
+  memberId: string | null;
+  memberName: string | null;
+  date: string; // YYYY-MM-DD
+  hours: number; // dezimal, z.B. 8.5
+  startTime: string | null; // HH:MM
+  endTime: string | null;
+  breakMinutes: number;
+  activity: string | null;
+  notes: string | null;
+  createdById: string | null;
+  createdByUsername?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TimeEntryInput {
+  date: string; // YYYY-MM-DD, required
+  hours: number; // required, > 0
+  memberId?: string | null;
+  memberName?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  breakMinutes?: number;
+  activity?: string | null;
+  notes?: string | null;
+}
+
+/** Aggregierte Summe ueber eine Filter-Dimension (z.B. pro Mitglied,
+ *  pro Tag, oder Projekt-Total). UI nutzt das fuer Header-Stats und
+ *  Wochen-Reports. */
+export interface TimeSummary {
+  /** Gruppen-Schluessel (Member-ID, Datum, oder leer fuer Total). */
+  key: string;
+  /** Lesbares Label (Member-Name, "2026-04-28", etc.). */
+  label: string;
+  hours: number;
+  entries: number;
+}
+
+export interface TimeEntryRepository {
+  list(projectId: string, opts?: { from?: string; to?: string; limit?: number }): Promise<TimeEntry[]>;
+  get(id: string): Promise<TimeEntry | null>;
+  create(projectId: string, input: TimeEntryInput, createdById?: string | null): Promise<TimeEntry | string>;
+  update(id: string, input: Partial<TimeEntryInput>): Promise<TimeEntry | null | string>;
+  delete(id: string): Promise<boolean>;
+  /** Cross-Projekt-Liste fuer Dashboard / Member-Detail. */
+  listForMember(memberId: string, opts?: { from?: string; to?: string; limit?: number }): Promise<TimeEntry[]>;
+  /** Summen pro Mitglied fuer ein Projekt im Zeitraum. */
+  summaryByMember(projectId: string, from?: string, to?: string): Promise<TimeSummary[]>;
+  /** Summen pro Tag fuer ein Projekt im Zeitraum. */
+  summaryByDate(projectId: string, from?: string, to?: string): Promise<TimeSummary[]>;
+}
+
 export interface FileEntry {
   id: string;
   filename: string;

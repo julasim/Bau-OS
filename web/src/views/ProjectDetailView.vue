@@ -191,9 +191,51 @@ type Tab =
   | "team"
   | "bautagebuch"
   | "meetings"
+  | "stunden"
   | "verlauf"
   | "zugriff";
 const tab = ref<Tab>("uebersicht");
+
+// ── Stunden (Migration 014) ─────────────────────────────────────────
+interface TimeEntry {
+  id: string;
+  projectId: string;
+  memberId: string | null;
+  memberName: string | null;
+  date: string;
+  hours: number;
+  startTime: string | null;
+  endTime: string | null;
+  breakMinutes: number;
+  activity: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+interface TimeSummaryRow {
+  key: string;
+  label: string;
+  hours: number;
+  entries: number;
+}
+interface TimeDraft {
+  id: string | null; // null = neu
+  date: string;
+  memberId: string | null;
+  memberName: string;
+  hours: string; // String fuer input — beim Save zu Number
+  startTime: string;
+  endTime: string;
+  breakMinutes: string;
+  activity: string;
+  notes: string;
+}
+const timeEntries = ref<TimeEntry[]>([]);
+const timeSummary = ref<TimeSummaryRow[]>([]);
+const timeLoaded = ref(false);
+const timeDraft = ref<TimeDraft | null>(null);
+const timeSaving = ref(false);
+const timeError = ref<string | null>(null);
 
 // ── Meetings (Migration 012) ──────────────────────────────
 type MeetingType =
@@ -821,6 +863,10 @@ async function openTab(t: Tab) {
     // Team brauchen wir fuer den Teilnehmer-Picker.
     if (!teamLoaded.value) await loadTeam();
     if (!meetingsLoaded.value) await loadMeetings();
+  }
+  if (t === "stunden") {
+    if (!teamLoaded.value) await loadTeam();
+    if (!timeLoaded.value) await loadTimeEntries();
   }
   if (t === "uebersicht") {
     if (!recentActivityLoaded.value) await loadRecentActivity();
@@ -1585,6 +1631,153 @@ async function saveMeeting() {
   }
 }
 
+// ── Stunden (Migration 014) ─────────────────────────────────────────────
+function todayIsoDate(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+function emptyTimeDraft(): TimeDraft {
+  return {
+    id: null,
+    date: todayIsoDate(),
+    memberId: null,
+    memberName: "",
+    hours: "",
+    startTime: "",
+    endTime: "",
+    breakMinutes: "0",
+    activity: "",
+    notes: "",
+  };
+}
+function timeDraftFrom(e: TimeEntry): TimeDraft {
+  return {
+    id: e.id,
+    date: e.date,
+    memberId: e.memberId,
+    memberName: e.memberName ?? "",
+    hours: String(e.hours),
+    startTime: e.startTime ?? "",
+    endTime: e.endTime ?? "",
+    breakMinutes: String(e.breakMinutes),
+    activity: e.activity ?? "",
+    notes: e.notes ?? "",
+  };
+}
+
+async function loadTimeEntries() {
+  try {
+    const n = encodeURIComponent(projectName.value);
+    timeEntries.value = await api.get<TimeEntry[]>(`/projects/${n}/time-entries?limit=200`);
+    // Summary fuer den ganzen verfuegbaren Zeitraum (Default: alles)
+    const sum = await api.get<{ groupBy: string; data: TimeSummaryRow[] }>(
+      `/projects/${n}/time-entries/summary?groupBy=member`,
+    );
+    timeSummary.value = sum.data;
+    timeLoaded.value = true;
+  } catch (e) {
+    timeError.value = e instanceof Error ? e.message : "Stunden nicht ladbar (DB-Modus erforderlich)";
+    timeLoaded.value = true;
+  }
+}
+
+const timeTotalHours = computed(() => timeEntries.value.reduce((s, e) => s + e.hours, 0));
+
+function newTimeEntry() {
+  timeError.value = null;
+  timeDraft.value = emptyTimeDraft();
+}
+function selectTimeEntry(e: TimeEntry) {
+  timeError.value = null;
+  timeDraft.value = timeDraftFrom(e);
+}
+function cancelTimeEdit() {
+  timeDraft.value = null;
+  timeError.value = null;
+}
+
+// Wenn User ein Team-Mitglied im Dropdown auswaehlt, automatisch
+// memberName aus dem allTeam-Lookup mitnehmen.
+function onTimeMemberChange(memberId: string) {
+  if (!timeDraft.value) return;
+  if (!memberId) {
+    timeDraft.value.memberId = null;
+    return;
+  }
+  const m = allTeam.value.find((x) => x.id === memberId);
+  timeDraft.value.memberId = memberId;
+  if (m) timeDraft.value.memberName = m.name;
+}
+
+async function saveTimeEntry() {
+  if (!timeDraft.value || timeSaving.value) return;
+  const d = timeDraft.value;
+  const hours = Number(d.hours);
+  if (!Number.isFinite(hours) || hours <= 0 || hours > 24) {
+    timeError.value = "Stundenanzahl muss zwischen 0 und 24 liegen";
+    return;
+  }
+  if (!d.date) {
+    timeError.value = "Datum ist erforderlich";
+    return;
+  }
+  if (!d.memberName.trim()) {
+    timeError.value = "Mitarbeiter ist erforderlich";
+    return;
+  }
+
+  timeSaving.value = true;
+  timeError.value = null;
+  try {
+    const body = {
+      date: d.date,
+      hours,
+      memberId: d.memberId || null,
+      memberName: d.memberName.trim() || null,
+      startTime: d.startTime || null,
+      endTime: d.endTime || null,
+      breakMinutes: Number(d.breakMinutes) || 0,
+      activity: d.activity.trim() || null,
+      notes: d.notes.trim() || null,
+    };
+    let saved: TimeEntry;
+    if (d.id) {
+      saved = await api.patch<TimeEntry>(`/time-entries/${d.id}`, body);
+      const idx = timeEntries.value.findIndex((e) => e.id === d.id);
+      if (idx >= 0) timeEntries.value[idx] = saved;
+    } else {
+      const n = encodeURIComponent(projectName.value);
+      saved = await api.post<TimeEntry>(`/projects/${n}/time-entries`, body);
+      timeEntries.value.unshift(saved);
+      timeEntries.value.sort((a, b) => b.date.localeCompare(a.date));
+    }
+    // Summary refresh — neuer Eintrag aendert das Aggregat.
+    const n = encodeURIComponent(projectName.value);
+    const sum = await api.get<{ data: TimeSummaryRow[] }>(`/projects/${n}/time-entries/summary?groupBy=member`);
+    timeSummary.value = sum.data;
+    timeDraft.value = timeDraftFrom(saved);
+  } catch (e) {
+    timeError.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+  } finally {
+    timeSaving.value = false;
+  }
+}
+
+async function deleteTimeEntry() {
+  if (!timeDraft.value?.id || !confirm("Stunden-Eintrag wirklich löschen?")) return;
+  try {
+    const id = timeDraft.value.id;
+    await api.delete(`/time-entries/${id}`);
+    timeEntries.value = timeEntries.value.filter((e) => e.id !== id);
+    timeDraft.value = null;
+    // Summary refresh
+    const n = encodeURIComponent(projectName.value);
+    const sum = await api.get<{ data: TimeSummaryRow[] }>(`/projects/${n}/time-entries/summary?groupBy=member`);
+    timeSummary.value = sum.data;
+  } catch (e) {
+    timeError.value = e instanceof Error ? e.message : "Löschen fehlgeschlagen";
+  }
+}
+
 async function deleteMeeting() {
   if (!meetingDraft.value?.id || !confirm("Meeting wirklich löschen?")) return;
   try {
@@ -1986,7 +2179,7 @@ async function deleteMeeting() {
       style="gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); overflow-x: auto"
     >
       <template
-        v-for="t in (['uebersicht', 'notes', 'tasks', 'termine', 'files', 'team', 'bautagebuch', 'meetings', 'verlauf', 'zugriff'] as const)"
+        v-for="t in (['uebersicht', 'notes', 'tasks', 'termine', 'files', 'team', 'bautagebuch', 'meetings', 'stunden', 'verlauf', 'zugriff'] as const)"
         :key="t"
       >
         <!-- "zugriff" nur fuer Admins. Alle anderen Tabs immer sichtbar. -->
@@ -2012,9 +2205,11 @@ async function deleteMeeting() {
                           ? "Bautagebuch"
                           : t === "meetings"
                             ? "Meetings"
-                            : t === "verlauf"
-                              ? "Verlauf"
-                              : "Zugriff"
+                            : t === "stunden"
+                              ? "Stunden"
+                              : t === "verlauf"
+                                ? "Verlauf"
+                                : "Zugriff"
           }}
         </button>
       </template>
@@ -2895,6 +3090,168 @@ async function deleteMeeting() {
 
           <div v-else class="mt-editor empty-hint" style="display: flex; align-items: center; justify-content: center">
             Meeting links auswählen oder „Neues Meeting" klicken.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stunden (Migration 014) -->
+    <div v-if="tab === 'stunden'" class="time-tab">
+      <div v-if="!timeLoaded" class="empty-hint">Lade Stunden…</div>
+      <div v-else>
+        <!-- Action-Bar mit Total -->
+        <div class="flex items-center" style="gap: 8px; margin-bottom: 14px; flex-wrap: wrap">
+          <button class="bauos-btn solid sm" @click="newTimeEntry">
+            <BIcon name="plus" :size="11" />
+            <span style="margin-left: 4px">Stunden eintragen</span>
+          </button>
+          <span class="empty-hint" style="margin-left: auto; font-size: 12px">
+            <strong style="color: var(--color-text)">{{ timeTotalHours.toFixed(1) }}h</strong>
+            · {{ timeEntries.length }}
+            {{ timeEntries.length === 1 ? "Eintrag" : "Einträge" }}
+          </span>
+        </div>
+
+        <!-- Summen pro Mitarbeiter -->
+        <div v-if="timeSummary.length > 0" class="time-summary">
+          <div class="eyebrow" style="margin-bottom: 8px">Summen pro Mitarbeiter</div>
+          <div class="time-summary-rows">
+            <div v-for="row in timeSummary" :key="row.key" class="time-summary-row">
+              <span class="time-summary-label">{{ row.label }}</span>
+              <span class="time-summary-hours">{{ row.hours.toFixed(1) }}h</span>
+              <span class="time-summary-count">{{ row.entries }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="timeEntries.length === 0 && !timeDraft" class="empty-state" style="margin-top: 16px">
+          <div class="empty-state-icon">⏱</div>
+          <div class="empty-state-text">Noch keine Stunden für dieses Projekt erfasst.</div>
+          <button class="bauos-btn solid sm" @click="newTimeEntry">
+            <BIcon name="plus" :size="11" :stroke-width="2" />
+            Erste Stunden eintragen
+          </button>
+        </div>
+
+        <div v-else class="time-grid">
+          <!-- Linke Spalte: Liste -->
+          <div class="time-list">
+            <div
+              v-for="e in timeEntries"
+              :key="e.id"
+              :class="['time-row', timeDraft?.id === e.id ? 'time-row-active' : '']"
+              @click="selectTimeEntry(e)"
+            >
+              <div class="time-row-head">
+                <span class="time-row-date">{{ e.date }}</span>
+                <span class="time-row-hours">{{ e.hours.toFixed(1) }}h</span>
+              </div>
+              <div class="time-row-name">{{ e.memberName ?? "—" }}</div>
+              <div v-if="e.activity" class="time-row-activity">{{ e.activity }}</div>
+            </div>
+          </div>
+
+          <!-- Rechte Spalte: Editor -->
+          <div class="time-editor" v-if="timeDraft">
+            <div class="flex items-center" style="gap: 8px; margin-bottom: 14px">
+              <h3 style="margin: 0; font-size: 16px; font-weight: 600">
+                {{ timeDraft.id ? "Eintrag bearbeiten" : "Neuer Stunden-Eintrag" }}
+              </h3>
+              <button
+                v-if="timeDraft.id"
+                class="bauos-btn ghost sm"
+                style="margin-left: auto"
+                @click="deleteTimeEntry"
+              >
+                <BIcon name="trash" :size="11" />
+                <span style="margin-left: 4px">Löschen</span>
+              </button>
+              <button
+                v-else
+                class="bauos-btn ghost sm"
+                style="margin-left: auto"
+                @click="cancelTimeEdit"
+              >
+                Abbrechen
+              </button>
+            </div>
+
+            <div class="time-row-fields">
+              <div class="time-field">
+                <label class="time-label">Datum <span style="color: var(--color-danger-text)">*</span></label>
+                <input v-model="timeDraft.date" type="date" class="stamm-input" />
+              </div>
+              <div class="time-field">
+                <label class="time-label">Stunden <span style="color: var(--color-danger-text)">*</span></label>
+                <input v-model="timeDraft.hours" type="number" step="0.25" min="0" max="24" class="stamm-input" placeholder="8.5" />
+              </div>
+            </div>
+
+            <!-- Mitarbeiter: Dropdown + Freitext-Override -->
+            <div class="time-field">
+              <label class="time-label">Mitarbeiter <span style="color: var(--color-danger-text)">*</span></label>
+              <div class="flex items-center" style="gap: 8px; flex-wrap: wrap">
+                <select
+                  :value="timeDraft.memberId ?? ''"
+                  @change="onTimeMemberChange(($event.target as HTMLSelectElement).value)"
+                  class="stamm-input"
+                  style="flex: 1; min-width: 180px"
+                >
+                  <option value="">— Freitext (extern) —</option>
+                  <option v-for="m in allTeam" :key="m.id" :value="m.id">{{ m.name }}</option>
+                </select>
+                <input
+                  v-model="timeDraft.memberName"
+                  class="stamm-input"
+                  style="flex: 1; min-width: 180px"
+                  placeholder="Name (Freitext für externe)"
+                />
+              </div>
+            </div>
+
+            <div class="time-row-fields">
+              <div class="time-field">
+                <label class="time-label">Beginn</label>
+                <input v-model="timeDraft.startTime" type="time" class="stamm-input" />
+              </div>
+              <div class="time-field">
+                <label class="time-label">Ende</label>
+                <input v-model="timeDraft.endTime" type="time" class="stamm-input" />
+              </div>
+              <div class="time-field">
+                <label class="time-label">Pause (Min.)</label>
+                <input v-model="timeDraft.breakMinutes" type="number" min="0" class="stamm-input" placeholder="0" />
+              </div>
+            </div>
+
+            <div class="time-field">
+              <label class="time-label">Tätigkeit</label>
+              <input v-model="timeDraft.activity" class="stamm-input" placeholder="z.B. Schalung EG, Maurerarbeiten" />
+            </div>
+
+            <div class="time-field">
+              <label class="time-label">Notiz</label>
+              <textarea
+                v-model="timeDraft.notes"
+                class="stamm-input"
+                rows="2"
+                style="resize: vertical; font-family: inherit; line-height: 1.5"
+              ></textarea>
+            </div>
+
+            <div class="flex items-center" style="gap: 8px; margin-top: 14px">
+              <button class="bauos-btn solid sm" :disabled="timeSaving" @click="saveTimeEntry">
+                {{ timeSaving ? "…" : "Speichern" }}
+              </button>
+              <button class="bauos-btn ghost sm" @click="cancelTimeEdit">Abbrechen</button>
+              <span v-if="timeError" style="font-size: 11px; color: var(--color-danger-text)">
+                {{ timeError }}
+              </span>
+            </div>
+          </div>
+
+          <div v-else class="time-editor empty-hint" style="display: flex; align-items: center; justify-content: center">
+            Eintrag links auswählen oder „Stunden eintragen" klicken.
           </div>
         </div>
       </div>
@@ -4040,6 +4397,145 @@ async function deleteMeeting() {
   background: var(--color-success-bg, color-mix(in srgb, #16a34a 10%, transparent));
   border-radius: 4px;
   white-space: nowrap;
+}
+
+/* ── Stunden (Migration 014) ───────────────────────────── */
+.time-tab {
+  padding-top: 4px;
+}
+.time-summary {
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+  background: var(--color-bg-subtle);
+}
+.time-summary-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.time-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+.time-summary-label {
+  flex: 1;
+  color: var(--color-text);
+  font-weight: 500;
+}
+.time-summary-hours {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  color: var(--color-text);
+  min-width: 60px;
+  text-align: right;
+}
+.time-summary-count {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  min-width: 40px;
+  text-align: right;
+}
+.time-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  gap: 18px;
+  align-items: start;
+}
+.time-list {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+  max-height: 600px;
+  overflow-y: auto;
+}
+.time-row {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.time-row:last-child {
+  border-bottom: none;
+}
+.time-row:hover {
+  background: var(--color-bg-subtle);
+}
+.time-row-active {
+  background: var(--color-bg-subtle);
+  border-left: 3px solid var(--color-accent, var(--color-text));
+  padding-left: 9px;
+}
+.time-row-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.time-row-date {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono, monospace);
+}
+.time-row-hours {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--color-text);
+  font-family: var(--font-mono, monospace);
+}
+.time-row-name {
+  font-size: 13px;
+  color: var(--color-text);
+  word-break: break-word;
+}
+.time-row-activity {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 3px;
+}
+.time-editor {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 360px;
+}
+.time-field {
+  margin-bottom: 14px;
+}
+.time-row-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.time-row-fields .time-field {
+  margin-bottom: 0;
+}
+.time-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+@media (max-width: 768px) {
+  .time-grid {
+    grid-template-columns: 1fr;
+  }
+  .time-list {
+    max-height: 280px;
+  }
+  .time-row-fields {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 @media (max-width: 768px) {
