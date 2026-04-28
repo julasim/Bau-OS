@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
+import { copyToClipboard } from "../utils/clipboard";
 import { useCurrentUser } from "../composables/useCurrentUser";
 
 const router = useRouter();
@@ -280,26 +281,35 @@ function startPairCountdown() {
   pairCountdownTimer = setInterval(tick, 1000);
 }
 
+// Gemeinsames Feedback-Message-State fuer beide Copy-Aktionen.
+// success = gruener Hinweis, error = roter Hinweis. 2.5s sichtbar.
+const copyMessage = ref<{ text: string; type: "success" | "error" } | null>(null);
+function showCopyFeedback(text: string, type: "success" | "error") {
+  copyMessage.value = { text, type };
+  setTimeout(() => {
+    if (copyMessage.value?.text === text) copyMessage.value = null;
+  }, 2500);
+}
+
 async function copyToken() {
   if (!pairToken.value) return;
-  try {
-    await navigator.clipboard.writeText(pairToken.value);
-  } catch {
-    /* clipboard API kann fehlen — User markiert manuell */
+  const ok = await copyToClipboard(pairToken.value);
+  if (ok) {
+    showCopyFeedback(`Code "${pairToken.value}" kopiert`, "success");
+  } else {
+    showCopyFeedback("Kopieren fehlgeschlagen — bitte manuell markieren", "error");
   }
 }
 
 // Kopiert den vollstaendigen "/pair CODE"-Befehl (haeufiger Wunsch: einfach
 // in Telegram pasten ohne nochmal zu tippen).
-const copyMessage = ref<string | null>(null);
 async function copyPairCommand() {
   if (!pairCommand.value) return;
-  try {
-    await navigator.clipboard.writeText(pairCommand.value);
-    copyMessage.value = "Befehl kopiert";
-    setTimeout(() => (copyMessage.value = null), 2000);
-  } catch {
-    /* clipboard API kann fehlen — User markiert manuell */
+  const ok = await copyToClipboard(pairCommand.value);
+  if (ok) {
+    showCopyFeedback("Befehl kopiert", "success");
+  } else {
+    showCopyFeedback("Kopieren fehlgeschlagen — bitte manuell markieren", "error");
   }
 }
 
@@ -714,8 +724,18 @@ function formatDate(iso?: string) {
                   Kopieren
                 </button>
               </div>
-              <div v-if="copyMessage" style="font-size: 11px; color: var(--color-success-text); margin-top: 4px">
-                ✓ {{ copyMessage }}
+              <div
+                v-if="copyMessage"
+                :style="{
+                  fontSize: '11px',
+                  marginTop: '4px',
+                  color:
+                    copyMessage.type === 'success'
+                      ? 'var(--color-success-text)'
+                      : 'var(--color-danger-text)',
+                }"
+              >
+                {{ copyMessage.type === "success" ? "✓ " : "⚠ " }}{{ copyMessage.text }}
               </div>
             </div>
           </div>
