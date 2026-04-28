@@ -114,6 +114,101 @@ async function submitPasswordReset() {
   }
 }
 
+// ── Bot-Token verwalten (Admin-Override) ───────────────────────
+// Erlaubt dem Admin, fuer einen User direkt das Bot-Token einzutragen,
+// ohne dass der User sich selbst einloggen muss. Ueblicher Onboarding-
+// Flow: Admin legt User an → User-Account verlinkt mit Team-Mitglied
+// → Admin generiert Bot-Token bei @BotFather → traegt ihn hier ein →
+// Backend startet sofort den per-User-Bot → Admin generiert Pair-Code
+// → schickt /pair an User.
+const showBotDialog = ref(false);
+const botTarget = ref<AdminUser | null>(null);
+interface BotStatus {
+  hasToken: boolean;
+  enabled: boolean;
+  chatId: string | null;
+  botUsername: string | null;
+  botRunning: boolean;
+}
+const botStatus = ref<BotStatus | null>(null);
+const botTokenInput = ref("");
+const botDialogSaving = ref(false);
+const botDialogError = ref<string | null>(null);
+const botDialogMessage = ref<string | null>(null);
+
+const BOT_TOKEN_RE = /^\d{6,}:[A-Za-z0-9_-]{30,}$/;
+const botTokenValid = computed(() => BOT_TOKEN_RE.test(botTokenInput.value.trim()));
+
+async function openBotTokenDialog(user: AdminUser) {
+  botTarget.value = user;
+  botTokenInput.value = "";
+  botDialogError.value = null;
+  botDialogMessage.value = null;
+  botStatus.value = null;
+  showBotDialog.value = true;
+  try {
+    botStatus.value = await api.get<BotStatus>(
+      `/admin/users/${encodeURIComponent(user.id)}/telegram-bot`,
+    );
+  } catch (e) {
+    botDialogError.value = e instanceof Error ? e.message : "Status nicht abrufbar";
+  }
+}
+
+function closeBotTokenDialog() {
+  showBotDialog.value = false;
+  botTokenInput.value = "";
+  botDialogError.value = null;
+  botDialogMessage.value = null;
+}
+
+async function saveBotToken() {
+  if (!botTarget.value || !botTokenValid.value || botDialogSaving.value) return;
+  const token = botTokenInput.value.trim();
+  botDialogSaving.value = true;
+  botDialogError.value = null;
+  botDialogMessage.value = null;
+  try {
+    const res = await api.put<{ ok: boolean; botUsername: string | null; botRunning: boolean }>(
+      `/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`,
+      { token },
+    );
+    botTokenInput.value = "";
+    if (res.botRunning && res.botUsername) {
+      botDialogMessage.value = `Bot @${res.botUsername} läuft. Jetzt Pair-Code generieren und dem User schicken.`;
+    } else {
+      botDialogMessage.value = "Token gespeichert, aber Bot startet nicht. Token bei @BotFather noch gültig?";
+    }
+    // Status frisch laden
+    botStatus.value = await api.get<BotStatus>(
+      `/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`,
+    );
+  } catch (e) {
+    botDialogError.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+  } finally {
+    botDialogSaving.value = false;
+  }
+}
+
+async function removeBotToken() {
+  if (!botTarget.value || !confirm("Bot-Token wirklich entfernen?")) return;
+  botDialogSaving.value = true;
+  botDialogError.value = null;
+  try {
+    await api.put(`/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`, {
+      token: null,
+    });
+    botDialogMessage.value = "Bot entfernt.";
+    botStatus.value = await api.get<BotStatus>(
+      `/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`,
+    );
+  } catch (e) {
+    botDialogError.value = e instanceof Error ? e.message : "Entfernen fehlgeschlagen";
+  } finally {
+    botDialogSaving.value = false;
+  }
+}
+
 // ── Telegram-Pair-Token (Phase 5) ───────────────────────
 const showPairDialog = ref(false);
 const pairTarget = ref<AdminUser | null>(null);
@@ -326,8 +421,8 @@ function formatDate(iso?: string) {
         <span class="eyebrow" style="width: 90px">Rolle</span>
         <span class="eyebrow" style="width: 70px">Telegram</span>
         <span class="eyebrow" style="width: 100px">Angelegt</span>
-        <!-- Aktionen-Spalte: matcht 3 row-action-Buttons (32px) + Gaps -->
-        <span class="eyebrow" style="width: 112px; text-align: right">Aktionen</span>
+        <!-- Aktionen-Spalte: matcht 4 row-action-Buttons (32px) + Gaps -->
+        <span class="eyebrow" style="width: 148px; text-align: right">Aktionen</span>
       </div>
       <div
         v-for="u in users"
@@ -384,6 +479,9 @@ function formatDate(iso?: string) {
           {{ formatDate(u.createdAt) }}
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 4px">
+          <button class="row-action" @click="openBotTokenDialog(u)" :title="'Bot-Token verwalten'">
+            <BIcon name="cpu" :size="12" />
+          </button>
           <button class="row-action" @click="openPairDialog(u)" :title="'Telegram pairen'">
             <BIcon name="message" :size="12" />
           </button>
@@ -636,6 +734,130 @@ function formatDate(iso?: string) {
 
         <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
           <button class="bauos-btn solid" @click="closePairDialog">Schließen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bot-Token-Dialog (Admin-Override) -->
+    <div v-if="showBotDialog && botTarget" class="modal-overlay" @click.self="closeBotTokenDialog">
+      <div class="modal-card" style="max-width: 540px">
+        <div class="eyebrow" style="margin-bottom: 4px">Telegram-Bot</div>
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 14px 0">
+          Bot für „{{ botTarget.username }}"
+        </h2>
+
+        <!-- Status-Block -->
+        <div v-if="botStatus" class="bot-status-block">
+          <span
+            class="bot-status-dot"
+            :class="
+              botStatus.botRunning
+                ? 'bot-status-active'
+                : botStatus.hasToken
+                  ? 'bot-status-error'
+                  : 'bot-status-inactive'
+            "
+          ></span>
+          <div style="flex: 1">
+            <div style="font-size: 13px; font-weight: 600; color: var(--color-text)">
+              <template v-if="botStatus.botRunning && botStatus.botUsername">
+                Bot @{{ botStatus.botUsername }} läuft
+              </template>
+              <template v-else-if="botStatus.hasToken">Token gesetzt, aber Bot läuft nicht</template>
+              <template v-else>Noch kein Bot eingerichtet</template>
+            </div>
+            <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px">
+              <template v-if="botStatus.chatId">
+                ✓ gepairt mit Chat
+                <span class="font-mono">{{ botStatus.chatId }}</span>
+              </template>
+              <template v-else-if="botStatus.botRunning">
+                Noch nicht gepairt — separat über „Telegram pairen" einen Code generieren.
+              </template>
+              <template v-else-if="botStatus.hasToken">
+                Token bei @BotFather noch gültig? Sonst neuen erzeugen.
+              </template>
+              <template v-else>Token aus @BotFather unten eintragen.</template>
+            </div>
+          </div>
+        </div>
+
+        <!-- Anleitung -->
+        <ol class="bot-steps">
+          <li>
+            Bot bei
+            <a href="https://t.me/BotFather" target="_blank" rel="noopener" class="bot-link">@BotFather</a>
+            anlegen → <code class="inline-cmd">/newbot</code> → Anweisungen folgen.
+          </li>
+          <li>
+            Token ähnlich
+            <code class="inline-cmd">123456789:AAE…</code> hier eintragen + speichern.
+          </li>
+          <li>Danach „Telegram pairen" ausführen, damit der User selbst seinen Chat verlinkt.</li>
+        </ol>
+
+        <!-- Token-Eingabe -->
+        <div class="flex items-center gap-3" style="margin-top: 8px">
+          <input
+            v-model="botTokenInput"
+            type="password"
+            placeholder="123456789:ABC-DEF... (von @BotFather)"
+            class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
+            style="
+              min-width: 0;
+              border: 1px solid var(--color-border);
+              background: var(--color-bg);
+              color: var(--color-text);
+            "
+            :class="{ 'bot-input-invalid': botTokenInput.length > 0 && !botTokenValid }"
+          />
+          <button
+            class="bauos-btn solid"
+            :disabled="botDialogSaving || !botTokenValid"
+            :style="{ opacity: botDialogSaving || !botTokenValid ? 0.5 : 1 }"
+            @click="saveBotToken"
+          >
+            {{ botDialogSaving ? "…" : botStatus?.hasToken ? "Bot wechseln" : "Bot einrichten" }}
+          </button>
+        </div>
+        <div
+          v-if="botTokenInput.length > 0 && !botTokenValid"
+          style="font-size: 11px; color: var(--color-warning-text, #b45309); margin-top: 6px"
+        >
+          Format passt nicht — Telegram-Tokens sehen so aus:
+          <span class="font-mono">123456789:ABCdefGHI-JKL_mnoPQR_stuVWXyz0123456</span>
+        </div>
+
+        <!-- Status-Messages -->
+        <p v-if="botDialogMessage" style="font-size: 12px; color: var(--color-success-text); margin-top: 12px">
+          {{ botDialogMessage }}
+        </p>
+        <p
+          v-if="botDialogError"
+          style="
+            margin-top: 12px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--color-danger-text);
+            background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+            border-radius: 6px;
+          "
+        >
+          {{ botDialogError }}
+        </p>
+
+        <!-- Footer-Actions -->
+        <div class="flex items-center justify-between" style="gap: 8px; margin-top: 20px">
+          <button
+            v-if="botStatus?.hasToken"
+            class="bauos-btn ghost"
+            :disabled="botDialogSaving"
+            @click="removeBotToken"
+          >
+            Bot entfernen
+          </button>
+          <span v-else></span>
+          <button class="bauos-btn solid" @click="closeBotTokenDialog">Schließen</button>
         </div>
       </div>
     </div>
@@ -898,14 +1120,61 @@ function formatDate(iso?: string) {
   font-size: 11px;
 }
 
+/* ── Bot-Token-Dialog ─────────────────────────────────────── */
+.bot-status-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 8px;
+}
+.bot-status-block .bot-status-dot {
+  margin-top: 5px;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.bot-status-active {
+  background: var(--color-success-text, #16a34a);
+}
+.bot-status-error {
+  background: var(--color-warning-text, #b45309);
+}
+.bot-status-inactive {
+  background: var(--color-text-faint);
+}
+.bot-steps {
+  list-style: decimal;
+  padding-left: 20px;
+  margin: 0 0 14px 0;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  line-height: 1.7;
+}
+.bot-steps li {
+  margin-bottom: 4px;
+}
+.bot-link {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+.bot-input-invalid {
+  border-color: var(--color-warning-text, #b45309) !important;
+}
+
 /* ── Mobile (Phase 1A) ─────────────────────────────────────── */
 .users-list-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 .users-list-inner {
-  /* Summe: 1fr Name + 90 Rolle + 70 Tg + 100 Datum + 112 Aktionen + Gaps + Padding */
-  min-width: 660px;
+  /* Summe: 1fr Name + 90 Rolle + 70 Tg + 100 Datum + 148 Aktionen + Gaps + Padding */
+  min-width: 700px;
 }
 /* Action-Buttons in der Tabelle: 32x32 statt globaler 36x36 — passt
    sonst nicht in die kompakte Aktionen-Spalte. Touch ist trotzdem ok. */

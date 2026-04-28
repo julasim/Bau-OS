@@ -209,14 +209,54 @@ adminUsersRoutes.post("/admin/users/:id/pair-token", async (c) => {
 // ── Telegram-Bot eines Users setzen/entfernen (Phase 6) ───────────────────
 // Admin-Override: kann fuer jeden User den Bot-Token setzen/loeschen.
 // Self-Service-Variante laeuft ueber /me/telegram-bot (settings.ts).
+//
+// Helper: liefert botUsername (aus Bot-Manager-Cache) + botRunning,
+// gleicher Pattern wie in settings.ts. UI nutzt das, um zu zeigen
+// ob der Bot wirklich gestartet ist (vs. nur Token gesetzt).
+async function getBotMeta(userId: string): Promise<{ botUsername: string | null; botRunning: boolean }> {
+  try {
+    const { getBotUsernameForUser, getBotStatus } = await import("../../bot-manager.js");
+    return {
+      botUsername: getBotUsernameForUser(userId),
+      botRunning: getBotStatus(userId) === "running",
+    };
+  } catch {
+    return { botUsername: null, botRunning: false };
+  }
+}
+
+// GET — aktuellen Bot-Status fuer den User abrufen.
+// Token selbst wird NIE im Response zurueckgegeben.
+adminUsersRoutes.get("/admin/users/:id/telegram-bot", async (c) => {
+  const id = c.req.param("id");
+  const target = await findDbUserById(id);
+  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
+  const meta = await getBotMeta(target.id);
+  return c.json({
+    hasToken: !!target.telegramBotToken,
+    enabled: target.telegramBotEnabled,
+    chatId: target.telegramChatId,
+    ...meta,
+  });
+});
+
 adminUsersRoutes.put("/admin/users/:id/telegram-bot", async (c) => {
   const id = c.req.param("id");
   const target = await findDbUserById(id);
   if (!target) return c.json({ error: "User nicht gefunden" }, 404);
 
   const body = await c.req.json<{ token?: string | null; enabled?: boolean }>();
-  if ("token" in body) {
-    await setUserBotToken(id, body.token ?? null);
+  // Token-Format-Validation — gleiche Regex wie in settings.ts.
+  // BotFather-Tokens haben das Format "123456789:ABC..." (Ziffern,
+  // Doppelpunkt, mind. 30 Zeichen aus [A-Za-z0-9_-]).
+  if ("token" in body && body.token != null) {
+    const token = String(body.token).trim();
+    if (!/^\d{6,}:[A-Za-z0-9_-]{30,}$/.test(token)) {
+      return c.json({ error: "Bot-Token hat falsches Format. Erwartet: '123456789:ABC...' (von @BotFather)" }, 400);
+    }
+    await setUserBotToken(id, token);
+  } else if ("token" in body) {
+    await setUserBotToken(id, null);
   }
   if ("enabled" in body) {
     await setUserBotEnabled(id, body.enabled === true);
@@ -229,7 +269,9 @@ adminUsersRoutes.put("/admin/users/:id/telegram-bot", async (c) => {
     /* Manager ist evtl. nicht aktiv (FS-Mode) — kein Fehler */
   }
   emit({ type: "team", action: "updated", id });
-  return c.json({ ok: true });
+  // Frischen Status zurueckgeben, damit UI sofort sieht ob Bot startet.
+  const meta = await getBotMeta(id);
+  return c.json({ ok: true, ...meta });
 });
 
 // ── Loeschen ────────────────────────────────────────────────────────────────
