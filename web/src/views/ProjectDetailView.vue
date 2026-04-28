@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
@@ -1635,6 +1635,103 @@ async function saveMeeting() {
 function todayIsoDate(): string {
   return new Date().toISOString().slice(0, 10);
 }
+
+/** Parser fuer flexible Zeit-Eingabe. Akzeptiert:
+ *   "8"    → "08:00"
+ *   "8:30" → "08:30"
+ *   "830"  → "08:30"
+ *   "0830" → "08:30"
+ *   "08:30" → "08:30"
+ *   leer / nicht-parsbar → null
+ *  Damit kann der User schnell tippen statt nur den Picker zu nutzen. */
+function parseTimeInput(s: string | null | undefined): string | null {
+  if (!s) return null;
+  const t = String(s).trim();
+  if (!t) return null;
+  // Schon im Format H:MM oder HH:MM
+  let m = t.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) {
+      return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+    }
+    return null;
+  }
+  // Nur Stunde: "8" → "08:00"
+  m = t.match(/^(\d{1,2})$/);
+  if (m) {
+    const h = parseInt(m[1], 10);
+    if (h >= 0 && h <= 23) return `${String(h).padStart(2, "0")}:00`;
+    return null;
+  }
+  // 4 Ziffern "0830" → "08:30"
+  m = t.match(/^(\d{2})(\d{2})$/);
+  if (m) {
+    const h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) return `${m[1]}:${m[2]}`;
+    return null;
+  }
+  // 3 Ziffern "830" → "08:30"
+  m = t.match(/^(\d)(\d{2})$/);
+  if (m) {
+    const h = parseInt(m[1], 10);
+    const min = parseInt(m[2], 10);
+    if (h >= 0 && h <= 23 && min >= 0 && min <= 59) return `0${m[1]}:${m[2]}`;
+    return null;
+  }
+  return null;
+}
+
+/** Differenz in Minuten zwischen zwei HH:MM-Strings. End < Start wird als
+ *  Schicht ueber Mitternacht interpretiert (z.B. 22:00–02:00 = 4h). */
+function timeDiffMinutes(start: string | null, end: string | null): number | null {
+  const s = parseTimeInput(start);
+  const e = parseTimeInput(end);
+  if (!s || !e) return null;
+  const [sH, sM] = s.split(":").map(Number);
+  const [eH, eM] = e.split(":").map(Number);
+  const startMin = sH * 60 + sM;
+  let endMin = eH * 60 + eM;
+  if (endMin < startMin) endMin += 24 * 60;
+  return endMin - startMin;
+}
+
+/** Computed: bei vorhandener Beginn+Ende → Stunden minus Pause.
+ *  null wenn nicht beide parsbar — UI laesst dann das hours-Field
+ *  fuer manuelle Eingabe offen. */
+const computedTimeHours = computed(() => {
+  if (!timeDraft.value) return null;
+  const diff = timeDiffMinutes(timeDraft.value.startTime, timeDraft.value.endTime);
+  if (diff === null) return null;
+  const breakMin = Number(timeDraft.value.breakMinutes) || 0;
+  const totalMin = Math.max(0, diff - breakMin);
+  return totalMin / 60;
+});
+
+// Watcher: schreibt automatisch in draft.hours sobald Beginn+Ende
+// parsbar sind. User kann hours danach manuell ueberschreiben — der
+// naechste Time-Change ueberschreibt's wieder. Klare Regel: wer Zeiten
+// eingibt, bekommt Auto-Compute.
+watch(computedTimeHours, (val) => {
+  if (val !== null && timeDraft.value) {
+    timeDraft.value.hours = val.toFixed(2);
+  }
+});
+
+// onBlur-Handler: normalisieren der Zeit-Inputs ("8" → "08:00").
+function normalizeStartTime() {
+  if (!timeDraft.value) return;
+  const n = parseTimeInput(timeDraft.value.startTime);
+  if (n) timeDraft.value.startTime = n;
+}
+function normalizeEndTime() {
+  if (!timeDraft.value) return;
+  const n = parseTimeInput(timeDraft.value.endTime);
+  if (n) timeDraft.value.endTime = n;
+}
+
 function emptyTimeDraft(): TimeDraft {
   return {
     id: null,
@@ -1725,6 +1822,12 @@ async function saveTimeEntry() {
     return;
   }
 
+  // Zeit-Felder normalisieren falls User direkt Save geklickt hat ohne
+  // vorher onBlur zu triggern (z.B. via Tab+Enter). "8" → "08:00".
+  // Wenn nicht parsbar → Backend wirft 400, dann sehen wir's im timeError.
+  const normalizedStart = parseTimeInput(d.startTime) ?? d.startTime ?? "";
+  const normalizedEnd = parseTimeInput(d.endTime) ?? d.endTime ?? "";
+
   timeSaving.value = true;
   timeError.value = null;
   try {
@@ -1733,8 +1836,8 @@ async function saveTimeEntry() {
       hours,
       memberId: d.memberId || null,
       memberName: d.memberName.trim() || null,
-      startTime: d.startTime || null,
-      endTime: d.endTime || null,
+      startTime: normalizedStart || null,
+      endTime: normalizedEnd || null,
       breakMinutes: Number(d.breakMinutes) || 0,
       activity: d.activity.trim() || null,
       notes: d.notes.trim() || null,
@@ -3182,8 +3285,31 @@ async function deleteMeeting() {
                 <input v-model="timeDraft.date" type="date" class="stamm-input" />
               </div>
               <div class="time-field">
-                <label class="time-label">Stunden <span style="color: var(--color-danger-text)">*</span></label>
-                <input v-model="timeDraft.hours" type="number" step="0.25" min="0" max="24" class="stamm-input" placeholder="8.5" />
+                <label class="time-label">
+                  Stunden <span style="color: var(--color-danger-text)">*</span>
+                  <span
+                    v-if="computedTimeHours !== null"
+                    style="
+                      font-size: 9px;
+                      font-weight: 400;
+                      color: var(--color-text-faint);
+                      margin-left: 6px;
+                      text-transform: none;
+                      letter-spacing: 0;
+                    "
+                  >
+                    (auto: Beginn–Ende)
+                  </span>
+                </label>
+                <input
+                  v-model="timeDraft.hours"
+                  type="number"
+                  step="0.25"
+                  min="0"
+                  max="24"
+                  class="stamm-input"
+                  placeholder="8.5"
+                />
               </div>
             </div>
 
@@ -3212,11 +3338,27 @@ async function deleteMeeting() {
             <div class="time-row-fields">
               <div class="time-field">
                 <label class="time-label">Beginn</label>
-                <input v-model="timeDraft.startTime" type="time" class="stamm-input" />
+                <!-- type="text" damit User flexibel tippen kann ("8", "8:30", "0830").
+                     onBlur normalisiert auf "HH:MM". inputmode hilft Mobile-Tastatur. -->
+                <input
+                  v-model="timeDraft.startTime"
+                  type="text"
+                  inputmode="numeric"
+                  class="stamm-input"
+                  placeholder="08:00"
+                  @blur="normalizeStartTime"
+                />
               </div>
               <div class="time-field">
                 <label class="time-label">Ende</label>
-                <input v-model="timeDraft.endTime" type="time" class="stamm-input" />
+                <input
+                  v-model="timeDraft.endTime"
+                  type="text"
+                  inputmode="numeric"
+                  class="stamm-input"
+                  placeholder="16:30"
+                  @blur="normalizeEndTime"
+                />
               </div>
               <div class="time-field">
                 <label class="time-label">Pause (Min.)</label>
