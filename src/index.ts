@@ -131,6 +131,13 @@ if (API_ENABLED) {
   logInfo("[API] Web-API deaktiviert (JWT_SECRET nicht gesetzt)");
 }
 
+// Maintenance-Cron (Audit-Log-Retention, abgelaufene Pair-Tokens etc.)
+// Laeuft nur im DB-Modus, weil alle Tasks DB-getrieben sind.
+if (DB_ENABLED) {
+  const { startMaintenanceCron } = await import("./maintenance.js");
+  startMaintenanceCron();
+}
+
 // Graceful Shutdown
 async function shutdown(signal: string): Promise<void> {
   logInfo(`${signal} empfangen — fahre herunter...`);

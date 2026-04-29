@@ -187,7 +187,34 @@ export const dbTeam: TeamRepository = {
       if (companyId) companyText = lookupName?.trim() ?? companyText;
     }
 
-    const userId = member.userId ?? null;
+    // Auto-Link: wenn der Caller keinen userId mitgibt, suchen wir nach einem
+    // passenden User-Account (Migration 013). EINDEUTIGER Match auf Username
+    // oder DisplayName (case-insensitive) wird verlinkt — dann kommen
+    // Notifications fuer Tasks/Termine/Meetings automatisch beim User an,
+    // sobald er gepairt ist. Konservativ: bei Mehrdeutigkeit kein Link.
+    let userId = member.userId ?? null;
+    if (userId === null) {
+      try {
+        const matches = await db`
+          SELECT id FROM users
+           WHERE LOWER(TRIM(username)) = LOWER(TRIM(${name}))
+              OR LOWER(TRIM(COALESCE(display_name, ''))) = LOWER(TRIM(${name}))
+        `;
+        if (matches.length === 1) {
+          // Eindeutigkeit auf der Team-Member-Seite: ist dieser User schon mit
+          // einem anderen team_member verlinkt? Wenn ja, NICHT auto-linken
+          // (UNIQUE-Constraint wuerde sonst den INSERT killen).
+          const [conflict] = await db`
+            SELECT 1 FROM team_members WHERE user_id = ${String(matches[0]!.id)} LIMIT 1
+          `;
+          if (!conflict) {
+            userId = String(matches[0]!.id);
+          }
+        }
+      } catch {
+        // Fail-soft — User-Tabelle nicht da o.ae. Kein Crash.
+      }
+    }
 
     const [row] = await db`
       INSERT INTO team_members (

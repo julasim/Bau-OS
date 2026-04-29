@@ -119,7 +119,18 @@ export async function listDbUsers(): Promise<DbUser[]> {
   return rows.map(rowToDbUser);
 }
 
-/** Legt einen neuen DB-User an. Throws bei UNIQUE-Konflikt auf username. */
+/** Legt einen neuen DB-User an. Throws bei UNIQUE-Konflikt auf username.
+ *
+ *  Auto-Link Migration 013: nach erfolgreichem INSERT prueft die Funktion,
+ *  ob ein team_member mit passendem Namen (case-insensitive auf username
+ *  oder displayName) existiert UND noch keinen user_id hat. Falls ja UND
+ *  eindeutig, wird die Verknuepfung gesetzt. Damit kommen Notifications
+ *  automatisch beim neuen User an, sobald er gepairt ist — kein manueller
+ *  Klick im TeamDetailView noetig.
+ *
+ *  Konservativ: bei Mehrdeutigkeit (mehrere team_members mit gleichem Namen)
+ *  wird NICHT verlinkt. Admin muss in dem Fall manuell setzen.
+ */
 export async function createDbUser(input: {
   username: string;
   password: string;
@@ -137,7 +148,33 @@ export async function createDbUser(input: {
     )
     RETURNING *
   `;
-  return rowToDbUser(row);
+  const user = rowToDbUser(row);
+
+  // Auto-Link: gibt es ein team_member ohne user_id, dessen Name zum
+  // neuen User passt? Wenn EINDEUTIG (Count=1), dann verlinken.
+  // CTE prueft erst ob Match eindeutig ist, bevor das UPDATE feuert —
+  // sonst werden bei "Max Mueller" + zwei team_members beide gewildert.
+  try {
+    await db`
+      WITH candidates AS (
+        SELECT id FROM team_members
+         WHERE user_id IS NULL
+           AND (
+             LOWER(TRIM(name)) = LOWER(TRIM(${user.username}))
+             OR LOWER(TRIM(name)) = LOWER(TRIM(${user.displayName ?? ""}))
+           )
+      )
+      UPDATE team_members
+         SET user_id = ${user.id}
+       WHERE id IN (SELECT id FROM candidates)
+         AND (SELECT COUNT(*) FROM candidates) = 1
+    `;
+  } catch {
+    // Tabelle team_members existiert evtl. nicht (FS-Mode-Mix) — egal,
+    // dann gibt es eben keinen Auto-Link.
+  }
+
+  return user;
 }
 
 /** Setzt Felder eines DB-Users. NICHT erlaubt: is_protected aufheben/setzen

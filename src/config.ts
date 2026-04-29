@@ -118,6 +118,14 @@ export const LOG_DISPLAY_MAX_CHARS = 3_800; // /logs Output-Limit
 export const LOG_JSONL_MAX_BYTES = parseInt(process.env.LOG_JSONL_MAX_BYTES || String(5 * 1024 * 1024), 10);
 export const LOG_JSONL_KEEP_FILES = parseInt(process.env.LOG_JSONL_KEEP_FILES || "5", 10);
 
+// ── Audit-Log Retention ────────────────────────────────────────────────────
+// Wie lange Audit-Eintraege aufbewahrt werden (Tage). Default 365 — fuer
+// Sicherheits-Forensik braucht man eher zu viel als zu wenig. Per Env
+// kuerzer setzbar, falls die Tabelle bei extrem hohem Traffic wegen
+// Login-Fail-Bombings zu gross wird.
+// 0 = nie loeschen (manuelle Verwaltung).
+export const AUDIT_RETENTION_DAYS = parseInt(process.env.AUDIT_RETENTION_DAYS || "365", 10);
+
 // ── Rate-Limiting ────────────────────────────────────────────────────────────
 // Login-Throttle (per-IP, schuetzt vor Brute-Force gegen das Loginformular)
 export const RATE_LIMIT_ATTEMPTS = 5;

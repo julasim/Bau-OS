@@ -630,16 +630,30 @@ onUnmounted(() => {
       <!-- User-Verknuepfung (Migration 013) — nur fuer Admins sichtbar.
            Erlaubt einem Team-Mitglied einen Login-Account zuzuordnen,
            damit Notifications fuer Tasks/Termine/Meetings ankommen. -->
-      <div v-if="isAdmin" class="link-card">
+      <div v-if="isAdmin" :class="['link-card', !member.userId ? 'link-card-warn' : '']">
         <div class="flex items-center" style="gap: 8px; margin-bottom: 8px">
           <BIcon name="link" :size="13" />
           <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted)">
             Verknüpfung mit Benutzer-Account
           </span>
+          <span
+            v-if="!member.userId"
+            style="font-size: 10px; padding: 2px 8px; background:#fef3c7; color:#92400e; border-radius: 999px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em"
+          >
+            Kein Telegram
+          </span>
         </div>
         <p style="font-size: 12px; color: var(--color-text-muted); margin: 0 0 10px 0; line-height: 1.4">
-          Damit Aufgaben, Termine und Meetings, die dieser Person zugewiesen werden,
-          automatisch eine Telegram-Benachrichtigung auslösen.
+          <template v-if="!member.userId">
+            <strong>Diese Person bekommt keine Telegram-Benachrichtigung</strong> bei Aufgaben,
+            Terminen oder Meetings, die ihr zugewiesen werden — weil kein Bau-OS-Konto verknüpft ist.
+            Verlinke unten ein bestehendes Konto, oder lege im Admin-Bereich einen neuen User an
+            (gleicher Name → automatische Verknüpfung).
+          </template>
+          <template v-else>
+            Aufgaben, Termine und Meetings, die dieser Person zugewiesen werden, lösen
+            automatisch eine Telegram-Benachrichtigung aus.
+          </template>
         </p>
         <div class="flex items-center" style="gap: 8px; flex-wrap: wrap">
           <select
@@ -1019,6 +1033,10 @@ onUnmounted(() => {
   border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   background: var(--color-bg-subtle);
+}
+.link-card-warn {
+  border-color: #f59e0b;
+  background: #fffbeb;
 }
 @media (max-width: 720px) {
   .stamm-grid {
