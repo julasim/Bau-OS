@@ -25,6 +25,13 @@ import {
 } from "../auth.js";
 import { generateSecret, buildOtpAuthUri, verifyToken as verifyTotpToken, generateBackupCodes } from "../totp.js";
 import { logInfo } from "../../logger.js";
+import { logEvent as audit } from "../../data/db-audit.js";
+
+function reqMeta(c: { req: { header(name: string): string | undefined } }): { ip: string; userAgent: string } {
+  const ipRaw = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown";
+  const ua = (c.req.header("user-agent") ?? "").slice(0, 256);
+  return { ip: ipRaw, userAgent: ua };
+}
 
 export const auth2faRoutes = new Hono<AppEnv>();
 
@@ -53,6 +60,16 @@ auth2faRoutes.post("/auth/2fa/setup", async (c) => {
   const secret = generateSecret();
   const ok = await storeTotpSecret(dbUser.id, secret);
   if (!ok) return c.json({ error: "Speichern fehlgeschlagen" }, 500);
+
+  const meta = reqMeta(c);
+  void audit({
+    event: "2fa.setup.start",
+    actorUserId: dbUser.id,
+    actorUsername: dbUser.username,
+    actorRole: dbUser.role,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
 
   const uri = buildOtpAuthUri(secret, dbUser.username, "Bau-OS");
   return c.json({ secret, otpauthUri: uri });
@@ -91,6 +108,16 @@ auth2faRoutes.post("/auth/2fa/verify", async (c) => {
   if (!ok) return c.json({ error: "Aktivierung fehlgeschlagen" }, 500);
 
   logInfo(`[2FA] ${dbUser.username} hat 2FA aktiviert`);
+  const meta = reqMeta(c);
+  void audit({
+    event: "2fa.enable",
+    actorUserId: dbUser.id,
+    actorUsername: dbUser.username,
+    actorRole: dbUser.role,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    details: { backupCodes: codes.length },
+  });
   return c.json({ ok: true, backupCodes: codes });
 });
 
@@ -138,5 +165,15 @@ auth2faRoutes.post("/auth/2fa/disable", async (c) => {
   if (!ok) return c.json({ error: "Deaktivierung fehlgeschlagen" }, 500);
 
   logInfo(`[2FA] ${dbUser.username} hat 2FA deaktiviert`);
+  const meta = reqMeta(c);
+  void audit({
+    event: "2fa.disable",
+    actorUserId: dbUser.id,
+    actorUsername: dbUser.username,
+    actorRole: dbUser.role,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    details: { method: body.token ? "totp" : "backup-code" },
+  });
   return c.json({ ok: true });
 });

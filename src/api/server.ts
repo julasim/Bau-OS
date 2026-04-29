@@ -43,6 +43,16 @@ import {
   consumeBackupCode,
 } from "./auth.js";
 import { verifyToken as verifyTotpToken } from "./totp.js";
+import { logEvent as audit } from "../data/db-audit.js";
+
+/** Liefert IP + User-Agent fuer Audit-Eintraege aus Request-Headern.
+ *  Trim auf 256 Zeichen, damit ein 8 KB User-Agent die Tabelle nicht
+ *  unnoetig aufblaeht. */
+function reqMeta(c: { req: { header(name: string): string | undefined } }): { ip: string; userAgent: string } {
+  const ipRaw = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown";
+  const ua = (c.req.header("user-agent") ?? "").slice(0, 256);
+  return { ip: ipRaw, userAgent: ua };
+}
 
 // Routes
 import { dashboardRoutes } from "./routes/dashboard.js";
@@ -185,18 +195,27 @@ app.post("/api/auth/login", async (c) => {
     }
   }
 
-  const failLogin = () => {
+  const meta = reqMeta(c);
+  const failLogin = (reason: string) => {
     loginAttempts.set(ip, {
       count: (entry && now < entry.resetAt ? entry.count : 0) + 1,
       resetAt: now + RATE_LIMIT_WINDOW_MS,
     });
+    void audit({
+      event: "login.fail",
+      actorUsername: usernameInput,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      details: { reason },
+      ok: false,
+    });
     return c.json({ error: "Benutzername oder Passwort falsch" }, 401);
   };
 
-  if (!pwHash || !username || !role) return failLogin();
+  if (!pwHash || !username || !role) return failLogin("user-not-found");
 
   const valid = await verifyPassword(body.password, pwHash);
-  if (!valid) return failLogin();
+  if (!valid) return failLogin("password-mismatch");
 
   loginAttempts.delete(ip);
 
@@ -205,10 +224,28 @@ app.post("/api/auth/login", async (c) => {
   // Legacy-JSON-User haben kein 2FA — die laufen weiter mit Single-Factor.
   if (dbUser?.totpEnabled) {
     const ticket = create2faTicket(dbUser);
+    void audit({
+      event: "login.success",
+      actorUserId: dbUser.id,
+      actorUsername: dbUser.username,
+      actorRole: dbUser.role,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      details: { step: "password-ok-pending-2fa" },
+    });
     return c.json({ requires2fa: true, ticket, username: dbUser.username });
   }
 
   const token = createToken(username, role, userId);
+  void audit({
+    event: "login.success",
+    actorUserId: userId ?? null,
+    actorUsername: username,
+    actorRole: role,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    details: { step: "single-factor" },
+  });
   return c.json({ token, username, role });
 });
 
@@ -242,32 +279,54 @@ app.post("/api/auth/login/2fa", async (c) => {
 
   // Reihenfolge: Token zuerst (regulaerer Flow). Backup-Code nur, wenn der
   // User explizit darauf umschaltet — dann wird genau einer verbraucht.
-  const trackFail = () => {
+  const meta = reqMeta(c);
+  const trackFail = (reason: string) => {
     loginAttempts.set(ip, {
       count: (entry && now < entry.resetAt ? entry.count : 0) + 1,
       resetAt: now + RATE_LIMIT_WINDOW_MS,
     });
+    void audit({
+      event: "login.2fa.fail",
+      actorUserId: user.id,
+      actorUsername: user.username,
+      actorRole: user.role,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      details: { reason },
+      ok: false,
+    });
   };
 
+  let usedBackup = false;
   if (body.token) {
     const secret = await getTotpSecretPlain(user.id);
     if (!secret) {
       return c.json({ error: "Kein TOTP-Secret hinterlegt" }, 500);
     }
     if (!verifyTotpToken(secret, body.token)) {
-      trackFail();
+      trackFail("token-invalid");
       return c.json({ error: "TOTP-Token ungueltig" }, 401);
     }
   } else if (body.backupCode) {
     const ok = await consumeBackupCode(user.id, body.backupCode);
     if (!ok) {
-      trackFail();
+      trackFail("backup-code-invalid");
       return c.json({ error: "Backup-Code ungueltig" }, 401);
     }
+    usedBackup = true;
   }
 
   loginAttempts.delete(ip);
   const token = createToken(user.username, user.role, user.id);
+  void audit({
+    event: "login.2fa.success",
+    actorUserId: user.id,
+    actorUsername: user.username,
+    actorRole: user.role,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+    details: { method: usedBackup ? "backup-code" : "totp" },
+  });
   return c.json({ token, username: user.username, role: user.role });
 });
 

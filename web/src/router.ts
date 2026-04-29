@@ -28,6 +28,7 @@ const router = createRouter({
         { path: "chat", name: "chat", component: () => import("./views/ChatView.vue") },
         { path: "settings", name: "settings", component: () => import("./views/SettingsView.vue") },
         { path: "admin/users", name: "admin-users", component: () => import("./views/AdminUsersView.vue") },
+        { path: "admin/audit", name: "admin-audit", component: () => import("./views/AdminAuditView.vue") },
       ],
     },
   ],

@@ -28,8 +28,29 @@ import {
 } from "../auth.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
+import { logEvent as audit } from "../../data/db-audit.js";
+import type { Context } from "hono";
 
 export const adminUsersRoutes = new Hono<AppEnv>();
+
+/** Sammelt Actor- und Request-Meta fuer Audit-Eintraege aus dem Hono-Context. */
+function actorFromCtx(c: Context<AppEnv>): {
+  actorUserId: string | null;
+  actorUsername: string | null;
+  actorRole: string | null;
+  ip: string;
+  userAgent: string;
+} {
+  const dbUser = c.get("dbUser");
+  const jwtUser = c.get("user");
+  return {
+    actorUserId: dbUser?.id ?? c.get("userId") ?? null,
+    actorUsername: dbUser?.username ?? jwtUser?.username ?? null,
+    actorRole: dbUser?.role ?? c.get("userRole") ?? null,
+    ip: c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown",
+    userAgent: (c.req.header("user-agent") ?? "").slice(0, 256),
+  };
+}
 
 // Alle Routes hier brauchen Admin-Rechte.
 adminUsersRoutes.use("/admin/users/*", adminMiddleware);
@@ -86,6 +107,13 @@ adminUsersRoutes.post("/admin/users", async (c) => {
       displayName: body.displayName?.trim() || null,
     });
     emit({ type: "team", action: "created", id: user.id });
+    void audit({
+      ...actorFromCtx(c),
+      event: "user.create",
+      targetUserId: user.id,
+      targetLabel: user.username,
+      details: { role: user.role },
+    });
     return c.json(publicUser(user), 201);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -155,6 +183,18 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
   }
   if (!updated) return c.json({ error: "Update fehlgeschlagen" }, 500);
   emit({ type: "team", action: "updated", id });
+  // Bei Rollen-Wechsel ein dediziertes Event — sonst generisches user.update.
+  const event = patch.role && patch.role !== target.role ? "user.role" : "user.update";
+  void audit({
+    ...actorFromCtx(c),
+    event,
+    targetUserId: id,
+    targetLabel: updated.username,
+    details: {
+      changed: Object.keys(patch),
+      ...(patch.role && patch.role !== target.role ? { from: target.role, to: patch.role } : {}),
+    },
+  });
   return c.json(publicUser(updated));
 });
 
@@ -178,6 +218,12 @@ adminUsersRoutes.patch("/admin/users/:id/password", async (c) => {
   const ok = await updateDbUserPassword(id, hash);
   if (!ok) return c.json({ error: "Update fehlgeschlagen" }, 500);
   emit({ type: "team", action: "updated", id });
+  void audit({
+    ...actorFromCtx(c),
+    event: "password.admin_reset",
+    targetUserId: id,
+    targetLabel: target.username,
+  });
   return c.json({ ok: true });
 });
 
@@ -203,6 +249,12 @@ adminUsersRoutes.post("/admin/users/:id/pair-token", async (c) => {
   } catch {
     /* BotManager nicht aktiv (FS-Mode) — UI faellt auf generische Anzeige zurueck */
   }
+  void audit({
+    ...actorFromCtx(c),
+    event: "pair.create",
+    targetUserId: id,
+    targetLabel: target.username,
+  });
   return c.json({ ...result, botUsername }, 201);
 });
 
@@ -249,14 +301,17 @@ adminUsersRoutes.put("/admin/users/:id/telegram-bot", async (c) => {
   // Token-Format-Validation — gleiche Regex wie in settings.ts.
   // BotFather-Tokens haben das Format "123456789:ABC..." (Ziffern,
   // Doppelpunkt, mind. 30 Zeichen aus [A-Za-z0-9_-]).
+  let tokenChanged: "set" | "clear" | null = null;
   if ("token" in body && body.token != null) {
     const token = String(body.token).trim();
     if (!/^\d{6,}:[A-Za-z0-9_-]{30,}$/.test(token)) {
       return c.json({ error: "Bot-Token hat falsches Format. Erwartet: '123456789:ABC...' (von @BotFather)" }, 400);
     }
     await setUserBotToken(id, token);
+    tokenChanged = "set";
   } else if ("token" in body) {
     await setUserBotToken(id, null);
+    tokenChanged = "clear";
   }
   if ("enabled" in body) {
     await setUserBotEnabled(id, body.enabled === true);
@@ -269,6 +324,14 @@ adminUsersRoutes.put("/admin/users/:id/telegram-bot", async (c) => {
     /* Manager ist evtl. nicht aktiv (FS-Mode) — kein Fehler */
   }
   emit({ type: "team", action: "updated", id });
+  if (tokenChanged) {
+    void audit({
+      ...actorFromCtx(c),
+      event: tokenChanged === "set" ? "bot.token.set" : "bot.token.clear",
+      targetUserId: id,
+      targetLabel: target.username,
+    });
+  }
   // Frischen Status zurueckgeben, damit UI sofort sieht ob Bot startet.
   const meta = await getBotMeta(id);
   return c.json({ ok: true, ...meta });
@@ -305,5 +368,45 @@ adminUsersRoutes.delete("/admin/users/:id", async (c) => {
   }
   if (!result) return c.json({ error: "Loeschen fehlgeschlagen" }, 500);
   emit({ type: "team", action: "deleted", id });
+  void audit({
+    ...actorFromCtx(c),
+    event: "user.delete",
+    targetUserId: id,
+    targetLabel: target.username,
+    details: { role: target.role },
+  });
   return c.json({ ok: true });
+});
+
+// ── Audit-Log lesen (nur Admins) ────────────────────────────────────────────
+// Liefert die letzten N Audit-Eintraege, optional gefiltert. Limit max 500
+// (DB-seitig erzwungen). Admin-only — Endpoint sitzt in admin-users weil das
+// Audit-Log Auth-/User-Centric ist und der UI-Tab dort am besten passt.
+adminUsersRoutes.get("/admin/audit", async (c) => {
+  const { listEvents } = await import("../../data/db-audit.js");
+  const url = new URL(c.req.url);
+  const params = url.searchParams;
+
+  const opts: Parameters<typeof listEvents>[0] = {};
+  const limitStr = params.get("limit");
+  if (limitStr) opts.limit = parseInt(limitStr, 10);
+  const offsetStr = params.get("offset");
+  if (offsetStr) opts.offset = parseInt(offsetStr, 10);
+  const actor = params.get("actor");
+  if (actor) opts.actorUserId = actor;
+  const target = params.get("target");
+  if (target) opts.targetUserId = target;
+  const event = params.get("event");
+  if (event) opts.event = event;
+  const eventPrefix = params.get("eventPrefix");
+  if (eventPrefix) opts.eventPrefix = eventPrefix;
+  const since = params.get("since");
+  if (since) opts.since = since;
+  const until = params.get("until");
+  if (until) opts.until = until;
+  const ip = params.get("ip");
+  if (ip) opts.ip = ip;
+
+  const events = await listEvents(opts);
+  return c.json(events);
 });

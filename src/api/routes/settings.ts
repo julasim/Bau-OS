@@ -19,6 +19,7 @@ import {
   type DbUser,
   type JwtPayload,
 } from "../auth.js";
+import { logEvent as audit } from "../../data/db-audit.js";
 
 type AppEnv = {
   Variables: {
@@ -148,14 +149,37 @@ settingsRoutes.post("/auth/password", async (c) => {
     return c.json({ error: "Neues Passwort muss mindestens 8 Zeichen haben" }, 400);
   }
 
+  const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown";
+  const ua = (c.req.header("user-agent") ?? "").slice(0, 256);
+
   const dbUser = c.get("dbUser");
   if (dbUser) {
     const valid = await verifyPassword(body.oldPassword, dbUser.passwordHash);
-    if (!valid) return c.json({ error: "Altes Passwort falsch" }, 401);
+    if (!valid) {
+      void audit({
+        event: "password.change",
+        actorUserId: dbUser.id,
+        actorUsername: dbUser.username,
+        actorRole: dbUser.role,
+        ip,
+        userAgent: ua,
+        details: { reason: "old-password-mismatch" },
+        ok: false,
+      });
+      return c.json({ error: "Altes Passwort falsch" }, 401);
+    }
     const newHash = await hashPassword(body.newPassword);
     const ok = await updateDbUserPassword(dbUser.id, newHash);
     if (!ok) return c.json({ error: "Update fehlgeschlagen" }, 500);
     logInfo(`[Settings] ${dbUser.username} hat Passwort geaendert`);
+    void audit({
+      event: "password.change",
+      actorUserId: dbUser.id,
+      actorUsername: dbUser.username,
+      actorRole: dbUser.role,
+      ip,
+      userAgent: ua,
+    });
     return c.json({ ok: true });
   }
 

@@ -1,6 +1,6 @@
 import fs from "fs";
 import path from "path";
-import { LOG_FILE, MAX_LOG_LINES, TIMEZONE } from "./config.js";
+import { LOG_FILE, MAX_LOG_LINES, TIMEZONE, LOG_JSONL_MAX_BYTES, LOG_JSONL_KEEP_FILES } from "./config.js";
 
 let lineCount = -1; // -1 = noch nicht initialisiert
 
@@ -66,9 +66,43 @@ function trimLog(): void {
 
 const jsonlPath = LOG_FILE.replace(/\.log$/, ".jsonl");
 
+/** Rotiert bot.jsonl groessenbasiert: bot.jsonl → .1, .1 → .2, ...,
+ *  aelteste wird geloescht. Wird vor jedem Append gepruef-/aufgerufen,
+ *  aber teure stat()-Calls werden auf einen pro 500 Append-Operationen
+ *  begrenzt — sonst kostet jeder Log-Aufruf einen Syscall.
+ *  In-Memory-Counter fuer den Fast-Path. */
+let jsonlAppendsSinceCheck = 0;
+const JSONL_CHECK_EVERY = 500;
+
+function rotateJsonlIfNeeded(): void {
+  try {
+    if (!fs.existsSync(jsonlPath)) return;
+    const size = fs.statSync(jsonlPath).size;
+    if (size < LOG_JSONL_MAX_BYTES) return;
+
+    // Aelteste loeschen (falls vorhanden), dann durchschieben.
+    const oldest = `${jsonlPath}.${LOG_JSONL_KEEP_FILES}`;
+    if (fs.existsSync(oldest)) fs.unlinkSync(oldest);
+    for (let i = LOG_JSONL_KEEP_FILES - 1; i >= 1; i--) {
+      const src = `${jsonlPath}.${i}`;
+      const dst = `${jsonlPath}.${i + 1}`;
+      if (fs.existsSync(src)) fs.renameSync(src, dst);
+    }
+    fs.renameSync(jsonlPath, `${jsonlPath}.1`);
+  } catch {
+    /* Rotation-Fehler darf den Logging-Pfad nicht killen */
+  }
+}
+
 function appendJsonl(entry: LogEntry): void {
   try {
     ensureLogDir();
+    if (jsonlAppendsSinceCheck >= JSONL_CHECK_EVERY) {
+      jsonlAppendsSinceCheck = 0;
+      rotateJsonlIfNeeded();
+    } else {
+      jsonlAppendsSinceCheck++;
+    }
     fs.appendFileSync(jsonlPath, JSON.stringify(entry) + "\n", "utf-8");
   } catch {
     /* JSONL-Fehler ist nicht kritisch */

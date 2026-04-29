@@ -103,6 +103,20 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
     }
     const result = await redeemPairToken(arg.toUpperCase(), String(ctx.chat.id));
     if (!result.ok) {
+      // Audit-Eintrag: Pair-Versuch fehlgeschlagen. Telegram-Chat-ID und
+      // Versuchstoken-Praefix in den Details, damit Admins bei Verdacht
+      // auf Brute-Force-Versuche etwas zum Querlesen haben.
+      const { logEvent } = await import("./data/db-audit.js");
+      void logEvent({
+        event: "pair.fail",
+        details: {
+          reason: result.reason,
+          chatId: String(ctx.chat.id),
+          tokenPrefix: arg.slice(0, 3).toUpperCase(),
+          ...(result.reason === "chat-id-taken" ? { conflictUsername: result.existingUsername } : {}),
+        },
+        ok: false,
+      });
       if (result.reason === "chat-id-taken") {
         await ctx.reply(
           `Dieser Telegram-Account ist bereits mit dem Bau-OS-User "${result.existingUsername}" verknuepft. Pro Bau-OS-Konto braucht es einen eigenen Telegram-Account. Falls das ein Versehen war: Admin kann das alte Pairing aufloesen.`,
@@ -113,6 +127,16 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       return;
     }
     const user = result.user;
+    const { logEvent } = await import("./data/db-audit.js");
+    void logEvent({
+      event: "pair.success",
+      actorUserId: user.id,
+      actorUsername: user.username,
+      actorRole: user.role,
+      targetUserId: user.id,
+      targetLabel: user.username,
+      details: { chatId: String(ctx.chat.id) },
+    });
     await ctx.reply(
       `Erfolgreich verknuepft mit "${user.displayName ?? user.username}".\nAb jetzt antwortet der Bot auf deine Nachrichten. /hilfe zeigt die verfuegbaren Befehle.`,
     );

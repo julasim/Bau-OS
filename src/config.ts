@@ -111,6 +111,13 @@ export const LOG_DEFAULT_LINES = 20; // /logs Standard-Anzahl
 export const LOG_MAX_DISPLAY_LINES = 50; // /logs Maximum
 export const LOG_DISPLAY_MAX_CHARS = 3_800; // /logs Output-Limit
 
+// JSONL-Log (maschinenlesbar, vollstaendig): groessenbasierte Rotation.
+// Bei Ueberschreitung wird bot.jsonl → bot.jsonl.1, bot.jsonl.1 → .2 ...
+// und das aelteste geloescht. Verhindert dass Disk volllaeuft auf
+// Long-Running-Installationen. 5 MB * 5 Files = 25 MB max im Worst-Case.
+export const LOG_JSONL_MAX_BYTES = parseInt(process.env.LOG_JSONL_MAX_BYTES || String(5 * 1024 * 1024), 10);
+export const LOG_JSONL_KEEP_FILES = parseInt(process.env.LOG_JSONL_KEEP_FILES || "5", 10);
+
 // ── Rate-Limiting ────────────────────────────────────────────────────────────
 // Login-Throttle (per-IP, schuetzt vor Brute-Force gegen das Loginformular)
 export const RATE_LIMIT_ATTEMPTS = 5;
