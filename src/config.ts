@@ -112,14 +112,27 @@ export const LOG_MAX_DISPLAY_LINES = 50; // /logs Maximum
 export const LOG_DISPLAY_MAX_CHARS = 3_800; // /logs Output-Limit
 
 // ── Rate-Limiting ────────────────────────────────────────────────────────────
+// Login-Throttle (per-IP, schuetzt vor Brute-Force gegen das Loginformular)
 export const RATE_LIMIT_ATTEMPTS = 5;
 export const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+
+// Globaler API-Throttle (per-IP, schuetzt vor Scrapern und automatisierten
+// Scans). Generoes genug, damit normales UI-Browsing nie limitiert wird —
+// 600 Requests pro Minute = 10/sec, deckt Bursts beim Tab-Wechsel locker ab.
+// Ueberschritten = 429 mit Retry-After-Header.
+export const API_RATE_LIMIT_REQUESTS = parseInt(process.env.API_RATE_LIMIT_REQUESTS || "600", 10);
+export const API_RATE_LIMIT_WINDOW_MS = parseInt(process.env.API_RATE_LIMIT_WINDOW_MS || "60000", 10);
 
 // ── Web-API ──────────────────────────────────────────────────────────────────
 export const API_PORT = parseInt(process.env.API_PORT || "3000", 10);
 export const JWT_SECRET = process.env.JWT_SECRET || "";
 export const USERS_FILE = path.join(process.cwd(), "data", "users.json");
 export const API_ENABLED = !!JWT_SECRET;
+// Production-Hardening: schwache JWT-Secrets ablehnen (mind. 32 Zeichen).
+// Im Dev-Modus nur warnen, damit der lokale Schnellstart funktioniert.
+export const JWT_SECRET_OK = JWT_SECRET.length >= 32;
+export const NODE_ENV = process.env.NODE_ENV || "development";
+export const IS_PRODUCTION = NODE_ENV === "production";
 
 // ── Datenbank (Supabase / PostgreSQL) ────────────────────────────────────────
 export const DATABASE_URL = process.env.DATABASE_URL || "";

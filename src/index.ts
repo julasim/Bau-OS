@@ -107,8 +107,21 @@ if (DB_ENABLED) {
 }
 
 // Web-API starten (nur wenn JWT_SECRET gesetzt)
-import { API_ENABLED, API_PORT } from "./config.js";
+import { API_ENABLED, API_PORT, JWT_SECRET_OK, IS_PRODUCTION } from "./config.js";
 if (API_ENABLED) {
+  // Production-Hardening: schwaches Secret = harter Stop. Dev-Modus warnt nur,
+  // damit lokale Smoke-Tests mit Default-Configs noch starten.
+  if (!JWT_SECRET_OK) {
+    if (IS_PRODUCTION) {
+      logError(
+        "[API] JWT_SECRET zu kurz (<32 Zeichen). Production-Start verweigert.",
+        new Error("Bitte ein starkes Secret setzen: openssl rand -base64 48"),
+      );
+      process.exit(1);
+    } else {
+      logInfo("[API] WARN — JWT_SECRET ist <32 Zeichen. In Production wuerde der Start verweigert.");
+    }
+  }
   const { startApi } = await import("./api/server.js");
   startApi();
   // Supabase Realtime Bridge starten (wenn verfuegbar)

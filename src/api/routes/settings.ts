@@ -144,8 +144,8 @@ settingsRoutes.post("/auth/password", async (c) => {
   if (!body.oldPassword || !body.newPassword) {
     return c.json({ error: "Altes und neues Passwort erforderlich" }, 400);
   }
-  if (body.newPassword.length < 6) {
-    return c.json({ error: "Neues Passwort muss mindestens 6 Zeichen haben" }, 400);
+  if (body.newPassword.length < 8) {
+    return c.json({ error: "Neues Passwort muss mindestens 8 Zeichen haben" }, 400);
   }
 
   const dbUser = c.get("dbUser");

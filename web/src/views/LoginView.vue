@@ -9,6 +9,12 @@ const password = ref("");
 const error = ref("");
 const loading = ref(false);
 
+// 2FA-Step-Zustand
+const twoFaTicket = ref<string | null>(null);
+const twoFaUsername = ref<string | null>(null);
+const totpToken = ref("");
+const useBackup = ref(false);
+
 // Hostname aus dem Browser uebernehmen — keine hardcoded Firma mehr.
 const hostname = computed(() =>
   typeof window !== "undefined" ? window.location.host : "bau-os",
@@ -33,17 +39,63 @@ async function login() {
   try {
     // Username trimmen — Browser-Autofill schmuggelt gern Leerzeichen rein.
     // Passwort bleibt unangetastet (Whitespace darf Teil sein).
-    const res = await api.post<{ token: string }>("/auth/login", {
+    const res = await api.post<{
+      token?: string;
+      requires2fa?: boolean;
+      ticket?: string;
+      username?: string;
+    }>("/auth/login", {
       username: username.value.trim(),
       password: password.value,
     });
-    setToken(res.token);
-    router.push("/");
+
+    // 2FA-Pfad: Backend liefert ein kurzes Ticket statt JWT.
+    if (res.requires2fa && res.ticket) {
+      twoFaTicket.value = res.ticket;
+      twoFaUsername.value = res.username ?? username.value.trim();
+      totpToken.value = "";
+      useBackup.value = false;
+      // Passwort-Feld leeren — kein Grund es im DOM zu halten
+      password.value = "";
+      return;
+    }
+
+    if (res.token) {
+      setToken(res.token);
+      router.push("/");
+    }
   } catch (e: any) {
     error.value = e.message || "Login fehlgeschlagen";
   } finally {
     loading.value = false;
   }
+}
+
+async function submitTotp() {
+  if (!twoFaTicket.value || !totpToken.value) return;
+  error.value = "";
+  loading.value = true;
+  try {
+    const cleanToken = totpToken.value.replace(/\s/g, "");
+    const payload = useBackup.value
+      ? { ticket: twoFaTicket.value, backupCode: cleanToken }
+      : { ticket: twoFaTicket.value, token: cleanToken };
+    const res = await api.post<{ token: string }>("/auth/login/2fa", payload);
+    setToken(res.token);
+    router.push("/");
+  } catch (e: any) {
+    error.value = e.message || "Code ungueltig";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function abortTwoFa() {
+  twoFaTicket.value = null;
+  twoFaUsername.value = null;
+  totpToken.value = "";
+  useBackup.value = false;
+  error.value = "";
 }
 </script>
 
@@ -153,6 +205,123 @@ async function login() {
       style="flex: 1; padding: 48px; background: var(--color-bg)"
     >
       <div style="width: 100%; max-width: 320px">
+        <!-- 2FA-Step: nach erfolgreichem Passwort, Token-Eingabe -->
+        <template v-if="twoFaTicket">
+          <h2
+            style="
+              font-size: 20px;
+              font-weight: 600;
+              color: var(--color-text);
+              margin: 0 0 4px 0;
+            "
+          >
+            Zwei-Faktor-Code
+          </h2>
+          <p
+            style="
+              font-size: 13px;
+              color: var(--color-text-muted);
+              margin: 0 0 24px 0;
+            "
+          >
+            <span v-if="!useBackup">
+              Bitte den 6-stelligen Code aus der Authenticator-App eingeben.
+            </span>
+            <span v-else>
+              Backup-Code eingeben (Format: <code class="font-mono">abcd-1234-5678</code>).
+              Jeder Code ist genau einmal nutzbar.
+            </span>
+          </p>
+
+          <form @submit.prevent="submitTotp" class="flex flex-col" style="gap: 16px">
+            <div>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">
+                {{ useBackup ? "Backup-Code" : "Code" }}
+              </label>
+              <input
+                v-model="totpToken"
+                type="text"
+                :inputmode="useBackup ? 'text' : 'numeric'"
+                :pattern="useBackup ? undefined : '[0-9]*'"
+                :maxlength="useBackup ? 14 : 7"
+                autocomplete="one-time-code"
+                autofocus
+                required
+                class="login-input"
+                style="font-family: 'JetBrains Mono', monospace; letter-spacing: 0.05em"
+              />
+            </div>
+
+            <p
+              v-if="error"
+              style="
+                font-size: 12px;
+                color: var(--color-danger-text);
+                background: var(--color-danger-bg);
+                border: 1px solid var(--color-danger-border);
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin: 0;
+              "
+            >
+              {{ error }}
+            </p>
+
+            <button
+              type="submit"
+              :disabled="loading || !totpToken"
+              style="
+                width: 100%;
+                padding: 10px;
+                font-size: 13px;
+                font-weight: 500;
+                color: var(--color-bg);
+                background: var(--color-primary);
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: opacity 180ms ease;
+              "
+              :style="{ opacity: (loading || !totpToken) ? 0.5 : 1 }"
+            >
+              {{ loading ? "…" : "Bestätigen" }}
+            </button>
+
+            <div class="flex justify-between" style="margin-top: 4px">
+              <button
+                type="button"
+                @click="useBackup = !useBackup; totpToken = ''; error = ''"
+                style="
+                  background: none;
+                  border: none;
+                  font-size: 12px;
+                  color: var(--color-text-muted);
+                  cursor: pointer;
+                  padding: 0;
+                "
+              >
+                {{ useBackup ? "Authenticator-Code verwenden" : "Backup-Code verwenden" }}
+              </button>
+              <button
+                type="button"
+                @click="abortTwoFa"
+                style="
+                  background: none;
+                  border: none;
+                  font-size: 12px;
+                  color: var(--color-text-muted);
+                  cursor: pointer;
+                  padding: 0;
+                "
+              >
+                Abbrechen
+              </button>
+            </div>
+          </form>
+        </template>
+
+        <!-- Normaler Login-Step -->
+        <template v-else>
         <h2
           style="
             font-size: 20px;
@@ -242,6 +411,7 @@ async function login() {
             >Passwort vergessen?</a
           >
         </form>
+        </template>
 
         <div
           style="

@@ -48,6 +48,7 @@
     "pdf-parse": "^2.4.5",
     "pdfkit": "^0.18.0",
     "postgres": "^3.4.7",
+    "qrcode": "^1.5.4",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2"
   },
@@ -59,6 +60,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/pdf-parse": "^1.1.5",
     "@types/pdfkit": "^0.17.5",
+    "@types/qrcode": "^1.5.6",
     "@vitejs/plugin-vue": "^6.0.5",
     "eslint": "^10.2.0",
     "eslint-config-prettier": "^10.1.8",

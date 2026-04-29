@@ -38,6 +38,8 @@ export interface DbUser {
   // Phase 6: Per-User Bots
   telegramBotToken: string | null;
   telegramBotEnabled: boolean;
+  // Phase 7 (Pre-Production): 2FA / TOTP
+  totpEnabled: boolean;
   settings: UserSettings;
   createdAt: string;
   updatedAt: string;
@@ -70,6 +72,7 @@ function rowToDbUser(row: Record<string, unknown>): DbUser {
     // den Wert unveraendert zurueck.
     telegramBotToken: decryptString(row.telegram_bot_token ? String(row.telegram_bot_token) : null),
     telegramBotEnabled: row.telegram_bot_enabled !== false,
+    totpEnabled: row.totp_enabled === true,
     settings,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
@@ -541,7 +544,14 @@ export function createToken(username: string, role: string, id?: string): string
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, JWT_SECRET) as JwtPayload;
+  const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { aud?: string };
+  // 2FA-Login-Tickets duerfen NICHT als regulaere Auth-Tokens akzeptiert
+  // werden — sonst koennte jemand mit dem Ticket aus Step 1 alle API-Calls
+  // machen ohne den TOTP-Schritt zu absolvieren.
+  if (decoded.aud === "2fa") {
+    throw new Error("2FA-Ticket ist kein gueltiges Login-Token");
+  }
+  return decoded;
 }
 
 // ── Hono Middleware ──────────────────────────────────────────────────────────
@@ -621,4 +631,153 @@ export async function adminMiddleware(c: Context, next: Next): Promise<Response 
     return c.json({ error: "Admin-Rechte erforderlich" }, 403);
   }
   await next();
+}
+
+// ── 2FA / TOTP (Phase 7 Pre-Production) ─────────────────────────────────────
+//
+// Lifecycle:
+//   1. Setup-Schritt 1: User klickt "2FA aktivieren". POST /auth/2fa/setup
+//      generiert einen frischen Secret, verschluesselt + speichert ihn,
+//      liefert otpauth-URI fuer QR-Code-Anzeige zurueck. totp_enabled
+//      bleibt false.
+//   2. Setup-Schritt 2: User scannt QR, gibt aktuellen 6-stelligen Token
+//      ein. POST /auth/2fa/verify prueft den Token, setzt totp_enabled=true,
+//      generiert 10 Backup-Codes (Plaintext einmalig im Response, Hashes
+//      in der DB). Ab jetzt verlangt der Login das 2. Token.
+//   3. Login-Flow: nach erfolgreichem Passwort liefert /auth/login statt
+//      einem JWT ein kurzes "Ticket" (5 Minuten gueltig, audience='2fa'),
+//      mit dem POST /auth/login/2fa eingeloest werden kann.
+//   4. Disable: POST /auth/2fa/disable braucht aktuelles Passwort + gueltigen
+//      TOTP-Token (Self-Lockout-Vermeidung). Loescht Secret + Backup-Codes.
+
+/** Liest den entschluesselten TOTP-Secret eines Users. Nur fuer Server-
+ *  interne Verifikation — der Plaintext-Secret verlaesst nie die API.
+ *  Liefert null wenn 2FA noch gar nicht eingerichtet wurde. */
+export async function getTotpSecretPlain(userId: string): Promise<string | null> {
+  if (!DB_ENABLED) return null;
+  const db = getDb();
+  const [row] = await db`
+    SELECT totp_secret_encrypted FROM users WHERE id = ${userId} LIMIT 1
+  `;
+  if (!row?.totp_secret_encrypted) return null;
+  return decryptString(String(row.totp_secret_encrypted));
+}
+
+/** Speichert einen frischen Base32-Secret. Setzt totp_enabled NICHT —
+ *  das passiert erst bei der Verifikation. Falls schon einer drin war,
+ *  ueberschreiben (der User klickt "Setup wiederholen"). */
+export async function storeTotpSecret(userId: string, secretBase32: string): Promise<boolean> {
+  if (!DB_ENABLED) return false;
+  const db = getDb();
+  const encrypted = encryptString(secretBase32);
+  const result = await db`
+    UPDATE users
+       SET totp_secret_encrypted = ${encrypted},
+           totp_enabled = false,
+           totp_backup_codes = '[]'::jsonb,
+           totp_verified_at = NULL
+     WHERE id = ${userId}
+  `;
+  return result.count > 0;
+}
+
+/** Aktiviert 2FA. Backup-Codes als bcrypt-Hashes (jeweils $2b$10$...).
+ *  Caller hat den Token bereits verifiziert. */
+export async function enableTotp(userId: string, backupCodeHashes: string[]): Promise<boolean> {
+  if (!DB_ENABLED) return false;
+  const db = getDb();
+  const result = await db`
+    UPDATE users
+       SET totp_enabled = true,
+           totp_backup_codes = ${JSON.stringify(backupCodeHashes)}::jsonb,
+           totp_verified_at = now()
+     WHERE id = ${userId}
+       AND totp_secret_encrypted IS NOT NULL
+  `;
+  return result.count > 0;
+}
+
+/** Deaktiviert 2FA komplett. Caller hat Passwort + Token verifiziert. */
+export async function disableTotp(userId: string): Promise<boolean> {
+  if (!DB_ENABLED) return false;
+  const db = getDb();
+  const result = await db`
+    UPDATE users
+       SET totp_secret_encrypted = NULL,
+           totp_enabled = false,
+           totp_backup_codes = '[]'::jsonb,
+           totp_verified_at = NULL
+     WHERE id = ${userId}
+  `;
+  return result.count > 0;
+}
+
+/** Prueft einen Backup-Code gegen die gespeicherten Hashes. Bei Treffer
+ *  wird der Hash entfernt (Einmalverwendung). Liefert true bei Erfolg. */
+export async function consumeBackupCode(userId: string, code: string): Promise<boolean> {
+  if (!DB_ENABLED) return false;
+  const cleaned = code.trim().toLowerCase();
+  if (!cleaned) return false;
+  const db = getDb();
+  const [row] = await db`
+    SELECT totp_backup_codes FROM users WHERE id = ${userId} LIMIT 1
+  `;
+  if (!row?.totp_backup_codes || !Array.isArray(row.totp_backup_codes)) return false;
+  const hashes = row.totp_backup_codes as string[];
+  for (let i = 0; i < hashes.length; i++) {
+    const ok = await bcrypt.compare(cleaned, hashes[i]!);
+    if (ok) {
+      const remaining = hashes.filter((_, j) => j !== i);
+      await db`
+        UPDATE users SET totp_backup_codes = ${JSON.stringify(remaining)}::jsonb
+        WHERE id = ${userId}
+      `;
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Hasht eine Liste Backup-Codes mit bcrypt. Bewusst sequentiell, weil
+ *  10 Codes * ~50ms = 500ms — kein Problem im Setup-Flow. */
+export async function hashBackupCodes(codes: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const c of codes) {
+    out.push(await bcrypt.hash(c.toLowerCase(), 10));
+  }
+  return out;
+}
+
+// ── 2FA-Login-Ticket (kurzlebiges JWT zwischen Schritt 1 und 2) ─────────────
+//
+// Nach erfolgreichem Passwort kriegt der User ein "Ticket" — JWT mit
+// audience='2fa' und 5-Min-Ablauf. Damit kann er POST /auth/login/2fa
+// aufrufen ohne erneutes Passwort. Das Ticket ist NICHT als regulaeres
+// JWT gueltig (audience-Check verhindert das).
+
+interface TwoFactorTicketPayload {
+  sub: string;
+  username: string;
+  role: string;
+  aud: "2fa";
+}
+
+export function create2faTicket(user: DbUser): string {
+  const payload: TwoFactorTicketPayload = {
+    sub: user.id,
+    username: user.username,
+    role: user.role,
+    aud: "2fa",
+  };
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "5m" });
+}
+
+export function verify2faTicket(ticket: string): TwoFactorTicketPayload | null {
+  try {
+    const decoded = jwt.verify(ticket, JWT_SECRET, { audience: "2fa" }) as TwoFactorTicketPayload;
+    if (decoded.aud !== "2fa") return null;
+    return decoded;
+  } catch {
+    return null;
+  }
 }

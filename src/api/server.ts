@@ -18,7 +18,14 @@ import { cors } from "hono/cors";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import path from "path";
-import { API_PORT, RATE_LIMIT_ATTEMPTS, RATE_LIMIT_WINDOW_MS, DB_ENABLED } from "../config.js";
+import {
+  API_PORT,
+  RATE_LIMIT_ATTEMPTS,
+  RATE_LIMIT_WINDOW_MS,
+  API_RATE_LIMIT_REQUESTS,
+  API_RATE_LIMIT_WINDOW_MS,
+  DB_ENABLED,
+} from "../config.js";
 import { logInfo } from "../logger.js";
 import {
   authMiddleware,
@@ -27,9 +34,15 @@ import {
   verifyPassword,
   createToken,
   findDbUserByUsername,
+  findDbUserById,
   countDbUsers,
   createInitialAdmin,
+  create2faTicket,
+  verify2faTicket,
+  getTotpSecretPlain,
+  consumeBackupCode,
 } from "./auth.js";
+import { verifyToken as verifyTotpToken } from "./totp.js";
 
 // Routes
 import { dashboardRoutes } from "./routes/dashboard.js";
@@ -50,8 +63,22 @@ import { chatRoutes } from "./routes/chat.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { agentLogsRoutes } from "./routes/agent-logs.js";
 import { adminUsersRoutes } from "./routes/admin-users.js";
+import { auth2faRoutes } from "./routes/auth-2fa.js";
 
 const app = new Hono<AppEnv>();
+
+// ── Health-Check (ohne Auth, ohne Rate-Limit) ────────────────────────────────
+// Liveness-Probe fuer Reverse-Proxy / Uptime-Monitoring. Liefert minimale
+// Information — KEINE Versionen, Build-Hashes oder DB-Zugaenge, weil der
+// Endpunkt anonym erreichbar ist.
+const startedAt = Date.now();
+app.get("/api/health", (c) => {
+  return c.json({
+    ok: true,
+    uptime: Math.floor((Date.now() - startedAt) / 1000),
+    db: DB_ENABLED,
+  });
+});
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim()) : undefined;
@@ -64,6 +91,44 @@ app.use(
     allowHeaders: ["Content-Type", "Authorization"],
   }),
 );
+
+// ── Globaler Rate-Limit (per-IP, vor Auth-Middleware) ────────────────────────
+// Schutz vor automatisierten Scans und Scrapern. Generoes (default 600/min),
+// damit normales UI-Browsing nie limitiert wird. Login + Setup-Wizard haben
+// zusaetzlich engere Limits weiter unten.
+//
+// In-Memory Sliding-Window: pro IP ein Bucket mit Counter und resetAt.
+// Reicht fuer Single-Instance-Deployments (Bau-OS laeuft auf einer VM).
+// Bei Multi-Instance muesste das auf Redis o.ae. wandern — aktuell nicht
+// relevant.
+const apiBuckets = new Map<string, { count: number; resetAt: number }>();
+
+app.use("/api/*", async (c, next) => {
+  // Health-Endpunkt ist oben schon abgehandelt — kommt hier nicht mehr an.
+  const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown";
+  const now = Date.now();
+  const bucket = apiBuckets.get(ip);
+  if (bucket && now < bucket.resetAt) {
+    if (bucket.count >= API_RATE_LIMIT_REQUESTS) {
+      const retryAfter = Math.ceil((bucket.resetAt - now) / 1000);
+      c.header("Retry-After", String(retryAfter));
+      return c.json({ error: "Zu viele Anfragen. Bitte kurz warten." }, 429);
+    }
+    bucket.count++;
+  } else {
+    apiBuckets.set(ip, { count: 1, resetAt: now + API_RATE_LIMIT_WINDOW_MS });
+  }
+
+  // Bucket-GC: alle 5 Minuten Map durchlaufen und abgelaufene Eintraege
+  // loeschen, sonst waechst die Map unbegrenzt bei jedem neuen Client.
+  if (now % 100 === 0 && apiBuckets.size > 1000) {
+    for (const [k, v] of apiBuckets) {
+      if (now >= v.resetAt) apiBuckets.delete(k);
+    }
+  }
+
+  await next();
+});
 
 // ── Rate Limiting (Login) ────────────────────────────────────────────────────
 const loginAttempts = new Map<string, { count: number; resetAt: number }>();
@@ -134,8 +199,76 @@ app.post("/api/auth/login", async (c) => {
   if (!valid) return failLogin();
 
   loginAttempts.delete(ip);
+
+  // 2FA-Check: hat der DB-User TOTP aktiv? Dann statt Token ein kurzes
+  // Ticket ausstellen, das nur fuer /auth/login/2fa verwendet werden kann.
+  // Legacy-JSON-User haben kein 2FA — die laufen weiter mit Single-Factor.
+  if (dbUser?.totpEnabled) {
+    const ticket = create2faTicket(dbUser);
+    return c.json({ requires2fa: true, ticket, username: dbUser.username });
+  }
+
   const token = createToken(username, role, userId);
   return c.json({ token, username, role });
+});
+
+// ── Login Step 2: TOTP-Token verifizieren und JWT ausstellen ────────────────
+app.post("/api/auth/login/2fa", async (c) => {
+  const ip = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "unknown";
+  const now = Date.now();
+  const entry = loginAttempts.get(ip);
+  if (entry && now < entry.resetAt && entry.count >= RATE_LIMIT_ATTEMPTS) {
+    return c.json({ error: "Zu viele Versuche. Bitte spaeter erneut versuchen." }, 429);
+  }
+
+  let body: { ticket: string; token?: string; backupCode?: string };
+  try {
+    body = await c.req.json<typeof body>();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
+  if (!body.ticket) return c.json({ error: "Ticket fehlt" }, 400);
+  if (!body.token && !body.backupCode) {
+    return c.json({ error: "TOTP-Token oder Backup-Code erforderlich" }, 400);
+  }
+
+  const claim = verify2faTicket(body.ticket);
+  if (!claim) return c.json({ error: "Ticket abgelaufen oder ungueltig" }, 401);
+
+  const user = await findDbUserById(claim.sub);
+  if (!user || !user.totpEnabled) {
+    return c.json({ error: "2FA nicht aktiv" }, 400);
+  }
+
+  // Reihenfolge: Token zuerst (regulaerer Flow). Backup-Code nur, wenn der
+  // User explizit darauf umschaltet — dann wird genau einer verbraucht.
+  const trackFail = () => {
+    loginAttempts.set(ip, {
+      count: (entry && now < entry.resetAt ? entry.count : 0) + 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    });
+  };
+
+  if (body.token) {
+    const secret = await getTotpSecretPlain(user.id);
+    if (!secret) {
+      return c.json({ error: "Kein TOTP-Secret hinterlegt" }, 500);
+    }
+    if (!verifyTotpToken(secret, body.token)) {
+      trackFail();
+      return c.json({ error: "TOTP-Token ungueltig" }, 401);
+    }
+  } else if (body.backupCode) {
+    const ok = await consumeBackupCode(user.id, body.backupCode);
+    if (!ok) {
+      trackFail();
+      return c.json({ error: "Backup-Code ungueltig" }, 401);
+    }
+  }
+
+  loginAttempts.delete(ip);
+  const token = createToken(user.username, user.role, user.id);
+  return c.json({ token, username: user.username, role: user.role });
 });
 
 // ── Setup-Wizard (ohne Auth) ────────────────────────────────────────────────
@@ -242,6 +375,7 @@ app.route("/api", eventsRoutes);
 app.route("/api", chatRoutes);
 app.route("/api", settingsRoutes);
 app.route("/api", agentLogsRoutes);
+app.route("/api", auth2faRoutes);
 
 // ── Statische Dateien (Vue SPA in Production) ────────────────────────────────
 app.use("/*", serveStatic({ root: "./dist/web" }));

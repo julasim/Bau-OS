@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { api } from "../api";
+import QRCode from "qrcode";
 
 interface SettingsState {
   displayName?: string;
@@ -45,6 +46,142 @@ const newPassword = ref("");
 const confirmPassword = ref("");
 
 const modelInput = ref("");
+
+// ── 2FA / TOTP ──────────────────────────────────────────────────────────────
+// Drei Zustaende:
+//   - twoFaStatus.enabled === false + setupSecret == null  → Aus, Button "Aktivieren"
+//   - twoFaStatus.enabled === false + setupSecret != null  → Setup laeuft (QR sichtbar)
+//   - twoFaStatus.enabled === true                          → Aktiv, Button "Deaktivieren"
+type TwoFaStatus = { enabled: boolean; available: boolean };
+const twoFaStatus = ref<TwoFaStatus>({ enabled: false, available: false });
+const setupSecret = ref<string | null>(null);
+const setupUri = ref<string | null>(null);
+const setupToken = ref("");
+const backupCodes = ref<string[] | null>(null);
+const twoFaBusy = ref(false);
+
+const disableMode = ref(false);
+const disablePassword = ref("");
+const disableToken = ref("");
+
+async function loadTwoFaStatus() {
+  try {
+    twoFaStatus.value = await api.get<TwoFaStatus>("/auth/2fa/status");
+  } catch {
+    /* still rendern, dann sieht der User halt "nicht verfuegbar" */
+  }
+}
+
+async function start2faSetup() {
+  twoFaBusy.value = true;
+  try {
+    const res = await api.post<{ secret: string; otpauthUri: string }>("/auth/2fa/setup", {});
+    setupSecret.value = res.secret;
+    setupUri.value = res.otpauthUri;
+    setupToken.value = "";
+    backupCodes.value = null;
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Setup fehlgeschlagen");
+  } finally {
+    twoFaBusy.value = false;
+  }
+}
+
+async function verify2faSetup() {
+  if (!setupToken.value || setupToken.value.replace(/\s/g, "").length !== 6) {
+    flash("error", "Bitte 6-stelligen Token eingeben");
+    return;
+  }
+  twoFaBusy.value = true;
+  try {
+    const res = await api.post<{ ok: boolean; backupCodes: string[] }>("/auth/2fa/verify", {
+      token: setupToken.value.replace(/\s/g, ""),
+    });
+    backupCodes.value = res.backupCodes;
+    setupSecret.value = null;
+    setupUri.value = null;
+    setupToken.value = "";
+    twoFaStatus.value = { enabled: true, available: true };
+    flash("success", "2FA aktiviert. Bitte Backup-Codes sichern!");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Verifikation fehlgeschlagen");
+  } finally {
+    twoFaBusy.value = false;
+  }
+}
+
+function cancel2faSetup() {
+  setupSecret.value = null;
+  setupUri.value = null;
+  setupToken.value = "";
+}
+
+function startDisable() {
+  disableMode.value = true;
+  disablePassword.value = "";
+  disableToken.value = "";
+}
+
+function cancelDisable() {
+  disableMode.value = false;
+  disablePassword.value = "";
+  disableToken.value = "";
+}
+
+async function confirmDisable() {
+  if (!disablePassword.value || !disableToken.value) {
+    flash("error", "Passwort und Token erforderlich");
+    return;
+  }
+  twoFaBusy.value = true;
+  try {
+    const cleanToken = disableToken.value.replace(/\s/g, "");
+    // Heuristik: 6 Ziffern = TOTP, sonst Backup-Code
+    const payload =
+      /^\d{6}$/.test(cleanToken)
+        ? { password: disablePassword.value, token: cleanToken }
+        : { password: disablePassword.value, backupCode: cleanToken };
+    await api.post("/auth/2fa/disable", payload);
+    twoFaStatus.value = { enabled: false, available: true };
+    backupCodes.value = null;
+    cancelDisable();
+    flash("success", "2FA deaktiviert");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Deaktivierung fehlgeschlagen");
+  } finally {
+    twoFaBusy.value = false;
+  }
+}
+
+function copyBackupCodes() {
+  if (!backupCodes.value) return;
+  const text = backupCodes.value.join("\n");
+  void navigator.clipboard?.writeText(text).catch(() => {});
+  flash("success", "Backup-Codes in Zwischenablage kopiert");
+}
+
+function dismissBackupCodes() {
+  backupCodes.value = null;
+}
+
+// QR-Code clientseitig als Data-URL rendern (kein externer Service —
+// otpauth-URIs sind sensibel, dafuer wollen wir keinen Roundtrip).
+const qrDataUrl = ref<string | null>(null);
+watch(setupUri, async (uri) => {
+  if (!uri) {
+    qrDataUrl.value = null;
+    return;
+  }
+  try {
+    qrDataUrl.value = await QRCode.toDataURL(uri, {
+      width: 220,
+      margin: 1,
+      errorCorrectionLevel: "M",
+    });
+  } catch {
+    qrDataUrl.value = null;
+  }
+});
 
 // Hinweis: Die Telegram-Bot-Verwaltung wurde aus den User-Settings
 // entfernt — Admin verwaltet Bot-Token und Pairing zentral via
@@ -135,8 +272,8 @@ async function changePassword() {
     flash("error", "Neue Passwoerter stimmen nicht ueberein");
     return;
   }
-  if (newPassword.value.length < 6) {
-    flash("error", "Neues Passwort muss mindestens 6 Zeichen haben");
+  if (newPassword.value.length < 8) {
+    flash("error", "Neues Passwort muss mindestens 8 Zeichen haben");
     return;
   }
 
@@ -189,6 +326,7 @@ async function toggleFast() {
 
 onMounted(() => {
   void loadAll();
+  void loadTwoFaStatus();
 });
 </script>
 
@@ -299,6 +437,212 @@ onMounted(() => {
               :style="{ opacity: (savingPassword || !oldPassword || !newPassword) ? 0.5 : 1 }"
             >
               {{ savingPassword ? "..." : "Passwort aendern" }}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Zwei-Faktor-Authentifizierung ─────────────────────────── -->
+      <section v-if="twoFaStatus.available">
+        <h3 class="settings-h3 mb-3">
+          Zwei-Faktor-Authentifizierung
+          <span
+            v-if="twoFaStatus.enabled"
+            class="ml-2 text-xs px-2 py-0.5 rounded-full"
+            style="background:#dcfce7; color:#166534"
+          >Aktiv</span>
+          <span
+            v-else
+            class="ml-2 text-xs px-2 py-0.5 rounded-full"
+            style="background:#f4f4f5; color:#52525b"
+          >Aus</span>
+        </h3>
+
+        <!-- Aus + nicht im Setup → Aktivieren-Button -->
+        <div
+          v-if="!twoFaStatus.enabled && !setupSecret && !backupCodes"
+          class="settings-card p-4"
+        >
+          <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
+            Zusaetzlicher Schutz beim Login: nach Passwort wird ein 6-stelliger
+            Code aus deiner Authenticator-App (Google Authenticator, Aegis,
+            1Password, Bitwarden, ...) verlangt.
+          </p>
+          <div class="flex justify-end">
+            <button
+              @click="start2faSetup"
+              :disabled="twoFaBusy"
+              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+              :style="{ opacity: twoFaBusy ? 0.5 : 1 }"
+            >
+              {{ twoFaBusy ? "..." : "2FA aktivieren" }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Setup laeuft → QR + Token-Eingabe -->
+        <div
+          v-else-if="setupSecret && setupUri"
+          class="settings-card p-4 space-y-4"
+        >
+          <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
+            Scanne den QR-Code in deiner Authenticator-App. Falls scannen nicht
+            geht, kannst du den Secret manuell eingeben.
+          </p>
+          <div class="flex flex-wrap gap-4 items-start">
+            <div
+              v-if="qrDataUrl"
+              style="background:#fff; padding:8px; border-radius:8px; flex-shrink:0"
+            >
+              <img :src="qrDataUrl" alt="2FA QR" style="display:block; width:220px; height:220px" />
+            </div>
+            <div class="flex-1" style="min-width: 240px">
+              <label class="text-xs settings-label" style="display:block; margin-bottom:4px">
+                Secret (Base32, manuell eingeben)
+              </label>
+              <code
+                class="font-mono text-sm"
+                style="display:block; padding:8px 10px; background:var(--color-surface-2,#f4f4f5); border-radius:6px; word-break:break-all"
+              >{{ setupSecret }}</code>
+              <div class="flex items-center gap-3 mt-3">
+                <label class="text-sm settings-label flex-shrink-0">Aktueller Code</label>
+                <input
+                  v-model="setupToken"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  maxlength="7"
+                  placeholder="123456"
+                  autocomplete="one-time-code"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
+                />
+              </div>
+            </div>
+          </div>
+          <div class="flex gap-2 justify-end">
+            <button
+              @click="cancel2faSetup"
+              :disabled="twoFaBusy"
+              class="px-4 py-1.5 text-sm rounded"
+              style="background:transparent; border:1px solid var(--color-border)"
+            >
+              Abbrechen
+            </button>
+            <button
+              @click="verify2faSetup"
+              :disabled="twoFaBusy || !setupToken"
+              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+              :style="{ opacity: (twoFaBusy || !setupToken) ? 0.5 : 1 }"
+            >
+              {{ twoFaBusy ? "..." : "Bestaetigen & aktivieren" }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Aktivierung erfolgreich → Backup-Codes anzeigen (einmalig!) -->
+        <div
+          v-else-if="backupCodes"
+          class="settings-card p-4 space-y-3"
+          style="border:2px solid #f59e0b"
+        >
+          <div class="flex items-start gap-2">
+            <span style="font-size:18px">⚠️</span>
+            <div>
+              <strong class="text-sm">Bitte jetzt sichern</strong>
+              <p class="text-xs" style="color: var(--color-text-muted); margin-top:4px">
+                Diese 10 Backup-Codes ersetzen den Authenticator wenn du dein
+                Geraet verlierst. Jeder Code ist genau <em>einmal</em> nutzbar.
+                Speichere sie in einem Passwort-Manager — sie werden NICHT
+                erneut angezeigt.
+              </p>
+            </div>
+          </div>
+          <pre
+            class="font-mono text-sm"
+            style="background:var(--color-surface-2,#f4f4f5); padding:12px; border-radius:6px; margin:0; overflow:auto"
+          >{{ backupCodes.join("\n") }}</pre>
+          <div class="flex gap-2 justify-end">
+            <button
+              @click="copyBackupCodes"
+              class="px-4 py-1.5 text-sm rounded"
+              style="background:transparent; border:1px solid var(--color-border)"
+            >
+              Kopieren
+            </button>
+            <button
+              @click="dismissBackupCodes"
+              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+            >
+              Habe ich gespeichert
+            </button>
+          </div>
+        </div>
+
+        <!-- 2FA aktiv → Disable-Bereich -->
+        <div
+          v-else-if="twoFaStatus.enabled && !disableMode"
+          class="settings-card p-4"
+        >
+          <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
+            2FA ist aktiv. Beim Login wird nach dem Passwort der 6-stellige
+            Code abgefragt.
+          </p>
+          <div class="flex justify-end">
+            <button
+              @click="startDisable"
+              class="px-4 py-1.5 text-sm rounded"
+              style="background:transparent; border:1px solid #dc2626; color:#dc2626"
+            >
+              Deaktivieren
+            </button>
+          </div>
+        </div>
+
+        <!-- Disable-Mode: Passwort + Token bestaetigen -->
+        <div
+          v-else-if="disableMode"
+          class="settings-card p-4 space-y-3"
+        >
+          <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
+            Zur Bestaetigung Passwort und einen aktuellen Code (oder Backup-Code)
+            eingeben.
+          </p>
+          <div class="flex items-center gap-3">
+            <label class="text-sm settings-label w-40 flex-shrink-0">Passwort</label>
+            <input
+              v-model="disablePassword"
+              type="password"
+              autocomplete="current-password"
+              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+            />
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="text-sm settings-label w-40 flex-shrink-0">Code / Backup</label>
+            <input
+              v-model="disableToken"
+              type="text"
+              autocomplete="one-time-code"
+              placeholder="123456 oder abcd-1234-5678"
+              class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
+            />
+          </div>
+          <div class="flex gap-2 justify-end pt-1">
+            <button
+              @click="cancelDisable"
+              :disabled="twoFaBusy"
+              class="px-4 py-1.5 text-sm rounded"
+              style="background:transparent; border:1px solid var(--color-border)"
+            >
+              Abbrechen
+            </button>
+            <button
+              @click="confirmDisable"
+              :disabled="twoFaBusy || !disablePassword || !disableToken"
+              class="px-4 py-1.5 text-sm font-medium rounded"
+              style="background:#dc2626; color:white; border:none"
+              :style="{ opacity: (twoFaBusy || !disablePassword || !disableToken) ? 0.5 : 1 }"
+            >
+              {{ twoFaBusy ? "..." : "2FA deaktivieren" }}
             </button>
           </div>
         </div>
