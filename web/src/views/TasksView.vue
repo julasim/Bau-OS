@@ -9,7 +9,13 @@ interface Task {
   text: string;
   status: "open" | "in_progress" | "done";
   priority?: string;
+  /** Legacy-Freitext-Assignee. Bei alten Daten kann hier auch
+   *  "[object Object]" stehen — wir zeigen das defensiv als "—". */
   assignee: string | null;
+  /** Migration 007: FK auf team_members.id — wenn gesetzt ist
+   *  assigneeName aus dem Backend-Join verfuegbar. */
+  assigneeId?: string | null;
+  assigneeName?: string | null;
   date: string | null;
   location: string | null;
   project: string | null;
@@ -18,10 +24,25 @@ interface Task {
   updatedAt: string;
 }
 
+/** Defensive Anzeige fuer assignee — alte Daten koennten "[object Object]"
+ *  als String enthalten (Bug aus alter API-Version, gefixt mit dem TeamMini-
+ *  Type-Fix). Bevorzugt assigneeName aus dem Backend-Join, sonst Freitext. */
+function displayAssignee(task: Task): string {
+  if (task.assigneeName && task.assigneeName !== "[object Object]") return task.assigneeName;
+  if (task.assignee && task.assignee !== "[object Object]") return task.assignee;
+  return "—";
+}
+
 type ViewMode = "list" | "kanban" | "timeline";
 
 const tasks = ref<Task[]>([]);
-const team = ref<string[]>([]);
+// /team liefert seit Migration 006 TeamMember-Objects, nicht mehr string[].
+// Wir brauchen hier nur id+name fuers Select.
+interface TeamMini {
+  id: string;
+  name: string;
+}
+const team = ref<TeamMini[]>([]);
 const editing = ref<Task | null>(null);
 const newText = ref("");
 const filter = ref<"all" | "open" | "in_progress" | "done">("all");
@@ -49,7 +70,7 @@ const counts = computed(() => ({
 async function load() {
   [tasks.value, team.value] = await Promise.all([
     api.get<Task[]>("/tasks"),
-    api.get<string[]>("/team").catch(() => []),
+    api.get<TeamMini[]>("/team").catch(() => []),
   ]);
 }
 
@@ -61,10 +82,17 @@ async function create() {
 }
 
 async function save(task: Task) {
+  // Defensive: falls assignee aus alten kaputten Daten ein Object ist
+  // ("[object Object]"-String oder echtes Object), normalisieren auf null.
+  const cleanAssignee =
+    typeof task.assignee === "string" && task.assignee !== "[object Object]"
+      ? task.assignee
+      : null;
   await api.put(`/tasks/${task.id}`, {
     text: task.text,
     status: task.status,
-    assignee: task.assignee,
+    assignee: cleanAssignee,
+    assigneeId: task.assigneeId ?? null,
     date: task.date,
     location: task.location,
   });
@@ -229,9 +257,12 @@ const kanbanColumns = computed(() => [
         </div>
         <div>
           <label class="eyebrow" style="margin-bottom: 4px; display: block">Person</label>
-          <select v-model="editing.assignee" class="form-input">
+          <!-- Bind auf assigneeId (UUID) statt assignee (Text). Backend
+               denormalisiert assignee-Text aus team_members.name beim Save,
+               sodass die Anzeige in der Liste konsistent bleibt. -->
+          <select v-model="editing.assigneeId" class="form-input">
             <option :value="null">–</option>
-            <option v-for="m in team" :key="m" :value="m">{{ m }}</option>
+            <option v-for="m in team" :key="m.id" :value="m.id">{{ m.name }}</option>
           </select>
         </div>
         <div>
@@ -333,7 +364,7 @@ const kanbanColumns = computed(() => [
           <span v-else style="color: var(--color-text-faint)">—</span>
         </div>
         <div style="width: 100px; font-size: 12px; color: var(--color-text-muted)" class="truncate">
-          {{ task.assignee || "—" }}
+          {{ displayAssignee(task) }}
         </div>
         <div
           class="font-mono"
