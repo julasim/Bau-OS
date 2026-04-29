@@ -418,20 +418,12 @@ function formatDate(iso?: string) {
     <!-- Liste -->
     <div class="users-list-wrap" style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
      <div class="users-list-inner">
-      <div
-        class="flex items-center"
-        style="
-          gap: 12px;
-          padding: 10px 16px;
-          background: var(--color-bg-subtle);
-          border-bottom: 1px solid var(--color-border);
-        "
-      >
+      <!-- Header — auf Mobile via CSS hidden -->
+      <div class="users-list-header flex items-center">
         <span class="eyebrow flex-1">Name</span>
         <span class="eyebrow" style="width: 90px">Rolle</span>
         <span class="eyebrow" style="width: 70px">Telegram</span>
         <span class="eyebrow" style="width: 100px">Angelegt</span>
-        <!-- Aktionen-Spalte: matcht 4 row-action-Buttons (32px) + Gaps -->
         <span class="eyebrow" style="width: 148px; text-align: right">Aktionen</span>
       </div>
       <div
@@ -440,10 +432,10 @@ function formatDate(iso?: string) {
         class="user-row"
         :class="{ 'user-row-protected': u.isProtected, 'user-row-self': u.id === currentUserId }"
       >
-        <div class="flex items-center" style="gap: 10px; flex: 1; min-width: 0">
+        <div class="user-name-block flex items-center" style="gap: 10px; flex: 1; min-width: 0">
           <div class="user-avatar">{{ initials(u.displayName ?? u.username) }}</div>
-          <div style="min-width: 0">
-            <div style="font-size: 13px; color: var(--color-text); display: flex; align-items: center; gap: 6px">
+          <div style="min-width: 0; flex: 1">
+            <div style="font-size: 13px; color: var(--color-text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
               <span>{{ u.displayName ?? u.username }}</span>
               <BIcon
                 v-if="u.isProtected"
@@ -469,9 +461,25 @@ function formatDate(iso?: string) {
             <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 1px">
               <span v-if="u.displayName">{{ u.username }}</span>
             </div>
+            <!-- Mobile-Meta-Zeile: Rolle + Telegram-Status + Datum als Chips,
+                 nur unter 768px sichtbar (CSS unten). -->
+            <div class="user-meta-mobile">
+              <button
+                class="role-btn"
+                :class="`role-btn-${u.role}`"
+                :disabled="u.isProtected || u.id === currentUserId"
+                @click="toggleRole(u)"
+              >
+                {{ u.role === "admin" ? "Admin" : "Nutzer" }}
+              </button>
+              <span class="user-meta-text">
+                {{ u.hasTelegram ? "✓ Telegram" : "kein Telegram" }}
+              </span>
+              <span class="user-meta-text font-mono">📅 {{ formatDate(u.createdAt) }}</span>
+            </div>
           </div>
         </div>
-        <div style="width: 90px">
+        <div class="user-col-role" style="width: 90px">
           <button
             class="role-btn"
             :class="`role-btn-${u.role}`"
@@ -482,13 +490,13 @@ function formatDate(iso?: string) {
             {{ u.role === "admin" ? "Admin" : "Nutzer" }}
           </button>
         </div>
-        <div style="width: 70px; font-size: 11px; color: var(--color-text-muted)">
+        <div class="user-col-telegram" style="width: 70px; font-size: 11px; color: var(--color-text-muted)">
           {{ u.hasTelegram ? "✓" : "—" }}
         </div>
-        <div class="font-mono" style="width: 100px; font-size: 11px; color: var(--color-text-tertiary)">
+        <div class="user-col-date font-mono" style="width: 100px; font-size: 11px; color: var(--color-text-tertiary)">
           {{ formatDate(u.createdAt) }}
         </div>
-        <div style="display: flex; justify-content: flex-end; gap: 4px">
+        <div class="user-actions" style="display: flex; justify-content: flex-end; gap: 4px">
           <button class="row-action" @click="openBotTokenDialog(u)" :title="'Bot-Token verwalten'">
             <BIcon name="cpu" :size="12" />
           </button>
@@ -1187,23 +1195,84 @@ function formatDate(iso?: string) {
   border-color: var(--color-warning-text, #b45309) !important;
 }
 
-/* ── Mobile (Phase 1A) ─────────────────────────────────────── */
+/* ── Nutzer-Liste — Layouts ────────────────────────────────── */
 .users-list-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 .users-list-inner {
-  /* Summe: 1fr Name + 90 Rolle + 70 Tg + 100 Datum + 148 Aktionen + Gaps + Padding */
+  /* Desktop: min-width damit die Spalten nicht zerquetschen.
+     Summe: 1fr Name + 90 Rolle + 70 Tg + 100 Datum + 148 Aktionen + Gaps. */
   min-width: 700px;
 }
-/* Action-Buttons in der Tabelle: 32x32 statt globaler 36x36 — passt
-   sonst nicht in die kompakte Aktionen-Spalte. Touch ist trotzdem ok. */
+.users-list-header {
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--color-bg-subtle);
+  border-bottom: 1px solid var(--color-border);
+}
+/* Mobile-Meta-Zeile (Rolle/Telegram/Datum als Chips) — Default hidden,
+   wird unter 768px aktiviert. */
+.user-meta-mobile {
+  display: none;
+}
+
 @media (max-width: 767.98px) {
-  .users-list-inner .row-action {
-    width: 32px !important;
-    height: 32px !important;
-    min-width: 32px !important;
-    min-height: 32px !important;
+  /* Card-Layout statt Tabelle */
+  .users-list-wrap {
+    overflow-x: visible;
+  }
+  .users-list-inner {
+    min-width: 0;
+  }
+  .users-list-header {
+    display: none;
+  }
+  /* Spalten-Divs verstecken — Daten wandern in die Mobile-Meta-Zeile */
+  .user-col-role,
+  .user-col-telegram,
+  .user-col-date {
+    display: none !important;
+  }
+  /* Mobile-Meta-Zeile sichtbar */
+  .user-meta-mobile {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin-top: 8px;
+    align-items: center;
+  }
+  .user-meta-mobile .role-btn {
+    /* Etwas kompakter im Mobile-Layout */
+    padding: 2px 8px !important;
+  }
+  .user-meta-text {
+    font-size: 11px;
+    color: var(--color-text-muted);
+  }
+  /* Action-Buttons rutschen unter den Namen-Block — flex-wrap auf der Row */
+  .user-row {
+    flex-wrap: wrap !important;
+    align-items: flex-start !important;
+    gap: 8px 12px !important;
+    padding: 12px 14px !important;
+  }
+  .user-name-block {
+    flex: 1 1 100% !important;
+  }
+  .user-actions {
+    flex: 1 1 100%;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+    padding-top: 4px;
+    border-top: 1px solid var(--color-border-subtle);
+  }
+  /* Touch-Targets in der Mobile-Action-Reihe etwas groesser */
+  .user-actions .row-action {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
   }
 }
 </style>
