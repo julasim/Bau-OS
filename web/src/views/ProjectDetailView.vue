@@ -997,6 +997,18 @@ async function onDrop(e: DragEvent) {
   if (tab.value !== "files") return;
   if (e.dataTransfer?.files?.length) await uploadFiles(e.dataTransfer.files);
 }
+// Versteckter file-Input + Ref-Trigger statt label-wrapping. Letzteres ist
+// fehleranfaellig wenn der Klick auf einem inneren SVG/BIcon landet —
+// Click-Events von SVG-Children propagieren nicht zuverlaessig zum
+// umschliessenden <label>. Mit explizitem Button + ref.click() ist das
+// rock-solid in allen Browsern.
+const fileInputRef = ref<HTMLInputElement | null>(null);
+
+function triggerFileUpload() {
+  if (uploading.value) return;
+  fileInputRef.value?.click();
+}
+
 function onFileInput(e: Event) {
   const input = e.target as HTMLInputElement;
   if (input.files?.length) {
@@ -2702,11 +2714,23 @@ async function deleteMeeting() {
             <span v-if="uploadMsg" style="font-size: 11px; color: var(--color-success-text)">
               {{ uploadMsg }}
             </span>
-            <label class="bauos-btn solid sm" :class="{ disabled: uploading }">
+            <button
+              type="button"
+              class="bauos-btn solid sm"
+              :disabled="uploading"
+              @click="triggerFileUpload"
+            >
               <BIcon name="paperclip" :size="12" />
               <span style="margin-left: 4px">{{ uploading ? "Lädt…" : "Hochladen" }}</span>
-              <input type="file" multiple style="display: none" @change="onFileInput" :disabled="uploading" />
-            </label>
+            </button>
+            <input
+              ref="fileInputRef"
+              type="file"
+              multiple
+              style="display: none"
+              :disabled="uploading"
+              @change="onFileInput"
+            />
           </div>
         </div>
 
