@@ -290,16 +290,8 @@ const kanbanColumns = computed(() => [
       style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden"
     >
      <div class="task-list-inner">
-      <!-- Header -->
-      <div
-        class="flex items-center"
-        style="
-          gap: 12px;
-          padding: 10px 16px;
-          background: var(--color-bg-subtle);
-          border-bottom: 1px solid var(--color-border);
-        "
-      >
+      <!-- Header — auf Mobile via CSS hidden, weil dort keine Tabelle mehr -->
+      <div class="task-list-header flex items-center">
         <span style="width: 14px" />
         <span class="eyebrow flex-1">Aufgabe</span>
         <span class="eyebrow" style="width: 120px">Projekt</span>
@@ -329,7 +321,7 @@ const kanbanColumns = computed(() => [
         >
           <BIcon v-if="task.status === 'done'" name="check" :size="10" :stroke-width="2.5" />
         </button>
-        <div class="flex-1 min-w-0" @click="edit(task)" style="cursor: pointer">
+        <div class="task-text flex-1 min-w-0" @click="edit(task)" style="cursor: pointer">
           <div
             :class="{ 'line-through': task.status === 'done' }"
             :style="{
@@ -349,8 +341,17 @@ const kanbanColumns = computed(() => [
           >
             {{ task.location }}
           </div>
+          <!-- Mobile-Meta-Zeile: Projekt + Person + Datum als Chips, nur unter
+               768px sichtbar (CSS unten). Verhindert Tabellen-Quetsche auf Phone. -->
+          <div class="task-meta-mobile">
+            <span v-if="task.project" class="task-meta-chip">{{ task.project }}</span>
+            <span v-if="task.assigneeName || (task.assignee && task.assignee !== '[object Object]')" class="task-meta-text">
+              👤 {{ displayAssignee(task) }}
+            </span>
+            <span v-if="task.date" class="task-meta-text font-mono">📅 {{ formatDate(task.date) }}</span>
+          </div>
         </div>
-        <div style="width: 120px; font-size: 12px; color: var(--color-text-muted)" class="truncate">
+        <div class="task-col-project" style="width: 120px; font-size: 12px; color: var(--color-text-muted)">
           <span
             v-if="task.project"
             style="
@@ -359,15 +360,16 @@ const kanbanColumns = computed(() => [
               border-radius: 4px;
               font-size: 11px;
             "
+            class="truncate"
             >{{ task.project }}</span
           >
           <span v-else style="color: var(--color-text-faint)">—</span>
         </div>
-        <div style="width: 100px; font-size: 12px; color: var(--color-text-muted)" class="truncate">
+        <div class="task-col-person truncate" style="width: 100px; font-size: 12px; color: var(--color-text-muted)">
           {{ displayAssignee(task) }}
         </div>
         <div
-          class="font-mono"
+          class="task-col-date font-mono"
           style="width: 90px; font-size: 11px; color: var(--color-text-muted)"
         >
           {{ formatDate(task.date) || "—" }}
@@ -669,19 +671,72 @@ const kanbanColumns = computed(() => [
   transform: translateX(2px);
 }
 
-/* ── Mobile: List + Kanban responsiv ─────────────────────────── */
+/* ── Tasks-Liste — Layouts ─────────────────────────────────── */
 .task-list-wrap {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 .task-list-inner {
-  /* min-width damit die Spalten nicht zerquetscht werden;
-     Wert grob = Summe aller Spaltenbreiten + Padding. */
+  /* Desktop: min-width damit die Spalten nicht zerquetscht werden. */
   min-width: 600px;
+}
+.task-list-header {
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--color-bg-subtle);
+  border-bottom: 1px solid var(--color-border);
+}
+/* Mobile-Meta-Zeile (Projekt/Person/Datum als Chips) — Default hidden,
+   wird unter 768px aktiviert. */
+.task-meta-mobile {
+  display: none;
 }
 
 @media (max-width: 767.98px) {
-  /* Kanban auf Phone: 1 Spalte statt 3 (sonst je ~120px = unbedienbar) */
+  /* Kein horizontal-scroll mehr — wir wechseln auf Card-Layout */
+  .task-list-wrap {
+    overflow-x: visible;
+  }
+  .task-list-inner {
+    min-width: 0;
+  }
+  /* Header verstecken — auf Phone redundant (Meta-Chips selbsterklaerend) */
+  .task-list-header {
+    display: none;
+  }
+  /* Tabellen-Spalten verstecken — Meta wandert unter den Aufgabe-Text */
+  .task-col-project,
+  .task-col-person,
+  .task-col-date {
+    display: none !important;
+  }
+  /* Mobile-Meta-Zeile sichtbar */
+  .task-meta-mobile {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+    align-items: center;
+  }
+  .task-meta-chip {
+    background: var(--color-border-subtle);
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    color: var(--color-text-muted);
+  }
+  .task-meta-text {
+    font-size: 11px;
+    color: var(--color-text-muted);
+  }
+  /* Row-Padding bisschen lockerer auf Phone */
+  .task-row {
+    padding: 12px 14px !important;
+    align-items: flex-start !important;
+  }
+  /* Kanban auf Phone: 1 Spalte statt 3 */
   .kanban-grid {
     grid-template-columns: 1fr !important;
   }
