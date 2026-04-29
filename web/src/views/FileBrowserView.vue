@@ -29,7 +29,7 @@
 //   Design vorgesehen, aktuell aber nicht datengestuetzt → disabled.
 // ============================================================
 
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import FileGlyph from "../components/FileGlyph.vue";
@@ -50,6 +50,8 @@ interface FileNode {
   size?: string;
   /** Original-Projekt (fuer Files unter Projekte/) */
   project?: string | null;
+  /** Markiert (vom aktuellen User) */
+  starred?: boolean;
   children?: FileNode[];
 }
 
@@ -62,18 +64,41 @@ interface ApiFile {
   extension: string;
   project?: string | null;
   analyzed?: boolean;
+  starred?: boolean;
 }
 
 interface ProjectEntry {
   name: string;
 }
 
+interface AdminUserMini {
+  id: string;
+  username: string;
+  displayName: string | null;
+  role: "admin" | "user";
+}
+
+interface FileShare {
+  fileId: string;
+  userId: string;
+  username: string;
+  displayName: string | null;
+  canEdit: boolean;
+  addedAt: string;
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
+type ViewMode = "all" | "recent" | "starred" | "shared";
+const mode = ref<ViewMode>("all");
 const path = ref<string[]>([]);
 const selected = ref<{ node: FileNode; columnIndex: number } | null>(null);
 const view = ref<"column" | "list" | "icons">("column");
 const sidebarOpen = ref(true);
 const searchTerm = ref("");
+
+// Forward/Back-Navigation: kleiner Stack, im Stil von Browsern.
+// Wir merken uns die letzten Pfade — Back schiebt rein, Forward wieder raus.
+const historyForward = ref<string[][]>([]);
 
 // Auf Mobile: Sidebar startet zugeklappt — Platz fuer den Browser.
 if (typeof window !== "undefined" && window.matchMedia("(max-width: 767.98px)").matches) {
@@ -82,6 +107,7 @@ if (typeof window !== "undefined" && window.matchMedia("(max-width: 767.98px)").
 
 const allFiles = ref<ApiFile[]>([]);
 const allProjects = ref<ProjectEntry[]>([]);
+const allUsers = ref<AdminUserMini[]>([]);
 const loading = ref(false);
 
 // File-Preview (rechts in der Spalten-Ansicht)
@@ -94,16 +120,44 @@ const uploading = ref(false);
 const uploadMsg = ref("");
 const dragging = ref(false);
 
+// Action-Menu (··· Dropdown im Preview-Pane)
+const actionMenuOpen = ref(false);
+
+// Teilen-Modal
+const shareModalOpen = ref(false);
+const shareModalFile = ref<FileNode | null>(null);
+const shareModalShares = ref<FileShare[]>([]);
+const shareModalSearchTerm = ref("");
+const shareModalCanEdit = ref(false);
+const shareModalBusy = ref(false);
+
 // ── Daten laden ──────────────────────────────────────────────────────────────
 async function loadFiles() {
   loading.value = true;
   try {
-    const raw = await api.get<ApiFile[]>("/files");
+    let endpoint = "/files";
+    if (mode.value === "recent") endpoint = "/files/recent";
+    else if (mode.value === "starred") endpoint = "/files/starred";
+    else if (mode.value === "shared") endpoint = "/files/shared";
+
+    const raw = await api.get<ApiFile[]>(endpoint);
     allFiles.value = raw.filter((f) => f.type === "file" && !!f.id);
   } catch {
     allFiles.value = [];
   } finally {
     loading.value = false;
+  }
+}
+
+async function loadUsers() {
+  // Nur einmalig fuer Teilen-Modal. /users/mini ist kein Admin-Endpoint —
+  // alle eingeloggten User koennen die Mini-Liste lesen (nur id/username/
+  // displayName, ohne Hashes oder Telegram-Daten).
+  if (allUsers.value.length > 0) return;
+  try {
+    allUsers.value = await api.get<AdminUserMini[]>("/users/mini");
+  } catch {
+    allUsers.value = [];
   }
 }
 
@@ -150,6 +204,19 @@ function kindLabel(k: FileKind): string {
   )[k];
 }
 
+function fileToNode(f: ApiFile): FileNode {
+  return {
+    name: f.name,
+    kind: extToKind(f.extension),
+    id: f.id,
+    updated: humanDate(f.modified),
+    sizeBytes: f.size,
+    size: formatSize(f.size),
+    project: f.project ?? null,
+    starred: f.starred === true,
+  };
+}
+
 const tree = computed<FileNode>(() => {
   // Filter: wenn ein Such-Term aktiv ist, fallen alle Files raus die nicht
   // matchen — das macht die Tree-Sicht zur Such-Sicht. Folder werden nur
@@ -158,11 +225,31 @@ const tree = computed<FileNode>(() => {
   const match = (f: ApiFile) =>
     !term || f.name.toLowerCase().includes(term) || (f.project ?? "").toLowerCase().includes(term);
 
-  // Projekte gruppieren
+  const filtered = allFiles.value.filter(match);
+
+  // ── Spezial-Modes: flache Liste in einem virtuellen Folder ───────────
+  // Recent/Starred/Shared sind keine Hierarchie — wir zeigen die Files
+  // direkt im Root, ohne Projekt-Gruppierung.
+  if (mode.value !== "all") {
+    const label =
+      mode.value === "recent" ? "Zuletzt bearbeitet" : mode.value === "starred" ? "Markiert" : "Geteilt";
+    return {
+      name: "Vault",
+      kind: "root",
+      children: [
+        {
+          name: label,
+          kind: "folder",
+          children: filtered.map(fileToNode), // KEINE Sortierung — Reihenfolge kommt vom Backend
+        },
+      ],
+    };
+  }
+
+  // ── Mode "all": Projekte + Privat ────────────────────────────────────
   const byProject = new Map<string, ApiFile[]>();
   const orphan: ApiFile[] = [];
-  for (const f of allFiles.value) {
-    if (!match(f)) continue;
+  for (const f of filtered) {
     if (f.project) {
       const arr = byProject.get(f.project) ?? [];
       arr.push(f);
@@ -170,18 +257,6 @@ const tree = computed<FileNode>(() => {
     } else {
       orphan.push(f);
     }
-  }
-
-  function fileToNode(f: ApiFile): FileNode {
-    return {
-      name: f.name,
-      kind: extToKind(f.extension),
-      id: f.id,
-      updated: humanDate(f.modified),
-      sizeBytes: f.size,
-      size: formatSize(f.size),
-      project: f.project ?? null,
-    };
   }
 
   // Projekt-Folder alphabetisch — auch leere Projekte (kein File aktuell)
@@ -326,28 +401,63 @@ async function loadPreview(node: FileNode) {
   }
 }
 
-function setSidebarTarget(target: string[] | null) {
-  if (!target) return;
-  path.value = target;
+// ── Navigation mit Forward/Back-History ─────────────────────────────────────
+// path-Aenderungen ueber navigateTo() pushen den vorherigen Pfad in den
+// Forward-Stack — Forward-Click macht den Schritt rueckgaengig (klassisches
+// Browser-Pattern). Direkte Manipulation von path.value (Sidebar/Breadcrumb)
+// koennte das umgehen, deswegen alle Pfad-Wechsel ueber navigateTo().
+function navigateTo(newPath: string[]) {
+  // Wenn der Forward-Stack einen Eintrag hat der genau dem newPath entspricht,
+  // pop'en wir ihn statt zu clearen — das ist das Forward-Klick-Szenario.
+  const top = historyForward.value[historyForward.value.length - 1];
+  if (top && JSON.stringify(top) === JSON.stringify(newPath)) {
+    historyForward.value.pop();
+  } else {
+    // Normaler Pfadwechsel: Forward-Stack invalidiert (wir verzweigen).
+    historyForward.value = [];
+  }
+  path.value = newPath;
   selected.value = null;
   previewContent.value = null;
+  actionMenuOpen.value = false;
+}
+
+function setSidebarTarget(target: string[] | null) {
+  if (!target) return;
+  navigateTo(target);
+}
+
+function setMode(newMode: ViewMode) {
+  if (mode.value === newMode) return;
+  mode.value = newMode; // watcher triggert loadFiles()
+  navigateTo([]);
 }
 
 function onBreadcrumbClick(i: number) {
   if (i === 0) {
-    path.value = [];
+    navigateTo([]);
   } else {
-    path.value = path.value.slice(0, i);
+    navigateTo(path.value.slice(0, i));
   }
-  selected.value = null;
-  previewContent.value = null;
 }
 
 function onBack() {
   if (path.value.length === 0) return;
+  // Aktuellen Pfad in Forward-Stack pushen, dann eine Stufe hoch.
+  historyForward.value.push([...path.value]);
   path.value = path.value.slice(0, -1);
   selected.value = null;
   previewContent.value = null;
+  actionMenuOpen.value = false;
+}
+
+function onForward() {
+  const next = historyForward.value.pop();
+  if (!next) return;
+  path.value = next;
+  selected.value = null;
+  previewContent.value = null;
+  actionMenuOpen.value = false;
 }
 
 // Reset preview wenn search aktiv wird (sonst bleibt es bei alten files
@@ -357,6 +467,11 @@ watch(searchTerm, () => {
   previewContent.value = null;
 });
 
+// Bei Mode-Wechsel die Files vom passenden Endpoint nachladen.
+watch(mode, () => {
+  void loadFiles();
+});
+
 // ── Aktionen auf Files ───────────────────────────────────────────────────────
 function downloadUrl(node: FileNode): string {
   if (!node.id) return "#";
@@ -364,6 +479,106 @@ function downloadUrl(node: FileNode): string {
   const base = `/api/files/download?id=${encodeURIComponent(node.id)}`;
   return token ? `${base}&token=${encodeURIComponent(token)}` : base;
 }
+
+// Star-Toggle. Optimistic-Update fuer Frontend-Snappiness — bei Fehler
+// wird der lokale State zurueckgerollt.
+async function toggleStar(node: FileNode, event?: Event) {
+  if (event) event.stopPropagation();
+  if (!node.id) return;
+  const wasStarred = node.starred === true;
+  // Update lokal (in allFiles)
+  const f = allFiles.value.find((x) => x.id === node.id);
+  if (f) f.starred = !wasStarred;
+  // Selected-Node mit dranziehen, damit Preview-Star-Indikator stimmt.
+  if (selected.value?.node?.id === node.id) {
+    selected.value = { ...selected.value, node: { ...selected.value.node, starred: !wasStarred } };
+  }
+  try {
+    if (wasStarred) {
+      await api.delete(`/files/${encodeURIComponent(node.id)}/star`);
+    } else {
+      await api.post(`/files/${encodeURIComponent(node.id)}/star`, {});
+    }
+  } catch {
+    // Rollback
+    if (f) f.starred = wasStarred;
+    if (selected.value?.node?.id === node.id) {
+      selected.value = { ...selected.value, node: { ...selected.value.node, starred: wasStarred } };
+    }
+  }
+  // Wenn wir gerade in Mode "starred" sind und ein Stern entfernt wurde,
+  // soll die Liste das reflektieren — neu laden.
+  if (mode.value === "starred" && wasStarred) {
+    await loadFiles();
+  }
+}
+
+// ── Teilen-Modal ────────────────────────────────────────────────────────────
+async function openShareModal(node: FileNode) {
+  if (!node.id) return;
+  shareModalFile.value = node;
+  shareModalOpen.value = true;
+  shareModalSearchTerm.value = "";
+  shareModalCanEdit.value = false;
+  shareModalShares.value = [];
+  await Promise.all([loadUsers(), loadShares(node.id)]);
+}
+
+function closeShareModal() {
+  shareModalOpen.value = false;
+  shareModalFile.value = null;
+  shareModalShares.value = [];
+}
+
+async function loadShares(fileId: string) {
+  try {
+    shareModalShares.value = await api.get<FileShare[]>(`/files/${encodeURIComponent(fileId)}/shares`);
+  } catch {
+    shareModalShares.value = [];
+  }
+}
+
+async function addShare(userId: string) {
+  if (!shareModalFile.value?.id) return;
+  shareModalBusy.value = true;
+  try {
+    await api.post(`/files/${encodeURIComponent(shareModalFile.value.id)}/shares`, {
+      userId,
+      canEdit: shareModalCanEdit.value,
+    });
+    await loadShares(shareModalFile.value.id);
+  } finally {
+    shareModalBusy.value = false;
+  }
+}
+
+async function removeShare(userId: string) {
+  if (!shareModalFile.value?.id) return;
+  shareModalBusy.value = true;
+  try {
+    await api.delete(
+      `/files/${encodeURIComponent(shareModalFile.value.id)}/shares/${encodeURIComponent(userId)}`,
+    );
+    await loadShares(shareModalFile.value.id);
+  } finally {
+    shareModalBusy.value = false;
+  }
+}
+
+// User-Picker im Modal: filtert nicht-gestartete Liste, schliesst bereits-
+// geshared User aus.
+const shareModalCandidates = computed<AdminUserMini[]>(() => {
+  const term = shareModalSearchTerm.value.trim().toLowerCase();
+  const sharedIds = new Set(shareModalShares.value.map((s) => s.userId));
+  return allUsers.value.filter((u) => {
+    if (sharedIds.has(u.id)) return false;
+    if (!term) return true;
+    return (
+      u.username.toLowerCase().includes(term) ||
+      (u.displayName ?? "").toLowerCase().includes(term)
+    );
+  });
+});
 
 async function deleteSelected() {
   const node = selected.value?.node;
@@ -485,9 +700,29 @@ function extLabel(kind: FileKind): string {
 
 const previewIsMarkdown = computed(() => previewFileName.value.toLowerCase().endsWith(".md"));
 
+// Click-Outside fuer das ··· Action-Menu — global Listener auf document.
+function onDocClick(e: MouseEvent) {
+  if (!actionMenuOpen.value) return;
+  // Wenn der Klick nicht in einem Action-Menu-Wrap war, schliessen.
+  const target = e.target as HTMLElement | null;
+  if (!target?.closest(".files-preview-actions-menu-wrap")) {
+    actionMenuOpen.value = false;
+  }
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
   await Promise.all([loadFiles(), loadProjects()]);
+  if (typeof document !== "undefined") {
+    document.addEventListener("click", onDocClick);
+  }
+});
+
+// Listener-Cleanup beim Unmount — sonst leakt das ueber Page-Wechsel hinaus.
+onBeforeUnmount(() => {
+  if (typeof document !== "undefined") {
+    document.removeEventListener("click", onDocClick);
+  }
 });
 </script>
 
@@ -520,7 +755,12 @@ onMounted(async () => {
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <button class="files-icon-btn" disabled title="Weiter">
+        <button
+          class="files-icon-btn"
+          :disabled="historyForward.length === 0"
+          @click="onForward"
+          title="Weiter"
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="9 18 15 12 9 6" />
           </svg>
@@ -643,28 +883,40 @@ onMounted(async () => {
             <div class="files-sidebar-label">Vault</div>
             <div
               class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': path.length === 0 && !searchTerm }"
-              @click="setSidebarTarget([])"
+              :class="{ 'files-sidebar-item-active': mode === 'all' && path.length === 0 && !searchTerm }"
+              @click="setMode('all')"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2v-9z" />
               </svg>
               <span>Alle Dateien</span>
             </div>
-            <div class="files-sidebar-item files-sidebar-item-disabled">
+            <div
+              class="files-sidebar-item"
+              :class="{ 'files-sidebar-item-active': mode === 'recent' }"
+              @click="setMode('recent')"
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="12" r="9" />
                 <polyline points="12 7 12 12 15 14" />
               </svg>
               <span>Zuletzt bearbeitet</span>
             </div>
-            <div class="files-sidebar-item files-sidebar-item-disabled">
+            <div
+              class="files-sidebar-item"
+              :class="{ 'files-sidebar-item-active': mode === 'starred' }"
+              @click="setMode('starred')"
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
               </svg>
               <span>Markiert</span>
             </div>
-            <div class="files-sidebar-item files-sidebar-item-disabled">
+            <div
+              class="files-sidebar-item"
+              :class="{ 'files-sidebar-item-active': mode === 'shared' }"
+              @click="setMode('shared')"
+            >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
                 <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
@@ -678,8 +930,8 @@ onMounted(async () => {
             <div class="files-sidebar-label">Hierarchie</div>
             <div
               class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': path[0] === 'Projekte' }"
-              @click="setSidebarTarget(['Projekte'])"
+              :class="{ 'files-sidebar-item-active': mode === 'all' && path[0] === 'Projekte' }"
+              @click="mode = 'all'; setSidebarTarget(['Projekte'])"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
@@ -688,8 +940,8 @@ onMounted(async () => {
             </div>
             <div
               class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': path[0] === 'Privat' }"
-              @click="setSidebarTarget(['Privat'])"
+              :class="{ 'files-sidebar-item-active': mode === 'all' && path[0] === 'Privat' }"
+              @click="mode = 'all'; setSidebarTarget(['Privat'])"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
@@ -776,6 +1028,17 @@ onMounted(async () => {
                 >
                   {{ it.name }}
                 </span>
+                <button
+                  v-if="it.kind !== 'folder' && it.id"
+                  class="files-row-star"
+                  :class="{ 'files-row-star-on': it.starred, 'files-row-star-active-row': (selected?.columnIndex === idx && selected?.node?.name === it.name) }"
+                  @click="toggleStar(it, $event)"
+                  :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" :fill="it.starred ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
+                  </svg>
+                </button>
                 <svg
                   v-if="it.kind === 'folder'"
                   width="10"
@@ -797,10 +1060,31 @@ onMounted(async () => {
 
           <!-- Preview-Pane (nur wenn Datei selektiert) -->
           <div v-if="selected?.node && selected.node.kind !== 'folder'" class="files-preview">
-            <div class="files-preview-eyebrow">Vorschau</div>
-            <div class="files-preview-hero">
-              <FileGlyph :kind="selected.node.kind" size="hero" />
+            <div class="files-preview-header">
+              <span class="files-preview-eyebrow">Vorschau</span>
+              <button
+                class="files-preview-star"
+                :class="{ 'files-preview-star-on': selected.node.starred }"
+                @click="toggleStar(selected.node)"
+                :title="selected.node.starred ? 'Markierung entfernen' : 'Markieren'"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" :fill="selected.node.starred ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
+                </svg>
+              </button>
             </div>
+
+            <!-- Hero: bei Bild → echtes Bild, bei PDF → iframe, sonst Glyph -->
+            <div class="files-preview-hero">
+              <img
+                v-if="selected.node.kind === 'image' && selected.node.id"
+                :src="downloadUrl(selected.node)"
+                :alt="selected.node.name"
+                class="files-preview-image"
+              />
+              <FileGlyph v-else :kind="selected.node.kind" size="hero" />
+            </div>
+
             <div>
               <div
                 class="files-preview-name"
@@ -820,8 +1104,8 @@ onMounted(async () => {
                 <span class="files-preview-val mono">{{ selected.node.updated ?? "—" }}</span>
               </div>
               <div class="files-preview-row">
-                <span class="files-preview-key">Tags</span>
-                <span class="files-preview-val">—</span>
+                <span class="files-preview-key">Projekt</span>
+                <span class="files-preview-val">{{ selected.node.project ?? "—" }}</span>
               </div>
               <div class="files-preview-row">
                 <span class="files-preview-key">Speicher</span>
@@ -830,15 +1114,55 @@ onMounted(async () => {
             </div>
             <div class="files-preview-actions">
               <a class="files-preview-btn-primary" :href="downloadUrl(selected.node)" target="_blank">Öffnen</a>
-              <button class="files-preview-btn-secondary" disabled>Teilen</button>
-              <button class="files-preview-btn-secondary" @click="deleteSelected" title="Löschen">···</button>
+              <button class="files-preview-btn-secondary" @click="openShareModal(selected.node)">Teilen</button>
+              <div class="files-preview-actions-menu-wrap">
+                <button
+                  class="files-preview-btn-secondary"
+                  @click="actionMenuOpen = !actionMenuOpen"
+                  :class="{ 'files-preview-btn-active': actionMenuOpen }"
+                  title="Mehr"
+                >
+                  ···
+                </button>
+                <div v-if="actionMenuOpen" class="files-action-menu" @click.stop>
+                  <button class="files-action-item" @click="actionMenuOpen = false; toggleStar(selected.node)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" /></svg>
+                    {{ selected.node.starred ? "Markierung entfernen" : "Markieren" }}
+                  </button>
+                  <a
+                    class="files-action-item"
+                    :href="downloadUrl(selected.node)"
+                    download
+                    @click="actionMenuOpen = false"
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    Herunterladen
+                  </a>
+                  <button class="files-action-item" @click="actionMenuOpen = false; openShareModal(selected.node)">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                    Teilen…
+                  </button>
+                  <div class="files-action-divider"></div>
+                  <button class="files-action-item files-action-danger" @click="actionMenuOpen = false; deleteSelected()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+                    Löschen
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <!-- Inline-Markdown-Vorschau wenn Markdown -->
-            <div v-if="previewIsMarkdown && previewContent" class="files-preview-md">
+            <!-- PDF inline -->
+            <iframe
+              v-if="selected.node.kind === 'pdf' && selected.node.id"
+              :src="downloadUrl(selected.node)"
+              class="files-preview-pdf"
+              :title="selected.node.name"
+            />
+            <!-- Markdown inline -->
+            <div v-else-if="previewIsMarkdown && previewContent" class="files-preview-md">
               <MarkdownRenderer :content="previewContent" />
             </div>
-            <!-- Sonst Text-Code-Vorschau -->
+            <!-- Code/Text inline -->
             <pre v-else-if="previewContent" class="files-preview-code">{{ previewContent }}</pre>
             <div v-else-if="previewLoading" class="files-preview-loading">Laedt…</div>
           </div>
@@ -859,6 +1183,17 @@ onMounted(async () => {
             <span class="files-list-name">
               <FileGlyph :kind="it.kind" :active="selected?.node?.name === it.name" />
               <span :class="{ mono: isMonoKind(it.kind) }" :style="{ fontSize: isMonoKind(it.kind) ? '12px' : '13px' }">{{ it.name }}</span>
+              <button
+                v-if="it.kind !== 'folder' && it.id"
+                class="files-row-star files-row-star-inline"
+                :class="{ 'files-row-star-on': it.starred, 'files-row-star-active-row': selected?.node?.name === it.name }"
+                @click="toggleStar(it, $event)"
+                :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" :fill="it.starred ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
+                </svg>
+              </button>
             </span>
             <span class="mono files-list-meta">{{ it.updated ?? "—" }}</span>
             <span class="mono files-list-meta">{{ it.size ?? "—" }}</span>
@@ -898,6 +1233,78 @@ onMounted(async () => {
     <!-- Drag-Overlay -->
     <div v-if="dragging" class="files-drag-overlay">
       <div class="files-drag-card">Dateien hier ablegen</div>
+    </div>
+
+    <!-- ─── Teilen-Modal ───────────────────────────────────── -->
+    <div v-if="shareModalOpen" class="files-modal-backdrop" @click="closeShareModal">
+      <div class="files-modal" @click.stop>
+        <div class="files-modal-header">
+          <div>
+            <div class="eyebrow">Teilen</div>
+            <h3 class="files-modal-title">{{ shareModalFile?.name ?? "Datei" }}</h3>
+          </div>
+          <button class="files-modal-close" @click="closeShareModal" title="Schließen">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Aktuelle Shares -->
+        <div class="files-modal-section">
+          <div class="files-modal-section-label">Aktuell geteilt mit</div>
+          <div v-if="shareModalShares.length === 0" class="files-modal-empty">
+            Noch mit niemandem geteilt.
+          </div>
+          <div v-for="s in shareModalShares" :key="s.userId" class="files-modal-share-row">
+            <div class="files-modal-share-info">
+              <span class="files-modal-share-name">{{ s.displayName ?? s.username }}</span>
+              <span v-if="s.displayName" class="files-modal-share-username">@{{ s.username }}</span>
+              <span v-if="s.canEdit" class="files-modal-pill">Bearbeiten</span>
+              <span v-else class="files-modal-pill files-modal-pill-muted">Lesen</span>
+            </div>
+            <button class="files-modal-share-remove" :disabled="shareModalBusy" @click="removeShare(s.userId)">
+              Entfernen
+            </button>
+          </div>
+        </div>
+
+        <!-- Hinzufuegen -->
+        <div class="files-modal-section">
+          <div class="files-modal-section-label">Hinzufügen</div>
+          <div class="files-modal-add-controls">
+            <input
+              v-model="shareModalSearchTerm"
+              type="text"
+              placeholder="Benutzer suchen…"
+              class="files-modal-input"
+            />
+            <label class="files-modal-checkbox">
+              <input v-model="shareModalCanEdit" type="checkbox" />
+              <span>Bearbeiten erlauben</span>
+            </label>
+          </div>
+          <div class="files-modal-candidates">
+            <div v-if="shareModalCandidates.length === 0" class="files-modal-empty">
+              {{ shareModalSearchTerm ? "Keine Treffer." : "Alle verfügbaren User sind bereits hinzugefügt." }}
+            </div>
+            <button
+              v-for="u in shareModalCandidates.slice(0, 50)"
+              :key="u.id"
+              class="files-modal-candidate"
+              :disabled="shareModalBusy"
+              @click="addShare(u.id)"
+            >
+              <div class="files-modal-candidate-info">
+                <span class="files-modal-candidate-name">{{ u.displayName ?? u.username }}</span>
+                <span v-if="u.displayName" class="files-modal-candidate-username">@{{ u.username }}</span>
+              </div>
+              <span class="files-modal-candidate-add">+ Hinzufügen</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -1591,5 +1998,349 @@ onMounted(async () => {
   .files-list-row > span:nth-child(4) {
     display: none;
   }
+}
+
+/* ─── Star-Buttons in Rows ──────────────────────────────────────────────── */
+.files-row-star {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-faint);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+.files-row:hover .files-row-star,
+.files-row-active .files-row-star,
+.files-row-star.files-row-star-on,
+.files-list-row:hover .files-row-star,
+.files-list-row-active .files-row-star,
+.files-icon-cell:hover .files-row-star,
+.files-icon-cell-active .files-row-star {
+  opacity: 1;
+}
+.files-row-star:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.files-row-star-on {
+  color: #f59e0b; /* amber-500 */
+}
+.files-row-star-active-row {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+.files-row-star-active-row.files-row-star-on {
+  color: #fbbf24 !important; /* amber-400 — gut sichtbar auf schwarz */
+}
+.files-row-star-inline {
+  margin-left: 6px;
+}
+
+/* ─── Preview-Header (Eyebrow + Star) ──────────────────────────────────── */
+.files-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.files-preview-star {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: var(--color-text-faint);
+}
+.files-preview-star:hover {
+  background: var(--color-border-subtle);
+}
+.files-preview-star-on {
+  color: #f59e0b;
+}
+
+/* ─── Bild-Vorschau ─────────────────────────────────────────────────────── */
+.files-preview-image {
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  display: block;
+}
+
+/* ─── PDF-Vorschau ──────────────────────────────────────────────────────── */
+.files-preview-pdf {
+  width: 100%;
+  height: 480px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  background: var(--color-bg);
+}
+
+/* ─── Action-Menu (··· Dropdown) ────────────────────────────────────────── */
+.files-preview-actions-menu-wrap {
+  position: relative;
+  flex: 1;
+}
+.files-preview-actions-menu-wrap .files-preview-btn-secondary {
+  width: 100%;
+}
+.files-preview-btn-active {
+  background: var(--color-border-subtle);
+}
+.files-action-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 200px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  padding: 4px;
+  z-index: 20;
+}
+.files-action-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+.files-action-item:hover {
+  background: var(--color-bg-subtle);
+}
+.files-action-item svg {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.files-action-divider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  margin: 4px 0;
+}
+.files-action-danger {
+  color: #dc2626;
+}
+.files-action-danger svg {
+  color: #dc2626;
+}
+.files-action-danger:hover {
+  background: #fef2f2;
+}
+
+/* ─── Teilen-Modal ──────────────────────────────────────────────────────── */
+.files-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+.files-modal {
+  background: var(--color-bg);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+.files-modal-header {
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.files-modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 4px 0 0 0;
+  letter-spacing: -0.01em;
+  word-break: break-word;
+}
+.files-modal-close {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.files-modal-close:hover {
+  background: var(--color-bg-subtle);
+}
+.files-modal-section {
+  padding: 16px 20px;
+  border-top: 1px solid var(--color-border-subtle);
+}
+.files-modal-section:first-of-type {
+  border-top: 0;
+}
+.files-modal-section-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-text-tertiary);
+  margin-bottom: 10px;
+}
+.files-modal-empty {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  padding: 8px 0;
+}
+.files-modal-share-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+.files-modal-share-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+.files-modal-share-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.files-modal-share-username {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-family: "JetBrains Mono", monospace;
+}
+.files-modal-pill {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 500;
+}
+.files-modal-pill-muted {
+  background: var(--color-border-subtle);
+  color: var(--color-text-muted);
+}
+.files-modal-share-remove {
+  font-size: 12px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  padding: 4px 10px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.files-modal-share-remove:hover:not(:disabled) {
+  background: #fef2f2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+.files-modal-add-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.files-modal-input {
+  flex: 1;
+  min-width: 180px;
+  padding: 7px 10px;
+  font-size: 13px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: inherit;
+  outline: 0;
+}
+.files-modal-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+.files-modal-candidates {
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0 -8px;
+}
+.files-modal-candidate {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.files-modal-candidate:hover:not(:disabled) {
+  background: var(--color-bg-subtle);
+}
+.files-modal-candidate:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.files-modal-candidate-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.files-modal-candidate-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+.files-modal-candidate-username {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  font-family: "JetBrains Mono", monospace;
+}
+.files-modal-candidate-add {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+/* Star nicht im Active-State (selected file in dunkel) ueberdecken */
+.files-list-row-active .files-row-star {
+  color: rgba(255, 255, 255, 0.7);
+}
+.files-list-row-active .files-row-star-on {
+  color: #fbbf24;
 }
 </style>

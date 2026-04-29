@@ -106,6 +106,19 @@ filesRoutes.get("/files", async (c) => {
             return false;
           });
 
+    // Star-Flags des aktuellen Users mitliefern (Migration 019).
+    // Eine einzelne Query, dann pro File ein Bool-Set-Lookup.
+    let starredSet = new Set<string>();
+    if (ctx.userId && filtered.length > 0) {
+      const db = getDb();
+      const fileIds = filtered.map((f) => f.id);
+      const starRows = await db`
+        SELECT file_id FROM file_stars
+        WHERE user_id = ${ctx.userId} AND file_id = ANY(${fileIds})
+      `;
+      starredSet = new Set(starRows.map((r) => String(r.file_id)));
+    }
+
     return c.json(
       filtered.map((f) => ({
         name: f.filename,
@@ -116,6 +129,7 @@ filesRoutes.get("/files", async (c) => {
         id: f.id,
         project: f.project,
         analyzed: f.analyzed,
+        starred: starredSet.has(f.id),
       })),
     );
   }
@@ -406,4 +420,174 @@ filesRoutes.delete("/files/:id/shares/:userId", async (c) => {
   const ok = await fileRepo.removeShare(fileId, c.req.param("userId"));
   if (ok) emit({ type: "file", action: "updated", id: fileId });
   return c.json({ ok });
+});
+
+// ── File-Starring (Markiert) ────────────────────────────────────────────────
+// Pro User. Liefert auch Files zurueck die der User gestartet hat — die
+// Reihenfolge ist nach starred_at DESC (neueste oben), nicht nach Datei-
+// Datum. Sichtbarkeit wird ueber canSeeFile geprueft, damit ein Star auf
+// einer Datei in einem Projekt-ohne-Zugriff (z.B. nach ACL-Wechsel) NICHT
+// die Datei zeigt.
+filesRoutes.get("/files/starred", async (c) => {
+  const ctx = userCtx(c);
+  if (!ctx.userId) return c.json([]);
+  if (!DB_ENABLED || !fileRepo) return c.json([]);
+
+  const db = getDb();
+  const rows = await db`
+    SELECT f.id, f.filename, f.filesize, f.filetype, f.updated_at,
+           p.name as project_name, fs.starred_at
+    FROM file_stars fs
+    JOIN files f ON f.id = fs.file_id
+    LEFT JOIN projects p ON p.id = f.project_id
+    WHERE fs.user_id = ${ctx.userId}
+    ORDER BY fs.starred_at DESC
+    LIMIT 200
+  `;
+
+  // ACL-Filter: ein User darf nur gestartete Files sehen, die er auch
+  // sehen darf. Liesse sich theoretisch auch im SELECT loesen, aber
+  // canSeeFile zentralisiert die Logik — eine Wahrheit.
+  const result: unknown[] = [];
+  for (const r of rows) {
+    const file = { id: String(r.id), project: r.project_name ? String(r.project_name) : null };
+    if (!(await canSeeFile(ctx, file))) continue;
+    result.push({
+      name: String(r.filename),
+      type: "file" as const,
+      size: Number(r.filesize || 0),
+      modified: String(r.updated_at),
+      extension: r.filetype ? String(r.filetype) : "",
+      id: String(r.id),
+      project: r.project_name ? String(r.project_name) : null,
+      starred: true,
+    });
+  }
+  return c.json(result);
+});
+
+filesRoutes.post("/files/:id/star", async (c) => {
+  const ctx = userCtx(c);
+  if (!ctx.userId) return c.json({ error: "Nicht eingeloggt" }, 401);
+  const fileId = c.req.param("id");
+  if (!fileRepo) return c.json({ error: "DB nicht aktiv" }, 500);
+  const file = await fileRepo.get(fileId);
+  if (!file) return c.json({ error: "Datei nicht gefunden" }, 404);
+  // Nur Files die der User sieht darf er auch starren — sonst koennte
+  // jemand UUIDs durchprobieren um die Existenz fremder Files zu testen.
+  if (!(await canSeeFile(ctx, file))) {
+    return c.json({ error: "Kein Zugriff" }, 403);
+  }
+  const db = getDb();
+  await db`
+    INSERT INTO file_stars (file_id, user_id)
+    VALUES (${fileId}, ${ctx.userId})
+    ON CONFLICT (file_id, user_id) DO NOTHING
+  `;
+  return c.json({ ok: true, starred: true });
+});
+
+filesRoutes.delete("/files/:id/star", async (c) => {
+  const ctx = userCtx(c);
+  if (!ctx.userId) return c.json({ error: "Nicht eingeloggt" }, 401);
+  const fileId = c.req.param("id");
+  const db = getDb();
+  await db`
+    DELETE FROM file_stars WHERE file_id = ${fileId} AND user_id = ${ctx.userId}
+  `;
+  return c.json({ ok: true, starred: false });
+});
+
+// ── Recent (Zuletzt bearbeitet) ─────────────────────────────────────────────
+// Files sortiert nach updated_at DESC, max 50 — gefiltert auf was der
+// User sehen darf. Im Prinzip eine Variante von /files mit anderer
+// Sortierung und kuerzerem Limit.
+filesRoutes.get("/files/recent", async (c) => {
+  const ctx = userCtx(c);
+  if (!DB_ENABLED || !fileRepo) return c.json([]);
+  const db = getDb();
+  const rows = await db`
+    SELECT f.id, f.filename, f.filesize, f.filetype, f.updated_at,
+           p.name as project_name, f.uploaded_by
+    FROM files f
+    LEFT JOIN projects p ON p.id = f.project_id
+    ORDER BY f.updated_at DESC
+    LIMIT 200
+  `;
+
+  // Stars vom aktuellen User in einem Rutsch holen.
+  let starredSet = new Set<string>();
+  if (ctx.userId) {
+    const ids = rows.map((r) => String(r.id));
+    if (ids.length > 0) {
+      const sr = await db`
+        SELECT file_id FROM file_stars WHERE user_id = ${ctx.userId} AND file_id = ANY(${ids})
+      `;
+      starredSet = new Set(sr.map((r) => String(r.file_id)));
+    }
+  }
+
+  const out: unknown[] = [];
+  for (const r of rows) {
+    const file = { id: String(r.id), project: r.project_name ? String(r.project_name) : null };
+    // Quick-ACL: bei Admin durch, bei User canSeeFile.
+    if (ctx.role !== "admin" && !(await canSeeFile(ctx, file))) continue;
+    out.push({
+      name: String(r.filename),
+      type: "file" as const,
+      size: Number(r.filesize || 0),
+      modified: String(r.updated_at),
+      extension: r.filetype ? String(r.filetype) : "",
+      id: String(r.id),
+      project: r.project_name ? String(r.project_name) : null,
+      starred: starredSet.has(String(r.id)),
+    });
+    if (out.length >= 50) break;
+  }
+  return c.json(out);
+});
+
+// ── Shared (Geteilt) ────────────────────────────────────────────────────────
+// Files, die explizit mit dem aktuellen User geteilt wurden (file_shares).
+// Im Gegensatz zu /files (das implizite Sichtbarkeit aus user_projects
+// einschliesst) liefert dieses Endpoint NUR Direkt-Shares.
+filesRoutes.get("/files/shared", async (c) => {
+  const ctx = userCtx(c);
+  if (!ctx.userId) return c.json([]);
+  if (!DB_ENABLED || !fileRepo) return c.json([]);
+  const db = getDb();
+  const rows = await db`
+    SELECT f.id, f.filename, f.filesize, f.filetype, f.updated_at,
+           p.name as project_name, fs.added_at, fs.can_edit
+    FROM file_shares fs
+    JOIN files f ON f.id = fs.file_id
+    LEFT JOIN projects p ON p.id = f.project_id
+    WHERE fs.user_id = ${ctx.userId}
+    ORDER BY fs.added_at DESC
+    LIMIT 200
+  `;
+
+  // Stars
+  const ids = rows.map((r) => String(r.id));
+  let starredSet = new Set<string>();
+  if (ids.length > 0) {
+    const sr = await db`
+      SELECT file_id FROM file_stars WHERE user_id = ${ctx.userId} AND file_id = ANY(${ids})
+    `;
+    starredSet = new Set(sr.map((r) => String(r.file_id)));
+  }
+
+  return c.json(
+    rows.map((r) => ({
+      name: String(r.filename),
+      type: "file" as const,
+      size: Number(r.filesize || 0),
+      modified: String(r.updated_at),
+      extension: r.filetype ? String(r.filetype) : "",
+      id: String(r.id),
+      project: r.project_name ? String(r.project_name) : null,
+      starred: starredSet.has(String(r.id)),
+      canEdit: r.can_edit === true,
+    })),
+  );
 });

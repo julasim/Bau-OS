@@ -56,6 +56,23 @@ function actorFromCtx(c: Context<AppEnv>): {
 adminUsersRoutes.use("/admin/users/*", adminMiddleware);
 adminUsersRoutes.use("/admin/users", adminMiddleware);
 
+// Mini-Liste fuer normale User: nur id+username+displayName, fuer Picker
+// in TeamDetailView, Teilen-Modal, Member-Resolver. KEIN Admin-Guard,
+// aber: nur authentifizierte User (authMiddleware ist app-weit gesetzt).
+// Passwort-Hash, Telegram-Daten, is_protected sind NICHT enthalten —
+// das ist die explizit oeffentliche Sicht.
+adminUsersRoutes.get("/users/mini", async (c) => {
+  const users = await listDbUsers();
+  return c.json(
+    users.map((u) => ({
+      id: u.id,
+      username: u.username,
+      displayName: u.displayName,
+      role: u.role,
+    })),
+  );
+});
+
 // Hilfsfunktion: Public-Shape des Users — Passwort-Hash bleibt drin.
 function publicUser(u: Awaited<ReturnType<typeof listDbUsers>>[number]) {
   return {
