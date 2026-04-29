@@ -313,7 +313,15 @@ interface Column {
 
 const columns = computed<Column[]>(() => {
   const root = tree.value;
-  const cols: Column[] = [{ parent: root, items: root.children ?? [] }];
+  // Wenn der User in einem Pfad navigiert hat (z.B. ["Privat"]), zeigen
+  // wir die Vault-Root-Spalte NICHT mehr — sie waere redundant mit der
+  // Sidebar (HIERARCHIE). Erst ab der Pfad-Tiefe 1 werden Spalten gerendert.
+  // Path leer → eine Spalte (die Root mit Projekte/Privat als Einstieg).
+  const cols: Column[] = [];
+  if (path.value.length === 0) {
+    cols.push({ parent: root, items: root.children ?? [] });
+    return cols;
+  }
   let cur: FileNode = root;
   for (const seg of path.value) {
     const next = cur.children?.find((c) => c.name === seg);
@@ -360,14 +368,22 @@ const totalSizeLabel = computed(() => formatSize(totalSizeBytes.value));
 const totalFileCount = computed(() => allFiles.value.length);
 
 // ── Click-Logik ──────────────────────────────────────────────────────────────
+// Mapping zwischen Spalten-Index und Pfad-Tiefe:
+// - Wenn path leer ist, zeigt cols[0] die Root (Projekte/Privat). Ein Klick
+//   auf einen Folder dort setzt path[0].
+// - Wenn path.length > 0, zeigen wir die Root-Spalte NICHT mehr (Sidebar
+//   uebernimmt das). cols[idx] zeigt dann children von path[idx]. Ein Klick
+//   in cols[idx] setzt path[idx + 1]. Daher das +1 unten.
 function onClickItem(node: FileNode, columnIndex: number) {
+  // Effektive Pfad-Tiefe, ab der dieser Klick aufbaut.
+  const baseDepth = path.value.length === 0 ? 0 : columnIndex + 1;
   if (node.kind === "folder") {
-    path.value = [...path.value.slice(0, columnIndex), node.name];
+    path.value = [...path.value.slice(0, baseDepth), node.name];
     selected.value = { node, columnIndex };
     previewContent.value = null;
   } else {
     // Files schliessen Pfad ab — selected bleibt fuer Preview
-    path.value = path.value.slice(0, columnIndex);
+    path.value = path.value.slice(0, baseDepth);
     selected.value = { node, columnIndex };
     void loadPreview(node);
   }
@@ -1012,14 +1028,15 @@ onBeforeUnmount(() => {
                 class="files-row"
                 :class="{
                   'files-row-active':
-                    (idx < path.length && path[idx] === it.name) ||
+                    (path.length > 0 && path[idx + 1] === it.name) ||
+                    (path.length === 0 && path[idx] === it.name) ||
                     (selected?.columnIndex === idx && selected?.node?.name === it.name && it.kind !== 'folder'),
                 }"
                 @click="onClickItem(it, idx)"
               >
                 <FileGlyph
                   :kind="it.kind"
-                  :active="(idx < path.length && path[idx] === it.name) || (selected?.columnIndex === idx && selected?.node?.name === it.name && it.kind !== 'folder')"
+                  :active="(path.length > 0 && path[idx + 1] === it.name) || (path.length === 0 && path[idx] === it.name) || (selected?.columnIndex === idx && selected?.node?.name === it.name && it.kind !== 'folder')"
                 />
                 <span
                   class="files-row-name"
@@ -1031,7 +1048,11 @@ onBeforeUnmount(() => {
                 <button
                   v-if="it.kind !== 'folder' && it.id"
                   class="files-row-star"
-                  :class="{ 'files-row-star-on': it.starred, 'files-row-star-active-row': (selected?.columnIndex === idx && selected?.node?.name === it.name) }"
+                  :class="{
+                    'files-row-star-on': it.starred,
+                    'files-row-star-active-row':
+                      selected?.columnIndex === idx && selected?.node?.name === it.name,
+                  }"
                   @click="toggleStar(it, $event)"
                   :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
                 >
