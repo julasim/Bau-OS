@@ -23,6 +23,26 @@ function rowToFile(row: Record<string, unknown>): FileEntry {
   };
 }
 
+/** Postgres' TEXT-Spalte erlaubt KEINE NUL-Bytes (\x00). Text-Extraktion
+ *  aus binaeren Formaten (PDF, DOCX, Bildern mit OCR) hinterlaesst hin und
+ *  wieder NULs aus Binaer-Header-Metadaten — der INSERT crasht dann mit:
+ *    "invalid byte sequence for encoding "UTF8": 0x00"
+ *
+ *  Wir strippen NULs defensiv hier in der Save-Schicht. Zusaetzlich
+ *  ungueltige Surrogate (lone high/low) werden ersetzt, damit auch
+ *  kaputtes Unicode (haeufig aus DWG-Metadaten) durchgeht. */
+function sanitizeTextForPg(s: string | null | undefined): string | null {
+  if (!s) return null;
+  // NUL-Bytes raus. eslint-disable: control-character im Pattern ist hier
+  // genau der Punkt — postgres TEXT lehnt sie ab.
+  // eslint-disable-next-line no-control-regex
+  let out = s.replace(/\x00/g, "");
+  // Lone Surrogates — postgres.js encodet UTF-16 → UTF-8, lone surrogates
+  // brechen die Konvertierung. Replacement-Char einsetzen.
+  out = out.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "�");
+  return out;
+}
+
 export const dbFiles: FileRepository = {
   async save(file) {
     const db = getDb();
@@ -36,18 +56,24 @@ export const dbFiles: FileRepository = {
       projectId = p?.id ?? null;
     }
 
+    // contentText defensiv durchputzen — NUL-Bytes aus Text-Extraktion
+    // killen sonst den INSERT (Postgres TEXT akzeptiert keine NUL).
+    const safeContentText = sanitizeTextForPg(file.contentText);
+
     // blob: Buffer → bytea. postgres.js serialisiert Buffer automatisch,
     //                wir muessen nichts encoden. NULL, wenn kein Blob
     //                uebergeben wurde (Legacy/Metadaten-only).
     const [row] = await db`
       INSERT INTO files (id, filename, filepath, filetype, filesize, mime_type, content_text, project_id, blob, uploaded_by, created_at, updated_at)
-      VALUES (${id}, ${file.filename}, ${file.filepath}, ${ext}, ${file.filesize}, ${file.mimeType ?? null}, ${file.contentText ?? null}, ${projectId}, ${file.blob ?? null}, ${file.uploadedById ?? null}, ${now}, ${now})
+      VALUES (${id}, ${file.filename}, ${file.filepath}, ${ext}, ${file.filesize}, ${file.mimeType ?? null}, ${safeContentText}, ${projectId}, ${file.blob ?? null}, ${file.uploadedById ?? null}, ${now}, ${now})
       RETURNING id, filename, filepath, filetype, filesize, mime_type, content_text, summary, tags, analyzed, created_at, updated_at, (SELECT name FROM projects WHERE id = project_id) as project_name
     `;
 
-    // Auto-Embed wenn Text vorhanden (fire-and-forget)
-    if (file.contentText) {
-      embedFile(id, file.contentText).catch((err) => logError("[Embedding]", err));
+    // Auto-Embed wenn Text vorhanden (fire-and-forget). Nutzt den
+    // bereits gesaeuberten Text — sonst wuerde das Embedding-Modell
+    // den NUL-haltigen Original sehen.
+    if (safeContentText) {
+      embedFile(id, safeContentText).catch((err) => logError("[Embedding]", err));
     }
 
     return rowToFile(row);
