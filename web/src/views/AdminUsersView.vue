@@ -15,6 +15,7 @@ interface AdminUser {
   role: "admin" | "user";
   isProtected: boolean;
   hasTelegram: boolean;
+  email: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +40,7 @@ const createSaving = ref(false);
 const createError = ref<string | null>(null);
 const createForm = ref({
   username: "",
+  email: "",
   password: "",
   passwordConfirm: "",
   role: "user" as "admin" | "user",
@@ -48,6 +50,7 @@ const createForm = ref({
 function openCreate() {
   createForm.value = {
     username: "",
+    email: "",
     password: "",
     passwordConfirm: "",
     role: "user",
@@ -57,10 +60,13 @@ function openCreate() {
   showCreateDialog.value = true;
 }
 
+const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createForm.value.email.trim()));
+
 const createCanSubmit = computed(
   () =>
     !createSaving.value &&
     createForm.value.username.trim().length >= 3 &&
+    emailValid.value &&
     createForm.value.password.length >= 8 &&
     createForm.value.password === createForm.value.passwordConfirm,
 );
@@ -72,6 +78,7 @@ async function submitCreate() {
   try {
     await api.post<AdminUser>("/admin/users", {
       username: createForm.value.username.trim(),
+      email: createForm.value.email.trim().toLowerCase(),
       password: createForm.value.password,
       role: createForm.value.role,
       displayName: createForm.value.displayName.trim() || undefined,
@@ -569,6 +576,23 @@ function formatDate(iso?: string) {
               placeholder="Optional, z.B. „Herbert Müller"
               class="form-input-lg"
             />
+          </label>
+          <label class="form-field form-field-span-2">
+            <span class="eyebrow">Email * (für 2FA-Login)</span>
+            <input
+              v-model="createForm.email"
+              type="email"
+              autocomplete="email"
+              placeholder="name@firma.at"
+              class="form-input-lg"
+              required
+            />
+            <span
+              v-if="createForm.email.length > 0 && !emailValid"
+              style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px"
+            >
+              Bitte eine gültige Email-Adresse — wird für 2FA-Login per Code verwendet.
+            </span>
           </label>
           <label class="form-field">
             <span class="eyebrow">Passwort *</span>

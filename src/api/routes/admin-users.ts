@@ -82,6 +82,7 @@ function publicUser(u: Awaited<ReturnType<typeof listDbUsers>>[number]) {
     role: u.role,
     isProtected: u.isProtected,
     hasTelegram: !!u.telegramChatId,
+    email: u.email,
     createdAt: u.createdAt,
     updatedAt: u.updatedAt,
   };
@@ -95,7 +96,7 @@ adminUsersRoutes.get("/admin/users", async (c) => {
 
 // ── Anlegen ──────────────────────────────────────────────────────────────────
 adminUsersRoutes.post("/admin/users", async (c) => {
-  let body: { username: string; password: string; role?: string; displayName?: string };
+  let body: { username: string; password: string; role?: string; displayName?: string; email?: string };
   try {
     body = await c.req.json();
   } catch {
@@ -104,11 +105,15 @@ adminUsersRoutes.post("/admin/users", async (c) => {
 
   const username = (body.username ?? "").trim();
   const password = body.password ?? "";
+  const email = (body.email ?? "").trim().toLowerCase();
   if (!username || username.length < 3) {
     return c.json({ error: "Benutzername muss mindestens 3 Zeichen haben" }, 400);
   }
   if (!password || password.length < 8) {
     return c.json({ error: "Passwort muss mindestens 8 Zeichen haben" }, 400);
+  }
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return c.json({ error: "Gueltige Email-Adresse erforderlich (Pflicht fuer 2FA-Login)" }, 400);
   }
   const role = body.role === "admin" ? "admin" : "user";
 
@@ -122,6 +127,7 @@ adminUsersRoutes.post("/admin/users", async (c) => {
       password,
       role,
       displayName: body.displayName?.trim() || null,
+      email,
     });
     emit({ type: "team", action: "created", id: user.id });
     void audit({
@@ -147,14 +153,19 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
   const target = await findDbUserById(id);
   if (!target) return c.json({ error: "User nicht gefunden" }, 404);
 
-  let body: { username?: string; role?: string; displayName?: string | null };
+  let body: { username?: string; role?: string; displayName?: string | null; email?: string | null };
   try {
     body = await c.req.json();
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
 
-  const patch: { username?: string; role?: "admin" | "user"; displayName?: string | null } = {};
+  const patch: {
+    username?: string;
+    role?: "admin" | "user";
+    displayName?: string | null;
+    email?: string | null;
+  } = {};
 
   if ("username" in body) {
     const newUsername = (body.username ?? "").trim();
@@ -188,6 +199,25 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
   if ("displayName" in body) {
     const dn = body.displayName;
     patch.displayName = typeof dn === "string" ? dn.trim() || null : null;
+  }
+
+  if ("email" in body) {
+    const e = body.email;
+    if (e === null || e === "") {
+      // Admin kann Email entfernen — User muss dann beim naechsten Login
+      // Setup-Flow durchlaufen.
+      patch.email = null;
+    } else if (typeof e === "string") {
+      const normalized = e.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+        return c.json({ error: "Ungueltige Email-Adresse" }, 400);
+      }
+      const { isEmailTaken } = await import("../auth.js");
+      if (await isEmailTaken(normalized, id)) {
+        return c.json({ error: "Diese Email-Adresse ist bereits einem anderen Konto zugeordnet" }, 409);
+      }
+      patch.email = normalized;
+    }
   }
 
   if (Object.keys(patch).length === 0) {

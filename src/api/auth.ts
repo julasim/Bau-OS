@@ -38,8 +38,11 @@ export interface DbUser {
   // Phase 6: Per-User Bots
   telegramBotToken: string | null;
   telegramBotEnabled: boolean;
-  // Phase 7 (Pre-Production): 2FA / TOTP
+  // Phase 7 (Pre-Production): 2FA / TOTP — wird durch Email-OTP abgeloest,
+  // Spalte bleibt als Read-Field fuer Audit/Migrations.
   totpEnabled: boolean;
+  // Migration 020: Email fuer 2FA. NULL = User muss noch eine setzen.
+  email: string | null;
   settings: UserSettings;
   createdAt: string;
   updatedAt: string;
@@ -73,6 +76,7 @@ function rowToDbUser(row: Record<string, unknown>): DbUser {
     telegramBotToken: decryptString(row.telegram_bot_token ? String(row.telegram_bot_token) : null),
     telegramBotEnabled: row.telegram_bot_enabled !== false,
     totpEnabled: row.totp_enabled === true,
+    email: row.email ? String(row.email) : null,
     settings,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
@@ -136,15 +140,19 @@ export async function createDbUser(input: {
   password: string;
   role: "admin" | "user";
   displayName?: string | null;
+  /** Optional. Wenn gesetzt: User ueberspringt den Email-Setup-Gate beim
+   *  ersten Login — Admin hat die Email schon hinterlegt. */
+  email?: string | null;
 }): Promise<DbUser> {
   if (!DB_ENABLED) throw new Error("DB-Modus erforderlich");
   const passwordHash = await hashPassword(input.password);
   const db = getDb();
+  const normalizedEmail = input.email?.trim().toLowerCase() || null;
   const [row] = await db`
-    INSERT INTO users (username, password_hash, role, display_name, is_protected, settings)
+    INSERT INTO users (username, password_hash, role, display_name, email, is_protected, settings)
     VALUES (
       ${input.username}, ${passwordHash}, ${input.role},
-      ${input.displayName ?? null}, false, '{}'::jsonb
+      ${input.displayName ?? null}, ${normalizedEmail}, false, '{}'::jsonb
     )
     RETURNING *
   `;
@@ -186,7 +194,7 @@ export async function createDbUser(input: {
  *  geguardet. Die Route ueberprueft das Ergebnis (rows == 0 → "letzter Admin"). */
 export async function updateDbUser(
   id: string,
-  patch: { username?: string; role?: "admin" | "user"; displayName?: string | null },
+  patch: { username?: string; role?: "admin" | "user"; displayName?: string | null; email?: string | null },
 ): Promise<DbUser | null | "last-admin"> {
   if (!DB_ENABLED) return null;
   const db = getDb();
@@ -196,6 +204,8 @@ export async function updateDbUser(
   const username = "username" in patch ? patch.username : current.username;
   const role = "role" in patch ? patch.role : current.role;
   const displayName = "displayName" in patch ? patch.displayName : current.display_name;
+  // Email normalisiert (lowercase, trimmed) damit UNIQUE-Index sauber matcht.
+  const email = "email" in patch ? patch.email?.trim().toLowerCase() || null : current.email;
 
   // Atomarer Last-Admin-Schutz: wenn das ein Admin-Demote ist, MUSS noch
   // mindestens ein anderer Admin uebrig bleiben. Sonst RETURNING bleibt leer.
@@ -205,7 +215,8 @@ export async function updateDbUser(
       UPDATE users SET
         username = ${username},
         role = ${role},
-        display_name = ${displayName}
+        display_name = ${displayName},
+        email = ${email}
       WHERE id = ${id}
         AND EXISTS (SELECT 1 FROM users WHERE role = 'admin' AND id <> ${id})
       RETURNING *
@@ -218,7 +229,8 @@ export async function updateDbUser(
     UPDATE users SET
       username = ${username},
       role = ${role},
-      display_name = ${displayName}
+      display_name = ${displayName},
+      email = ${email}
     WHERE id = ${id}
     RETURNING *
   `;
@@ -446,14 +458,15 @@ export async function listBotEnabledUsers(): Promise<DbUser[]> {
  *  Atomic: SELECT ... WHERE NOT EXISTS-Pattern. Wenn beim INSERT bereits
  *  ein Admin existiert, gibt RETURNING leer zurueck → wir werfen. Der
  *  username-UNIQUE-Constraint ist eine zweite Verteidigungslinie. */
-export async function createInitialAdmin(username: string, password: string): Promise<DbUser> {
+export async function createInitialAdmin(username: string, password: string, email?: string): Promise<DbUser> {
   if (!DB_ENABLED) throw new Error("Setup benoetigt DB-Modus");
 
   const passwordHash = await hashPassword(password);
+  const normalizedEmail = email?.trim().toLowerCase() || null;
   const db = getDb();
   const rows = await db`
-    INSERT INTO users (username, password_hash, role, is_protected, settings)
-    SELECT ${username}, ${passwordHash}, 'admin', true, '{}'::jsonb
+    INSERT INTO users (username, password_hash, role, email, is_protected, settings)
+    SELECT ${username}, ${passwordHash}, 'admin', ${normalizedEmail}, true, '{}'::jsonb
     WHERE NOT EXISTS (SELECT 1 FROM users)
     RETURNING *
   `;
@@ -582,11 +595,11 @@ export function createToken(username: string, role: string, id?: string): string
 
 export function verifyToken(token: string): JwtPayload {
   const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { aud?: string };
-  // 2FA-Login-Tickets duerfen NICHT als regulaere Auth-Tokens akzeptiert
-  // werden — sonst koennte jemand mit dem Ticket aus Step 1 alle API-Calls
-  // machen ohne den TOTP-Schritt zu absolvieren.
-  if (decoded.aud === "2fa") {
-    throw new Error("2FA-Ticket ist kein gueltiges Login-Token");
+  // 2FA-Login-Tickets und 2FA-Setup-Tickets duerfen NICHT als regulaere
+  // Auth-Tokens akzeptiert werden — sonst koennte jemand mit dem Ticket
+  // aus Step 1 alle API-Calls machen ohne 2FA zu absolvieren.
+  if (decoded.aud === "2fa" || decoded.aud === "2fa-setup") {
+    throw new Error("Login-Ticket ist kein gueltiges Auth-Token");
   }
   return decoded;
 }
@@ -813,6 +826,205 @@ export function verify2faTicket(ticket: string): TwoFactorTicketPayload | null {
   try {
     const decoded = jwt.verify(ticket, JWT_SECRET, { audience: "2fa" }) as TwoFactorTicketPayload;
     if (decoded.aud !== "2fa") return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
+// ── Email-2FA (Migration 020) ────────────────────────────────────────────────
+//
+// Lifecycle:
+//   1. POST /api/auth/login (username+password) → wenn User Email hat:
+//      createEmailOtp() generiert 6-stelligen Code, hasht ihn, speichert
+//      ihn als email_otp_tokens-Eintrag mit purpose='login', sendet Code
+//      via SMTP, gibt Ticket zurueck.
+//   2. POST /api/auth/login/2fa (ticket+code) → verifyAndConsumeEmailOtp()
+//      sucht den OTP-Eintrag, prueft Ablauf + bcrypt.compare auf code,
+//      markiert used=true. Bei Erfolg: regulaeres JWT.
+//
+// Setup (User hat noch keine Email — Legacy-Konten):
+//   1. Login liefert {requiresEmailSetup: true, ticket} statt 2FA-Ticket.
+//   2. POST /api/auth/setup-email/start (ticket+email) sendet Verifikations-
+//      code an die NEUE Email. purpose='email-setup', pending_email gefuellt.
+//   3. POST /api/auth/setup-email/verify (ticket+code) prueft, schreibt
+//      pending_email auf users.email, liefert reguläres JWT.
+//
+// Sicherheits-Punkte:
+//   - Codes sind bcrypt-gehasht — Backup-Dump leakt nichts Live-Funktionales.
+//   - max 5 Versuche pro OTP-Token (attempts-Counter). Brute-Force-Schutz.
+//   - 10 Minuten Lebensdauer.
+//   - Used = true nach erfolgreicher Verifikation = kein Replay.
+//   - Vorhandene unbenutzte Login-OTPs eines Users werden bei jedem neuen
+//     Login uebernutzt → invalidiert (verhindert paralleles Multi-Login).
+
+interface CreateOtpResult {
+  ticket: string;
+  code: string; // Plain — wird ans Mail-Template uebergeben, danach weggeworfen
+}
+
+/** Generiert 6-stelligen Code, hasht ihn, speichert mit Ticket-ID,
+ *  sendet KEINE Mail (das ist Caller-Job). Existierende unbenutzte
+ *  Tokens des Users mit gleichem purpose werden vorher invalidiert. */
+export async function createEmailOtp(
+  userId: string,
+  purpose: "login" | "email-setup",
+  pendingEmail?: string,
+): Promise<CreateOtpResult> {
+  if (!DB_ENABLED) throw new Error("Email-OTP benoetigt DB-Modus");
+  const db = getDb();
+
+  // Alte unbenutzte Tokens dieses Users + Purpose invalidieren — pro
+  // User immer nur EIN aktiver Code dieser Art. Verhindert Konfusion und
+  // beschleunigt das aufraeumen.
+  await db`
+    DELETE FROM email_otp_tokens
+    WHERE user_id = ${userId} AND purpose = ${purpose}
+  `;
+
+  // 6-stelliger Code, fuehrende Nullen erlaubt (000123).
+  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+  const codeHash = await bcrypt.hash(code, 8);
+  // Ticket: 16 Bytes random hex — referenziert den Token-Eintrag.
+  // Nicht zu verwechseln mit dem JWT-Ticket fuer den 2FA-Login (das
+  // identifiziert den USER, nicht den OTP-Eintrag).
+  const ticket = crypto.randomBytes(16).toString("hex");
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+  await db`
+    INSERT INTO email_otp_tokens (ticket, user_id, code_hash, purpose, pending_email, expires_at)
+    VALUES (${ticket}, ${userId}, ${codeHash}, ${purpose}, ${pendingEmail ?? null}, ${expiresAt})
+  `;
+
+  return { ticket, code };
+}
+
+export type VerifyOtpResult =
+  | { ok: true; userId: string; pendingEmail: string | null }
+  | { ok: false; reason: "not-found" | "expired" | "used" | "too-many-attempts" | "code-invalid" };
+
+/** Prueft den Code gegen den gespeicherten Hash und marked used.
+ *  Atomarer Race-Schutz: SELECT + UPDATE in einer Transaktion, damit
+ *  zwei parallele Verifikationen denselben Code nicht beide einloesen. */
+export async function verifyAndConsumeEmailOtp(
+  ticket: string,
+  code: string,
+  expectedPurpose: "login" | "email-setup",
+): Promise<VerifyOtpResult> {
+  if (!DB_ENABLED) return { ok: false, reason: "not-found" };
+  const cleanCode = code.replace(/\s+/g, "");
+  if (!/^\d{6}$/.test(cleanCode)) return { ok: false, reason: "code-invalid" };
+
+  const db = getDb();
+  let result: VerifyOtpResult = { ok: false, reason: "not-found" };
+
+  await db.begin(async (tx) => {
+    const [row] = await tx`
+      SELECT ticket, user_id, code_hash, purpose, pending_email, expires_at, used, attempts
+        FROM email_otp_tokens
+       WHERE ticket = ${ticket}
+       LIMIT 1
+       FOR UPDATE
+    `;
+    if (!row) {
+      result = { ok: false, reason: "not-found" };
+      return;
+    }
+    if (String(row.purpose) !== expectedPurpose) {
+      // Token existiert, aber falscher Zweck — wirkt wie not-found.
+      result = { ok: false, reason: "not-found" };
+      return;
+    }
+    if (row.used === true) {
+      result = { ok: false, reason: "used" };
+      return;
+    }
+    const expiresAt = row.expires_at instanceof Date ? row.expires_at : new Date(String(row.expires_at));
+    if (expiresAt.getTime() < Date.now()) {
+      result = { ok: false, reason: "expired" };
+      return;
+    }
+    if (Number(row.attempts) >= 5) {
+      result = { ok: false, reason: "too-many-attempts" };
+      return;
+    }
+
+    const ok = await bcrypt.compare(cleanCode, String(row.code_hash));
+    if (!ok) {
+      // Attempts-Counter erhoehen, damit Brute-Force nach 5 Fehlversuchen
+      // den Token tot setzt.
+      await tx`UPDATE email_otp_tokens SET attempts = attempts + 1 WHERE ticket = ${ticket}`;
+      result = { ok: false, reason: "code-invalid" };
+      return;
+    }
+
+    // Erfolgreich — Token verbrauchen.
+    await tx`UPDATE email_otp_tokens SET used = true WHERE ticket = ${ticket}`;
+    result = {
+      ok: true,
+      userId: String(row.user_id),
+      pendingEmail: row.pending_email ? String(row.pending_email) : null,
+    };
+  });
+
+  return result;
+}
+
+/** Setzt die Email eines Users — wird im Email-Setup-Flow aufgerufen
+ *  nachdem die Verifikation erfolgreich war. Schreibt normalisiert
+ *  (lowercase + trim). UNIQUE-Konflikt wird zu Error. */
+export async function setUserEmail(userId: string, email: string): Promise<DbUser | null> {
+  if (!DB_ENABLED) return null;
+  const normalized = email.trim().toLowerCase();
+  const db = getDb();
+  const [row] = await db`
+    UPDATE users SET email = ${normalized} WHERE id = ${userId} RETURNING *
+  `;
+  return row ? rowToDbUser(row) : null;
+}
+
+/** Liefert true wenn die Email-Adresse schon einem ANDEREN User gehoert.
+ *  Fuer Pre-Check beim Email-Setup, damit der UNIQUE-Constraint nicht
+ *  ueberraschend kracht. */
+export async function isEmailTaken(email: string, exceptUserId?: string): Promise<boolean> {
+  if (!DB_ENABLED) return false;
+  const normalized = email.trim().toLowerCase();
+  const db = getDb();
+  const rows = await db`
+    SELECT 1 FROM users
+     WHERE LOWER(email) = ${normalized}
+       ${exceptUserId ? db`AND id <> ${exceptUserId}` : db``}
+     LIMIT 1
+  `;
+  return rows.length > 0;
+}
+
+// ── 2FA-Setup-Ticket (kurzlebig, fuer Email-Setup-Flow) ─────────────────────
+// Eigenes audience='2fa-setup' damit es NICHT als Login-Ticket benutzt
+// werden kann. Lebensdauer 10 Min — die Setup-Mail muss in der Zeit
+// ankommen + Code eingegeben werden.
+
+interface EmailSetupTicketPayload {
+  sub: string;
+  username: string;
+  role: string;
+  aud: "2fa-setup";
+}
+
+export function createEmailSetupTicket(user: DbUser): string {
+  const payload: EmailSetupTicketPayload = {
+    sub: user.id,
+    username: user.username,
+    role: user.role,
+    aud: "2fa-setup",
+  };
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "10m" });
+}
+
+export function verifyEmailSetupTicket(ticket: string): EmailSetupTicketPayload | null {
+  try {
+    const decoded = jwt.verify(ticket, JWT_SECRET, { audience: "2fa-setup" }) as EmailSetupTicketPayload;
+    if (decoded.aud !== "2fa-setup") return null;
     return decoded;
   } catch {
     return null;

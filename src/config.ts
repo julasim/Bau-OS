@@ -149,6 +149,22 @@ export const JWT_SECRET_OK = JWT_SECRET.length >= 32;
 export const NODE_ENV = process.env.NODE_ENV || "development";
 export const IS_PRODUCTION = NODE_ENV === "production";
 
+// ── SMTP / Mail (Migration 020 — Email-2FA) ─────────────────────────────────
+// Wird fuer den Versand der Login-Codes via Email genutzt. Ohne SMTP_HOST
+// sind 2FA-Mails deaktiviert — der Code wird dann ins Server-Log geschrieben
+// (Dev-Modus). In Production verweigert der Boot wenn SMTP nicht konfiguriert
+// und Users mit Email-Adresse existieren.
+//
+// Tested: Office365, Gmail (mit App-Password), Mailgun, eigene Postfix-Server.
+// Default Port 587 mit STARTTLS, secure=true bei 465.
+export const SMTP_HOST = process.env.SMTP_HOST || "";
+export const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
+export const SMTP_USER = process.env.SMTP_USER || "";
+export const SMTP_PASS = process.env.SMTP_PASS || "";
+export const SMTP_FROM = process.env.SMTP_FROM || "Bau-OS <noreply@bau-os.local>";
+export const SMTP_SECURE = (process.env.SMTP_SECURE ?? "auto").toLowerCase();
+export const SMTP_ENABLED = !!SMTP_HOST;
+
 // ── Datenbank (Supabase / PostgreSQL) ────────────────────────────────────────
 export const DATABASE_URL = process.env.DATABASE_URL || "";
 export const DB_ENABLED = !!DATABASE_URL;

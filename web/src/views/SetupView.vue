@@ -7,6 +7,7 @@ import { api, setToken } from "../api";
 
 const router = useRouter();
 const username = ref("");
+const email = ref("");
 const password = ref("");
 const passwordConfirm = ref("");
 const error = ref("");
@@ -21,10 +22,12 @@ const passwordTooShort = computed(() => password.value.length > 0 && password.va
 const passwordsMismatch = computed(
   () => passwordConfirm.value.length > 0 && password.value !== passwordConfirm.value,
 );
+const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim()));
 const canSubmit = computed(
   () =>
     !loading.value &&
     username.value.trim().length >= 3 &&
+    emailValid.value &&
     password.value.length >= 8 &&
     password.value === passwordConfirm.value,
 );
@@ -52,6 +55,7 @@ async function submit() {
   try {
     const res = await api.post<{ token: string }>("/setup/admin", {
       username: username.value.trim(),
+      email: email.value.trim().toLowerCase(),
       password: password.value,
     });
     setToken(res.token);
@@ -199,6 +203,23 @@ async function submit() {
                 style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px"
               >
                 Mindestens 3 Zeichen.
+              </div>
+            </div>
+            <div>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">Email-Adresse</label>
+              <input
+                v-model="email"
+                type="email"
+                autocomplete="email"
+                required
+                placeholder="name@firma.at"
+                class="login-input"
+              />
+              <div
+                v-if="email.length > 0 && !emailValid"
+                style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px"
+              >
+                Bitte gültige Email-Adresse — wird für 2FA-Login per Code verwendet.
               </div>
             </div>
             <div>
