@@ -137,6 +137,10 @@ const filesLoaded = ref(false); // Lazy-Load: erst laden, wenn Tab geoeffnet wir
 const dragging = ref(false);
 const uploading = ref(false);
 const uploadMsg = ref("");
+// Eigene Fehler-State, damit Erfolgs-Message und Fehler-Message gleichzeitig
+// angezeigt werden koennen (z.B. bei partial-success). Fehler bleibt laenger
+// stehen (8s vs 3s) damit der User Zeit hat zu lesen.
+const uploadError = ref("");
 
 // ── Team-State (Stufe 3c) ──────────────────────────────────
 const allTeam = ref<TeamMember[]>([]);
@@ -1021,6 +1025,7 @@ async function uploadFiles(fileList: FileList) {
   if (uploading.value) return;
   uploading.value = true;
   uploadMsg.value = "";
+  uploadError.value = "";
   const formData = new FormData();
   // Projekt-Zuweisung automatisch — das ist der Zweck des projekt-scoped Tabs.
   formData.append("project", projectName.value);
@@ -1033,19 +1038,44 @@ async function uploadFiles(fileList: FileList) {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     });
-    const data = await res.json();
-    if (data.success) {
-      const count = data.uploaded?.length ?? 0;
-      uploadMsg.value = `${count} Datei${count === 1 ? "" : "en"} hochgeladen`;
-      await Promise.all([loadFiles(), loadAll()]);
-    } else {
-      uploadMsg.value = data.error || "Upload fehlgeschlagen";
+    const data = (await res.json()) as {
+      success?: boolean;
+      uploaded?: unknown[];
+      error?: string;
+      partial?: boolean;
+      failures?: Array<{ filename: string; error: string }>;
+    };
+
+    if (!res.ok || !data.success) {
+      // HTTP-Fehler oder Backend hat success=false geliefert. Echte
+      // Fehlermeldung anzeigen statt "Upload fehlgeschlagen".
+      const detail =
+        data.failures?.[0]?.error ?? data.error ?? `HTTP ${res.status} ${res.statusText}`;
+      uploadError.value = `Upload fehlgeschlagen: ${detail}`;
+      return;
     }
-  } catch {
-    uploadMsg.value = "Upload fehlgeschlagen";
+
+    const count = data.uploaded?.length ?? 0;
+    if (count === 0) {
+      uploadError.value = "Datei wurde nicht gespeichert (Backend hat kein File angenommen)";
+      return;
+    }
+    uploadMsg.value = `${count} Datei${count === 1 ? "" : "en"} hochgeladen`;
+    if (data.partial && data.failures && data.failures.length > 0) {
+      // Teil-Erfolg: zusaetzlich anzeigen was fehlgeschlagen ist.
+      uploadError.value = `Fehler bei ${data.failures.length} Datei(en): ${data.failures[0]!.error}`;
+    }
+    await Promise.all([loadFiles(), loadAll()]);
+  } catch (e) {
+    uploadError.value = `Upload fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`;
   } finally {
     uploading.value = false;
-    setTimeout(() => (uploadMsg.value = ""), 3000);
+    setTimeout(() => {
+      uploadMsg.value = "";
+    }, 3000);
+    setTimeout(() => {
+      uploadError.value = "";
+    }, 8000);
   }
 }
 
@@ -2732,6 +2762,20 @@ async function deleteMeeting() {
               @change="onFileInput"
             />
           </div>
+        </div>
+        <div
+          v-if="uploadError"
+          style="
+            margin-bottom: 12px;
+            padding: 10px 14px;
+            border: 1px solid var(--color-danger-border);
+            background: var(--color-danger-bg);
+            color: var(--color-danger-text);
+            border-radius: 6px;
+            font-size: 12px;
+          "
+        >
+          {{ uploadError }}
         </div>
 
         <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">

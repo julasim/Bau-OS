@@ -242,11 +242,15 @@ filesRoutes.post("/files/upload", async (c) => {
 
   const saved: string[] = [];
   const dbEntries: Array<{ id: string; filename: string }> = [];
+  const failures: Array<{ filename: string; error: string }> = [];
 
   // ── DB-Modus: Blob in die DB, kein Vault-Write ─────────────────────────────
   if (DB_ENABLED && fileRepo) {
     for (const file of files) {
-      if (!file.name || file.size === 0) continue;
+      if (!file.name || file.size === 0) {
+        if (file.name) failures.push({ filename: file.name, error: "Leere Datei (size = 0)" });
+        continue;
+      }
       if (file.size > MAX_UPLOAD_BYTES) {
         return c.json({ error: `Datei "${file.name}" ist zu groß (max ${MAX_UPLOAD_MB} MB)` }, 413);
       }
@@ -261,8 +265,14 @@ filesRoutes.post("/files/upload", async (c) => {
         if (result.format !== "unsupported" && result.text) {
           contentText = result.text;
         }
-      } catch {
-        // Extraktion fehlgeschlagen — Datei trotzdem speichern
+      } catch (err) {
+        // Extraktion fehlgeschlagen — Datei trotzdem speichern. Nur Log,
+        // kein Push in failures (das wuerde User verwirren — der File ging
+        // ja eh durch).
+        const { logInfo } = await import("../../logger.js");
+        logInfo(
+          `[Upload] Text-Extraktion fehlgeschlagen fuer "${safeName}": ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
 
       try {
@@ -281,13 +291,35 @@ filesRoutes.post("/files/upload", async (c) => {
         });
         dbEntries.push({ id: entry.id, filename: entry.filename });
         saved.push(safeName);
-      } catch {
-        // DB-Fehler — Datei geht verloren (kein Vault-Fallback mehr, weil der
-        // User explizit "alles in die DB" wollte).
+      } catch (err) {
+        // KEIN silent-swallow mehr. Bug-Erfahrung: Drag&Drop schien zu klappen
+        // ("success: true"), aber files.uploaded war [] — User sah nichts und
+        // dachte Upload wurde verschluckt. Jetzt: Fehler loggen + im Response
+        // mitschicken, damit die UI eine echte Fehlermeldung anzeigen kann.
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const { logError } = await import("../../logger.js");
+        logError(`[Upload] DB-Save fehlgeschlagen fuer "${safeName}" (project=${project ?? "—"})`, err);
+        failures.push({ filename: safeName, error: errMsg });
       }
     }
 
     if (saved.length > 0) emit({ type: "file", action: "created", id: saved.join(", ") });
+
+    // Nur erfolgreich wenn ALLE Files durchgingen. Bei mindestens einem
+    // Fehler: success=false, error mit der ersten Failure-Message — die UI
+    // kann das anzeigen.
+    if (failures.length > 0 && saved.length === 0) {
+      return c.json({ success: false, error: failures[0]!.error, failures }, 500);
+    }
+    if (failures.length > 0) {
+      return c.json({
+        success: true,
+        uploaded: saved,
+        dbEntries,
+        partial: true,
+        failures,
+      });
+    }
     return c.json({ success: true, uploaded: saved, dbEntries });
   }
 

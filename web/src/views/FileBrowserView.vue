@@ -658,19 +658,34 @@ async function uploadFiles(fileList: FileList) {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
       body: formData,
     });
-    const data = (await res.json()) as { success?: boolean; uploaded?: unknown[]; error?: string };
-    if (data.success) {
-      const count = data.uploaded?.length ?? 0;
-      uploadMsg.value = `${count} Datei(en) hochgeladen${targetProject ? ` → ${targetProject}` : ""}`;
-      await loadFiles();
-    } else {
-      uploadMsg.value = data.error || "Upload fehlgeschlagen";
+    const data = (await res.json()) as {
+      success?: boolean;
+      uploaded?: unknown[];
+      error?: string;
+      partial?: boolean;
+      failures?: Array<{ filename: string; error: string }>;
+    };
+    if (!res.ok || !data.success) {
+      const detail = data.failures?.[0]?.error ?? data.error ?? `HTTP ${res.status}`;
+      uploadMsg.value = `Upload fehlgeschlagen: ${detail}`;
+      return;
     }
-  } catch {
-    uploadMsg.value = "Upload fehlgeschlagen";
+    const count = data.uploaded?.length ?? 0;
+    if (count === 0) {
+      uploadMsg.value = "Datei wurde nicht gespeichert (Backend hat kein File angenommen)";
+      return;
+    }
+    let msg = `${count} Datei(en) hochgeladen${targetProject ? ` → ${targetProject}` : ""}`;
+    if (data.partial && data.failures?.length) {
+      msg += ` — ${data.failures.length} Fehler: ${data.failures[0]!.error}`;
+    }
+    uploadMsg.value = msg;
+    await loadFiles();
+  } catch (e) {
+    uploadMsg.value = `Upload fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`;
   } finally {
     uploading.value = false;
-    setTimeout(() => (uploadMsg.value = ""), 3000);
+    setTimeout(() => (uploadMsg.value = ""), 6000);
   }
 }
 
