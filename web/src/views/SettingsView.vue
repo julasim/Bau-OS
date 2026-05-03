@@ -105,6 +105,108 @@ function cancelEmailChange() {
   emailHint.value = null;
 }
 
+// ── Microsoft-Konto (Phase 1: OAuth-Verbindung) ─────────────────────────────
+// Status-Polling beim Mount + nach jeder Verbinden/Trennen-Aktion.
+// Connect-Button oeffnet die MS-Authorize-URL als Popup —
+// Backend-Callback macht Token-Storage, postMessage zurueck an opener,
+// dieser triggert ein Status-Reload.
+interface MsAccount {
+  msEmail: string;
+  msDisplayName: string | null;
+  calendarMode: "default" | "bau-os";
+  syncEnabled: boolean;
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+  accessTokenValid: boolean;
+}
+interface MsStatus {
+  connected: boolean;
+  available: boolean;
+  reason?: string;
+  account?: MsAccount;
+}
+
+const msStatus = ref<MsStatus>({ connected: false, available: false });
+const msBusy = ref(false);
+const msMessage = ref<{ type: "ok" | "err"; text: string } | null>(null);
+
+async function loadMsStatus() {
+  try {
+    msStatus.value = await api.get<MsStatus>("/auth/microsoft/status");
+  } catch {
+    msStatus.value = { connected: false, available: false };
+  }
+}
+
+async function connectMicrosoft() {
+  msBusy.value = true;
+  msMessage.value = null;
+  try {
+    const res = await api.post<{ url: string }>("/auth/microsoft/connect", {
+      returnTo: "/settings",
+    });
+    const popup = window.open(res.url, "ms-oauth", "width=520,height=720");
+    if (!popup) {
+      msMessage.value = {
+        type: "err",
+        text: "Popup wurde blockiert. Bitte Popup-Blocker für diese Seite deaktivieren.",
+      };
+      return;
+    }
+    // Auf postMessage vom Callback-Tab warten.
+    const onMsg = async (ev: MessageEvent) => {
+      if (!ev.data || ev.data.type !== "bauos:ms-oauth") return;
+      window.removeEventListener("message", onMsg);
+      if (ev.data.kind === "success") {
+        msMessage.value = { type: "ok", text: ev.data.message ?? "Microsoft-Konto verbunden." };
+        await loadMsStatus();
+      } else {
+        msMessage.value = { type: "err", text: ev.data.message ?? "Verbindung fehlgeschlagen." };
+      }
+    };
+    window.addEventListener("message", onMsg);
+    // Failsafe: Popup geschlossen ohne Anmeldung → nach 1.5s Status pollen.
+    const poll = setInterval(async () => {
+      if (popup.closed) {
+        clearInterval(poll);
+        window.removeEventListener("message", onMsg);
+        await loadMsStatus();
+      }
+    }, 1500);
+  } catch (e) {
+    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Verbinden fehlgeschlagen" };
+  } finally {
+    msBusy.value = false;
+  }
+}
+
+async function disconnectMicrosoft() {
+  if (!confirm("Microsoft-Verbindung wirklich trennen? Synchronisierte Termine bleiben in Bau-OS erhalten.")) return;
+  msBusy.value = true;
+  msMessage.value = null;
+  try {
+    await api.delete("/auth/microsoft/disconnect");
+    msMessage.value = { type: "ok", text: "Verbindung getrennt." };
+    await loadMsStatus();
+  } catch (e) {
+    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Trennen fehlgeschlagen" };
+  } finally {
+    msBusy.value = false;
+  }
+}
+
+async function updateMsSettings(patch: { calendarMode?: "default" | "bau-os"; syncEnabled?: boolean }) {
+  msBusy.value = true;
+  try {
+    await api.patch("/auth/microsoft/settings", patch);
+    await loadMsStatus();
+  } catch (e) {
+    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Update fehlgeschlagen" };
+  } finally {
+    msBusy.value = false;
+  }
+}
+
 // Hinweis: Die Telegram-Bot-Verwaltung wurde aus den User-Settings
 // entfernt — Admin verwaltet Bot-Token und Pairing zentral via
 // /admin/users (Bot-Token-Dialog + Pair-Dialog). Self-Service-Endpoint
@@ -248,6 +350,7 @@ async function toggleFast() {
 
 onMounted(() => {
   void loadAll();
+  void loadMsStatus();
 });
 </script>
 
@@ -469,6 +572,137 @@ onMounted(() => {
               :style="{ opacity: (emailBusy || !emailVerifyCode) ? 0.5 : 1 }"
             >
               {{ emailBusy ? "..." : "Bestätigen" }}
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Microsoft-Konto (Outlook-Calendar) ─────────────────────── -->
+      <section>
+        <h3 class="settings-h3 mb-3">
+          Microsoft-Konto
+          <span
+            class="ml-2 text-xs px-2 py-0.5 rounded-full"
+            :style="
+              !msStatus.available
+                ? 'background:#f4f4f5; color:#52525b'
+                : msStatus.connected
+                  ? 'background:#dcfce7; color:#166534'
+                  : 'background:#fef3c7; color:#92400e'
+            "
+          >
+            {{
+              !msStatus.available
+                ? "Nicht konfiguriert"
+                : msStatus.connected
+                  ? "Verbunden"
+                  : "Nicht verbunden"
+            }}
+          </span>
+        </h3>
+
+        <!-- Backend ist nicht konfiguriert -->
+        <div v-if="!msStatus.available" class="settings-card p-4">
+          <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
+            Microsoft-Integration ist auf diesem Server nicht aktiviert.
+            <span v-if="msStatus.reason">{{ msStatus.reason }}</span>
+            <span v-else>Admin muss <code class="font-mono">MS_CLIENT_ID</code>, <code class="font-mono">MS_CLIENT_SECRET</code> und <code class="font-mono">MS_TENANT_ID</code> in der <code class="font-mono">.env</code> setzen.</span>
+          </p>
+        </div>
+
+        <!-- Nicht verbunden — Connect-Button -->
+        <div v-else-if="!msStatus.connected" class="settings-card p-4">
+          <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
+            Verbinde dein Microsoft-Konto, um Outlook-Kalender mit Bau-OS zu synchronisieren.
+            Termine landen in deinem Outlook und Outlook-Termine erscheinen in Bau-OS.
+          </p>
+          <div v-if="msMessage" class="ms-message" :class="msMessage.type === 'ok' ? 'ms-msg-ok' : 'ms-msg-err'">
+            {{ msMessage.text }}
+          </div>
+          <div class="flex justify-end" style="margin-top: 12px">
+            <button
+              @click="connectMicrosoft"
+              :disabled="msBusy"
+              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition flex items-center gap-2"
+              :style="{ opacity: msBusy ? 0.5 : 1 }"
+            >
+              <!-- Microsoft-Logo: vier Quadrate als CSS -->
+              <span class="ms-logo-mini">
+                <span style="background:#F25022"></span>
+                <span style="background:#7FBA00"></span>
+                <span style="background:#00A4EF"></span>
+                <span style="background:#FFB900"></span>
+              </span>
+              {{ msBusy ? "..." : "Mit Microsoft verbinden" }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Verbunden — Anzeige + Settings + Trennen -->
+        <div v-else class="settings-card p-4 space-y-3">
+          <div class="settings-row flex items-center justify-between px-0 py-1">
+            <span class="text-sm settings-label">Verbunden mit</span>
+            <span class="text-sm font-mono settings-value">
+              {{ msStatus.account?.msEmail }}
+            </span>
+          </div>
+          <div v-if="msStatus.account?.msDisplayName" class="settings-row flex items-center justify-between px-0 py-1">
+            <span class="text-sm settings-label">Name</span>
+            <span class="text-sm settings-value">{{ msStatus.account.msDisplayName }}</span>
+          </div>
+
+          <!-- Calendar-Mode-Auswahl -->
+          <div class="settings-row flex items-center gap-3 px-0 py-2">
+            <label class="text-sm settings-label flex-shrink-0" style="width: 140px">Kalender</label>
+            <select
+              :value="msStatus.account?.calendarMode"
+              :disabled="msBusy"
+              @change="updateMsSettings({ calendarMode: ($event.target as HTMLSelectElement).value as 'default' | 'bau-os' })"
+              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+            >
+              <option value="default">Standard-Kalender (Outlook-Default)</option>
+              <option value="bau-os">Eigener „Bau-OS"-Kalender (wird automatisch angelegt)</option>
+            </select>
+          </div>
+
+          <!-- Sync-Schalter -->
+          <label
+            class="settings-row flex items-center gap-3 px-0 py-2"
+            style="cursor: pointer"
+          >
+            <input
+              type="checkbox"
+              :checked="msStatus.account?.syncEnabled"
+              :disabled="msBusy"
+              @change="updateMsSettings({ syncEnabled: ($event.target as HTMLInputElement).checked })"
+            />
+            <div style="flex: 1">
+              <div class="text-sm">Sync aktiv</div>
+              <div class="text-xs" style="color: var(--color-text-muted); margin-top: 2px">
+                Wenn aktiviert: Bau-OS-Termine werden in Outlook angelegt und Outlook-Termine in Bau-OS importiert.
+              </div>
+            </div>
+          </label>
+
+          <div v-if="msStatus.account?.lastSyncAt" class="text-xs" style="color: var(--color-text-tertiary)">
+            Letzte Synchronisation: {{ msStatus.account.lastSyncAt }}
+          </div>
+          <div v-if="msStatus.account?.lastSyncError" class="text-xs ms-msg-err" style="padding: 8px 10px; border-radius: 6px">
+            Letzter Sync-Fehler: {{ msStatus.account.lastSyncError }}
+          </div>
+
+          <div v-if="msMessage" class="ms-message" :class="msMessage.type === 'ok' ? 'ms-msg-ok' : 'ms-msg-err'">
+            {{ msMessage.text }}
+          </div>
+
+          <div class="flex justify-end" style="margin-top: 12px">
+            <button
+              @click="disconnectMicrosoft"
+              :disabled="msBusy"
+              class="px-4 py-1.5 text-sm rounded"
+              style="background:transparent; border:1px solid #dc2626; color:#dc2626"
+            >
+              Verbindung trennen
             </button>
           </div>
         </div>
@@ -751,4 +985,34 @@ onMounted(() => {
   color: var(--color-danger-text, #b91c1c);
 }
 
+/* ── Microsoft-Sektion ─────────────────────────────────── */
+.ms-message {
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+.ms-msg-ok {
+  background: #dcfce7;
+  color: #166534;
+}
+.ms-msg-err {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Microsoft 4-Quadrate-Logo, mini fuer Buttons */
+.ms-logo-mini {
+  display: inline-grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  width: 14px;
+  height: 14px;
+}
+.ms-logo-mini > span {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
 </style>

@@ -156,6 +156,23 @@ export const IS_PRODUCTION = NODE_ENV === "production";
 //   Beispiel: APP_URL=https://app.bau-os.at
 export const APP_URL = process.env.APP_URL || "";
 
+// ── Microsoft Graph (Outlook-Calendar-Sync, Migration 022/023) ──────────────
+// Werte aus deiner Azure App-Registrierung:
+//   1. portal.azure.com → App-Registrierungen → "+ Neue Registrierung"
+//   2. Redirect-URI: <APP_URL>/api/auth/microsoft/callback
+//   3. API-Berechtigungen: Calendars.ReadWrite + User.Read + offline_access
+//   4. Werte hier eintragen.
+//
+// Tenant-ID: konkrete Tenant-UUID fuer Single-Tenant-Apps. "common" fuer
+// Multi-Tenant (jeder MS-User kann sich verbinden). Default "common".
+export const MS_CLIENT_ID = process.env.MS_CLIENT_ID || "";
+export const MS_CLIENT_SECRET = process.env.MS_CLIENT_SECRET || "";
+export const MS_TENANT_ID = process.env.MS_TENANT_ID || "common";
+// Redirect-URI muss EXAKT mit dem Wert in Azure uebereinstimmen.
+// Default leer → Backend baut sie aus APP_URL + dem Standard-Pfad.
+export const MS_REDIRECT_URI = process.env.MS_REDIRECT_URI || "";
+export const MS_GRAPH_ENABLED = !!(MS_CLIENT_ID && MS_CLIENT_SECRET);
+
 // ── SMTP / Mail (Migration 020 — Email-2FA) ─────────────────────────────────
 // Wird fuer den Versand der Login-Codes via Email genutzt. Ohne SMTP_HOST
 // sind 2FA-Mails deaktiviert — der Code wird dann ins Server-Log geschrieben

@@ -91,6 +91,7 @@ import { chatRoutes } from "./routes/chat.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { agentLogsRoutes } from "./routes/agent-logs.js";
 import { adminUsersRoutes } from "./routes/admin-users.js";
+import { authMicrosoftRoutes } from "./routes/auth-microsoft.js";
 // Old TOTP-Routes (auth2faRoutes): durch Email-2FA in Migration 020
 // abgeloest. Endpoints werden nicht mehr exposed, damit nicht parallel
 // zwei 2FA-Mechanismen laufen koennen. Datei bleibt im Code als Recovery-
@@ -746,6 +747,7 @@ app.route("/api", eventsRoutes);
 app.route("/api", chatRoutes);
 app.route("/api", settingsRoutes);
 app.route("/api", agentLogsRoutes);
+app.route("/api", authMicrosoftRoutes);
 // app.route("/api", auth2faRoutes); — siehe Kommentar oben
 
 // ── Statische Dateien (Vue SPA in Production) ────────────────────────────────
