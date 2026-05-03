@@ -35,6 +35,11 @@ interface HeartbeatConfig {
   prompt: string;
 }
 
+// Erlaubte Off-Marker fuer den Cron-Header. Wird absichtlich von User
+// gesetzt um den Heartbeat eines Agenten stillzuhalten ohne die ganze
+// HEARTBEAT.md zu loeschen (komfortabel fuer "spaeter wieder einschalten").
+const HEARTBEAT_OFF_MARKERS = new Set(["disabled", "off", "none", "false", "no", "aus"]);
+
 function parseHeartbeat(agentName: string): HeartbeatConfig | null {
   const hbPath = path.join(getAgentPath(agentName), "HEARTBEAT.md");
   if (!fs.existsSync(hbPath)) return null;
@@ -45,6 +50,12 @@ function parseHeartbeat(agentName: string): HeartbeatConfig | null {
   if (!cronMatch) return null;
 
   const cronExpression = cronMatch[1].trim();
+
+  // Off-Marker silent behandeln — kein Error-Log, kein Cron-Job.
+  if (HEARTBEAT_OFF_MARKERS.has(cronExpression.toLowerCase())) {
+    return null;
+  }
+
   if (!cron.validate(cronExpression)) {
     logError(`Heartbeat/${agentName}`, `Ungueltige Cron-Expression: "${cronExpression}"`);
     return null;
@@ -94,15 +105,23 @@ async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> 
 
 // Agents die bereits einen Cron-Job haben (verhindert Duplikate)
 const _registeredAgents = new Set<string>();
+// Agents bei denen wir wissen "kein Heartbeat" — verhindert dass der
+// Meta-Cron jede Minute parseHeartbeat() neu aufruft und die Errors
+// neu loggt. Wird via reloadHeartbeat() invalidiert wenn der User die
+// HEARTBEAT.md aendert (live-reload).
+const _knownNoHeartbeat = new Set<string>();
 const _cronTasks = new Map<string, cron.ScheduledTask>();
 let _replyFn: ReplyFn | null = null;
 
 function registerAgentIfNeeded(agentName: string, replyFn: ReplyFn): boolean {
   if (_registeredAgents.has(agentName)) return false;
+  if (_knownNoHeartbeat.has(agentName)) return false;
 
   const config = parseHeartbeat(agentName);
   if (!config) {
-    logInfo(`[Heartbeat] ${agentName}: keine gueltige HEARTBEAT.md — uebersprungen`);
+    // Einmal loggen, dann merken — sonst spamt der Meta-Cron jede Minute.
+    logInfo(`[Heartbeat] ${agentName}: kein aktiver Cron — uebersprungen`);
+    _knownNoHeartbeat.add(agentName);
     return false;
   }
 
@@ -132,11 +151,15 @@ export function reloadHeartbeat(agentName: string): string {
     _cronTasks.delete(agentName);
     _registeredAgents.delete(agentName);
   }
+  // Auch den "no-heartbeat"-Cache invalidieren, damit nach Reload eine
+  // neu gesetzte Cron-Expression auch aktiv wird.
+  _knownNoHeartbeat.delete(agentName);
 
   // Neuen Job registrieren
   const config = parseHeartbeat(agentName);
   if (!config) {
     logInfo(`[Heartbeat] ${agentName}: HEARTBEAT.md entfernt oder ungueltig — Cron gestoppt`);
+    _knownNoHeartbeat.add(agentName);
     return `Heartbeat fuer ${agentName} deaktiviert (keine gueltige Cron-Expression).`;
   }
 
