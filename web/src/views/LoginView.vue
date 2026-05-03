@@ -9,17 +9,20 @@ const password = ref("");
 const error = ref("");
 const loading = ref(false);
 
-// Drei moegliche Steps:
+// Vier moegliche Steps:
 //   "login"        → Username + Passwort
 //   "code"         → 6-stelliger Code aus der Email-2FA
+//   "magic-link"   → Anmelde-Link wurde verschickt, User wartet auf Klick
 //   "setup-email"  → User hat noch keine Email; muss sie hier setzen + verifizieren
-type Step = "login" | "code" | "setup-email";
+type Step = "login" | "code" | "magic-link" | "setup-email";
 const step = ref<Step>("login");
 
 // Step "code"
 const ticket = ref<string | null>(null);
 const otpCode = ref("");
 const emailHint = ref<string | null>(null);
+const magicLinkBusy = ref(false);
+const magicLinkConsuming = ref(false);
 
 // Step "setup-email" — sub-states: "enter-email" oder "verify-code"
 type SetupSubStep = "enter-email" | "verify-code";
@@ -41,13 +44,43 @@ const setupEmailValid = computed(() =>
 // Beim Mount: pruefen, ob noch gar kein Admin existiert. In dem Fall fuehrt
 // /setup den User durchs Erstanlegen — die Login-Form macht ohne Admin-Konto
 // keinen Sinn.
+//
+// Zusaetzlich: ?magic=<token>-Param aus der URL pruefen — wenn vorhanden,
+// versuchen wir direkt einzuloesen (Magic-Link-Klick aus Email).
 onMounted(async () => {
   try {
     const status = await api.get<{ needsSetup: boolean }>("/setup/status");
-    if (status.needsSetup) router.replace("/setup");
+    if (status.needsSetup) {
+      router.replace("/setup");
+      return;
+    }
   } catch {
     // Setup-Endpoint nicht da → Backend ist alt oder im FS-Mode. Kein
     // Wizard-Redirect, normaler Login wird einfach versucht.
+  }
+
+  // Magic-Link aus URL einloesen
+  const url = new URL(window.location.href);
+  const magic = url.searchParams.get("magic");
+  if (magic) {
+    magicLinkConsuming.value = true;
+    try {
+      const res = await api.get<{ token: string }>(
+        `/auth/login/magic-link/consume?token=${encodeURIComponent(magic)}`,
+      );
+      // Magic-Param aus URL entfernen damit ein Reload nicht erneut versucht
+      url.searchParams.delete("magic");
+      window.history.replaceState({}, "", url.toString());
+      setToken(res.token);
+      router.push("/");
+    } catch (e: unknown) {
+      error.value = e instanceof Error ? e.message : "Anmelde-Link ungueltig";
+      // Param trotzdem entfernen damit der User retry kann
+      url.searchParams.delete("magic");
+      window.history.replaceState({}, "", url.toString());
+    } finally {
+      magicLinkConsuming.value = false;
+    }
   }
 });
 
@@ -117,6 +150,20 @@ async function submitCode() {
     error.value = e instanceof Error ? e.message : "Code ungueltig";
   } finally {
     loading.value = false;
+  }
+}
+
+async function requestMagicLink() {
+  if (!ticket.value || magicLinkBusy.value) return;
+  error.value = "";
+  magicLinkBusy.value = true;
+  try {
+    await api.post("/auth/login/magic-link/start", { ticket: ticket.value });
+    step.value = "magic-link";
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : "Anmelde-Link konnte nicht gesendet werden";
+  } finally {
+    magicLinkBusy.value = false;
   }
 }
 
@@ -278,8 +325,31 @@ function abortFlow() {
       style="flex: 1; padding: 48px; background: var(--color-bg)"
     >
       <div style="width: 100%; max-width: 320px">
+        <!-- Auto-Consume Magic-Link: Spinner anzeigen -->
+        <template v-if="magicLinkConsuming">
+          <h2
+            style="
+              font-size: 20px;
+              font-weight: 600;
+              color: var(--color-text);
+              margin: 0 0 4px 0;
+            "
+          >
+            Anmelde-Link wird geprüft…
+          </h2>
+          <p
+            style="
+              font-size: 13px;
+              color: var(--color-text-muted);
+              margin: 0 0 24px 0;
+            "
+          >
+            Einen Moment, du wirst gleich angemeldet.
+          </p>
+        </template>
+
         <!-- Step "code": 6-stelliger Email-Code -->
-        <template v-if="step === 'code'">
+        <template v-else-if="step === 'code'">
           <h2
             style="
               font-size: 20px;
@@ -379,7 +449,110 @@ function abortFlow() {
                 Abbrechen
               </button>
             </div>
+
+            <button
+              type="button"
+              @click="requestMagicLink"
+              :disabled="magicLinkBusy"
+              style="
+                width: 100%;
+                margin-top: 12px;
+                padding: 9px;
+                font-size: 12px;
+                font-weight: 500;
+                color: var(--color-text);
+                background: transparent;
+                border: 1px solid var(--color-border);
+                border-radius: 6px;
+                cursor: pointer;
+              "
+              :style="{ opacity: magicLinkBusy ? 0.5 : 1 }"
+            >
+              {{ magicLinkBusy ? "Wird gesendet…" : "Lieber Anmelde-Link statt Code" }}
+            </button>
           </form>
+        </template>
+
+        <!-- Step "magic-link": Mail wurde verschickt, User wartet auf Klick -->
+        <template v-else-if="step === 'magic-link'">
+          <h2
+            style="
+              font-size: 20px;
+              font-weight: 600;
+              color: var(--color-text);
+              margin: 0 0 4px 0;
+            "
+          >
+            Anmelde-Link verschickt
+          </h2>
+          <p style="font-size: 13px; color: var(--color-text-muted); margin: 0 0 24px 0">
+            Wir haben dir einen Anmelde-Link an
+            <strong v-if="emailHint" class="font-mono">{{ emailHint }}</strong>
+            <span v-else>deine Email-Adresse</span>
+            geschickt. Öffne die Mail und klicke den Link — dann bist du angemeldet.
+            Der Link ist 15 Minuten gültig.
+          </p>
+          <div
+            style="
+              padding: 12px 14px;
+              background: var(--color-bg-subtle);
+              border: 1px solid var(--color-border-subtle);
+              border-radius: 6px;
+              font-size: 12px;
+              color: var(--color-text-muted);
+              line-height: 1.5;
+            "
+          >
+            Tipp: der Klick öffnet diese Seite automatisch in einem neuen Tab.
+            Lass dieses Fenster offen — falls's hier nicht von alleine weiterspringt,
+            kommt der Login einfach im neuen Tab.
+          </div>
+
+          <p
+            v-if="error"
+            style="
+              font-size: 12px;
+              color: var(--color-danger-text);
+              background: var(--color-danger-bg);
+              border: 1px solid var(--color-danger-border);
+              padding: 8px 12px;
+              border-radius: 6px;
+              margin: 12px 0 0 0;
+            "
+          >
+            {{ error }}
+          </p>
+
+          <div class="flex justify-between" style="margin-top: 16px">
+            <button
+              type="button"
+              @click="step = 'code'; error = ''"
+              style="
+                background: none;
+                border: none;
+                font-size: 12px;
+                color: var(--color-text-muted);
+                cursor: pointer;
+                padding: 0;
+              "
+            >
+              Doch lieber Code eingeben
+            </button>
+            <button
+              type="button"
+              @click="abortFlow"
+              style="
+                background: none;
+                border: none;
+                font-size: 12px;
+                color: var(--color-text-muted);
+                cursor: pointer;
+                padding: 0;
+              "
+            >
+              Abbrechen
+            </button>
+          </div>
         </template>
 
         <!-- Step "setup-email": Email-Adresse setzen + verifizieren -->

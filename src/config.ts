@@ -149,6 +149,13 @@ export const JWT_SECRET_OK = JWT_SECRET.length >= 32;
 export const NODE_ENV = process.env.NODE_ENV || "development";
 export const IS_PRODUCTION = NODE_ENV === "production";
 
+// Public-Base-URL fuer Links in Emails (Magic-Link, Password-Reset, Welcome).
+// Default leer → Backend nimmt Host aus dem Request-Header (Reverse-Proxy
+// muss Host korrekt forwarden). Setzbar via Env, falls die App hinter
+// einem CDN sitzt oder die Public-URL anders ist als der Request-Host.
+//   Beispiel: APP_URL=https://app.bau-os.at
+export const APP_URL = process.env.APP_URL || "";
+
 // ── SMTP / Mail (Migration 020 — Email-2FA) ─────────────────────────────────
 // Wird fuer den Versand der Login-Codes via Email genutzt. Ohne SMTP_HOST
 // sind 2FA-Mails deaktiviert — der Code wird dann ins Server-Log geschrieben

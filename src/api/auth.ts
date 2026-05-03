@@ -1030,3 +1030,84 @@ export function verifyEmailSetupTicket(ticket: string): EmailSetupTicketPayload 
     return null;
   }
 }
+
+// ── Magic-Link-Login (Migration 021) ────────────────────────────────────────
+//
+// Alternative zum 6-stelligen Login-Code: User klickt einen Link in der
+// Email, ist eingeloggt. Setzt 2FA-Ticket voraus (User muss vorher
+// Username+Passwort eingegeben haben — Link allein reicht NICHT, weil
+// jemand sonst den Empfaenger einer abgefangenen Mail einloggen koennte).
+//
+// Token-Sicherheit:
+//   - 32 Bytes random URL-safe = 256 Bit Entropie. Brute-Force unmoeglich.
+//   - DB speichert sha256-Hash → DB-Leak bringt einem Angreifer nichts,
+//     er muesste den Original-Token aus der Mail haben.
+//   - 15 Min Lebensdauer (Mail-Zustellung + Klick passt locker rein).
+//   - Einmal-Use (used-Flag) — Replay nicht moeglich.
+
+/** Erzeugt einen Magic-Link-Token fuer den User. Returns plain Token
+ *  (kommt in die URL der Email) und liefert dem Caller den Plaintext —
+ *  der wird sofort ans Mail-Template uebergeben und danach weggeworfen. */
+export async function createMagicLinkToken(userId: string): Promise<string> {
+  if (!DB_ENABLED) throw new Error("Magic-Link benoetigt DB-Modus");
+  const db = getDb();
+
+  // Vorhandene unbenutzte Magic-Links des Users invalidieren — pro
+  // User immer nur ein aktiver Link.
+  await db`
+    DELETE FROM email_otp_tokens
+    WHERE user_id = ${userId} AND purpose = 'magic-link'
+  `;
+
+  const tokenPlain = crypto.randomBytes(32).toString("base64url");
+  const tokenHash = crypto.createHash("sha256").update(tokenPlain).digest("hex");
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+  await db`
+    INSERT INTO email_otp_tokens (ticket, user_id, code_hash, purpose, expires_at)
+    VALUES (${tokenHash}, ${userId}, ${null}, 'magic-link', ${expiresAt})
+  `;
+
+  return tokenPlain;
+}
+
+/** Loest den Magic-Link-Token ein und liefert den User zurueck.
+ *  Race-sichere Transaktion mit FOR UPDATE damit zwei parallele
+ *  Klicks nicht beide einloesen. */
+export async function consumeMagicLinkToken(tokenPlain: string): Promise<DbUser | null> {
+  if (!DB_ENABLED) return null;
+  if (!tokenPlain || typeof tokenPlain !== "string") return null;
+  const tokenHash = crypto.createHash("sha256").update(tokenPlain).digest("hex");
+
+  const db = getDb();
+  let userId: string | null = null;
+
+  try {
+    await db.begin(async (tx) => {
+      const [row] = await tx`
+        SELECT user_id, expires_at, used
+          FROM email_otp_tokens
+         WHERE ticket = ${tokenHash} AND purpose = 'magic-link'
+         LIMIT 1
+         FOR UPDATE
+      `;
+      if (!row) {
+        throw new Error("__not_found__");
+      }
+      if (row.used === true) {
+        throw new Error("__used__");
+      }
+      const expiresAt = row.expires_at instanceof Date ? row.expires_at : new Date(String(row.expires_at));
+      if (expiresAt.getTime() < Date.now()) {
+        throw new Error("__expired__");
+      }
+      userId = String(row.user_id);
+      await tx`UPDATE email_otp_tokens SET used = true WHERE ticket = ${tokenHash}`;
+    });
+  } catch {
+    return null;
+  }
+
+  if (!userId) return null;
+  return findDbUserById(userId);
+}

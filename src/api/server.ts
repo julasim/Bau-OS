@@ -45,9 +45,23 @@ import {
   isEmailTaken,
   createEmailSetupTicket,
   verifyEmailSetupTicket,
+  createMagicLinkToken,
+  consumeMagicLinkToken,
 } from "./auth.js";
-import { sendMail, buildLoginOtpMail, buildEmailVerifyMail } from "./email.js";
+import { sendMail, buildLoginOtpMail, buildEmailVerifyMail, buildMagicLinkMail } from "./email.js";
 import { logEvent as audit } from "../data/db-audit.js";
+import { APP_URL } from "../config.js";
+
+/** Bestimmt die Public-Base-URL fuer Links in Emails. APP_URL aus der
+ *  Env hat Vorrang (z.B. wenn die App hinter CDN sitzt). Fallback: aus
+ *  Request-Headern bauen. Caddy/Nginx muss Host + X-Forwarded-Proto
+ *  korrekt forwarden — Bau-OS docker-compose macht das per Default. */
+function publicBaseUrl(c: { req: { header(name: string): string | undefined } }): string {
+  if (APP_URL) return APP_URL.replace(/\/$/, "");
+  const proto = c.req.header("x-forwarded-proto") ?? "http";
+  const host = c.req.header("x-forwarded-host") ?? c.req.header("host") ?? "localhost";
+  return `${proto}://${host}`;
+}
 
 /** Liefert IP + User-Agent fuer Audit-Eintraege aus Request-Headern.
  *  Trim auf 256 Zeichen, damit ein 8 KB User-Agent die Tabelle nicht
@@ -527,6 +541,101 @@ app.post("/api/auth/setup-email/verify", async (c) => {
   // Verifikation authentifiziert. Aequivalent zu einem 2FA-Login.
   const token = createToken(updated.username, updated.role, updated.id);
   return c.json({ token, username: updated.username, role: updated.role });
+});
+
+// ── Magic-Link-Login (Migration 021) ────────────────────────────────────────
+//
+// Schritt 1: POST /api/auth/login/magic-link/start (mit 2fa-Ticket)
+//   - Generiert 32-Byte URL-safe Token, hasht ihn (sha256), speichert
+//     den Hash im email_otp_tokens-Eintrag mit purpose='magic-link'.
+//   - Versendet die Mail mit URL ?magic=<plain-Token>.
+// Schritt 2: GET  /api/auth/login/magic-link/consume?token=<plain>
+//   - Hasht den uebergebenen Token, sucht Eintrag, marked used.
+//   - Liefert JWT bei Erfolg.
+//
+// Ablauf im UI:
+//   1. User loggt sich mit Username+Passwort ein → kriegt 2FA-Ticket.
+//   2. Statt Code einzutippen klickt er "Anmelde-Link statt Code".
+//   3. Frontend POST /magic-link/start → Mail wird verschickt.
+//   4. User klickt Link in Mail → Frontend nimmt ?magic-Param,
+//      ruft GET /magic-link/consume → eingeloggt.
+
+app.post("/api/auth/login/magic-link/start", async (c) => {
+  let body: { ticket: string };
+  try {
+    body = await c.req.json<typeof body>();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
+  if (!body.ticket) return c.json({ error: "Ticket fehlt" }, 400);
+
+  const claim = verify2faTicket(body.ticket);
+  if (!claim) return c.json({ error: "Ticket abgelaufen oder ungueltig" }, 401);
+
+  const user = await findDbUserById(claim.sub);
+  if (!user || !user.email) {
+    return c.json({ error: "User nicht gefunden oder keine Email hinterlegt" }, 404);
+  }
+
+  const meta = reqMeta(c);
+  try {
+    const tokenPlain = await createMagicLinkToken(user.id);
+    // URL-Aufbau: /login?magic=<token>. LoginView fischt den Param,
+    // ruft den Consume-Endpoint und ist dann eingeloggt.
+    const url = `${publicBaseUrl(c)}/login?magic=${encodeURIComponent(tokenPlain)}`;
+    const mail = buildMagicLinkMail({
+      username: user.displayName ?? user.username,
+      magicLinkUrl: url,
+    });
+    const sent = await sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html });
+    void audit({
+      event: sent ? "login.magic_link.sent" : "login.magic_link.fail",
+      actorUserId: user.id,
+      actorUsername: user.username,
+      actorRole: user.role,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      details: { sent },
+      ok: sent,
+    });
+    if (!sent) {
+      return c.json({ error: "Anmelde-Link konnte nicht zugestellt werden" }, 502);
+    }
+    return c.json({ ok: true });
+  } catch (err) {
+    const { logError } = await import("../logger.js");
+    logError("[Login] Magic-Link konnte nicht erstellt werden", err);
+    return c.json({ error: "Anmelde-Link konnte nicht erstellt werden" }, 500);
+  }
+});
+
+app.get("/api/auth/login/magic-link/consume", async (c) => {
+  const tokenPlain = c.req.query("token");
+  if (!tokenPlain) return c.json({ error: "Token fehlt" }, 400);
+
+  const meta = reqMeta(c);
+  const user = await consumeMagicLinkToken(tokenPlain);
+  if (!user) {
+    void audit({
+      event: "login.magic_link.fail",
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      details: { reason: "invalid-or-expired" },
+      ok: false,
+    });
+    return c.json({ error: "Anmelde-Link ungueltig oder abgelaufen. Bitte neu starten." }, 401);
+  }
+
+  const token = createToken(user.username, user.role, user.id);
+  void audit({
+    event: "login.magic_link.success",
+    actorUserId: user.id,
+    actorUsername: user.username,
+    actorRole: user.role,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
+  return c.json({ token, username: user.username, role: user.role });
 });
 
 // ── Setup-Wizard (ohne Auth) ────────────────────────────────────────────────
