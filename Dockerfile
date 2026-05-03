@@ -29,6 +29,7 @@ RUN npm ci
 COPY . .
 RUN npm run build:all \
     && cp -r src/db/migrations dist/db/migrations \
+    && cp -r src/emails dist/emails \
     && npm prune --omit=dev
 
 EXPOSE 3000
