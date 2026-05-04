@@ -1,19 +1,31 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Docker Compose — 4-Service-Architektur
+# Bau-OS Docker Compose — 3-Service-Architektur (Edge-Proxy uebernimmt TLS)
 #
 #   postgres  pgvector/pgvector:pg16  — DB + Vector-Extension
 #   ollama    ollama/ollama           — LLM-Runtime + Embeddings
 #   app       (Build aus Dockerfile)  — Bau-OS Telegram-Bot + WebUI + API
-#   caddy     caddy:2                 — Reverse-Proxy + automatisches HTTPS
 #
-# Nur `app` ist unser Code. Alle anderen sind offizielle Images, ziehen
-# Updates ueber `docker compose pull`.
+# TLS + Reverse-Proxy: zentral via /opt/proxy (julasim/Proxy auf GitHub).
+# Bau-OS haengt sich ueber das externe Docker-Netzwerk `proxy` an den
+# Edge-Caddy. Der Edge-Caddy kuemmert sich um Let's-Encrypt + Routing
+# fuer alle Apps die im proxy-Netzwerk sind.
 #
-# Start:   docker compose up -d
-# Logs:    docker compose logs -f            (alle)
-#          docker compose logs -f ollama     (nur ein Service)
-# Update:  docker compose pull && docker compose build app && docker compose up -d
-# Stop:    docker compose down
+# Vorbereitung (einmalig pro VPS):
+#   cd /opt/proxy && docker compose up -d
+#   → legt das Docker-Netzwerk `proxy` an + startet edge-caddy auf 80/443.
+#
+# Start Bau-OS:
+#   docker compose up -d
+# Logs:
+#   docker compose logs -f
+# Update:
+#   git pull && docker compose pull && docker compose build app && docker compose up -d
+# Stop:
+#   docker compose down
+#
+# Standalone-Modus (ohne Edge-Proxy):
+#   Wenn kein zentraler Edge-Proxy existiert, Block "caddy" wieder aktivieren
+#   (siehe Git-History vor dem Edge-Proxy-Umzug) und proxy-Network entfernen.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: bau-os
@@ -37,10 +49,10 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    # Postgres bleibt intern — nur app redet mit ihm. Wer von aussen debuggen
-    # will, kann 5432 freigeben, sollte das aber bewusst tun.
-    # ports:
-    #   - "127.0.0.1:5432:5432"
+    # Postgres bleibt intern. Wer von aussen debuggen will, kann
+    # ports: ["127.0.0.1:5432:5432"] zusetzen, sollte das aber bewusst tun.
+    networks:
+      - default
 
   ollama:
     image: ollama/ollama:latest
@@ -54,6 +66,9 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+    # Ollama bleibt intern, nur app redet mit ihm via Service-Name.
+    networks:
+      - default
     # GPU-Support (optional, erfordert nvidia-container-toolkit auf dem Host):
     # deploy:
     #   resources:
@@ -85,37 +100,24 @@ services:
       - ./data:/opt/bau-os/data
       - ./tools:/opt/bau-os/tools
       - ./.chat_id:/opt/bau-os/.chat_id
-    # App-Port bleibt intern erreichbar; Caddy proxyt von aussen.
-    # Wer Caddy nicht will, kann hier direkt exposen:
-    # ports:
-    #   - "${API_PORT:-3000}:3000"
+    # Port 3000 nur container-intern — Edge-Caddy proxied via proxy-Netzwerk.
     expose:
       - "3000"
-
-  caddy:
-    image: caddy:2
-    container_name: bauos-caddy
-    restart: always
-    environment:
-      # CADDY_DOMAIN leer oder unset → fallback auf ":80" (HTTP only).
-      # Caddy expandiert Env-Vars zur Config-Parse-Zeit; ein leerer String
-      # (nicht unset!) wuerde den Caddyfile-Default NICHT ausloesen, daher
-      # hier als Shell-Default ersetzen bevor die Variable den Container erreicht.
-      CADDY_DOMAIN: ${CADDY_DOMAIN:-:80}
-    ports:
-      # Host-Ports via .env konfigurierbar. Default 80/443, bei HSTS-Browser-
-      # Problemen oder wenn 80 extern belegt: HTTP_PORT=8080, HTTPS_PORT=8443.
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
-    volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
+    networks:
+      - proxy    # externes Netzwerk vom zentralen Edge-Caddy
+      - default  # internes Netzwerk fuer postgres + ollama
 
 volumes:
   postgres_data:
   ollama_models:
-  caddy_data:
-  caddy_config:
+
+networks:
+  # Externes Docker-Netzwerk vom zentralen Edge-Proxy (/opt/proxy).
+  # Wird vom edge-caddy + jeder externen App geteilt. Muss VOR dem
+  # ersten Bau-OS-Start existieren — wird vom Edge-Proxy-Stack angelegt.
+  proxy:
+    external: true
+  # Internes Bau-OS-Netzwerk fuer postgres + ollama + app.
+  # Compose erstellt das automatisch — Definition hier rein zur
+  # Klarheit, damit alle Services explizit ein Netzwerk referenzieren.
+  default:
