@@ -23,7 +23,7 @@
 
 import { Hono } from "hono";
 import type { AppEnv } from "../server.js";
-import { findUserBySubscriptionId } from "../../data/db-microsoft.js";
+import { findCalendarBySubscriptionId } from "../../data/db-microsoft.js";
 import { computeClientState } from "../../sync/microsoft-subscriptions.js";
 import { graphFetch, GraphError } from "../graph.js";
 import { terminRepo } from "../../data/index.js";
@@ -118,16 +118,17 @@ async function handleNotification(n: MsNotification): Promise<void> {
     return;
   }
 
-  const user = await findUserBySubscriptionId(n.subscriptionId);
-  if (!user) {
-    // Subscription gehoert keinem aktiven User mehr — vermutlich nach
-    // Disconnect noch eine in-flight Notification. Silent ignorieren.
+  const userCal = await findCalendarBySubscriptionId(n.subscriptionId);
+  if (!userCal) {
+    // Subscription gehoert keinem aktiven User+Kalender mehr — vermutlich
+    // nach Disable/Disconnect noch eine in-flight Notification. Silent.
     return;
   }
+  const user = { userId: userCal.userId, calendarId: userCal.calendarId };
 
-  // clientState gegen unseren HMAC validieren — schuetzt vor gefakten
-  // Notifications wenn jemand die Webhook-URL erraet.
-  const expectedState = computeClientState(user.userId);
+  // clientState ist jetzt pro (User, Kalender) eindeutig — Multi-Calendar
+  // Schutz gegen Cross-Calendar-Spoofing.
+  const expectedState = computeClientState(user.userId, user.calendarId);
   if (n.clientState !== expectedState) {
     logError(
       `[MS-Webhook] clientState-Mismatch fuer Subscription ${n.subscriptionId} — drop`,

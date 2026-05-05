@@ -342,3 +342,223 @@ export async function listExpiringSubscriptions(
     subscriptionId: String(r.subscription_id),
   }));
 }
+
+// ── Multi-Calendar (Phase 5c) ────────────────────────────────────────────────
+//
+// Junction-Table user_microsoft_calendars (Migration 024) erlaubt es, dass
+// ein User mehrere Outlook-Kalender mit Bau-OS verbindet. Single-Calendar-
+// Felder auf user_microsoft_accounts (calendar_id, calendar_mode,
+// subscription_id) bleiben fuer Legacy-Kompatibilitaet bestehen, sind aber
+// nicht mehr Source-of-Truth.
+
+export interface UserCalendar {
+  userId: string;
+  calendarId: string;
+  displayName: string | null;
+  enabled: boolean;
+  direction: "both" | "pull-only" | "push-only";
+  subscriptionId: string | null;
+  subscriptionExpiresAt: string | null;
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+  addedAt: string;
+}
+
+function rowToCalendar(row: Record<string, unknown>): UserCalendar {
+  return {
+    userId: String(row.user_id),
+    calendarId: String(row.calendar_id),
+    displayName: row.display_name ? String(row.display_name) : null,
+    enabled: row.enabled === true,
+    direction: (row.direction as UserCalendar["direction"]) ?? "both",
+    subscriptionId: row.subscription_id ? String(row.subscription_id) : null,
+    subscriptionExpiresAt:
+      row.subscription_expires_at instanceof Date
+        ? row.subscription_expires_at.toISOString()
+        : row.subscription_expires_at
+          ? String(row.subscription_expires_at)
+          : null,
+    lastSyncAt:
+      row.last_sync_at instanceof Date
+        ? row.last_sync_at.toISOString()
+        : row.last_sync_at
+          ? String(row.last_sync_at)
+          : null,
+    lastSyncError: row.last_sync_error ? String(row.last_sync_error) : null,
+    addedAt: row.added_at instanceof Date ? row.added_at.toISOString() : String(row.added_at),
+  };
+}
+
+/** Liste aller Kalender eines Users (egal ob enabled oder nicht). */
+export async function listUserCalendars(userId: string): Promise<UserCalendar[]> {
+  if (!DB_ENABLED) return [];
+  const db = getDb();
+  const rows = await db`
+    SELECT * FROM user_microsoft_calendars WHERE user_id = ${userId}
+    ORDER BY display_name NULLS LAST, calendar_id
+  `;
+  return rows.map((r) => rowToCalendar(r));
+}
+
+/** Nur die aktiven Kalender — fuer den Sync-Worker. */
+export async function listEnabledCalendars(userId: string): Promise<UserCalendar[]> {
+  if (!DB_ENABLED) return [];
+  const db = getDb();
+  const rows = await db`
+    SELECT * FROM user_microsoft_calendars
+     WHERE user_id = ${userId} AND enabled = true
+    ORDER BY added_at
+  `;
+  return rows.map((r) => rowToCalendar(r));
+}
+
+/** Insert oder Update eines Kalender-Eintrags. Wird beim Discovery
+ *  (refresh from MS) sowie beim Toggle aufgerufen. Existing-Werte fuer
+ *  enabled/direction werden NICHT ueberschrieben wenn nicht im Patch. */
+export async function upsertUserCalendar(input: {
+  userId: string;
+  calendarId: string;
+  displayName?: string | null;
+  enabled?: boolean;
+  direction?: "both" | "pull-only" | "push-only";
+}): Promise<UserCalendar> {
+  if (!DB_ENABLED) throw new Error("DB-Modus erforderlich");
+  const db = getDb();
+
+  // Existiert schon? Dann selektives Update — sonst Insert.
+  const [existing] = await db`
+    SELECT * FROM user_microsoft_calendars
+    WHERE user_id = ${input.userId} AND calendar_id = ${input.calendarId}
+  `;
+  if (existing) {
+    const [row] = await db`
+      UPDATE user_microsoft_calendars SET
+        display_name = ${input.displayName !== undefined ? input.displayName : (existing.display_name as string | null)},
+        enabled = ${input.enabled !== undefined ? input.enabled : (existing.enabled as boolean)},
+        direction = ${input.direction !== undefined ? input.direction : (existing.direction as string)}
+      WHERE user_id = ${input.userId} AND calendar_id = ${input.calendarId}
+      RETURNING *
+    `;
+    return rowToCalendar(row);
+  }
+  const [row] = await db`
+    INSERT INTO user_microsoft_calendars (user_id, calendar_id, display_name, enabled, direction)
+    VALUES (
+      ${input.userId},
+      ${input.calendarId},
+      ${input.displayName ?? null},
+      ${input.enabled ?? true},
+      ${input.direction ?? "both"}
+    )
+    RETURNING *
+  `;
+  return rowToCalendar(row);
+}
+
+/** Toggle nur das enabled-Flag (Settings-UI Checkbox). */
+export async function setCalendarEnabled(
+  userId: string,
+  calendarId: string,
+  enabled: boolean,
+): Promise<UserCalendar | null> {
+  if (!DB_ENABLED) return null;
+  const db = getDb();
+  const [row] = await db`
+    UPDATE user_microsoft_calendars SET enabled = ${enabled}
+    WHERE user_id = ${userId} AND calendar_id = ${calendarId}
+    RETURNING *
+  `;
+  return row ? rowToCalendar(row) : null;
+}
+
+/** Loescht einen Kalender-Eintrag (nicht den Outlook-Calendar selbst). */
+export async function deleteUserCalendar(userId: string, calendarId: string): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`DELETE FROM user_microsoft_calendars WHERE user_id = ${userId} AND calendar_id = ${calendarId}`;
+}
+
+/** Webhook-Receiver: Subscription-ID → User+Calendar. */
+export async function findCalendarBySubscriptionId(subscriptionId: string): Promise<{
+  userId: string;
+  calendarId: string;
+} | null> {
+  if (!DB_ENABLED) return null;
+  const db = getDb();
+  const [row] = await db`
+    SELECT user_id, calendar_id
+      FROM user_microsoft_calendars
+     WHERE subscription_id = ${subscriptionId}
+     LIMIT 1
+  `;
+  return row ? { userId: String(row.user_id), calendarId: String(row.calendar_id) } : null;
+}
+
+/** Subscription-State pro Kalender pflegen. */
+export async function setCalendarSubscription(
+  userId: string,
+  calendarId: string,
+  patch: { subscriptionId: string; expiresAt: Date },
+): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`
+    UPDATE user_microsoft_calendars SET
+      subscription_id         = ${patch.subscriptionId},
+      subscription_expires_at = ${patch.expiresAt.toISOString()}
+    WHERE user_id = ${userId} AND calendar_id = ${calendarId}
+  `;
+}
+
+export async function clearCalendarSubscription(userId: string, calendarId: string): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`
+    UPDATE user_microsoft_calendars SET
+      subscription_id         = NULL,
+      subscription_expires_at = NULL
+    WHERE user_id = ${userId} AND calendar_id = ${calendarId}
+  `;
+}
+
+/** Renewal-Cron Helper: alle Subs die in <N Stunden ablaufen. */
+export async function listExpiringCalendarSubscriptions(
+  withinHours: number,
+): Promise<Array<{ userId: string; calendarId: string; subscriptionId: string }>> {
+  if (!DB_ENABLED) return [];
+  const db = getDb();
+  const cutoff = new Date(Date.now() + withinHours * 60 * 60 * 1000).toISOString();
+  const rows = await db`
+    SELECT user_id, calendar_id, subscription_id
+      FROM user_microsoft_calendars
+     WHERE subscription_id IS NOT NULL
+       AND subscription_expires_at < ${cutoff}
+       AND enabled = true
+  `;
+  return rows.map((r) => ({
+    userId: String(r.user_id),
+    calendarId: String(r.calendar_id),
+    subscriptionId: String(r.subscription_id),
+  }));
+}
+
+export async function markCalendarSyncSuccess(userId: string, calendarId: string): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`
+    UPDATE user_microsoft_calendars SET
+      last_sync_at = now(),
+      last_sync_error = NULL
+    WHERE user_id = ${userId} AND calendar_id = ${calendarId}
+  `;
+}
+
+export async function markCalendarSyncError(userId: string, calendarId: string, error: string): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`
+    UPDATE user_microsoft_calendars SET
+      last_sync_error = ${error.slice(0, 500)}
+    WHERE user_id = ${userId} AND calendar_id = ${calendarId}
+  `;
+}

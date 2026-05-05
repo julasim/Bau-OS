@@ -137,8 +137,14 @@ const msMessage = ref<{ type: "ok" | "err"; text: string } | null>(null);
 async function loadMsStatus() {
   try {
     msStatus.value = await api.get<MsStatus>("/auth/microsoft/status");
+    if (msStatus.value.connected) {
+      await loadMsCalendars();
+    } else {
+      msCalendars.value = [];
+    }
   } catch {
     msStatus.value = { connected: false, available: false };
+    msCalendars.value = [];
   }
 }
 
@@ -204,10 +210,72 @@ async function updateMsSettings(patch: { calendarMode?: "default" | "bau-os"; sy
   try {
     await api.patch("/auth/microsoft/settings", patch);
     await loadMsStatus();
+    // Master-Toggle erfordert ggf. neue Calendar-Liste (z.B. wenn Subs
+    // gerade angelegt werden — dann zeigt webhookActive sonst nicht).
+    await loadMsCalendars();
   } catch (e) {
     msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Update fehlgeschlagen" };
   } finally {
     msBusy.value = false;
+  }
+}
+
+// ── Multi-Calendar (Phase 5c) ───────────────────────────────────────────────
+
+interface MsUserCalendar {
+  userId: string;
+  calendarId: string;
+  displayName: string | null;
+  enabled: boolean;
+  direction: "both" | "pull-only" | "push-only";
+  subscriptionId: string | null;
+  subscriptionExpiresAt: string | null;
+  lastSyncAt: string | null;
+  lastSyncError: string | null;
+  addedAt: string;
+}
+
+const msCalendars = ref<MsUserCalendar[]>([]);
+const msCalendarsBusy = ref(false);
+
+async function loadMsCalendars() {
+  if (!msStatus.value.connected) {
+    msCalendars.value = [];
+    return;
+  }
+  try {
+    const res = await api.get<{ calendars: MsUserCalendar[] }>("/auth/microsoft/calendars");
+    msCalendars.value = res.calendars ?? [];
+  } catch {
+    msCalendars.value = [];
+  }
+}
+
+async function refreshMsCalendars() {
+  msCalendarsBusy.value = true;
+  msMessage.value = null;
+  try {
+    const res = await api.post<{ calendars: MsUserCalendar[] }>("/auth/microsoft/calendars/refresh", {});
+    msCalendars.value = res.calendars ?? [];
+    msMessage.value = { type: "ok", text: "Kalender-Liste aktualisiert." };
+  } catch (e) {
+    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Refresh fehlgeschlagen" };
+  } finally {
+    msCalendarsBusy.value = false;
+  }
+}
+
+async function toggleMsCalendar(cal: MsUserCalendar, enabled: boolean) {
+  msCalendarsBusy.value = true;
+  msMessage.value = null;
+  try {
+    await api.patch(`/auth/microsoft/calendars/${encodeURIComponent(cal.calendarId)}`, { enabled });
+    await loadMsCalendars();
+    await loadMsStatus();
+  } catch (e) {
+    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Toggle fehlgeschlagen" };
+  } finally {
+    msCalendarsBusy.value = false;
   }
 }
 
@@ -655,18 +723,91 @@ onMounted(() => {
             <span class="text-sm settings-value">{{ msStatus.account.msDisplayName }}</span>
           </div>
 
-          <!-- Calendar-Mode-Auswahl -->
-          <div class="settings-row flex items-center gap-3 px-0 py-2">
-            <label class="text-sm settings-label flex-shrink-0" style="width: 140px">Kalender</label>
-            <select
-              :value="msStatus.account?.calendarMode"
-              :disabled="msBusy"
-              @change="updateMsSettings({ calendarMode: ($event.target as HTMLSelectElement).value as 'default' | 'bau-os' })"
-              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+          <!-- Multi-Calendar-Liste (Phase 5c).
+               User waehlt aus seinen Outlook-Kalendern beliebig viele aus
+               die mit Bau-OS gesyncet werden sollen. Pro aktiviertem
+               Kalender legt das Backend eine eigene Webhook-Subscription
+               an. Default-Push-Ziel fuer neue Bau-OS-Termine ist der
+               Kalender mit Anzeigename "Bau-OS" (wird beim Connect
+               automatisch erstellt). -->
+          <div class="settings-row flex flex-col gap-2 px-0 py-2">
+            <div class="flex items-center justify-between">
+              <label class="text-sm settings-label">Outlook-Kalender</label>
+              <button
+                @click="refreshMsCalendars"
+                :disabled="msCalendarsBusy"
+                class="text-xs"
+                style="
+                  padding: 4px 10px;
+                  border-radius: 4px;
+                  background: transparent;
+                  border: 1px solid var(--color-border);
+                  cursor: pointer;
+                "
+              >
+                {{ msCalendarsBusy ? "..." : "Aus Outlook neu laden" }}
+              </button>
+            </div>
+            <div
+              v-if="msCalendars.length === 0"
+              class="text-xs"
+              style="
+                color: var(--color-text-muted);
+                padding: 12px;
+                background: var(--color-bg-subtle);
+                border: 1px dashed var(--color-border);
+                border-radius: 6px;
+              "
             >
-              <option value="default">Standard-Kalender (Outlook-Default)</option>
-              <option value="bau-os">Eigener „Bau-OS"-Kalender (wird automatisch angelegt)</option>
-            </select>
+              Keine Kalender geladen. Klick „Aus Outlook neu laden".
+            </div>
+            <div v-else class="flex flex-col" style="gap: 4px">
+              <label
+                v-for="cal in msCalendars"
+                :key="cal.calendarId"
+                class="flex items-center gap-3"
+                style="
+                  cursor: pointer;
+                  padding: 8px 10px;
+                  border-radius: 6px;
+                  border: 1px solid var(--color-border-subtle);
+                  background: var(--color-bg-subtle);
+                "
+              >
+                <input
+                  type="checkbox"
+                  :checked="cal.enabled"
+                  :disabled="msCalendarsBusy"
+                  @change="toggleMsCalendar(cal, ($event.target as HTMLInputElement).checked)"
+                />
+                <div style="flex: 1; min-width: 0">
+                  <div class="text-sm" style="font-weight: 500">
+                    {{ cal.displayName || cal.calendarId }}
+                  </div>
+                  <div
+                    class="text-xs"
+                    style="color: var(--color-text-tertiary); margin-top: 2px"
+                  >
+                    <span v-if="cal.enabled && cal.subscriptionId">Instant-Sync · </span>
+                    <span v-else-if="cal.enabled">Polling · </span>
+                    <span v-if="cal.lastSyncAt">letzter Sync: {{ cal.lastSyncAt }}</span>
+                    <span v-else>noch nicht synchronisiert</span>
+                  </div>
+                  <div
+                    v-if="cal.lastSyncError"
+                    class="text-xs ms-msg-err"
+                    style="margin-top: 4px; padding: 4px 6px; border-radius: 4px"
+                  >
+                    Fehler: {{ cal.lastSyncError }}
+                  </div>
+                </div>
+              </label>
+            </div>
+            <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 4px">
+              Aktivierte Kalender werden bidirektional mit Bau-OS synchronisiert.
+              Neue Bau-OS-Termine landen im Kalender „Bau-OS" (oder im ersten
+              aktivierten falls keiner so heißt).
+            </div>
           </div>
 
           <!-- Sync-Schalter -->

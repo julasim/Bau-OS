@@ -35,10 +35,11 @@ import { graphFetch, graphFetchAll, GraphError } from "../api/graph.js";
 import {
   getMsAccount,
   listSyncEnabledUsers,
-  markSyncSuccess,
-  markSyncError,
-  setCalendarId,
-  type MsAccountPublic,
+  listEnabledCalendars,
+  markCalendarSyncSuccess,
+  markCalendarSyncError,
+  upsertUserCalendar,
+  type UserCalendar,
 } from "../data/db-microsoft.js";
 import { terminRepo } from "../data/index.js";
 import { TIMEZONE, DB_ENABLED } from "../config.js";
@@ -206,113 +207,142 @@ async function buildMsEventBody(termin: Termin): Promise<Record<string, unknown>
   return body;
 }
 
-// ── Calendar-Resolution ──────────────────────────────────────────────────────
+// ── Calendar-Resolution (Multi-Calendar, Phase 5c) ──────────────────────────
 
-/** Liefert die Calendar-URL fuer den User. Bei 'default' = "/me/events"
- *  (kein calendar-Pfad), bei 'bau-os' wird die ID lazy-resolved/created. */
-async function resolveCalendarPath(account: MsAccountPublic): Promise<string> {
-  if (account.calendarMode === "default") return "/me/events";
+/** Pfad fuer Events eines bestimmten Kalenders. */
+function calendarEventsPath(calendarId: string): string {
+  return `/me/calendars/${calendarId}/events`;
+}
 
-  // Bau-OS-Mode: wir brauchen eine calendar_id. Schon gesetzt? Dann nutzen.
-  if (account.calendarId) {
-    return `/me/calendars/${account.calendarId}/events`;
+/** Discovery: holt alle Kalender des Users von Microsoft + upsert'd sie
+ *  in die Junction. Wird beim ersten Settings-Aufruf + manuellem Refresh
+ *  benutzt. Existing-Junction-Eintraege bleiben mit ihrem enabled-Flag. */
+export async function discoverCalendars(userId: string): Promise<UserCalendar[]> {
+  if (!DB_ENABLED) return [];
+  const calendars = await graphFetchAll<MsCalendar>(userId, "/me/calendars");
+  const result: UserCalendar[] = [];
+  for (const c of calendars) {
+    const upserted = await upsertUserCalendar({
+      userId,
+      calendarId: c.id,
+      displayName: c.name,
+      // enabled NICHT ueberschreiben — Discovery soll die Auswahl des Users
+      // nicht aendern. Bei Erstanlage default-true via upsertUserCalendar.
+    });
+    result.push(upserted);
   }
-
-  // Suche existierenden "Bau-OS"-Kalender, sonst lege ihn an.
-  const calendars = await graphFetchAll<MsCalendar>(account.userId, "/me/calendars");
-  let calId = calendars.find((c) => c.name === BAU_OS_CAL_NAME)?.id;
-  if (!calId) {
-    const { data } = await graphFetch<MsCalendar>(account.userId, "/me/calendars", {
+  // Lazy-Create: wenn der User noch keinen "Bau-OS"-Kalender hat, legen
+  // wir einen an. Das macht den ersten Push reibungslos: User connectet,
+  // klickt "Bau-OS" als Default, und es funktioniert sofort.
+  if (!calendars.some((c) => c.name === BAU_OS_CAL_NAME)) {
+    const { data } = await graphFetch<MsCalendar>(userId, "/me/calendars", {
       method: "POST",
       body: { name: BAU_OS_CAL_NAME },
     });
-    if (!data?.id) throw new Error("Bau-OS-Kalender konnte nicht erstellt werden");
-    calId = data.id;
-    logInfo(`[MS-Sync] Bau-OS-Kalender fuer User ${account.userId} angelegt (${calId})`);
+    if (data?.id) {
+      const upserted = await upsertUserCalendar({
+        userId,
+        calendarId: data.id,
+        displayName: BAU_OS_CAL_NAME,
+        enabled: true,
+      });
+      result.push(upserted);
+      logInfo(`[MS-Sync] Bau-OS-Kalender fuer User ${userId} angelegt (${data.id})`);
+    }
   }
-  await setCalendarId(account.userId, calId);
-  return `/me/calendars/${calId}/events`;
+  return result;
 }
 
-/** Fuer GETs ueber den Default-Calendar oder den Bau-OS-Kalender. Liefert
- *  die ID die wir auch in termine.ms_calendar_id schreiben. */
-async function resolveCalendarIdForList(account: MsAccountPublic): Promise<{ path: string; calendarId: string }> {
-  if (account.calendarMode === "default") {
-    // Fuer den Default-Kalender holen wir einmal die ID, damit wir sie in
-    // ms_calendar_id mit speichern (Phase 4 braucht das fuer Webhooks).
-    const { data } = await graphFetch<{ id: string }>(account.userId, "/me/calendar");
-    return { path: "/me/events", calendarId: data?.id ?? "" };
-  }
-  const path = await resolveCalendarPath(account);
-  // Format: /me/calendars/{id}/events → calendarId = mittleres Segment
-  const match = path.match(/\/me\/calendars\/([^/]+)\/events/);
-  return { path, calendarId: match?.[1] ?? account.calendarId ?? "" };
+/** Default-Push-Ziel: fuer neue Bau-OS-Termine ohne ms_event_id, in welchen
+ *  Outlook-Kalender pushen wir? Bevorzugt einen mit display_name='Bau-OS',
+ *  fallback auf den ersten enabled mit direction in {'both','push-only'}. */
+async function pickPushCalendar(userId: string): Promise<UserCalendar | null> {
+  const calendars = await listEnabledCalendars(userId);
+  const writeable = calendars.filter((c) => c.direction === "both" || c.direction === "push-only");
+  if (writeable.length === 0) return null;
+  // 1. exakter Bau-OS-Name
+  const bauos = writeable.find((c) => c.displayName === BAU_OS_CAL_NAME);
+  if (bauos) return bauos;
+  // 2. erster enabled writeable
+  return writeable[0]!;
 }
 
 // ── Pull (Outlook → Bau-OS) ──────────────────────────────────────────────────
 
-/** Holt geaenderte Outlook-Events fuer einen User und upsert'd sie in Bau-OS.
- *  Verwendet $filter=lastModifiedDateTime gt {iso} um inkrementell zu sein. */
-export async function pullFromOutlook(userId: string): Promise<{ pulled: number; errors: number }> {
-  const account = await getMsAccount(userId);
-  if (!account) {
-    logInfo(`[MS-Sync] User ${userId} hat kein verbundenes MS-Konto`);
-    return { pulled: 0, errors: 0 };
-  }
+/** Pullt einen einzelnen Kalender. Wird vom Sync-Worker pro aktivem
+ *  Junction-Eintrag aufgerufen. */
+export async function pullCalendar(
+  userId: string,
+  calendar: UserCalendar,
+): Promise<{ pulled: number; errors: number }> {
+  // pull-only und both pullen, push-only nicht.
+  if (calendar.direction === "push-only") return { pulled: 0, errors: 0 };
 
   let pulled = 0;
   let errors = 0;
-
   try {
-    const { path, calendarId } = await resolveCalendarIdForList(account);
-
-    // Inkrementell: nur Events die seit letztem Sync (minus 5min Overlap)
-    // geaendert wurden. Beim ersten Lauf: -30 Tage bis +90 Tage als Window.
-    const since = account.lastSyncAt ? new Date(new Date(account.lastSyncAt).getTime() - 5 * 60 * 1000) : null;
-
-    // ISO-Zeit fuer den Filter — Microsoft will UTC mit "Z".
+    const path = calendarEventsPath(calendar.calendarId);
+    const since = calendar.lastSyncAt ? new Date(new Date(calendar.lastSyncAt).getTime() - 5 * 60 * 1000) : null;
     const sinceIso = since ? since.toISOString() : null;
-
-    // Window-Filter: 30 Tage zurueck bis 90 Tage vorwaerts. Zur Reduktion
-    // der Datenmenge — wer 5 Jahre alte Outlook-Termine hat, will die
-    // wahrscheinlich nicht alle in Bau-OS sehen.
     const windowStart = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const windowEnd = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
-
     const filterParts: string[] = [`start/dateTime ge '${windowStart}'`, `start/dateTime le '${windowEnd}'`];
-    if (sinceIso) {
-      filterParts.push(`lastModifiedDateTime gt ${sinceIso}`);
-    }
+    if (sinceIso) filterParts.push(`lastModifiedDateTime gt ${sinceIso}`);
     const filter = filterParts.join(" and ");
     const select = "id,subject,start,end,location,isAllDay,lastModifiedDateTime,attendees";
     const query = `${path}?$filter=${encodeURIComponent(filter)}&$select=${select}&$top=100`;
 
     const events = await graphFetchAll<MsEvent>(userId, query);
-    logInfo(`[MS-Sync] User ${userId}: ${events.length} Outlook-Events seit letztem Sync`);
-
+    if (events.length > 0) {
+      logInfo(`[MS-Sync] User ${userId} Cal "${calendar.displayName ?? calendar.calendarId}": ${events.length} Events`);
+    }
     for (const ev of events) {
       try {
-        await importMsEventToBauOs(userId, calendarId, ev);
+        await importMsEventToBauOs(userId, calendar.calendarId, ev);
         pulled++;
       } catch (err) {
         errors++;
         logError(`[MS-Sync] Import-Fehler fuer Event ${ev.id}`, err);
       }
     }
-
-    await markSyncSuccess(userId);
+    await markCalendarSyncSuccess(userId, calendar.calendarId);
     if (pulled > 0) emit({ type: "termin", action: "synced" });
   } catch (err) {
     errors++;
     const msg = err instanceof Error ? err.message : String(err);
-    await markSyncError(userId, msg);
+    await markCalendarSyncError(userId, calendar.calendarId, msg);
     if (err instanceof GraphError) {
-      logError(`[MS-Sync] Pull fuer User ${userId} fehlgeschlagen: ${err.code} (HTTP ${err.status})`, err);
+      logError(`[MS-Sync] Pull Cal ${calendar.calendarId} User ${userId}: ${err.code} (HTTP ${err.status})`, err);
     } else {
-      logError(`[MS-Sync] Pull fuer User ${userId} fehlgeschlagen`, err);
+      logError(`[MS-Sync] Pull Cal ${calendar.calendarId} User ${userId} fehlgeschlagen`, err);
     }
   }
+  return { pulled, errors };
+}
 
+/** Convenience: alle aktiven Kalender eines Users pullen. Wenn die
+ *  Junction noch leer ist, triggert Discovery. */
+export async function pullFromOutlook(userId: string): Promise<{ pulled: number; errors: number }> {
+  const account = await getMsAccount(userId);
+  if (!account) {
+    logInfo(`[MS-Sync] User ${userId} hat kein verbundenes MS-Konto`);
+    return { pulled: 0, errors: 0 };
+  }
+  let calendars = await listEnabledCalendars(userId);
+  if (calendars.length === 0) {
+    // Erster Sync-Lauf nach Migration 024 — Junction noch leer + kein
+    // Backfill (User wurde nach der Migration neu verbunden). Discover.
+    await discoverCalendars(userId);
+    calendars = await listEnabledCalendars(userId);
+    if (calendars.length === 0) return { pulled: 0, errors: 0 };
+  }
+  let pulled = 0;
+  let errors = 0;
+  for (const c of calendars) {
+    const r = await pullCalendar(userId, c);
+    pulled += r.pulled;
+    errors += r.errors;
+  }
   return { pulled, errors };
 }
 
@@ -426,21 +456,28 @@ export async function pushToOutlook(userId: string, terminId: string): Promise<v
 
   try {
     const body = await buildMsEventBody(termin);
-    const { path: calPath, calendarId } = await resolveCalendarIdForList(account);
 
     if (!termin.msEventId) {
-      // CREATE
-      const { data, etag } = await graphFetch<MsEvent>(userId, calPath, {
+      // CREATE — Default-Push-Kalender aus der Junction waehlen. Wenn es
+      // keinen aktiven push-faehigen Kalender gibt, schlaegt der Push fehl
+      // mit klarem Hinweis (statt blind in den Default zu pushen).
+      const target = await pickPushCalendar(userId);
+      if (!target) {
+        throw new Error("Kein aktivierter Outlook-Kalender mit Schreibrecht — Settings pruefen");
+      }
+      const { data, etag } = await graphFetch<MsEvent>(userId, calendarEventsPath(target.calendarId), {
         method: "POST",
         body,
       });
       if (!data?.id) throw new Error("Microsoft hat keine Event-ID zurueckgegeben");
       await terminRepo.markMsSynced(terminId, {
         msEventId: data.id,
-        msCalendarId: calendarId || null,
+        msCalendarId: target.calendarId,
         msEtag: data["@odata.etag"] ?? etag,
       });
-      logInfo(`[MS-Sync] Termin ${terminId} → MS-Event ${data.id} angelegt`);
+      logInfo(
+        `[MS-Sync] Termin ${terminId} → MS-Event ${data.id} angelegt in "${target.displayName ?? target.calendarId}"`,
+      );
     } else {
       // UPDATE — mit If-Match wenn ETag vorhanden, sonst ohne (best-effort).
       const opts: Parameters<typeof graphFetch>[2] = { method: "PATCH", body };

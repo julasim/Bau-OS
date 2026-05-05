@@ -218,15 +218,14 @@ authMicrosoftRoutes.delete("/auth/microsoft/disconnect", authMiddleware, async (
   const account = await getMsAccount(userId);
   if (!account) return c.json({ ok: true, message: "Kein verbundenes Konto" });
 
-  // Webhook-Subscription bei MS aufraeumen — falls eine existiert. Best-
-  // effort: wenn das fehlschlaegt loggen wir und loeschen trotzdem das
-  // lokale Konto (Disconnect ist User-Wille, soll nicht an Token-Fehlern
-  // scheitern).
+  // Alle Webhook-Subscriptions bei MS aufraeumen — Multi-Calendar:
+  // pro Junction-Eintrag eine Sub. Best-effort: wenn das fehlschlaegt
+  // loggen wir und loeschen trotzdem das lokale Konto.
   try {
-    const { deleteSubscription } = await import("../../sync/microsoft-subscriptions.js");
-    await deleteSubscription(userId);
+    const { deleteAllSubscriptionsForUser } = await import("../../sync/microsoft-subscriptions.js");
+    await deleteAllSubscriptionsForUser(userId);
   } catch (err) {
-    logError("[MS] deleteSubscription bei Disconnect fehlgeschlagen", err);
+    logError("[MS] deleteAllSubscriptionsForUser bei Disconnect fehlgeschlagen", err);
   }
 
   const ok = await deleteMsAccount(userId);
@@ -264,31 +263,28 @@ authMicrosoftRoutes.patch("/auth/microsoft/settings", authMiddleware, async (c) 
   const updated = await updateMsAccountSettings(userId, body);
   if (!updated) return c.json({ error: "Kein verbundenes Konto" }, 404);
 
-  // Webhook-Lifecycle an den syncEnabled-Toggle koppeln:
-  //  - syncEnabled FALSE → TRUE: Subscription anlegen (Instant-Sync aktiv)
-  //  - syncEnabled TRUE  → FALSE: Subscription bei MS aufraeumen
-  //  - calendarMode hat sich geaendert: alte Sub loeschen + neue auf
-  //    den richtigen Resource-Pfad anlegen (sonst kommen Notifications
-  //    fuer den falschen Kalender)
+  // Webhook-Lifecycle: Master-Switch syncEnabled steuert ALLE
+  // Subscriptions des Users. Pro-Kalender-Toggles laufen ueber den
+  // /calendars/:id-Endpoint (Phase 5c).
+  //  - syncEnabled FALSE → TRUE: alle aktiven Junction-Kalender bekommen
+  //    eine Subscription
+  //  - syncEnabled TRUE  → FALSE: alle Subs aufraeumen
   try {
     const wasOn = previous?.syncEnabled === true;
     const isOn = updated.syncEnabled === true;
-    const calendarChanged = previous?.calendarMode !== updated.calendarMode;
     if (isOn && !wasOn) {
       const { createSubscription } = await import("../../sync/microsoft-subscriptions.js");
-      void createSubscription(userId).catch((err) =>
-        logError("[MS] createSubscription nach Toggle fehlgeschlagen", err),
-      );
+      const { listEnabledCalendars } = await import("../../data/db-microsoft.js");
+      const cals = await listEnabledCalendars(userId);
+      for (const c of cals) {
+        void createSubscription(userId, c.calendarId).catch((err) =>
+          logError(`[MS] createSubscription nach Toggle fuer Cal ${c.calendarId} fehlgeschlagen`, err),
+        );
+      }
     } else if (!isOn && wasOn) {
-      const { deleteSubscription } = await import("../../sync/microsoft-subscriptions.js");
-      void deleteSubscription(userId).catch((err) =>
-        logError("[MS] deleteSubscription nach Toggle fehlgeschlagen", err),
-      );
-    } else if (isOn && calendarChanged) {
-      const { createSubscription } = await import("../../sync/microsoft-subscriptions.js");
-      // createSubscription macht implizit einen Cleanup vor dem Anlegen.
-      void createSubscription(userId).catch((err) =>
-        logError("[MS] createSubscription nach Calendar-Wechsel fehlgeschlagen", err),
+      const { deleteAllSubscriptionsForUser } = await import("../../sync/microsoft-subscriptions.js");
+      void deleteAllSubscriptionsForUser(userId).catch((err) =>
+        logError("[MS] deleteAllSubscriptionsForUser nach Toggle fehlgeschlagen", err),
       );
     }
   } catch (err) {
@@ -296,6 +292,99 @@ authMicrosoftRoutes.patch("/auth/microsoft/settings", authMiddleware, async (c) 
   }
 
   return c.json({ ok: true, account: updated });
+});
+
+// ── Multi-Calendar (Phase 5c) ───────────────────────────────────────────────
+
+/** Liste aller Outlook-Kalender des Users (mit enable-Status).
+ *  Wenn die Junction noch leer ist, triggert Discovery — der erste Aufruf
+ *  nach dem Connect populiert sie automatisch. */
+authMicrosoftRoutes.get("/auth/microsoft/calendars", authMiddleware, async (c) => {
+  const userId = c.get("userId");
+  if (!userId) return c.json({ error: "Nicht eingeloggt" }, 401);
+
+  const { listUserCalendars } = await import("../../data/db-microsoft.js");
+  let cals = await listUserCalendars(userId);
+  if (cals.length === 0) {
+    try {
+      const { discoverCalendars } = await import("../../sync/microsoft-sync.js");
+      await discoverCalendars(userId);
+      cals = await listUserCalendars(userId);
+    } catch (err) {
+      logError("[MS] discoverCalendars beim ersten Aufruf fehlgeschlagen", err);
+    }
+  }
+  return c.json({ calendars: cals });
+});
+
+/** Refresh: holt aktuelle Liste von Microsoft + upsert in Junction.
+ *  User druecken den "Refresh"-Button wenn sie in Outlook einen neuen
+ *  Kalender angelegt haben und der hier auftauchen soll. */
+authMicrosoftRoutes.post("/auth/microsoft/calendars/refresh", authMiddleware, async (c) => {
+  const userId = c.get("userId");
+  if (!userId) return c.json({ error: "Nicht eingeloggt" }, 401);
+  try {
+    const { discoverCalendars } = await import("../../sync/microsoft-sync.js");
+    const cals = await discoverCalendars(userId);
+    return c.json({ ok: true, calendars: cals });
+  } catch (err) {
+    logError("[MS] discoverCalendars (refresh) fehlgeschlagen", err);
+    return c.json({ error: err instanceof Error ? err.message : "Refresh fehlgeschlagen" }, 502);
+  }
+});
+
+/** Toggle eines einzelnen Kalenders (enabled true/false). Bei Aktivierung
+ *  wird sofort eine Subscription angelegt, bei Deaktivierung die alte
+ *  geloescht — Webhook-Lifecycle pro Kalender. */
+authMicrosoftRoutes.patch("/auth/microsoft/calendars/:calendarId", authMiddleware, async (c) => {
+  const userId = c.get("userId");
+  if (!userId) return c.json({ error: "Nicht eingeloggt" }, 401);
+  const calendarId = c.req.param("calendarId");
+  if (!calendarId) return c.json({ error: "Kalender-ID fehlt" }, 400);
+
+  let body: { enabled?: boolean; direction?: "both" | "pull-only" | "push-only" };
+  try {
+    body = await c.req.json<typeof body>();
+  } catch {
+    return c.json({ error: "Ungueltiger Body" }, 400);
+  }
+
+  const { setCalendarEnabled, upsertUserCalendar } = await import("../../data/db-microsoft.js");
+  const { listUserCalendars } = await import("../../data/db-microsoft.js");
+  const before = (await listUserCalendars(userId)).find((c) => c.calendarId === calendarId);
+  if (!before) return c.json({ error: "Kalender nicht gefunden" }, 404);
+
+  let updated = before;
+  if (body.enabled !== undefined) {
+    updated = (await setCalendarEnabled(userId, calendarId, body.enabled)) ?? updated;
+  }
+  if (body.direction) {
+    updated = await upsertUserCalendar({ userId, calendarId, direction: body.direction });
+  }
+
+  // Subscription-Lifecycle: nur wenn der User-Master-Toggle (syncEnabled
+  // auf user_microsoft_accounts) aktiv ist, brauchen wir Subs anzulegen.
+  // Ist der Master aus, blockiert der Sync sowieso — Sub waere unnoetig.
+  try {
+    const account = await getMsAccount(userId);
+    if (account?.syncEnabled) {
+      if (before.enabled === false && updated.enabled === true) {
+        const { createSubscription } = await import("../../sync/microsoft-subscriptions.js");
+        void createSubscription(userId, calendarId).catch((err) =>
+          logError(`[MS] createSubscription fuer Cal ${calendarId} fehlgeschlagen`, err),
+        );
+      } else if (before.enabled === true && updated.enabled === false) {
+        const { deleteSubscription } = await import("../../sync/microsoft-subscriptions.js");
+        void deleteSubscription(userId, calendarId).catch((err) =>
+          logError(`[MS] deleteSubscription fuer Cal ${calendarId} fehlgeschlagen`, err),
+        );
+      }
+    }
+  } catch (err) {
+    logError("[MS] Subscription-Lifecycle bei Kalender-Toggle", err);
+  }
+
+  return c.json({ ok: true, calendar: updated });
 });
 
 // ── HTML-Response fuer den Callback ─────────────────────────────────────────
