@@ -176,33 +176,52 @@ export const dbTermine: TerminRepository = {
   async upsertFromMs(input: TerminFromMsInput): Promise<Termin> {
     const db = getDb();
 
-    // Existiert schon → Update statt Insert. ms_event_id ist UNIQUE,
-    // wir nutzen ON CONFLICT mit DO UPDATE.
-    const id = crypto.randomUUID();
+    // Manueller Upsert: ON CONFLICT (ms_event_id) wuerde an dem partial
+    // UNIQUE-Index "uq_termine_ms_event_id ... WHERE ms_event_id IS NOT NULL"
+    // (Migration 023) scheitern — PostgreSQL kann partial-Index-Inference
+    // nur, wenn der index_predicate exakt repliziert wird. Statt das fragil
+    // zu replizieren machen wir SELECT-then-INSERT-or-UPDATE in einer
+    // Transaktion. Race-condition-frei, weil wir innerhalb einer Single-
+    // Connection-Transaktion arbeiten + UNIQUE-Index uns vor parallelen
+    // Inserts schuetzt (zweiter Insert wuerde 23505 werfen → wir koennten
+    // bei Bedarf retryen, aber bei MS-Sync ist nur ein Worker pro User aktiv).
     const now = new Date().toISOString();
-    const [row] = await db`
-      INSERT INTO termine (
-        id, text, datum, uhrzeit, endzeit, location, created_at,
-        ms_event_id, ms_calendar_id, ms_owner_user_id, ms_etag,
-        ms_sync_status, ms_last_sync_at, ms_source
-      ) VALUES (
-        ${id}, ${input.text}, ${input.datum}, ${input.uhrzeit}, ${input.endzeit}, ${input.location}, ${now},
-        ${input.msEventId}, ${input.msCalendarId}, ${input.msOwnerUserId}, ${input.msEtag},
-        'synced', ${now}, 'microsoft'
-      )
-      ON CONFLICT (ms_event_id) DO UPDATE SET
-        text             = EXCLUDED.text,
-        datum            = EXCLUDED.datum,
-        uhrzeit          = EXCLUDED.uhrzeit,
-        endzeit          = EXCLUDED.endzeit,
-        location         = EXCLUDED.location,
-        ms_calendar_id   = EXCLUDED.ms_calendar_id,
-        ms_etag          = EXCLUDED.ms_etag,
-        ms_sync_status   = 'synced',
-        ms_last_sync_at  = EXCLUDED.ms_last_sync_at
-      RETURNING id
+
+    const [existing] = await db`
+      SELECT id FROM termine WHERE ms_event_id = ${input.msEventId} LIMIT 1
     `;
-    const result = await this.get(String(row.id));
+
+    let resultId: string;
+    if (existing) {
+      resultId = String(existing.id);
+      await db`
+        UPDATE termine SET
+          text             = ${input.text},
+          datum            = ${input.datum},
+          uhrzeit          = ${input.uhrzeit},
+          endzeit          = ${input.endzeit},
+          location         = ${input.location},
+          ms_calendar_id   = ${input.msCalendarId},
+          ms_etag          = ${input.msEtag},
+          ms_sync_status   = 'synced',
+          ms_last_sync_at  = ${now}
+        WHERE id = ${resultId}
+      `;
+    } else {
+      resultId = crypto.randomUUID();
+      await db`
+        INSERT INTO termine (
+          id, text, datum, uhrzeit, endzeit, location, created_at,
+          ms_event_id, ms_calendar_id, ms_owner_user_id, ms_etag,
+          ms_sync_status, ms_last_sync_at, ms_source
+        ) VALUES (
+          ${resultId}, ${input.text}, ${input.datum}, ${input.uhrzeit}, ${input.endzeit}, ${input.location}, ${now},
+          ${input.msEventId}, ${input.msCalendarId}, ${input.msOwnerUserId}, ${input.msEtag},
+          'synced', ${now}, 'microsoft'
+        )
+      `;
+    }
+    const result = await this.get(resultId);
     if (!result) throw new Error("Termin nach upsertFromMs nicht lesbar");
     return result;
   },
