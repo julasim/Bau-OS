@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, watch } from "vue";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
+import ConflictDialog from "../components/ConflictDialog.vue";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Termin {
@@ -240,9 +241,25 @@ async function create() {
   }
 }
 
+// Konflikt-Termine bekommen ein eigenes Dialog statt des normalen Edits.
+// Der User soll erst auflösen welche Version (Bau-OS / Outlook) gewinnt
+// bevor er weiter editiert — sonst riskieren wir einen Re-Konflikt
+// nach dem Speichern.
+const conflictTerminId = ref<string | null>(null);
+
 function edit(t: Termin) {
+  if (t.msSyncStatus === "conflict") {
+    conflictTerminId.value = t.id;
+    return;
+  }
   showCreate.value = false;
   editing.value = { ...t, assignees: [...t.assignees] };
+}
+
+async function onConflictResolved() {
+  conflictTerminId.value = null;
+  await load();
+  flash("success", "Konflikt aufgelöst");
 }
 
 async function save(t: Termin) {
@@ -723,6 +740,15 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
         Keine Termine vorhanden.
       </p>
     </div>
+
+    <!-- Konflikt-Auflösungs-Dialog (Phase 5b). Wird von edit() aufgerufen
+         wenn der Termin ms_sync_status='conflict' hat. -->
+    <ConflictDialog
+      v-if="conflictTerminId"
+      :termin-id="conflictTerminId"
+      @close="conflictTerminId = null"
+      @resolved="onConflictResolved"
+    />
   </div>
 </template>
 
