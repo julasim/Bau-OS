@@ -54,6 +54,12 @@ interface MsEventDateTime {
   timeZone: string; // "Europe/Vienna" oder "UTC"
 }
 
+interface MsAttendee {
+  emailAddress?: { address?: string; name?: string };
+  type?: "required" | "optional" | "resource";
+  status?: { response?: string; time?: string };
+}
+
 interface MsEvent {
   id: string;
   subject?: string;
@@ -62,6 +68,7 @@ interface MsEvent {
   location?: { displayName?: string };
   isAllDay?: boolean;
   lastModifiedDateTime?: string;
+  attendees?: MsAttendee[];
   "@odata.etag"?: string;
 }
 
@@ -146,8 +153,10 @@ function bauosToMsStart(termin: Termin): { start: MsEventDateTime; end: MsEventD
   };
 }
 
-/** Mapping Bau-OS Termin → MS-Graph-Body fuer POST/PATCH /me/events. */
-function buildMsEventBody(termin: Termin): Record<string, unknown> {
+/** Mapping Bau-OS Termin → MS-Graph-Body fuer POST/PATCH /me/events.
+ *  Async weil wir die Email-Adressen der Team-Mitglieder aus der DB
+ *  laden muessen (assigneeIds → email). */
+async function buildMsEventBody(termin: Termin): Promise<Record<string, unknown>> {
   const { start, end, isAllDay } = bauosToMsStart(termin);
   const body: Record<string, unknown> = {
     subject: termin.text,
@@ -157,6 +166,42 @@ function buildMsEventBody(termin: Termin): Record<string, unknown> {
   };
   if (termin.location) {
     body.location = { displayName: termin.location };
+  }
+
+  // Attendees: assigneeIds (Team-Mitglieder mit Email-Adresse) → MS-Format.
+  // Outlook verschickt automatisch ICS-Einladungen an die Adressen, sobald
+  // der Event gespeichert wird.
+  const attendees: MsAttendee[] = [];
+  if (Array.isArray(termin.assigneeIds) && termin.assigneeIds.length > 0) {
+    const { findEmailsForMembers } = await import("../data/db-team.js");
+    const members = await findEmailsForMembers(termin.assigneeIds);
+    for (const m of members) {
+      attendees.push({
+        emailAddress: { address: m.email, name: m.name },
+        type: "required",
+      });
+    }
+  }
+  // Externe Teilnehmer (Freitext in assignees, NICHT in assigneeIds gemappt):
+  // Wenn der String wie eine Email aussieht, schicken wir ihn als Attendee
+  // mit. Sonst lassen wir ihn weg (MS hat fuer Plain-Text-Namen keinen
+  // Anker — Outlook braucht eine Email).
+  if (Array.isArray(termin.assignees)) {
+    const memberNames = new Set((termin.assigneesResolved ?? []).map((r) => r.name.toLowerCase()));
+    for (const raw of termin.assignees) {
+      const trimmed = raw.trim();
+      if (!trimmed || memberNames.has(trimmed.toLowerCase())) continue;
+      // Sehr simpler Email-Test — robuster Vergleich macht der MS-Server.
+      if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+        attendees.push({
+          emailAddress: { address: trimmed, name: trimmed },
+          type: "required",
+        });
+      }
+    }
+  }
+  if (attendees.length > 0) {
+    body.attendees = attendees;
   }
   return body;
 }
@@ -239,7 +284,7 @@ export async function pullFromOutlook(userId: string): Promise<{ pulled: number;
       filterParts.push(`lastModifiedDateTime gt ${sinceIso}`);
     }
     const filter = filterParts.join(" and ");
-    const select = "id,subject,start,end,location,isAllDay,lastModifiedDateTime";
+    const select = "id,subject,start,end,location,isAllDay,lastModifiedDateTime,attendees";
     const query = `${path}?$filter=${encodeURIComponent(filter)}&$select=${select}&$top=100`;
 
     const events = await graphFetchAll<MsEvent>(userId, query);
@@ -295,17 +340,63 @@ async function importMsEventToBauOs(userId: string, calendarId: string, ev: MsEv
   const location = ev.location?.displayName?.trim() || null;
   const text = ev.subject?.trim() || "(Kein Titel)";
 
+  // Attendees → assigneeIds (gemappte Mitglieder) + assignees (Freitext fuer
+  // unbekannte Emails). Der Owner-User wird nicht selbst als Attendee
+  // einsortiert — er ist der Organisator.
+  const { assigneeIds, assignees } = await mapMsAttendeesToBauOs(ev.attendees);
+
   await terminRepo.upsertFromMs({
     text,
     datum,
     uhrzeit,
     endzeit,
     location,
+    assignees,
+    assigneeIds,
     msEventId: ev.id,
     msCalendarId: calendarId || null,
     msOwnerUserId: userId,
     msEtag: etag,
   });
+}
+
+/** Mapping MS-Attendees → Bau-OS assigneeIds + assignees-Freitext.
+ *  Trennt gemappte Team-Mitglieder (assigneeIds) von externen Email-
+ *  Adressen (assignees als Freitext). */
+export async function mapMsAttendeesToBauOs(
+  attendees: MsAttendee[] | undefined,
+): Promise<{ assigneeIds: string[]; assignees: string[] }> {
+  if (!Array.isArray(attendees) || attendees.length === 0) {
+    return { assigneeIds: [], assignees: [] };
+  }
+  const emails: string[] = [];
+  for (const a of attendees) {
+    const addr = a.emailAddress?.address?.trim();
+    if (addr) emails.push(addr);
+  }
+  if (emails.length === 0) return { assigneeIds: [], assignees: [] };
+
+  const { findMembersByEmails } = await import("../data/db-team.js");
+  const matched = await findMembersByEmails(emails);
+
+  const assigneeIds: string[] = [];
+  const assignees: string[] = [];
+  const seenIds = new Set<string>();
+  for (const a of attendees) {
+    const addr = a.emailAddress?.address?.trim() ?? "";
+    const name = a.emailAddress?.name?.trim() || addr;
+    if (!addr) continue;
+    const member = matched.get(addr.toLowerCase());
+    if (member && !seenIds.has(member.id)) {
+      assigneeIds.push(member.id);
+      assignees.push(member.name);
+      seenIds.add(member.id);
+    } else if (!member) {
+      // Externe Email → als Freitext behalten damit der User sie sieht.
+      assignees.push(name);
+    }
+  }
+  return { assigneeIds, assignees };
 }
 
 // ── Push (Bau-OS → Outlook) ──────────────────────────────────────────────────
@@ -334,7 +425,7 @@ export async function pushToOutlook(userId: string, terminId: string): Promise<v
   if (termin.msSyncStatus !== "pending") return;
 
   try {
-    const body = buildMsEventBody(termin);
+    const body = await buildMsEventBody(termin);
     const { path: calPath, calendarId } = await resolveCalendarIdForList(account);
 
     if (!termin.msEventId) {

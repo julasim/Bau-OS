@@ -191,6 +191,9 @@ export const dbTermine: TerminRepository = {
       SELECT id FROM termine WHERE ms_event_id = ${input.msEventId} LIMIT 1
     `;
 
+    const assignees = Array.isArray(input.assignees) ? input.assignees : [];
+    const assigneeIds = Array.isArray(input.assigneeIds) ? input.assigneeIds : [];
+
     let resultId: string;
     if (existing) {
       resultId = String(existing.id);
@@ -201,6 +204,8 @@ export const dbTermine: TerminRepository = {
           uhrzeit          = ${input.uhrzeit},
           endzeit          = ${input.endzeit},
           location         = ${input.location},
+          assignees        = ${assignees},
+          assignee_ids     = ${assigneeIds},
           ms_calendar_id   = ${input.msCalendarId},
           ms_etag          = ${input.msEtag},
           ms_sync_status   = 'synced',
@@ -211,11 +216,12 @@ export const dbTermine: TerminRepository = {
       resultId = crypto.randomUUID();
       await db`
         INSERT INTO termine (
-          id, text, datum, uhrzeit, endzeit, location, created_at,
+          id, text, datum, uhrzeit, endzeit, location, assignees, assignee_ids, created_at,
           ms_event_id, ms_calendar_id, ms_owner_user_id, ms_etag,
           ms_sync_status, ms_last_sync_at, ms_source
         ) VALUES (
-          ${resultId}, ${input.text}, ${input.datum}, ${input.uhrzeit}, ${input.endzeit}, ${input.location}, ${now},
+          ${resultId}, ${input.text}, ${input.datum}, ${input.uhrzeit}, ${input.endzeit}, ${input.location},
+          ${assignees}, ${assigneeIds}, ${now},
           ${input.msEventId}, ${input.msCalendarId}, ${input.msOwnerUserId}, ${input.msEtag},
           'synced', ${now}, 'microsoft'
         )

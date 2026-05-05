@@ -498,13 +498,19 @@ export interface TaskRepository {
 /** Input-Shape fuer das Importieren eines Outlook-Termins (Read-Sync).
  *  Die ms_*-Felder kommen direkt aus Microsoft Graph; der Rest sind
  *  bereits gemappte Bau-OS-Werte. msEventId+msOwnerUserId sind Pflicht
- *  damit der nachfolgende Update-Match funktioniert. */
+ *  damit der nachfolgende Update-Match funktioniert.
+ *
+ *  assignees + assigneeIds (optional) tragen Outlook-Attendees in
+ *  Bau-OS — Member-IDs fuer gemappte Team-Mitglieder, Freitext-Strings
+ *  (Emails) fuer externe Teilnehmer ohne Bau-OS-Eintrag. */
 export interface TerminFromMsInput {
   text: string;
   datum: string;
   uhrzeit: string | null;
   endzeit: string | null;
   location: string | null;
+  assignees?: string[];
+  assigneeIds?: string[];
   msEventId: string;
   msCalendarId: string | null;
   msOwnerUserId: string;

@@ -48,6 +48,11 @@ interface MsNotification {
   tenantId?: string;
 }
 
+interface MsAttendeeResource {
+  emailAddress?: { address?: string; name?: string };
+  type?: "required" | "optional" | "resource";
+}
+
 interface MsEventResource {
   id: string;
   subject?: string;
@@ -55,6 +60,7 @@ interface MsEventResource {
   end?: { dateTime: string; timeZone: string };
   location?: { displayName?: string };
   isAllDay?: boolean;
+  attendees?: MsAttendeeResource[];
   "@odata.etag"?: string;
 }
 
@@ -173,12 +179,19 @@ async function handleEventCreatedOrUpdated(userId: string, eventId: string, cale
   const location = ev.location?.displayName?.trim() || null;
   const text = ev.subject?.trim() || "(Kein Titel)";
 
+  // Attendees → assigneeIds + assignees, gleicher Helper wie im Cron-Pull
+  // (DRY — Single-Source-of-Truth fuers MS-Attendee-Mapping).
+  const { mapMsAttendeesToBauOs } = await import("../../sync/microsoft-sync.js");
+  const { assigneeIds, assignees } = await mapMsAttendeesToBauOs(ev.attendees);
+
   await terminRepo.upsertFromMs({
     text,
     datum,
     uhrzeit,
     endzeit,
     location,
+    assignees,
+    assigneeIds,
     msEventId: ev.id,
     msCalendarId: calendarId,
     msOwnerUserId: userId,
