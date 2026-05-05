@@ -74,8 +74,30 @@ interface MsCalendar {
 const BAU_OS_CAL_NAME = "Bau-OS";
 
 // ── Helpers: Datum/Zeit-Mapping ──────────────────────────────────────────────
+//
+// WICHTIG: Bau-OS speichert datum kanonisch als "TT.MM.JJJJ" (siehe
+// normalizeDatum() in workspace/termine.ts). Microsoft Graph akzeptiert
+// AUSSCHLIESSLICH ISO-8601 ("YYYY-MM-DDTHH:mm:ss"). Alle Hin-/Rueck-
+// konvertierungen laufen ueber diese 2 Helper, damit nirgendwo ein
+// Format-Mismatch entsteht.
 
-/** "2026-05-05T14:00:00.0000000" → "2026-05-05" */
+/** "07.05.2026" → "2026-05-07". Akzeptiert auch schon ISO. */
+function bauosDatumToIso(datum: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datum)) return datum;
+  const m = datum.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+  if (!m) throw new Error(`Unverstaendliches Datumsformat: "${datum}"`);
+  return `${m[3]}-${m[2]}-${m[1]}`;
+}
+
+/** "2026-05-07" → "07.05.2026" — Bau-OS-kanonisch. */
+function isoToBauosDatum(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) throw new Error(`Unverstaendliches ISO-Datum: "${iso}"`);
+  return `${m[3]}.${m[2]}.${m[1]}`;
+}
+
+/** "2026-05-05T14:00:00.0000000" → "2026-05-05" (ISO) → wird vom Aufrufer
+ *  noch zu Bau-OS-Datum konvertiert. */
 function extractDate(dt: string): string {
   return dt.split("T")[0]!;
 }
@@ -86,34 +108,36 @@ function extractTime(dt: string): string {
   return t.slice(0, 5); // HH:MM
 }
 
-/** Bau-OS HH:MM zu MS-Graph dateTime: "YYYY-MM-DDTHH:MM:00".
- *  Fuer All-Day-Events gibt Microsoft 00:00 + isAllDay=true vor. */
+/** Bau-OS Termin → MS-Graph start/end dateTime. Konvertiert TT.MM.JJJJ
+ *  intern zu ISO und baut den korrekt formatierten dateTime-String.
+ *  Fuer All-Day-Events: isAllDay=true + end-Datum ist Tag+1 (MS-Konvention). */
 function bauosToMsStart(termin: Termin): { start: MsEventDateTime; end: MsEventDateTime; isAllDay: boolean } {
-  const datum = termin.datum;
+  const isoDatum = bauosDatumToIso(termin.datum);
+
   // All-Day: kein uhrzeit gesetzt
   if (!termin.uhrzeit) {
     // MS verlangt fuer All-Day: start.dateTime=YYYY-MM-DDT00:00:00, end=tag+1
-    const startDate = new Date(`${datum}T00:00:00Z`);
+    const startDate = new Date(`${isoDatum}T00:00:00Z`);
     const endDate = new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
     const endIso = endDate.toISOString().slice(0, 10);
     return {
-      start: { dateTime: `${datum}T00:00:00`, timeZone: TIMEZONE },
+      start: { dateTime: `${isoDatum}T00:00:00`, timeZone: TIMEZONE },
       end: { dateTime: `${endIso}T00:00:00`, timeZone: TIMEZONE },
       isAllDay: true,
     };
   }
   // Mit Uhrzeit. Endzeit fallback: +30min wenn nicht gesetzt.
-  const startDt = `${datum}T${termin.uhrzeit}:00`;
+  const startDt = `${isoDatum}T${termin.uhrzeit}:00`;
   let endDt: string;
   if (termin.endzeit) {
-    endDt = `${datum}T${termin.endzeit}:00`;
+    endDt = `${isoDatum}T${termin.endzeit}:00`;
   } else {
     // +30 Minuten — naive Zeit-Arithmetik reicht hier
     const [h, m] = termin.uhrzeit.split(":").map(Number);
     const totalMinutes = h! * 60 + m! + 30;
     const endH = Math.floor(totalMinutes / 60) % 24;
     const endM = totalMinutes % 60;
-    endDt = `${datum}T${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}:00`;
+    endDt = `${isoDatum}T${String(endH).padStart(2, "0")}:${String(endM).padStart(2, "0")}:00`;
   }
   return {
     start: { dateTime: startDt, timeZone: TIMEZONE },
@@ -261,7 +285,10 @@ async function importMsEventToBauOs(userId: string, calendarId: string, ev: MsEv
   // ETag aus @odata.etag — kommt im Format W/"datetime'2026-05-05T...'"
   const etag = ev["@odata.etag"] ?? null;
 
-  const datum = extractDate(ev.start.dateTime);
+  // ISO-Datum aus MS extrahieren und auf Bau-OS-Format (TT.MM.JJJJ) bringen,
+  // damit es konsistent mit allen anderen Termin-Quellen ist (Bot, UI, Vault).
+  const isoDate = extractDate(ev.start.dateTime);
+  const datum = isoToBauosDatum(isoDate);
   const isAllDay = ev.isAllDay === true;
   const uhrzeit = isAllDay ? null : extractTime(ev.start.dateTime);
   const endzeit = isAllDay || !ev.end?.dateTime ? null : extractTime(ev.end.dateTime);
@@ -397,9 +424,29 @@ export async function deleteFromOutlook(
 
 /** Drained alle pending Termine eines Users — wird vom Cron + nach
  *  jedem Save aufgerufen. Limitiert auf 100 pro Lauf, damit ein
- *  Batch-Operation den Cron nicht blockiert. */
+ *  Batch-Operation den Cron nicht blockiert.
+ *
+ *  Der Cron resetted vor dem Push 'error'-Termine zurueck zu 'pending':
+ *  damit haben einmal kaputte Termine eine Chance auf erneuten Versuch
+ *  ohne dass der User manuell etwas machen muss (z.B. nach einem Bugfix
+ *  im Sync-Code, oder wenn MS Graph mal fluechtig down war). */
 export async function pushAllPending(userId: string): Promise<{ pushed: number; errors: number }> {
   if (!terminRepo.listPendingForUser) return { pushed: 0, errors: 0 };
+
+  // Re-Try-Strategie: alle 'error'-Termine des Users wieder auf 'pending'
+  // setzen, damit pushToOutlook sie erneut versucht. Das ist OK weil
+  // pushToOutlook idempotent ist — wenn ms_event_id schon existiert, wird
+  // PATCH gemacht, nicht POST.
+  if (DB_ENABLED) {
+    const { getDb } = await import("../db/client.js");
+    await getDb()`
+      UPDATE termine
+         SET ms_sync_status = 'pending'
+       WHERE ms_owner_user_id = ${userId}
+         AND ms_sync_status = 'error'
+    `;
+  }
+
   const pending = await terminRepo.listPendingForUser(userId);
   let pushed = 0;
   let errors = 0;
