@@ -18,7 +18,7 @@
 // ============================================================
 
 import cron from "node-cron";
-import { TIMEZONE, AUDIT_RETENTION_DAYS, DB_ENABLED } from "./config.js";
+import { TIMEZONE, AUDIT_RETENTION_DAYS, DB_ENABLED, MS_GRAPH_ENABLED } from "./config.js";
 import { logInfo, logError } from "./logger.js";
 
 /** Loescht Audit-Eintraege aelter als AUDIT_RETENTION_DAYS.
@@ -56,6 +56,19 @@ async function runMaintenance(): Promise<void> {
   }
 }
 
+/** MS-Graph-Sync alle 5 Minuten fuer alle User mit aktivem Sync.
+ *  Push-pending zuerst (lokale Aenderungen Vorrang), dann Pull aus Outlook.
+ *  Webhook-basierte Variante kommt in Phase 4 — Polling ist Fallback. */
+async function runMicrosoftSync(): Promise<void> {
+  if (!MS_GRAPH_ENABLED) return;
+  try {
+    const { runSyncForAllUsers } = await import("./sync/microsoft-sync.js");
+    await runSyncForAllUsers();
+  } catch (err) {
+    logError("[MS-Sync] Cron-Lauf fehlgeschlagen", err);
+  }
+}
+
 /** Startet den Maintenance-Cron. Idempotent — mehrfache Calls registrieren
  *  trotzdem nur einen Job (boot-Time-only). */
 let _registered = false;
@@ -73,6 +86,23 @@ export function startMaintenanceCron(): void {
     { timezone: TIMEZONE },
   );
   logInfo(`[Maintenance] Cron registriert: 03:15 ${TIMEZONE} (Audit-Retention ${AUDIT_RETENTION_DAYS}d)`);
+
+  // Microsoft-Graph-Sync alle 5 Minuten — nur wenn das Backend ueberhaupt
+  // konfiguriert ist (sonst keine Logs alle 5min ohne Funktion).
+  if (MS_GRAPH_ENABLED) {
+    cron.schedule(
+      "*/5 * * * *",
+      () => {
+        void runMicrosoftSync();
+      },
+      { timezone: TIMEZONE },
+    );
+    logInfo("[MS-Sync] Cron registriert: alle 5 Minuten (Outlook-Calendar-Sync)");
+    // Nach 30s ersten Lauf — damit man nach Boot direkt syncen kann.
+    setTimeout(() => {
+      void runMicrosoftSync();
+    }, 30_000);
+  }
 
   // Beim ersten Boot einmal direkt ausfuehren — wenn die Installation
   // 6 Monate offline war, soll nicht erst auf 03:15 gewartet werden.

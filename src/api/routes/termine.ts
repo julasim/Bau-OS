@@ -4,8 +4,32 @@ import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../d
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import { notifyTerminInvited, resolveUserIdsFromMembers } from "../../notifications.js";
+import { getMsAccount } from "../../data/db-microsoft.js";
+import { pushToOutlook, deleteFromOutlook } from "../../sync/microsoft-sync.js";
+import { logError } from "../../logger.js";
 
 export const termineRoutes = new Hono<AppEnv>();
+
+/** Markiert den Termin als pending fuer den MS-Sync und triggert async-Push.
+ *  Fire-and-forget: wenn Microsoft Graph gerade down ist, bleibt der Termin
+ *  auf 'pending' und der 5-min-Cron versucht's nochmal. */
+async function triggerMsSync(userId: string | null, terminId: string): Promise<void> {
+  if (!userId) return;
+  try {
+    const account = await getMsAccount(userId);
+    if (!account || !account.syncEnabled) return;
+    if (terminRepo.markMsPending) {
+      await terminRepo.markMsPending(terminId, userId);
+    }
+    // Push fire-and-forget. Errors landen im Log, ms_sync_status wird
+    // intern auf 'error' gesetzt, der Cron probiert's spaeter wieder.
+    void pushToOutlook(userId, terminId).catch((err) => {
+      logError(`[Termine] Async-Push zu MS fehlgeschlagen fuer ${terminId}`, err);
+    });
+  } catch (err) {
+    logError("[Termine] triggerMsSync", err);
+  }
+}
 
 function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
@@ -75,6 +99,8 @@ termineRoutes.post("/termine", async (c) => {
     if (updated) result = updated;
   }
   emit({ type: "termin", action: "created", id: termin.id, project: body.project });
+  // MS-Graph-Sync: pending markieren + async push (fire-and-forget).
+  void triggerMsSync(c.var.userId, result.id);
   // Notification an alle Teilnehmer mit verlinktem User-Account.
   if (body.assigneeIds && body.assigneeIds.length > 0) {
     void (async () => {
@@ -117,6 +143,8 @@ termineRoutes.put("/termine/:id", async (c) => {
   const termin = await terminRepo.update(id, body);
   if (!termin) return c.json({ error: "Termin nicht gefunden" }, 404);
   emit({ type: "termin", action: "updated", id });
+  // MS-Graph-Sync: pending markieren + async push.
+  void triggerMsSync(c.var.userId, id);
   if ("assigneeIds" in body && Array.isArray(body.assigneeIds)) {
     const prevIds = new Set(prev?.assigneeIds ?? []);
     const added = body.assigneeIds.filter((mid) => !prevIds.has(mid));
@@ -145,8 +173,18 @@ termineRoutes.put("/termine/:id", async (c) => {
 
 termineRoutes.delete("/termine/:id", async (c) => {
   const id = c.req.param("id");
+  // VORHER laden, damit wir die ms_event_id fuer den Outlook-Delete kennen.
+  const before = await terminRepo.get(id);
   const ok = await terminRepo.delete(id);
-  if (ok) emit({ type: "termin", action: "deleted", id });
+  if (ok) {
+    emit({ type: "termin", action: "deleted", id });
+    // MS-Graph: wenn der Termin in Outlook gespiegelt war → dort auch loeschen.
+    if (before?.msEventId && before.msOwnerUserId) {
+      void deleteFromOutlook(before.msOwnerUserId, before.msEventId, before.msCalendarId ?? null).catch((err) =>
+        logError(`[Termine] Async-Delete in MS fehlgeschlagen fuer ${id}`, err),
+      );
+    }
+  }
   return c.json({ ok });
 });
 

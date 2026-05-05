@@ -13,6 +13,9 @@ interface Termin {
   location: string | null;
   assignees: string[];
   project?: string | null;
+  // Microsoft-Graph-Sync (Phase 2/3) — fuer Outlook-Badge in der UI.
+  msSource?: "bau-os" | "microsoft" | null;
+  msSyncStatus?: "pending" | "synced" | "conflict" | "error" | null;
 }
 
 type ViewMode = "month" | "week" | "day" | "list";
@@ -296,6 +299,31 @@ const VIEWS: { id: ViewMode; label: string }[] = [
   { id: "day", label: "Tag" },
   { id: "list", label: "Liste" },
 ];
+
+// ── Outlook-Badge ───────────────────────────────────────────────────────────
+// Zeigt mit welchem Microsoft-Status der Termin synchronisiert ist:
+//   - synced/microsoft  → blaues "O" (Outlook), Termin ist in beiden Systemen
+//   - pending           → oranges "O", wartet auf Push (5-min-Cron)
+//   - conflict          → rotes "O", Outlook + Bau-OS sind divergiert
+//   - error             → graues "O", letzter Sync fehlgeschlagen
+//   - keine ms_*-Felder → kein Badge (lokaler Termin ohne MS-Verbindung)
+function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
+  if (!t.msSource && !t.msSyncStatus) return { show: false, cls: "", title: "" };
+  if (t.msSyncStatus === "conflict") {
+    return { show: true, cls: "ms-badge ms-badge-conflict", title: "Konflikt mit Outlook — bitte prüfen" };
+  }
+  if (t.msSyncStatus === "error") {
+    return { show: true, cls: "ms-badge ms-badge-error", title: "Sync mit Outlook fehlgeschlagen" };
+  }
+  if (t.msSyncStatus === "pending") {
+    return { show: true, cls: "ms-badge ms-badge-pending", title: "Wartet auf Outlook-Sync" };
+  }
+  // synced (oder NULL bei Migration-only) → blau
+  if (t.msSource === "microsoft") {
+    return { show: true, cls: "ms-badge", title: "Aus Outlook importiert" };
+  }
+  return { show: true, cls: "ms-badge", title: "Mit Outlook synchronisiert" };
+}
 </script>
 
 <template>
@@ -492,6 +520,7 @@ const VIEWS: { id: ViewMode; label: string }[] = [
                 {{ t.uhrzeit }}
               </span>
               <span class="truncate" style="flex: 1">{{ t.text }}</span>
+              <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
             </button>
             <div
               v-if="termineForDate(day.iso).length > 3"
@@ -547,6 +576,7 @@ const VIEWS: { id: ViewMode; label: string }[] = [
                 {{ t.uhrzeit }}
               </span>
               <span class="truncate" style="flex: 1">{{ t.text }}</span>
+              <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
             </button>
           </div>
         </div>
@@ -597,6 +627,7 @@ const VIEWS: { id: ViewMode; label: string }[] = [
               <span v-if="t.location" style="color: var(--color-text-muted); font-size: 11px">
                 · {{ t.location }}
               </span>
+              <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title" style="margin-left: auto">O</span>
             </button>
           </div>
         </div>
@@ -615,6 +646,7 @@ const VIEWS: { id: ViewMode; label: string }[] = [
             <span v-if="t.location" style="color: var(--color-text-muted); font-size: 11px">
               · {{ t.location }}
             </span>
+            <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title" style="margin-left: auto">O</span>
           </button>
         </div>
       </div>
@@ -653,9 +685,10 @@ const VIEWS: { id: ViewMode; label: string }[] = [
                 "
                 >–:–</span
               >
-              <div class="min-w-0">
-                <div style="font-size: 13px; color: var(--color-text); font-weight: 500">
-                  {{ t.text }}
+              <div class="min-w-0" style="flex: 1">
+                <div style="font-size: 13px; color: var(--color-text); font-weight: 500; display: flex; align-items: center; gap: 6px">
+                  <span>{{ t.text }}</span>
+                  <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
                 </div>
                 <div
                   class="flex flex-wrap"
@@ -832,6 +865,36 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 }
 .cal-event:hover {
   background: var(--color-border);
+}
+
+/* Outlook-Sync-Badges (Phase 2/3) — Visualisierung woher der Termin kommt
+   und ob er gerade in Sync ist. Outlook-Blau ist Microsofts Brand-Farbe. */
+.ms-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+  background: #0078d4;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  font-family:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  letter-spacing: -0.5px;
+  user-select: none;
+}
+.ms-badge-pending {
+  background: #f59e0b;
+}
+.ms-badge-conflict {
+  background: #dc2626;
+}
+.ms-badge-error {
+  background: #6b7280;
 }
 
 .cal-event-big {

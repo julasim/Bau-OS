@@ -43,6 +43,22 @@ export interface Termin {
   recurring?: string | null;
   color?: string | null;
   createdAt: string;
+
+  // ── Microsoft-Graph-Sync (Migration 023) ───────────────────────
+  /** Microsoft Graph Event-ID. NULL = nicht in Outlook. */
+  msEventId?: string | null;
+  /** Welcher Outlook-Kalender (NULL = Default). */
+  msCalendarId?: string | null;
+  /** Bau-OS-User der den MS-Event "besitzt" (UUID). */
+  msOwnerUserId?: string | null;
+  /** Microsoft-ETag fuer If-Match-Conditional-Updates. */
+  msEtag?: string | null;
+  /** 'pending' = wartet auf Push, 'synced' = aktuell, 'conflict', 'error'. */
+  msSyncStatus?: "pending" | "synced" | "conflict" | "error" | null;
+  /** ISO-Timestamp letzter erfolgreicher Sync. */
+  msLastSyncAt?: string | null;
+  /** 'bau-os' = von hier erzeugt; 'microsoft' = aus Outlook importiert. */
+  msSource?: "bau-os" | "microsoft" | null;
 }
 
 export interface Note {
@@ -479,12 +495,60 @@ export interface TaskRepository {
   delete(id: string, project?: string): Promise<boolean>;
 }
 
+/** Input-Shape fuer das Importieren eines Outlook-Termins (Read-Sync).
+ *  Die ms_*-Felder kommen direkt aus Microsoft Graph; der Rest sind
+ *  bereits gemappte Bau-OS-Werte. msEventId+msOwnerUserId sind Pflicht
+ *  damit der nachfolgende Update-Match funktioniert. */
+export interface TerminFromMsInput {
+  text: string;
+  datum: string;
+  uhrzeit: string | null;
+  endzeit: string | null;
+  location: string | null;
+  msEventId: string;
+  msCalendarId: string | null;
+  msOwnerUserId: string;
+  msEtag: string | null;
+}
+
 export interface TerminRepository {
   save(datum: string, text: string, uhrzeit?: string, project?: string): Promise<Termin | string>;
   list(project?: string): Promise<Termin[]>;
   get(id: string, project?: string): Promise<Termin | null>;
   update(id: string, updates: Partial<Termin>, project?: string): Promise<Termin | null>;
   delete(textOrId: string, project?: string): Promise<boolean>;
+
+  // ── Microsoft-Graph-Sync (DB-only) ─────────────────────────────
+  /** Findet einen Termin per Microsoft-Event-ID. Used vom Read-Sync
+   *  um zu entscheiden insert-vs-update, und vom Webhook (Phase 4). */
+  getByMsEventId?(msEventId: string): Promise<Termin | null>;
+  /** Erzeugt oder aktualisiert einen Termin der aus Outlook kam.
+   *  Idempotent ueber UNIQUE(ms_event_id) — beim zweiten Call mit
+   *  gleicher msEventId wird upsert'd. Setzt ms_source='microsoft'
+   *  und ms_sync_status='synced'. */
+  upsertFromMs?(input: TerminFromMsInput): Promise<Termin>;
+  /** Liste aller Termine die noch zu MS gepusht werden muessen
+   *  (ms_sync_status='pending') fuer einen bestimmten Owner-User.
+   *  Fuer den Sync-Worker — der iteriert und ruft pushToOutlook. */
+  listPendingForUser?(userId: string): Promise<Termin[]>;
+  /** Markiert einen Termin als erfolgreich gesynct mit MS. Setzt
+   *  ms_event_id, ms_calendar_id, ms_etag, ms_sync_status='synced',
+   *  ms_last_sync_at=now(). Genau dann von pushToOutlook gerufen wenn
+   *  Microsoft 200/201 zurueckgibt. */
+  markMsSynced?(
+    id: string,
+    patch: { msEventId: string; msCalendarId: string | null; msEtag: string | null },
+  ): Promise<void>;
+  /** Markiert einen Termin als Sync-Error (z.B. Token kaputt, Graph
+   *  500). Setzt ms_sync_status='error'. */
+  markMsSyncError?(id: string): Promise<void>;
+  /** Markiert einen Termin als bereit zum Push (ms_sync_status='pending',
+   *  ms_owner_user_id=ownerId, ms_source='bau-os'). Wird beim
+   *  Save/Update aufgerufen wenn der Owner-User aktiven Sync hat. */
+  markMsPending?(id: string, ownerUserId: string): Promise<void>;
+  /** Loescht in MS und setzt die ms_*-Felder lokal zurueck (oder
+   *  loescht den Termin lokal wenn delete=true). */
+  clearMsLink?(id: string): Promise<void>;
 }
 
 export interface NoteSummary {

@@ -199,3 +199,58 @@ export async function updateMsAccountSettings(
   `;
   return row ? rowToPublic(row) : null;
 }
+
+// ── Sync-Worker-Helper (Phase 2) ─────────────────────────────────────────────
+
+/** Liste aller User mit aktivem Sync — der Cron iteriert die. Liefert genug
+ *  Felder fuer den Sync-Worker, ohne Tokens (die laedt loadDecryptedTokens). */
+export async function listSyncEnabledUsers(): Promise<
+  Array<{ userId: string; calendarMode: "default" | "bau-os"; calendarId: string | null }>
+> {
+  if (!DB_ENABLED) return [];
+  const db = getDb();
+  const rows = await db`
+    SELECT user_id, calendar_mode, calendar_id
+      FROM user_microsoft_accounts
+     WHERE sync_enabled = true
+  `;
+  return rows.map((r) => ({
+    userId: String(r.user_id),
+    calendarMode: r.calendar_mode === "bau-os" ? "bau-os" : "default",
+    calendarId: r.calendar_id ? String(r.calendar_id) : null,
+  }));
+}
+
+/** Schreibt last_sync_at + raeumt last_sync_error nach einem erfolgreichen
+ *  Sync-Lauf. Im Error-Fall via setSyncError. */
+export async function markSyncSuccess(userId: string): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`
+    UPDATE user_microsoft_accounts SET
+      last_sync_at = now(),
+      last_sync_error = NULL
+    WHERE user_id = ${userId}
+  `;
+}
+
+/** Schreibt last_sync_error fuer Diagnose im UI ("zuletzt Sync fehlgeschlagen"). */
+export async function markSyncError(userId: string, error: string): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`
+    UPDATE user_microsoft_accounts SET
+      last_sync_error = ${error.slice(0, 500)}
+    WHERE user_id = ${userId}
+  `;
+}
+
+/** Persistiert die Calendar-ID nach Lazy-Create im 'bau-os'-Mode. */
+export async function setCalendarId(userId: string, calendarId: string): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`
+    UPDATE user_microsoft_accounts SET calendar_id = ${calendarId}
+    WHERE user_id = ${userId}
+  `;
+}

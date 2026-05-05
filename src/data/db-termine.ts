@@ -2,7 +2,7 @@
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { validateDatum, validateUhrzeit, normalizeDatum } from "../workspace/termine.js";
-import type { Termin, TerminRepository } from "./types.js";
+import type { Termin, TerminRepository, TerminFromMsInput } from "./types.js";
 
 function rowToTermin(row: Record<string, unknown>): Termin {
   const assigneeIds = Array.isArray(row.assignee_ids) ? (row.assignee_ids as string[]).map(String) : [];
@@ -26,6 +26,19 @@ function rowToTermin(row: Record<string, unknown>): Termin {
     recurring: row.recurring ? String(row.recurring) : null,
     color: row.color ? String(row.color) : null,
     createdAt: String(row.created_at),
+    // ── Microsoft-Graph-Sync ──────────────────────────────
+    msEventId: row.ms_event_id ? String(row.ms_event_id) : null,
+    msCalendarId: row.ms_calendar_id ? String(row.ms_calendar_id) : null,
+    msOwnerUserId: row.ms_owner_user_id ? String(row.ms_owner_user_id) : null,
+    msEtag: row.ms_etag ? String(row.ms_etag) : null,
+    msSyncStatus: (row.ms_sync_status as Termin["msSyncStatus"]) ?? null,
+    msLastSyncAt:
+      row.ms_last_sync_at instanceof Date
+        ? row.ms_last_sync_at.toISOString()
+        : row.ms_last_sync_at
+          ? String(row.ms_last_sync_at)
+          : null,
+    msSource: (row.ms_source as Termin["msSource"]) ?? null,
   };
 }
 
@@ -150,5 +163,102 @@ export const dbTermine: TerminRepository = {
       WHERE id::text = ${textOrId} OR text LIKE ${"%" + textOrId + "%"}
     `;
     return result.count > 0;
+  },
+
+  // ── Microsoft-Graph-Sync ─────────────────────────────────────
+
+  async getByMsEventId(msEventId) {
+    const db = getDb();
+    const rows = await db.unsafe(`${TERMIN_SELECT} WHERE t.ms_event_id = $1 LIMIT 1`, [msEventId]);
+    return rows[0] ? rowToTermin(rows[0] as Record<string, unknown>) : null;
+  },
+
+  async upsertFromMs(input: TerminFromMsInput): Promise<Termin> {
+    const db = getDb();
+
+    // Existiert schon → Update statt Insert. ms_event_id ist UNIQUE,
+    // wir nutzen ON CONFLICT mit DO UPDATE.
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const [row] = await db`
+      INSERT INTO termine (
+        id, text, datum, uhrzeit, endzeit, location, created_at,
+        ms_event_id, ms_calendar_id, ms_owner_user_id, ms_etag,
+        ms_sync_status, ms_last_sync_at, ms_source
+      ) VALUES (
+        ${id}, ${input.text}, ${input.datum}, ${input.uhrzeit}, ${input.endzeit}, ${input.location}, ${now},
+        ${input.msEventId}, ${input.msCalendarId}, ${input.msOwnerUserId}, ${input.msEtag},
+        'synced', ${now}, 'microsoft'
+      )
+      ON CONFLICT (ms_event_id) DO UPDATE SET
+        text             = EXCLUDED.text,
+        datum            = EXCLUDED.datum,
+        uhrzeit          = EXCLUDED.uhrzeit,
+        endzeit          = EXCLUDED.endzeit,
+        location         = EXCLUDED.location,
+        ms_calendar_id   = EXCLUDED.ms_calendar_id,
+        ms_etag          = EXCLUDED.ms_etag,
+        ms_sync_status   = 'synced',
+        ms_last_sync_at  = EXCLUDED.ms_last_sync_at
+      RETURNING id
+    `;
+    const result = await this.get(String(row.id));
+    if (!result) throw new Error("Termin nach upsertFromMs nicht lesbar");
+    return result;
+  },
+
+  async listPendingForUser(userId): Promise<Termin[]> {
+    const db = getDb();
+    const rows = await db.unsafe(
+      `${TERMIN_SELECT} WHERE t.ms_sync_status = 'pending' AND t.ms_owner_user_id = $1 ORDER BY t.datum, t.uhrzeit`,
+      [userId],
+    );
+    return rows.map((r) => rowToTermin(r as Record<string, unknown>));
+  },
+
+  async markMsSynced(id, patch): Promise<void> {
+    const db = getDb();
+    await db`
+      UPDATE termine SET
+        ms_event_id     = ${patch.msEventId},
+        ms_calendar_id  = ${patch.msCalendarId},
+        ms_etag         = ${patch.msEtag},
+        ms_sync_status  = 'synced',
+        ms_last_sync_at = now()
+      WHERE id = ${id}
+    `;
+  },
+
+  async markMsSyncError(id): Promise<void> {
+    const db = getDb();
+    await db`UPDATE termine SET ms_sync_status = 'error' WHERE id = ${id}`;
+  },
+
+  async markMsPending(id, ownerUserId): Promise<void> {
+    const db = getDb();
+    // Nur als pending markieren wenn der Termin noch nicht aus MS kam
+    // (sonst koennten wir einen Outlook-Event von uns ueberschreiben).
+    // Existing 'synced' MS-Termine werden auch wieder pending gesetzt
+    // (lokale Aenderung an einem Outlook-Event → push back).
+    await db`
+      UPDATE termine SET
+        ms_sync_status   = 'pending',
+        ms_owner_user_id = COALESCE(ms_owner_user_id, ${ownerUserId}),
+        ms_source        = COALESCE(ms_source, 'bau-os')
+      WHERE id = ${id}
+    `;
+  },
+
+  async clearMsLink(id): Promise<void> {
+    const db = getDb();
+    await db`
+      UPDATE termine SET
+        ms_event_id     = NULL,
+        ms_calendar_id  = NULL,
+        ms_etag         = NULL,
+        ms_sync_status  = NULL,
+        ms_last_sync_at = NULL
+      WHERE id = ${id}
+    `;
   },
 };

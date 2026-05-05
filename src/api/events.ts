@@ -6,7 +6,7 @@
 
 export interface DataEvent {
   type: "task" | "termin" | "note" | "project" | "file" | "team" | "bautagebuch" | "meeting" | "time";
-  action: "created" | "updated" | "deleted" | "completed" | "saved";
+  action: "created" | "updated" | "deleted" | "completed" | "saved" | "synced";
   id?: string;
   data?: Record<string, unknown>;
   project?: string | null;
