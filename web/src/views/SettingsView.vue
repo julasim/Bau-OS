@@ -118,6 +118,10 @@ interface MsAccount {
   lastSyncAt: string | null;
   lastSyncError: string | null;
   accessTokenValid: boolean;
+  /** Phase 4: Webhook-Subscription aktiv? Bedeutet Instant-Sync (<1s
+   *  Latenz) statt 5-min-Polling. */
+  webhookActive?: boolean;
+  subscriptionExpiresAt?: string | null;
 }
 interface MsStatus {
   connected: boolean;
@@ -683,6 +687,34 @@ onMounted(() => {
               </div>
             </div>
           </label>
+
+          <!-- Phase 4: Webhook-Status. Wenn aktiv, hat Bau-OS bei Microsoft
+               eine Subscription registriert und bekommt Push-Notifications
+               sobald sich was im Outlook-Calendar aendert (<1s Latenz).
+               Wenn nicht aktiv, laeuft das 5-min-Polling als Fallback. -->
+          <div
+            v-if="msStatus.account?.syncEnabled"
+            class="flex items-center"
+            style="gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--color-bg-subtle); border: 1px solid var(--color-border-subtle)"
+          >
+            <span
+              :style="{
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: msStatus.account.webhookActive ? '#16a34a' : '#f59e0b',
+                flexShrink: 0,
+              }"
+            ></span>
+            <div class="text-xs" style="flex: 1">
+              <span v-if="msStatus.account.webhookActive">
+                <strong>Instant-Sync aktiv</strong> — Aenderungen in Outlook erscheinen sofort in Bau-OS.
+              </span>
+              <span v-else>
+                <strong>Polling-Modus</strong> — Sync alle 5 Minuten. Webhook-Subscription wird beim naechsten Lauf eingerichtet.
+              </span>
+            </div>
+          </div>
 
           <div v-if="msStatus.account?.lastSyncAt" class="text-xs" style="color: var(--color-text-tertiary)">
             Letzte Synchronisation: {{ msStatus.account.lastSyncAt }}

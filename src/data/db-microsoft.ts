@@ -30,6 +30,13 @@ export interface MsAccountPublic {
    *  (mit 60s Sicherheitsmarge). Caller benutzt das fuer "muss refreshed
    *  werden?"-Entscheidungen. */
   accessTokenValid: boolean;
+  /** Microsoft-Graph-Subscription fuer Push-Webhooks (Phase 4). NULL =
+   *  noch nicht subscribed (Polling-Fallback aktiv); gesetzt = Instant-
+   *  Sync via Webhook. */
+  subscriptionId: string | null;
+  /** Wann die Subscription bei Microsoft ablaeuft. Renewal-Cron erneuert
+   *  sie kurz davor. */
+  subscriptionExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +81,13 @@ function rowToPublic(row: Record<string, unknown>): MsAccountPublic {
           : null,
     lastSyncError: row.last_sync_error ? String(row.last_sync_error) : null,
     accessTokenValid: expiresAt.getTime() > Date.now() + 60_000,
+    subscriptionId: row.subscription_id ? String(row.subscription_id) : null,
+    subscriptionExpiresAt:
+      row.subscription_expires_at instanceof Date
+        ? row.subscription_expires_at.toISOString()
+        : row.subscription_expires_at
+          ? String(row.subscription_expires_at)
+          : null,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
   };
@@ -253,4 +267,78 @@ export async function setCalendarId(userId: string, calendarId: string): Promise
     UPDATE user_microsoft_accounts SET calendar_id = ${calendarId}
     WHERE user_id = ${userId}
   `;
+}
+
+// ── Subscription-Helper (Phase 4: Webhooks) ──────────────────────────────────
+
+/** Findet einen User anhand der MS-Subscription-ID. Wird vom Webhook-
+ *  Endpoint genutzt: Notification kommt rein → subscriptionId → User. */
+export async function findUserBySubscriptionId(subscriptionId: string): Promise<{
+  userId: string;
+  calendarId: string | null;
+  calendarMode: "default" | "bau-os";
+} | null> {
+  if (!DB_ENABLED) return null;
+  const db = getDb();
+  const [row] = await db`
+    SELECT user_id, calendar_id, calendar_mode
+      FROM user_microsoft_accounts
+     WHERE subscription_id = ${subscriptionId}
+     LIMIT 1
+  `;
+  if (!row) return null;
+  return {
+    userId: String(row.user_id),
+    calendarId: row.calendar_id ? String(row.calendar_id) : null,
+    calendarMode: row.calendar_mode === "bau-os" ? "bau-os" : "default",
+  };
+}
+
+/** Speichert eine neue oder erneuerte Subscription. */
+export async function setSubscription(
+  userId: string,
+  patch: { subscriptionId: string; expiresAt: Date },
+): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`
+    UPDATE user_microsoft_accounts SET
+      subscription_id         = ${patch.subscriptionId},
+      subscription_expires_at = ${patch.expiresAt.toISOString()}
+    WHERE user_id = ${userId}
+  `;
+}
+
+/** Loescht die Subscription-Felder lokal (z.B. nach Disconnect oder
+ *  wenn MS sie revoked hat). */
+export async function clearSubscription(userId: string): Promise<void> {
+  if (!DB_ENABLED) return;
+  const db = getDb();
+  await db`
+    UPDATE user_microsoft_accounts SET
+      subscription_id         = NULL,
+      subscription_expires_at = NULL
+    WHERE user_id = ${userId}
+  `;
+}
+
+/** Liste aller Subscriptions die in den naechsten N Stunden ablaufen.
+ *  Renewal-Cron iteriert die. */
+export async function listExpiringSubscriptions(
+  withinHours: number,
+): Promise<Array<{ userId: string; subscriptionId: string }>> {
+  if (!DB_ENABLED) return [];
+  const db = getDb();
+  const cutoff = new Date(Date.now() + withinHours * 60 * 60 * 1000).toISOString();
+  const rows = await db`
+    SELECT user_id, subscription_id
+      FROM user_microsoft_accounts
+     WHERE subscription_id IS NOT NULL
+       AND subscription_expires_at < ${cutoff}
+       AND sync_enabled = true
+  `;
+  return rows.map((r) => ({
+    userId: String(r.user_id),
+    subscriptionId: String(r.subscription_id),
+  }));
 }

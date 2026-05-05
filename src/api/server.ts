@@ -92,6 +92,7 @@ import { settingsRoutes } from "./routes/settings.js";
 import { agentLogsRoutes } from "./routes/agent-logs.js";
 import { adminUsersRoutes } from "./routes/admin-users.js";
 import { authMicrosoftRoutes } from "./routes/auth-microsoft.js";
+import { webhooksMicrosoftRoutes } from "./routes/webhooks-microsoft.js";
 // Old TOTP-Routes (auth2faRoutes): durch Email-2FA in Migration 020
 // abgeloest. Endpoints werden nicht mehr exposed, damit nicht parallel
 // zwei 2FA-Mechanismen laufen koennen. Datei bleibt im Code als Recovery-
@@ -699,6 +700,12 @@ app.post("/api/setup/admin", async (c) => {
 // reguläre Auth-Token. Die anderen 4 Routes (status, connect, disconnect,
 // settings) setzen ihre eigene authMiddleware inline — siehe auth-microsoft.ts.
 app.route("/api", authMicrosoftRoutes);
+
+// ── Microsoft-Webhook-Receiver VOR der globalen authMiddleware ──────────────
+// Microsoft Graph schickt Notifications anonym (ohne Auth-Header). Die
+// Sicherheit kommt aus dem clientState-HMAC, nicht aus JWT — siehe
+// routes/webhooks-microsoft.ts. Endpoint: POST /api/webhooks/microsoft
+app.route("/api", webhooksMicrosoftRoutes);
 
 // ── Auth-Middleware für alle /api/* Routes ────────────────────────────────────
 app.use("/api/*", authMiddleware);

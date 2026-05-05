@@ -101,6 +101,13 @@ authMicrosoftRoutes.get("/auth/microsoft/status", authMiddleware, async (c) => {
       lastSyncAt: account.lastSyncAt,
       lastSyncError: account.lastSyncError,
       accessTokenValid: account.accessTokenValid,
+      // Phase-4 Webhook-Status — UI zeigt "Instant-Sync aktiv" wenn
+      // beides stimmt (Subscription existiert + laeuft noch).
+      webhookActive:
+        !!account.subscriptionId &&
+        !!account.subscriptionExpiresAt &&
+        new Date(account.subscriptionExpiresAt).getTime() > Date.now(),
+      subscriptionExpiresAt: account.subscriptionExpiresAt,
     },
   });
 });
@@ -211,6 +218,17 @@ authMicrosoftRoutes.delete("/auth/microsoft/disconnect", authMiddleware, async (
   const account = await getMsAccount(userId);
   if (!account) return c.json({ ok: true, message: "Kein verbundenes Konto" });
 
+  // Webhook-Subscription bei MS aufraeumen — falls eine existiert. Best-
+  // effort: wenn das fehlschlaegt loggen wir und loeschen trotzdem das
+  // lokale Konto (Disconnect ist User-Wille, soll nicht an Token-Fehlern
+  // scheitern).
+  try {
+    const { deleteSubscription } = await import("../../sync/microsoft-subscriptions.js");
+    await deleteSubscription(userId);
+  } catch (err) {
+    logError("[MS] deleteSubscription bei Disconnect fehlgeschlagen", err);
+  }
+
   const ok = await deleteMsAccount(userId);
   if (!ok) return c.json({ error: "Trennen fehlgeschlagen" }, 500);
 
@@ -242,8 +260,41 @@ authMicrosoftRoutes.patch("/auth/microsoft/settings", authMiddleware, async (c) 
     return c.json({ error: "calendarMode muss 'default' oder 'bau-os' sein" }, 400);
   }
 
+  const previous = await getMsAccount(userId);
   const updated = await updateMsAccountSettings(userId, body);
   if (!updated) return c.json({ error: "Kein verbundenes Konto" }, 404);
+
+  // Webhook-Lifecycle an den syncEnabled-Toggle koppeln:
+  //  - syncEnabled FALSE → TRUE: Subscription anlegen (Instant-Sync aktiv)
+  //  - syncEnabled TRUE  → FALSE: Subscription bei MS aufraeumen
+  //  - calendarMode hat sich geaendert: alte Sub loeschen + neue auf
+  //    den richtigen Resource-Pfad anlegen (sonst kommen Notifications
+  //    fuer den falschen Kalender)
+  try {
+    const wasOn = previous?.syncEnabled === true;
+    const isOn = updated.syncEnabled === true;
+    const calendarChanged = previous?.calendarMode !== updated.calendarMode;
+    if (isOn && !wasOn) {
+      const { createSubscription } = await import("../../sync/microsoft-subscriptions.js");
+      void createSubscription(userId).catch((err) =>
+        logError("[MS] createSubscription nach Toggle fehlgeschlagen", err),
+      );
+    } else if (!isOn && wasOn) {
+      const { deleteSubscription } = await import("../../sync/microsoft-subscriptions.js");
+      void deleteSubscription(userId).catch((err) =>
+        logError("[MS] deleteSubscription nach Toggle fehlgeschlagen", err),
+      );
+    } else if (isOn && calendarChanged) {
+      const { createSubscription } = await import("../../sync/microsoft-subscriptions.js");
+      // createSubscription macht implizit einen Cleanup vor dem Anlegen.
+      void createSubscription(userId).catch((err) =>
+        logError("[MS] createSubscription nach Calendar-Wechsel fehlgeschlagen", err),
+      );
+    }
+  } catch (err) {
+    logError("[MS] Webhook-Lifecycle-Hook im Settings-Patch", err);
+  }
+
   return c.json({ ok: true, account: updated });
 });
 

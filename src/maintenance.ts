@@ -58,7 +58,8 @@ async function runMaintenance(): Promise<void> {
 
 /** MS-Graph-Sync alle 5 Minuten fuer alle User mit aktivem Sync.
  *  Push-pending zuerst (lokale Aenderungen Vorrang), dann Pull aus Outlook.
- *  Webhook-basierte Variante kommt in Phase 4 — Polling ist Fallback. */
+ *  Webhook-basierte Push-Notifications (Phase 4) ergaenzen das — Polling
+ *  bleibt als Sicherheitsnetz wenn ein Webhook mal verloren geht. */
 async function runMicrosoftSync(): Promise<void> {
   if (!MS_GRAPH_ENABLED) return;
   try {
@@ -66,6 +67,19 @@ async function runMicrosoftSync(): Promise<void> {
     await runSyncForAllUsers();
   } catch (err) {
     logError("[MS-Sync] Cron-Lauf fehlgeschlagen", err);
+  }
+}
+
+/** Erneuert MS-Graph-Subscriptions die bald ablaufen. Microsoft erlaubt
+ *  fuer Calendar-Events maximal ~70h Lifetime — wir checken stuendlich
+ *  und erneuern alles was in <12h ablaufen wuerde. */
+async function runMicrosoftSubscriptionRenewal(): Promise<void> {
+  if (!MS_GRAPH_ENABLED) return;
+  try {
+    const { renewExpiringSubscriptions } = await import("./sync/microsoft-subscriptions.js");
+    await renewExpiringSubscriptions();
+  } catch (err) {
+    logError("[MS-Webhook] Renewal-Cron fehlgeschlagen", err);
   }
 }
 
@@ -102,6 +116,22 @@ export function startMaintenanceCron(): void {
     setTimeout(() => {
       void runMicrosoftSync();
     }, 30_000);
+
+    // Subscription-Renewal: stuendlich. MS erlaubt maximal ~70h Lifetime,
+    // wir erneuern alles was in <12h ablaeuft → reichlich Puffer.
+    cron.schedule(
+      "13 * * * *",
+      () => {
+        void runMicrosoftSubscriptionRenewal();
+      },
+      { timezone: TIMEZONE },
+    );
+    logInfo("[MS-Webhook] Renewal-Cron registriert: stuendlich :13 (Subscriptions verlaengern)");
+    // Nach 60s einmal direkt laufen — damit nach Boot sofort gecheckt wird
+    // ob Subscriptions schon kurz vor Ablauf stehen (z.B. nach langem Outage).
+    setTimeout(() => {
+      void runMicrosoftSubscriptionRenewal();
+    }, 60_000);
   }
 
   // Beim ersten Boot einmal direkt ausfuehren — wenn die Installation
