@@ -692,6 +692,14 @@ app.post("/api/setup/admin", async (c) => {
   return c.json({ token, username: admin.username, role: admin.role, id: admin.id }, 201);
 });
 
+// ── Microsoft-OAuth-Routes VOR der globalen authMiddleware ──────────────────
+// Der Callback (/api/auth/microsoft/callback) muss public sein — Microsoft
+// schickt einen anonymen Browser dorthin (ohne JWT-Header). Die Schutz-
+// mechanik des Callbacks ist der state-JWT (audience='ms-oauth'), nicht das
+// reguläre Auth-Token. Die anderen 4 Routes (status, connect, disconnect,
+// settings) setzen ihre eigene authMiddleware inline — siehe auth-microsoft.ts.
+app.route("/api", authMicrosoftRoutes);
+
 // ── Auth-Middleware für alle /api/* Routes ────────────────────────────────────
 app.use("/api/*", authMiddleware);
 
@@ -747,7 +755,8 @@ app.route("/api", eventsRoutes);
 app.route("/api", chatRoutes);
 app.route("/api", settingsRoutes);
 app.route("/api", agentLogsRoutes);
-app.route("/api", authMicrosoftRoutes);
+// authMicrosoftRoutes wird oben VOR der globalen authMiddleware registriert,
+// damit /callback public bleibt — siehe Kommentar bei Zeile ~696.
 // app.route("/api", auth2faRoutes); — siehe Kommentar oben
 
 // ── Statische Dateien (Vue SPA in Production) ────────────────────────────────
