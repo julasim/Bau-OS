@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { clearToken } from "../api";
+import { api, clearToken } from "../api";
 import { useTheme } from "../composables/useTheme";
 import { useSidebar } from "../composables/useSidebar";
 import { useCurrentUser } from "../composables/useCurrentUser";
@@ -12,6 +12,24 @@ const route = useRoute();
 const { isDark, toggle } = useTheme();
 const { open, close } = useSidebar();
 const { displayName, initials, role, isAdmin } = useCurrentUser();
+
+// ── Branding-Logo + Firmenname (Phase 6g) ───────────────────────────────────
+// Wenn der User in Settings → Branding ein Logo hochgeladen hat, zeigen wir
+// das in der Sidebar oben statt dem "B"-Quadrat. Cache-Buster sorgt fuer
+// Refresh nach Re-Upload.
+interface BrandingLite {
+  companyName: string | null;
+  logoUrl: string | null;
+}
+const branding = ref<BrandingLite>({ companyName: null, logoUrl: null });
+async function loadSidebarBranding() {
+  try {
+    branding.value = await api.get<BrandingLite>("/branding");
+  } catch {
+    branding.value = { companyName: null, logoUrl: null };
+  }
+}
+onMounted(() => void loadSidebarBranding());
 
 interface NavItem {
   to: string;
@@ -101,9 +119,18 @@ function onNavClick() {
     :class="['sidebar-root flex flex-col flex-shrink-0', open ? 'sidebar-open' : 'sidebar-closed']"
     style="width: 240px; background: var(--color-bg-subtle); border-right: 1px solid var(--color-border)"
   >
-    <!-- Logo -->
+    <!-- Logo / Branding (Phase 6g) — falls Logo gesetzt: anzeigen, sonst
+         Fallback auf das schwarze "B"-Quadrat. Firmenname ueberschreibt
+         "Bau-OS" wenn vorhanden. -->
     <div class="flex items-center gap-2.5" style="padding: 16px 20px; border-bottom: 1px solid var(--color-border)">
+      <img
+        v-if="branding.logoUrl"
+        :src="branding.logoUrl"
+        :alt="branding.companyName ?? 'Logo'"
+        style="width: 28px; height: 28px; object-fit: contain; border-radius: 6px; background: #fff; padding: 2px"
+      />
       <div
+        v-else
         class="flex items-center justify-center font-semibold"
         style="
           width: 28px;
@@ -117,8 +144,14 @@ function onNavClick() {
       >
         B
       </div>
-      <div class="leading-tight">
-        <div style="color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.2">Bau-OS</div>
+      <div class="leading-tight min-w-0">
+        <div
+          class="truncate"
+          style="color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.2"
+          :title="branding.companyName ?? 'Bau-OS'"
+        >
+          {{ branding.companyName ?? "Bau-OS" }}
+        </div>
         <div class="eyebrow" style="margin-top: 2px">Workspace</div>
       </div>
     </div>

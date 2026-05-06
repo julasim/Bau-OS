@@ -1008,13 +1008,14 @@ async function saveBranding() {
   }
 }
 
-async function uploadLogo(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
+async function uploadLogoFile(file: File) {
   if (!file) return;
+  if (!/^image\/(png|jpeg|svg\+xml|webp)$/i.test(file.type)) {
+    flash("error", "Nur PNG, JPEG, SVG oder WebP erlaubt");
+    return;
+  }
   if (file.size > 2 * 1024 * 1024) {
     flash("error", "Logo zu groß (max 2 MB)");
-    input.value = "";
     return;
   }
   brandingBusy.value = true;
@@ -1037,8 +1038,32 @@ async function uploadLogo(event: Event) {
     flash("error", e instanceof Error ? e.message : "Logo-Upload fehlgeschlagen");
   } finally {
     brandingBusy.value = false;
-    input.value = "";
   }
+}
+
+async function uploadLogo(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  await uploadLogoFile(file);
+  input.value = "";
+}
+
+// Drag & Drop fuer Logo-Upload (Phase 6g)
+const logoDragActive = ref(false);
+function onLogoDragOver(e: DragEvent) {
+  e.preventDefault();
+  logoDragActive.value = true;
+}
+function onLogoDragLeave(e: DragEvent) {
+  e.preventDefault();
+  logoDragActive.value = false;
+}
+async function onLogoDrop(e: DragEvent) {
+  e.preventDefault();
+  logoDragActive.value = false;
+  const file = e.dataTransfer?.files?.[0];
+  if (file) await uploadLogoFile(file);
 }
 
 async function removeLogo() {
@@ -1907,26 +1932,54 @@ onMounted(() => {
               <div class="text-sm" style="font-weight: 600; margin-bottom: 12px">Logo</div>
               <div class="flex items-center" style="gap: 16px; flex-wrap: wrap">
                 <div
-                  style="
-                    width: 160px;
-                    height: 100px;
-                    border: 1px dashed var(--color-border);
-                    border-radius: 8px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background: var(--color-bg-subtle);
-                    flex-shrink: 0;
-                    overflow: hidden;
-                  "
+                  @dragover.prevent="onLogoDragOver"
+                  @dragleave.prevent="onLogoDragLeave"
+                  @drop.prevent="onLogoDrop"
+                  :style="{
+                    width: '160px',
+                    height: '100px',
+                    border: logoDragActive ? '2px solid var(--color-primary)' : '1px dashed var(--color-border)',
+                    borderRadius: '8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: logoDragActive ? 'var(--color-bg-muted)' : 'var(--color-bg-subtle)',
+                    flexShrink: 0,
+                    overflow: 'hidden',
+                    transition: 'all 120ms ease',
+                    position: 'relative',
+                  }"
                 >
                   <img
                     v-if="branding?.logoUrl"
                     :src="`${branding.logoUrl}?bust=${brandingLogoBust}`"
                     :alt="branding.companyName ?? 'Logo'"
-                    style="max-width: 100%; max-height: 100%; object-fit: contain"
+                    style="max-width: 100%; max-height: 100%; object-fit: contain; pointer-events: none"
                   />
-                  <span v-else class="text-xs" style="color: var(--color-text-tertiary)"> Kein Logo </span>
+                  <span
+                    v-else
+                    class="text-xs"
+                    style="color: var(--color-text-tertiary); pointer-events: none; text-align: center; padding: 8px"
+                  >
+                    Logo hier hinziehen<br />oder unten auswählen
+                  </span>
+                  <div
+                    v-if="logoDragActive"
+                    class="text-xs"
+                    style="
+                      position: absolute;
+                      inset: 0;
+                      display: flex;
+                      align-items: center;
+                      justify-content: center;
+                      background: rgba(0, 0, 0, 0.05);
+                      color: var(--color-text);
+                      font-weight: 500;
+                      pointer-events: none;
+                    "
+                  >
+                    Loslassen…
+                  </div>
                 </div>
                 <div style="flex: 1; min-width: 200px">
                   <input
