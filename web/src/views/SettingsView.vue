@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from "vue";
+import { ref, onMounted, computed, watch } from "vue";
 import { api } from "../api";
 
 interface SettingsState {
@@ -420,6 +420,56 @@ async function toggleFast() {
   }
 }
 
+// ── Sidebar-Navigation (Phase 6a) ───────────────────────────────────────────
+// Settings ist als Apple-Settings-style Sidebar aufgebaut: links Sektionen-
+// Liste, rechts der Inhalt der aktiven Sektion. Der gewaehlte Tab bleibt
+// in localStorage, damit Refresh nicht zurueck auf "profil" springt.
+
+type SettingsSection =
+  | "profil"
+  | "email"
+  | "microsoft"
+  | "modelle"
+  | "praeferenzen"
+  | "branding"
+  | "vorlagen"
+  | "word-export"
+  | "projekt-module"
+  | "system";
+
+const SETTINGS_NAV: { id: SettingsSection; label: string; icon: string; group: string }[] = [
+  { id: "profil", label: "Profil & Sicherheit", icon: "user", group: "Konto" },
+  { id: "email", label: "Email & 2FA", icon: "mail", group: "Konto" },
+  { id: "microsoft", label: "Microsoft Outlook", icon: "calendar", group: "Konto" },
+  { id: "modelle", label: "KI-Modelle", icon: "cpu", group: "System" },
+  { id: "praeferenzen", label: "Präferenzen", icon: "sliders", group: "System" },
+  { id: "branding", label: "Branding", icon: "image", group: "Vorlagen" },
+  { id: "vorlagen", label: "Vorlagen", icon: "file-text", group: "Vorlagen" },
+  { id: "word-export", label: "Word-Export", icon: "download", group: "Vorlagen" },
+  { id: "projekt-module", label: "Projekt-Module", icon: "layers", group: "Vorlagen" },
+  { id: "system", label: "System-Info", icon: "info", group: "System" },
+];
+
+const SECTION_KEY = "bau-os-settings-section";
+const activeSection = ref<SettingsSection>(
+  ((): SettingsSection => {
+    const stored = localStorage.getItem(SECTION_KEY) as SettingsSection | null;
+    if (stored && SETTINGS_NAV.some((n) => n.id === stored)) return stored;
+    return "profil";
+  })(),
+);
+
+watch(activeSection, (v) => localStorage.setItem(SECTION_KEY, v));
+
+const settingsNavGroups = computed(() => {
+  const map = new Map<string, typeof SETTINGS_NAV>();
+  for (const item of SETTINGS_NAV) {
+    if (!map.has(item.group)) map.set(item.group, []);
+    map.get(item.group)!.push(item);
+  }
+  return Array.from(map.entries()).map(([group, items]) => ({ group, items }));
+});
+
 onMounted(() => {
   void loadAll();
   void loadMsStatus();
@@ -427,46 +477,70 @@ onMounted(() => {
 </script>
 
 <template>
-  <div
-    style="
-      max-width: 780px;
-      margin: 0 auto;
-      padding: 28px 32px 48px;
-      color: var(--color-text);
-    "
-  >
-    <div style="margin-bottom: 20px">
-      <div class="eyebrow" style="margin-bottom: 6px">System</div>
-      <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">
-        Einstellungen
-      </h1>
-      <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
-        Persönliche Präferenzen, Profil und Laufzeit-Optionen. System-Variablen (DATABASE_URL,
-        BOT_TOKEN etc.) werden in der <code class="font-mono">.env</code>-Datei verwaltet.
-      </p>
-    </div>
+  <div class="settings-layout">
+    <!-- Sidebar-Navigation (Phase 6a) — links, scrollt unabhaengig vom Content -->
+    <aside class="settings-sidebar">
+      <div style="padding: 24px 20px 12px">
+        <div class="eyebrow" style="margin-bottom: 6px">System</div>
+        <h1
+          style="
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+            letter-spacing: -0.01em;
+          "
+        >
+          Einstellungen
+        </h1>
+      </div>
+      <nav class="settings-nav">
+        <div
+          v-for="grp in settingsNavGroups"
+          :key="grp.group"
+          class="settings-nav-group"
+        >
+          <div class="settings-nav-group-title">{{ grp.group }}</div>
+          <button
+            v-for="item in grp.items"
+            :key="item.id"
+            type="button"
+            :class="[
+              'settings-nav-item',
+              activeSection === item.id ? 'settings-nav-item-active' : '',
+            ]"
+            @click="activeSection = item.id"
+          >
+            <span class="settings-nav-dot" aria-hidden="true"></span>
+            <span>{{ item.label }}</span>
+          </button>
+        </div>
+      </nav>
+    </aside>
 
-    <!-- Flash-Meldung -->
-    <div
-      v-if="message"
-      :class="[
-        'settings-flash mb-4 px-3 py-2 text-sm rounded',
-        message.type === 'success' ? 'settings-flash-ok' : 'settings-flash-err',
-      ]"
-    >
-      {{ message.text }}
-    </div>
+    <!-- Content-Pane: aktive Sektion -->
+    <div class="settings-content">
+      <!-- Flash-Meldung — global, sektion-uebergreifend -->
+      <div
+        v-if="message"
+        :class="[
+          'settings-flash mb-4 px-3 py-2 text-sm rounded',
+          message.type === 'success' ? 'settings-flash-ok' : 'settings-flash-err',
+        ]"
+      >
+        {{ message.text }}
+      </div>
 
-    <div
-      v-if="loading"
-      class="text-sm py-8"
-      style="color: var(--color-text-tertiary)"
-    >
-      Laedt...
-    </div>
+      <div
+        v-if="loading"
+        class="text-sm py-8"
+        style="color: var(--color-text-tertiary)"
+      >
+        Laedt...
+      </div>
 
-    <div v-else-if="data" class="space-y-8">
-      <!-- ── Profil ─────────────────────────────────────────────────── -->
+      <div v-else-if="data" class="settings-section-wrap">
+      <!-- ── Profil & Sicherheit ────────────────────────────────────── -->
+      <template v-if="activeSection === 'profil'">
       <section>
         <h3 class="settings-h3 mb-3">Profil</h3>
         <div class="settings-card settings-divide">
@@ -537,8 +611,10 @@ onMounted(() => {
           </div>
         </div>
       </section>
+      </template>
 
       <!-- ── Email (2FA via Email-OTP) ────────────────────────────── -->
+      <template v-if="activeSection === 'email'">
       <section>
         <h3 class="settings-h3 mb-3">
           Email (Zwei-Faktor-Login)
@@ -648,8 +724,10 @@ onMounted(() => {
           </div>
         </div>
       </section>
+      </template>
 
       <!-- ── Microsoft-Konto (Outlook-Calendar) ─────────────────────── -->
+      <template v-if="activeSection === 'microsoft'">
       <section>
         <h3 class="settings-h3 mb-3">
           Microsoft-Konto
@@ -880,8 +958,10 @@ onMounted(() => {
           </div>
         </div>
       </section>
+      </template>
 
       <!-- ── LLM / Laufzeit ─────────────────────────────────────────── -->
+      <template v-if="activeSection === 'modelle'">
       <section>
         <h3 class="settings-h3 mb-3">LLM</h3>
         <div class="settings-card settings-divide">
@@ -947,8 +1027,10 @@ onMounted(() => {
           </div>
         </div>
       </section>
+      </template>
 
       <!-- ── Praeferenzen ───────────────────────────────────────────── -->
+      <template v-if="activeSection === 'praeferenzen'">
       <section>
         <h3 class="settings-h3 mb-3">Praeferenzen</h3>
         <div class="settings-card settings-divide">
@@ -997,8 +1079,78 @@ onMounted(() => {
           </button>
         </div>
       </section>
+      </template>
+
+      <!-- ── Branding (Phase 6b) ────────────────────────────────────── -->
+      <template v-if="activeSection === 'branding'">
+        <section>
+          <h3 class="settings-h3 mb-3">Branding</h3>
+          <div class="settings-card p-6">
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Logo, Firmenname und Kontaktdaten — werden in PDF/Word-Exporten und
+              Visitenkarten-Drucken verwendet.
+            </p>
+            <p class="text-xs" style="color: var(--color-text-tertiary)">
+              ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
+            </p>
+          </div>
+        </section>
+      </template>
+
+      <!-- ── Vorlagen (Phase 6c) ────────────────────────────────────── -->
+      <template v-if="activeSection === 'vorlagen'">
+        <section>
+          <h3 class="settings-h3 mb-3">Vorlagen</h3>
+          <div class="settings-card p-6">
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Notiz- und Meeting-Vorlagen mit Platzhaltern wie
+              <code class="font-mono">{{ "{{Projekt}}" }}</code> oder
+              <code class="font-mono">{{ "{{Datum}}" }}</code>. Beim Anlegen einer
+              neuen Notiz wird die ausgewählte Vorlage automatisch eingefügt.
+            </p>
+            <p class="text-xs" style="color: var(--color-text-tertiary)">
+              ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
+            </p>
+          </div>
+        </section>
+      </template>
+
+      <!-- ── Word-Export (Phase 6d) ─────────────────────────────────── -->
+      <template v-if="activeSection === 'word-export'">
+        <section>
+          <h3 class="settings-h3 mb-3">Word-Export</h3>
+          <div class="settings-card p-6">
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Lade Word-Dokumente (.docx) als Layout-Template hoch. Beim Export
+              eines Meetings, Bautagebuch-Eintrags oder Stundenzettels werden die
+              Daten in dein Layout eingefügt.
+            </p>
+            <p class="text-xs" style="color: var(--color-text-tertiary)">
+              ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
+            </p>
+          </div>
+        </section>
+      </template>
+
+      <!-- ── Projekt-Module (Phase 6e) ──────────────────────────────── -->
+      <template v-if="activeSection === 'projekt-module'">
+        <section>
+          <h3 class="settings-h3 mb-3">Projekt-Module</h3>
+          <div class="settings-card p-6">
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Welche Bereiche sollen in Projekten verfügbar sein? Hier
+              aktivierst/deaktivierst du Notizen, Aufgaben, Termine,
+              Bautagebuch, Meetings, Stundenerfassung etc.
+            </p>
+            <p class="text-xs" style="color: var(--color-text-tertiary)">
+              ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
+            </p>
+          </div>
+        </section>
+      </template>
 
       <!-- ── System-Info ───────────────────────────────────────────── -->
+      <template v-if="activeSection === 'system'">
       <section>
         <h3 class="settings-h3 mb-3">System</h3>
         <div class="settings-card settings-divide text-sm">
@@ -1032,6 +1184,8 @@ onMounted(() => {
           </div>
         </div>
       </section>
+      </template>
+    </div>
     </div>
   </div>
 </template>
@@ -1187,5 +1341,110 @@ onMounted(() => {
   display: block;
   width: 100%;
   height: 100%;
+}
+
+/* ── Sidebar-Layout (Phase 6a) ─────────────────────────────────────── */
+.settings-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100%;
+  color: var(--color-text);
+}
+.settings-sidebar {
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg-subtle);
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+}
+.settings-content {
+  padding: 28px 32px 48px;
+  max-width: 720px;
+}
+.settings-section-wrap > * + * {
+  margin-top: 32px;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px 24px;
+}
+.settings-nav-group {
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+}
+.settings-nav-group-title {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-tertiary);
+  font-weight: 600;
+  padding: 0 8px 6px;
+}
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+.settings-nav-item:hover {
+  background: var(--color-border-subtle);
+  color: var(--color-text);
+}
+.settings-nav-item-active {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-weight: 500;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.settings-nav-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-text-faint);
+  flex-shrink: 0;
+}
+.settings-nav-item-active .settings-nav-dot {
+  background: var(--color-primary, #111827);
+}
+
+/* Mobile: Sidebar wird zur Top-Bar (horizontale Tabs). */
+@media (max-width: 767.98px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+  .settings-sidebar {
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow-x: auto;
+    padding: 0 12px 12px;
+  }
+  .settings-nav-group {
+    margin-top: 0;
+  }
+  .settings-nav-group-title {
+    display: none;
+  }
+  .settings-content {
+    padding: 20px 16px 40px;
+  }
 }
 </style>
