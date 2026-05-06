@@ -93,6 +93,7 @@ import { agentLogsRoutes } from "./routes/agent-logs.js";
 import { adminUsersRoutes } from "./routes/admin-users.js";
 import { authMicrosoftRoutes } from "./routes/auth-microsoft.js";
 import { webhooksMicrosoftRoutes } from "./routes/webhooks-microsoft.js";
+import { brandingRoutes, publicBrandingRoutes } from "./routes/branding.js";
 // Old TOTP-Routes (auth2faRoutes): durch Email-2FA in Migration 020
 // abgeloest. Endpoints werden nicht mehr exposed, damit nicht parallel
 // zwei 2FA-Mechanismen laufen koennen. Datei bleibt im Code als Recovery-
@@ -707,6 +708,12 @@ app.route("/api", authMicrosoftRoutes);
 // routes/webhooks-microsoft.ts. Endpoint: POST /api/webhooks/microsoft
 app.route("/api", webhooksMicrosoftRoutes);
 
+// ── Branding-Logo PUBLIC ────────────────────────────────────────────────────
+// GET /api/branding/logo liefert das Firmen-Logo als image/* aus. Public
+// damit <img>-Tags ohne Auth-Header laden (Login-Page, PDF-Generator,
+// externe Vorschau). Inhalt ist nicht sensibel.
+app.route("/api", publicBrandingRoutes);
+
 // ── Auth-Middleware für alle /api/* Routes ────────────────────────────────────
 app.use("/api/*", authMiddleware);
 
@@ -762,6 +769,7 @@ app.route("/api", eventsRoutes);
 app.route("/api", chatRoutes);
 app.route("/api", settingsRoutes);
 app.route("/api", agentLogsRoutes);
+app.route("/api", brandingRoutes);
 // authMicrosoftRoutes wird oben VOR der globalen authMiddleware registriert,
 // damit /callback public bleibt — siehe Kommentar bei Zeile ~696.
 // app.route("/api", auth2faRoutes); — siehe Kommentar oben

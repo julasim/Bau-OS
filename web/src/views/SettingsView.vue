@@ -420,6 +420,138 @@ async function toggleFast() {
   }
 }
 
+// ── Branding (Phase 6b) ─────────────────────────────────────────────────────
+// Firmen-Logo + Stammdaten (wird in Word-/PDF-Exports verwendet).
+//
+// Logo-Upload geht direkt als multipart/form-data, der Rest patcht via
+// JSON. Logo-Vorschau zeigt /api/branding/logo?bust=<ts> damit Browser-
+// Cache nach einem Re-Upload nicht das alte Bild zeigt.
+
+interface BrandingState {
+  companyName: string | null;
+  logoUrl: string | null;
+  logoMimeType: string | null;
+  logoFilename: string | null;
+  primaryColor: string | null;
+  address: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  updatedAt: string;
+}
+
+const branding = ref<BrandingState | null>(null);
+const brandingDraft = ref({
+  companyName: "",
+  primaryColor: "",
+  address: "",
+  phone: "",
+  email: "",
+  website: "",
+});
+const brandingBusy = ref(false);
+const brandingLogoBust = ref(0); // Cache-Buster fuer <img>-src nach Upload
+
+async function loadBranding() {
+  try {
+    const data = await api.get<BrandingState | null>("/branding");
+    branding.value = data;
+    if (data) {
+      brandingDraft.value = {
+        companyName: data.companyName ?? "",
+        primaryColor: data.primaryColor ?? "",
+        address: data.address ?? "",
+        phone: data.phone ?? "",
+        email: data.email ?? "",
+        website: data.website ?? "",
+      };
+    }
+  } catch {
+    branding.value = null;
+  }
+}
+
+const brandingDirty = computed(() => {
+  if (!branding.value) return false;
+  const d = brandingDraft.value;
+  const b = branding.value;
+  return (
+    d.companyName !== (b.companyName ?? "") ||
+    d.primaryColor !== (b.primaryColor ?? "") ||
+    d.address !== (b.address ?? "") ||
+    d.phone !== (b.phone ?? "") ||
+    d.email !== (b.email ?? "") ||
+    d.website !== (b.website ?? "")
+  );
+});
+
+async function saveBranding() {
+  brandingBusy.value = true;
+  try {
+    const body = {
+      companyName: brandingDraft.value.companyName.trim() || null,
+      primaryColor: brandingDraft.value.primaryColor.trim() || null,
+      address: brandingDraft.value.address.trim() || null,
+      phone: brandingDraft.value.phone.trim() || null,
+      email: brandingDraft.value.email.trim() || null,
+      website: brandingDraft.value.website.trim() || null,
+    };
+    branding.value = await api.patch<BrandingState>("/branding", body);
+    flash("success", "Branding gespeichert");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  } finally {
+    brandingBusy.value = false;
+  }
+}
+
+async function uploadLogo(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) {
+    flash("error", "Logo zu groß (max 2 MB)");
+    input.value = "";
+    return;
+  }
+  brandingBusy.value = true;
+  try {
+    const fd = new FormData();
+    fd.append("logo", file);
+    const res = await fetch("/api/branding/logo", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Upload fehlgeschlagen" }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    branding.value = (await res.json()) as BrandingState;
+    brandingLogoBust.value = Date.now();
+    flash("success", "Logo hochgeladen");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Logo-Upload fehlgeschlagen");
+  } finally {
+    brandingBusy.value = false;
+    input.value = "";
+  }
+}
+
+async function removeLogo() {
+  if (!confirm("Logo wirklich entfernen?")) return;
+  brandingBusy.value = true;
+  try {
+    branding.value = await api.delete<BrandingState>("/branding/logo");
+    brandingLogoBust.value = Date.now();
+    flash("success", "Logo entfernt");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Entfernen fehlgeschlagen");
+  } finally {
+    brandingBusy.value = false;
+  }
+}
+
 // ── Sidebar-Navigation (Phase 6a) ───────────────────────────────────────────
 // Settings ist als Apple-Settings-style Sidebar aufgebaut: links Sektionen-
 // Liste, rechts der Inhalt der aktiven Sektion. Der gewaehlte Tab bleibt
@@ -473,6 +605,7 @@ const settingsNavGroups = computed(() => {
 onMounted(() => {
   void loadAll();
   void loadMsStatus();
+  void loadBranding();
 });
 </script>
 
@@ -1085,14 +1218,160 @@ onMounted(() => {
       <template v-if="activeSection === 'branding'">
         <section>
           <h3 class="settings-h3 mb-3">Branding</h3>
-          <div class="settings-card p-6">
-            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
-              Logo, Firmenname und Kontaktdaten — werden in PDF/Word-Exporten und
-              Visitenkarten-Drucken verwendet.
-            </p>
-            <p class="text-xs" style="color: var(--color-text-tertiary)">
-              ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
-            </p>
+          <p
+            class="text-sm"
+            style="color: var(--color-text-muted); margin: 0 0 16px"
+          >
+            Logo und Firmenstammdaten. Werden in Word-/PDF-Exports,
+            Visitenkarten-Drucken und Email-Templates verwendet.
+          </p>
+
+          <!-- Logo-Upload + Vorschau -->
+          <div class="settings-card p-5" style="margin-bottom: 16px">
+            <div class="text-sm" style="font-weight: 600; margin-bottom: 12px">
+              Logo
+            </div>
+            <div class="flex items-center" style="gap: 16px; flex-wrap: wrap">
+              <div
+                style="
+                  width: 160px;
+                  height: 100px;
+                  border: 1px dashed var(--color-border);
+                  border-radius: 8px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  background: var(--color-bg-subtle);
+                  flex-shrink: 0;
+                  overflow: hidden;
+                "
+              >
+                <img
+                  v-if="branding?.logoUrl"
+                  :src="`${branding.logoUrl}?bust=${brandingLogoBust}`"
+                  :alt="branding.companyName ?? 'Logo'"
+                  style="max-width: 100%; max-height: 100%; object-fit: contain"
+                />
+                <span
+                  v-else
+                  class="text-xs"
+                  style="color: var(--color-text-tertiary)"
+                >
+                  Kein Logo
+                </span>
+              </div>
+              <div style="flex: 1; min-width: 200px">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                  :disabled="brandingBusy"
+                  @change="uploadLogo"
+                  style="font-size: 13px"
+                />
+                <div
+                  class="text-xs"
+                  style="color: var(--color-text-tertiary); margin-top: 6px"
+                >
+                  PNG, JPEG, SVG oder WebP. Max 2 MB.
+                  <span v-if="branding?.logoFilename"
+                    >Aktuell: {{ branding.logoFilename }}</span
+                  >
+                </div>
+                <button
+                  v-if="branding?.logoUrl"
+                  @click="removeLogo"
+                  :disabled="brandingBusy"
+                  class="text-xs"
+                  style="
+                    margin-top: 10px;
+                    padding: 4px 10px;
+                    border-radius: 4px;
+                    background: transparent;
+                    border: 1px solid #dc2626;
+                    color: #dc2626;
+                    cursor: pointer;
+                  "
+                >
+                  Logo entfernen
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Stammdaten-Formular -->
+          <div class="settings-card settings-divide">
+            <div class="settings-row flex items-center gap-3 px-4 py-3">
+              <label class="text-sm settings-label w-40 flex-shrink-0">Firmenname</label>
+              <input
+                v-model="brandingDraft.companyName"
+                placeholder="Sima Architecture e.U."
+                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+              />
+            </div>
+            <div class="settings-row flex items-start gap-3 px-4 py-3">
+              <label class="text-sm settings-label w-40 flex-shrink-0">Adresse</label>
+              <textarea
+                v-model="brandingDraft.address"
+                rows="2"
+                placeholder="Straße, PLZ Ort, Land"
+                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                style="resize: vertical; font-family: inherit"
+              ></textarea>
+            </div>
+            <div class="settings-row flex items-center gap-3 px-4 py-3">
+              <label class="text-sm settings-label w-40 flex-shrink-0">Telefon</label>
+              <input
+                v-model="brandingDraft.phone"
+                placeholder="+43 ..."
+                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+              />
+            </div>
+            <div class="settings-row flex items-center gap-3 px-4 py-3">
+              <label class="text-sm settings-label w-40 flex-shrink-0">Email</label>
+              <input
+                v-model="brandingDraft.email"
+                type="email"
+                placeholder="kontakt@firma.at"
+                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+              />
+            </div>
+            <div class="settings-row flex items-center gap-3 px-4 py-3">
+              <label class="text-sm settings-label w-40 flex-shrink-0">Website</label>
+              <input
+                v-model="brandingDraft.website"
+                placeholder="https://firma.at"
+                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+              />
+            </div>
+            <div class="settings-row flex items-center gap-3 px-4 py-3">
+              <label class="text-sm settings-label w-40 flex-shrink-0">Primärfarbe</label>
+              <input
+                v-model="brandingDraft.primaryColor"
+                placeholder="#111827"
+                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none font-mono"
+                style="max-width: 140px"
+              />
+              <span
+                v-if="brandingDraft.primaryColor"
+                :style="{
+                  width: '24px',
+                  height: '24px',
+                  borderRadius: '4px',
+                  background: brandingDraft.primaryColor,
+                  border: '1px solid var(--color-border)',
+                }"
+              ></span>
+            </div>
+            <div class="flex justify-end px-4 py-3" style="gap: 8px">
+              <button
+                @click="saveBranding"
+                :disabled="brandingBusy || !brandingDirty"
+                class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+                :style="{ opacity: brandingBusy || !brandingDirty ? 0.5 : 1 }"
+              >
+                {{ brandingBusy ? "..." : "Speichern" }}
+              </button>
+            </div>
           </div>
         </section>
       </template>
