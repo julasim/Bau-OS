@@ -102,7 +102,8 @@ publicBrandingRoutes.get("/branding/logo", async (c) => {
   if (logo.filename) {
     c.header("Content-Disposition", `inline; filename="${logo.filename.replace(/"/g, "")}"`);
   }
-  return c.body(
-    logo.buffer.buffer.slice(logo.buffer.byteOffset, logo.buffer.byteOffset + logo.buffer.byteLength) as ArrayBuffer,
-  );
+  // Buffer ist eine Subclass von Uint8Array — Hono auf @hono/node-server
+  // akzeptiert Uint8Array direkt. Der frueher verwendete .buffer.slice()-
+  // Workaround konnte mit SharedArrayBuffer-Resultaten kollidieren.
+  return c.body(new Uint8Array(logo.buffer));
 });

@@ -22,6 +22,36 @@ const viewMode = ref<"list" | "grid">("list");
 const sortBy = ref<"updatedAt" | "title" | "size">("updatedAt");
 const sortAsc = ref(false);
 
+// ── Vorlagen (Phase 6c) ────────────────────────────────────────────────────
+// User waehlt eine Vorlage → Backend rendert sie mit Live-Daten
+// (Datum, Branding, Projekt) → Body wird vorbefuellt.
+interface NoteTemplateSummary {
+  id: string;
+  kind: string;
+  name: string;
+  isDefault: boolean;
+}
+const noteTemplates = ref<NoteTemplateSummary[]>([]);
+const selectedTemplateId = ref<string>("");
+
+async function loadNoteTemplates() {
+  try {
+    noteTemplates.value = await api.get<NoteTemplateSummary[]>("/templates?kind=note");
+  } catch {
+    noteTemplates.value = [];
+  }
+}
+
+async function applyNoteTemplate() {
+  if (!selectedTemplateId.value) return;
+  try {
+    const res = await api.get<{ rendered: string }>(`/templates/${selectedTemplateId.value}/render`);
+    newContent.value = res.rendered;
+  } catch {
+    /* fail silently */
+  }
+}
+
 const filtered = computed(() => {
   let result = notes.value;
   if (searchQuery.value) {
@@ -64,7 +94,11 @@ async function remove(name: string) {
 function formatDate(iso: string) {
   if (!iso) return "–";
   const d = new Date(iso);
-  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" }) + " " + d.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+  return (
+    d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" }) +
+    " " +
+    d.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" })
+  );
 }
 
 function formatSize(bytes: number) {
@@ -88,7 +122,10 @@ function relativeTime(iso: string) {
 
 function toggleSort(col: typeof sortBy.value) {
   if (sortBy.value === col) sortAsc.value = !sortAsc.value;
-  else { sortBy.value = col; sortAsc.value = col === "title"; }
+  else {
+    sortBy.value = col;
+    sortAsc.value = col === "title";
+  }
 }
 
 function sortIcon(col: string) {
@@ -96,7 +133,10 @@ function sortIcon(col: string) {
   return sortAsc.value ? "\u25B2" : "\u25BC";
 }
 
-onMounted(load);
+onMounted(() => {
+  void load();
+  void loadNoteTemplates();
+});
 useEvents(["note"], () => load());
 </script>
 
@@ -106,9 +146,7 @@ useEvents(["note"], () => load());
     <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
       <div class="min-w-0">
         <div class="eyebrow" style="margin-bottom: 6px">Inhalte</div>
-        <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">
-          Notizen
-        </h1>
+        <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">Notizen</h1>
         <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
           {{ notes.length }} Notizen im Workspace
         </p>
@@ -127,10 +165,25 @@ useEvents(["note"], () => load());
 
     <!-- Create -->
     <div v-if="showCreate" class="form-card">
+      <!-- Vorlage waehlen (optional) — Backend rendert mit Live-Daten -->
+      <div v-if="noteTemplates.length > 0" class="flex items-center" style="gap: 8px; margin-bottom: 10px">
+        <span class="text-xs" style="color: var(--color-text-muted); flex-shrink: 0"> Vorlage: </span>
+        <select
+          v-model="selectedTemplateId"
+          @change="applyNoteTemplate"
+          class="form-input"
+          style="flex: 1; padding: 4px 8px; font-size: 12px"
+        >
+          <option value="">— keine —</option>
+          <option v-for="t in noteTemplates" :key="t.id" :value="t.id">
+            {{ t.name }}{{ t.isDefault ? " (Standard)" : "" }}
+          </option>
+        </select>
+      </div>
       <textarea
         v-model="newContent"
         placeholder="Markdown-Inhalt…"
-        rows="6"
+        rows="10"
         class="form-input font-mono"
         style="resize: vertical; margin-bottom: 12px"
       />
@@ -179,11 +232,7 @@ useEvents(["note"], () => load());
       >
         <div class="flex items-start justify-between" style="margin-bottom: 10px">
           <BIcon name="file" :size="18" style="color: var(--color-text-muted)" />
-          <button
-            @click.stop="remove(note.title)"
-            class="note-del-btn"
-            aria-label="Löschen"
-          >
+          <button @click.stop="remove(note.title)" class="note-del-btn" aria-label="Löschen">
             <BIcon name="x" :size="12" />
           </button>
         </div>
@@ -230,14 +279,26 @@ useEvents(["note"], () => load());
         "
       >
         <span style="width: 14px" />
-        <button @click="toggleSort('title')" class="eyebrow flex-1" style="text-align: left; background: transparent; border: none; cursor: pointer">
+        <button
+          @click="toggleSort('title')"
+          class="eyebrow flex-1"
+          style="text-align: left; background: transparent; border: none; cursor: pointer"
+        >
           Name {{ sortIcon("title") }}
         </button>
         <span class="eyebrow" style="width: 120px">Projekt</span>
-        <button @click="toggleSort('size')" class="eyebrow" style="width: 70px; text-align: right; background: transparent; border: none; cursor: pointer">
+        <button
+          @click="toggleSort('size')"
+          class="eyebrow"
+          style="width: 70px; text-align: right; background: transparent; border: none; cursor: pointer"
+        >
           Größe {{ sortIcon("size") }}
         </button>
-        <button @click="toggleSort('updatedAt')" class="eyebrow" style="width: 130px; text-align: right; background: transparent; border: none; cursor: pointer">
+        <button
+          @click="toggleSort('updatedAt')"
+          class="eyebrow"
+          style="width: 130px; text-align: right; background: transparent; border: none; cursor: pointer"
+        >
           Geändert {{ sortIcon("updatedAt") }}
         </button>
         <span style="width: 20px" />
@@ -273,12 +334,7 @@ useEvents(["note"], () => load());
         <span style="width: 130px; font-size: 11px; color: var(--color-text-tertiary); text-align: right">
           {{ formatDate(note.updatedAt) }}
         </span>
-        <button
-          @click.stop="remove(note.title)"
-          class="note-del-btn"
-          style="width: 20px"
-          aria-label="Löschen"
-        >
+        <button @click.stop="remove(note.title)" class="note-del-btn" style="width: 20px" aria-label="Löschen">
           <BIcon name="x" :size="12" />
         </button>
       </div>
@@ -359,7 +415,10 @@ useEvents(["note"], () => load());
   border: none;
   cursor: pointer;
   color: var(--color-text-faint);
-  transition: opacity 180ms ease, color 180ms ease, background 180ms ease;
+  transition:
+    opacity 180ms ease,
+    color 180ms ease,
+    background 180ms ease;
 }
 .note-del-btn:hover {
   color: var(--color-danger-text);

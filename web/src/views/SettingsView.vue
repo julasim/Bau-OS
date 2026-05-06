@@ -64,10 +64,9 @@ async function startEmailChange() {
   if (!emailNewValid.value) return;
   emailBusy.value = true;
   try {
-    const res = await api.post<{ ticket: string; emailHint?: string }>(
-      "/settings/email/change/start",
-      { email: emailNew.value.trim().toLowerCase() },
-    );
+    const res = await api.post<{ ticket: string; emailHint?: string }>("/settings/email/change/start", {
+      email: emailNew.value.trim().toLowerCase(),
+    });
     emailVerifyTicket.value = res.ticket;
     emailHint.value = res.emailHint ?? emailNew.value.trim().toLowerCase();
     emailVerifyCode.value = "";
@@ -420,6 +419,215 @@ async function toggleFast() {
   }
 }
 
+// ── Vorlagen (Phase 6c) ─────────────────────────────────────────────────────
+// Markdown-Vorlagen fuer Notizen, Meetings, Bautagebuch-Eintraege.
+// Settings-UI: links Liste pro Kind, rechts Editor mit Live-Preview.
+
+type TemplateKind = "note" | "meeting" | "bautagebuch";
+
+interface Template {
+  id: string;
+  kind: TemplateKind;
+  name: string;
+  description: string | null;
+  body: string;
+  isDefault: boolean;
+  createdById: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const TEMPLATE_KINDS: { id: TemplateKind; label: string }[] = [
+  { id: "meeting", label: "Meetings" },
+  { id: "note", label: "Notizen" },
+  { id: "bautagebuch", label: "Bautagebuch" },
+];
+
+const templates = ref<Template[]>([]);
+const templateKindFilter = ref<TemplateKind>("meeting");
+const templateEditing = ref<Template | null>(null);
+const templateDraft = ref<{
+  kind: TemplateKind;
+  name: string;
+  description: string;
+  body: string;
+  isDefault: boolean;
+}>({
+  kind: "meeting",
+  name: "",
+  description: "",
+  body: "",
+  isDefault: false,
+});
+const templateBusy = ref(false);
+const templateVariables = ref<{ name: string; description: string }[]>([]);
+const templatePreview = ref<string>("");
+
+const templatesByKind = computed(() => {
+  return templates.value.filter((t) => t.kind === templateKindFilter.value);
+});
+
+async function loadTemplates() {
+  try {
+    templates.value = await api.get<Template[]>("/templates");
+  } catch {
+    templates.value = [];
+  }
+}
+
+async function loadTemplateVariables() {
+  try {
+    templateVariables.value = await api.get<{ name: string; description: string }[]>("/templates/_variables");
+  } catch {
+    templateVariables.value = [];
+  }
+}
+
+function startNewTemplate() {
+  templateEditing.value = null;
+  templateDraft.value = {
+    kind: templateKindFilter.value,
+    name: "",
+    description: "",
+    body: "",
+    isDefault: false,
+  };
+  templatePreview.value = "";
+}
+
+function startEditTemplate(t: Template) {
+  templateEditing.value = t;
+  templateDraft.value = {
+    kind: t.kind,
+    name: t.name,
+    description: t.description ?? "",
+    body: t.body,
+    isDefault: t.isDefault,
+  };
+  void renderTemplatePreview();
+}
+
+function cancelTemplate() {
+  templateEditing.value = null;
+  templateDraft.value = { kind: templateKindFilter.value, name: "", description: "", body: "", isDefault: false };
+  templatePreview.value = "";
+}
+
+async function saveTemplate() {
+  if (!templateDraft.value.name.trim()) {
+    flash("error", "Name ist Pflicht");
+    return;
+  }
+  templateBusy.value = true;
+  try {
+    if (templateEditing.value) {
+      const updated = await api.patch<Template>(`/templates/${templateEditing.value.id}`, {
+        name: templateDraft.value.name.trim(),
+        description: templateDraft.value.description.trim() || null,
+        body: templateDraft.value.body,
+        isDefault: templateDraft.value.isDefault,
+      });
+      templateEditing.value = updated;
+      flash("success", "Vorlage gespeichert");
+    } else {
+      await api.post<Template>("/templates", {
+        kind: templateDraft.value.kind,
+        name: templateDraft.value.name.trim(),
+        description: templateDraft.value.description.trim() || null,
+        body: templateDraft.value.body,
+        isDefault: templateDraft.value.isDefault,
+      });
+      flash("success", "Vorlage angelegt");
+      cancelTemplate();
+    }
+    await loadTemplates();
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  } finally {
+    templateBusy.value = false;
+  }
+}
+
+async function removeTemplate(t: Template) {
+  if (!confirm(`Vorlage "${t.name}" wirklich loeschen?`)) return;
+  templateBusy.value = true;
+  try {
+    await api.delete(`/templates/${t.id}`);
+    if (templateEditing.value?.id === t.id) cancelTemplate();
+    await loadTemplates();
+    flash("success", "Vorlage geloescht");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Loeschen fehlgeschlagen");
+  } finally {
+    templateBusy.value = false;
+  }
+}
+
+async function setTemplateDefault(t: Template) {
+  templateBusy.value = true;
+  try {
+    await api.patch<Template>(`/templates/${t.id}`, { isDefault: true });
+    await loadTemplates();
+    flash("success", `"${t.name}" ist jetzt Standard fuer ${t.kind}`);
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Default-Setzen fehlgeschlagen");
+  } finally {
+    templateBusy.value = false;
+  }
+}
+
+/** Rendert den Body mit Variablen ersetzt. Nutzt das render-Endpoint mit
+ *  einem Test-Project das es vermutlich gibt — falls keiner gegeben ist,
+ *  bleiben Projekt-Placeholder leer. */
+async function renderTemplatePreview() {
+  if (!templateEditing.value) {
+    // Bei "Neu" rendern wir mit Dummy-Vars clientseitig.
+    const today = new Date();
+    const dd = String(today.getDate()).padStart(2, "0");
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const yy = today.getFullYear();
+    const datum = `${dd}.${mm}.${yy}`;
+    const dummy: Record<string, string> = {
+      Datum: datum,
+      Tag: datum,
+      Heute: datum,
+      Projekt: "(Beispiel-Projekt)",
+      Bauherr: "(Bauherr)",
+      Firma: "(deine Firma)",
+      User: "(du)",
+    };
+    templatePreview.value = templateDraft.value.body.replace(
+      /\{\{\s*([A-Za-z][A-Za-z0-9_]*)\s*\}\}/g,
+      (m: string, name: string) => dummy[name] ?? m,
+    );
+    return;
+  }
+  try {
+    const res = await api.get<{ rendered: string }>(`/templates/${templateEditing.value.id}/render`);
+    templatePreview.value = res.rendered;
+  } catch {
+    templatePreview.value = templateDraft.value.body;
+  }
+}
+
+watch(
+  () => templateDraft.value.body,
+  () => {
+    void renderTemplatePreview();
+  },
+);
+
+/** Liefert "{{Name}}" als String — Helper damit die innere ""-Notation
+ *  in templates nicht den Vue-SFC-Parser verwirrt (siehe Phase-6a-Hotfix). */
+function placeholderRef(name: string): string {
+  return "{{" + name + "}}";
+}
+watch(templateKindFilter, () => {
+  if (!templateEditing.value) {
+    templateDraft.value.kind = templateKindFilter.value;
+  }
+});
+
 // ── Branding (Phase 6b) ─────────────────────────────────────────────────────
 // Firmen-Logo + Stammdaten (wird in Word-/PDF-Exports verwendet).
 //
@@ -606,6 +814,8 @@ onMounted(() => {
   void loadAll();
   void loadMsStatus();
   void loadBranding();
+  void loadTemplates();
+  void loadTemplateVariables();
 });
 </script>
 
@@ -615,32 +825,16 @@ onMounted(() => {
     <aside class="settings-sidebar">
       <div style="padding: 24px 20px 12px">
         <div class="eyebrow" style="margin-bottom: 6px">System</div>
-        <h1
-          style="
-            font-size: 18px;
-            font-weight: 600;
-            margin: 0;
-            letter-spacing: -0.01em;
-          "
-        >
-          Einstellungen
-        </h1>
+        <h1 style="font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em">Einstellungen</h1>
       </div>
       <nav class="settings-nav">
-        <div
-          v-for="grp in settingsNavGroups"
-          :key="grp.group"
-          class="settings-nav-group"
-        >
+        <div v-for="grp in settingsNavGroups" :key="grp.group" class="settings-nav-group">
           <div class="settings-nav-group-title">{{ grp.group }}</div>
           <button
             v-for="item in grp.items"
             :key="item.id"
             type="button"
-            :class="[
-              'settings-nav-item',
-              activeSection === item.id ? 'settings-nav-item-active' : '',
-            ]"
+            :class="['settings-nav-item', activeSection === item.id ? 'settings-nav-item-active' : '']"
             @click="activeSection = item.id"
           >
             <span class="settings-nav-dot" aria-hidden="true"></span>
@@ -663,808 +857,927 @@ onMounted(() => {
         {{ message.text }}
       </div>
 
-      <div
-        v-if="loading"
-        class="text-sm py-8"
-        style="color: var(--color-text-tertiary)"
-      >
-        Laedt...
-      </div>
+      <div v-if="loading" class="text-sm py-8" style="color: var(--color-text-tertiary)">Laedt...</div>
 
       <div v-else-if="data" class="settings-section-wrap">
-      <!-- ── Profil & Sicherheit ────────────────────────────────────── -->
-      <template v-if="activeSection === 'profil'">
-      <section>
-        <h3 class="settings-h3 mb-3">Profil</h3>
-        <div class="settings-card settings-divide">
-          <div class="settings-row flex items-center justify-between px-4 py-3">
-            <span class="text-sm settings-label">Benutzername</span>
-            <span class="text-sm font-mono settings-value">{{ data.profile.username }}</span>
-          </div>
-          <div class="settings-row flex items-center justify-between px-4 py-3">
-            <span class="text-sm settings-label">Rolle</span>
-            <span class="text-sm settings-value">{{ data.profile.role }}</span>
-          </div>
-          <div class="settings-row flex items-center justify-between px-4 py-3">
-            <span class="text-sm settings-label">Registriert</span>
-            <span class="text-sm settings-value">{{ data.profile.createdAt }}</span>
-          </div>
-          <div class="settings-row flex items-center gap-3 px-4 py-3">
-            <label class="text-sm settings-label w-40 flex-shrink-0">Anzeige-Name</label>
-            <input
-              v-model="displayName"
-              type="text"
-              placeholder="z.B. Julius"
-              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-            />
-          </div>
-        </div>
-      </section>
+        <!-- ── Profil & Sicherheit ────────────────────────────────────── -->
+        <template v-if="activeSection === 'profil'">
+          <section>
+            <h3 class="settings-h3 mb-3">Profil</h3>
+            <div class="settings-card settings-divide">
+              <div class="settings-row flex items-center justify-between px-4 py-3">
+                <span class="text-sm settings-label">Benutzername</span>
+                <span class="text-sm font-mono settings-value">{{ data.profile.username }}</span>
+              </div>
+              <div class="settings-row flex items-center justify-between px-4 py-3">
+                <span class="text-sm settings-label">Rolle</span>
+                <span class="text-sm settings-value">{{ data.profile.role }}</span>
+              </div>
+              <div class="settings-row flex items-center justify-between px-4 py-3">
+                <span class="text-sm settings-label">Registriert</span>
+                <span class="text-sm settings-value">{{ data.profile.createdAt }}</span>
+              </div>
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Anzeige-Name</label>
+                <input
+                  v-model="displayName"
+                  type="text"
+                  placeholder="z.B. Julius"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                />
+              </div>
+            </div>
+          </section>
 
-      <!-- ── Passwort ───────────────────────────────────────────────── -->
-      <section>
-        <h3 class="settings-h3 mb-3">Passwort aendern</h3>
-        <div class="settings-card p-4 space-y-3">
-          <div class="flex items-center gap-3">
-            <label class="text-sm settings-label w-40 flex-shrink-0">Altes Passwort</label>
-            <input
-              v-model="oldPassword"
-              type="password"
-              autocomplete="current-password"
-              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-            />
-          </div>
-          <div class="flex items-center gap-3">
-            <label class="text-sm settings-label w-40 flex-shrink-0">Neues Passwort</label>
-            <input
-              v-model="newPassword"
-              type="password"
-              autocomplete="new-password"
-              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-            />
-          </div>
-          <div class="flex items-center gap-3">
-            <label class="text-sm settings-label w-40 flex-shrink-0">Bestaetigen</label>
-            <input
-              v-model="confirmPassword"
-              type="password"
-              autocomplete="new-password"
-              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-            />
-          </div>
-          <div class="flex justify-end pt-1">
-            <button
-              @click="changePassword"
-              :disabled="savingPassword || !oldPassword || !newPassword"
-              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-              :style="{ opacity: (savingPassword || !oldPassword || !newPassword) ? 0.5 : 1 }"
-            >
-              {{ savingPassword ? "..." : "Passwort aendern" }}
-            </button>
-          </div>
-        </div>
-      </section>
-      </template>
+          <!-- ── Passwort ───────────────────────────────────────────────── -->
+          <section>
+            <h3 class="settings-h3 mb-3">Passwort aendern</h3>
+            <div class="settings-card p-4 space-y-3">
+              <div class="flex items-center gap-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Altes Passwort</label>
+                <input
+                  v-model="oldPassword"
+                  type="password"
+                  autocomplete="current-password"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                />
+              </div>
+              <div class="flex items-center gap-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Neues Passwort</label>
+                <input
+                  v-model="newPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                />
+              </div>
+              <div class="flex items-center gap-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Bestaetigen</label>
+                <input
+                  v-model="confirmPassword"
+                  type="password"
+                  autocomplete="new-password"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                />
+              </div>
+              <div class="flex justify-end pt-1">
+                <button
+                  @click="changePassword"
+                  :disabled="savingPassword || !oldPassword || !newPassword"
+                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+                  :style="{ opacity: savingPassword || !oldPassword || !newPassword ? 0.5 : 1 }"
+                >
+                  {{ savingPassword ? "..." : "Passwort aendern" }}
+                </button>
+              </div>
+            </div>
+          </section>
+        </template>
 
-      <!-- ── Email (2FA via Email-OTP) ────────────────────────────── -->
-      <template v-if="activeSection === 'email'">
-      <section>
-        <h3 class="settings-h3 mb-3">
-          Email (Zwei-Faktor-Login)
-          <span
-            class="ml-2 text-xs px-2 py-0.5 rounded-full"
-            :style="data.profile.email
-              ? 'background:#dcfce7; color:#166534'
-              : 'background:#fef3c7; color:#92400e'"
-          >{{ data.profile.email ? "Aktiv" : "Nicht gesetzt" }}</span>
-        </h3>
+        <!-- ── Email (2FA via Email-OTP) ────────────────────────────── -->
+        <template v-if="activeSection === 'email'">
+          <section>
+            <h3 class="settings-h3 mb-3">
+              Email (Zwei-Faktor-Login)
+              <span
+                class="ml-2 text-xs px-2 py-0.5 rounded-full"
+                :style="data.profile.email ? 'background:#dcfce7; color:#166534' : 'background:#fef3c7; color:#92400e'"
+                >{{ data.profile.email ? "Aktiv" : "Nicht gesetzt" }}</span
+              >
+            </h3>
 
-        <div v-if="!emailEditing" class="settings-card p-4">
-          <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
-            Bei jedem Login wird nach dem Passwort ein 6-stelliger Code an deine
-            Email-Adresse gesendet. Pflicht-Feld — ohne Email ist kein Login möglich.
-          </p>
-          <div class="settings-row flex items-center justify-between px-0 py-1">
-            <span class="text-sm settings-label">Aktuelle Adresse</span>
-            <span class="text-sm font-mono settings-value">
-              {{ data.profile.email ?? "— nicht gesetzt —" }}
-            </span>
-          </div>
-          <div class="flex justify-end" style="margin-top: 12px">
-            <button
-              @click="emailEditing = true"
-              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-            >
-              {{ data.profile.email ? "Email ändern" : "Email hinterlegen" }}
-            </button>
-          </div>
-        </div>
+            <div v-if="!emailEditing" class="settings-card p-4">
+              <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
+                Bei jedem Login wird nach dem Passwort ein 6-stelliger Code an deine Email-Adresse gesendet.
+                Pflicht-Feld — ohne Email ist kein Login möglich.
+              </p>
+              <div class="settings-row flex items-center justify-between px-0 py-1">
+                <span class="text-sm settings-label">Aktuelle Adresse</span>
+                <span class="text-sm font-mono settings-value">
+                  {{ data.profile.email ?? "— nicht gesetzt —" }}
+                </span>
+              </div>
+              <div class="flex justify-end" style="margin-top: 12px">
+                <button
+                  @click="emailEditing = true"
+                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+                >
+                  {{ data.profile.email ? "Email ändern" : "Email hinterlegen" }}
+                </button>
+              </div>
+            </div>
 
-        <!-- Email-Aenderung: Neue Adresse eingeben -->
-        <div v-else-if="!emailVerifyTicket" class="settings-card p-4 space-y-3">
-          <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
-            Wir senden einen Bestätigungs-Code an die neue Adresse.
-            Erst nach erfolgreicher Bestätigung wird die Adresse aktiv.
-          </p>
-          <div class="flex items-center gap-3">
-            <label class="text-sm settings-label w-40 flex-shrink-0">Neue Email</label>
-            <input
-              v-model="emailNew"
-              type="email"
-              autocomplete="email"
-              placeholder="name@firma.at"
-              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-            />
-          </div>
-          <div class="flex gap-2 justify-end pt-1">
-            <button
-              @click="cancelEmailChange"
-              :disabled="emailBusy"
-              class="px-4 py-1.5 text-sm rounded"
-              style="background:transparent; border:1px solid var(--color-border)"
-            >
-              Abbrechen
-            </button>
-            <button
-              @click="startEmailChange"
-              :disabled="emailBusy || !emailNewValid"
-              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-              :style="{ opacity: (emailBusy || !emailNewValid) ? 0.5 : 1 }"
-            >
-              {{ emailBusy ? "..." : "Code senden" }}
-            </button>
-          </div>
-        </div>
+            <!-- Email-Aenderung: Neue Adresse eingeben -->
+            <div v-else-if="!emailVerifyTicket" class="settings-card p-4 space-y-3">
+              <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
+                Wir senden einen Bestätigungs-Code an die neue Adresse. Erst nach erfolgreicher Bestätigung wird die
+                Adresse aktiv.
+              </p>
+              <div class="flex items-center gap-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Neue Email</label>
+                <input
+                  v-model="emailNew"
+                  type="email"
+                  autocomplete="email"
+                  placeholder="name@firma.at"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                />
+              </div>
+              <div class="flex gap-2 justify-end pt-1">
+                <button
+                  @click="cancelEmailChange"
+                  :disabled="emailBusy"
+                  class="px-4 py-1.5 text-sm rounded"
+                  style="background: transparent; border: 1px solid var(--color-border)"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  @click="startEmailChange"
+                  :disabled="emailBusy || !emailNewValid"
+                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+                  :style="{ opacity: emailBusy || !emailNewValid ? 0.5 : 1 }"
+                >
+                  {{ emailBusy ? "..." : "Code senden" }}
+                </button>
+              </div>
+            </div>
 
-        <!-- Email-Aenderung: Code aus Mail bestätigen -->
-        <div v-else class="settings-card p-4 space-y-3">
-          <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
-            Wir haben einen 6-stelligen Code an
-            <strong v-if="emailHint" class="font-mono">{{ emailHint }}</strong>
-            geschickt. Code unten eingeben, um die Email-Aenderung zu bestaetigen.
-            10 Minuten gültig.
-          </p>
-          <div class="flex items-center gap-3">
-            <label class="text-sm settings-label w-40 flex-shrink-0">Code</label>
-            <input
-              v-model="emailVerifyCode"
-              type="text"
-              inputmode="numeric"
-              pattern="[0-9]*"
-              maxlength="7"
-              autocomplete="one-time-code"
-              class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
-              style="letter-spacing: 0.15em"
-            />
-          </div>
-          <div class="flex gap-2 justify-end pt-1">
-            <button
-              @click="cancelEmailChange"
-              :disabled="emailBusy"
-              class="px-4 py-1.5 text-sm rounded"
-              style="background:transparent; border:1px solid var(--color-border)"
-            >
-              Abbrechen
-            </button>
-            <button
-              @click="verifyEmailChange"
-              :disabled="emailBusy || !emailVerifyCode"
-              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-              :style="{ opacity: (emailBusy || !emailVerifyCode) ? 0.5 : 1 }"
-            >
-              {{ emailBusy ? "..." : "Bestätigen" }}
-            </button>
-          </div>
-        </div>
-      </section>
-      </template>
+            <!-- Email-Aenderung: Code aus Mail bestätigen -->
+            <div v-else class="settings-card p-4 space-y-3">
+              <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
+                Wir haben einen 6-stelligen Code an
+                <strong v-if="emailHint" class="font-mono">{{ emailHint }}</strong>
+                geschickt. Code unten eingeben, um die Email-Aenderung zu bestaetigen. 10 Minuten gültig.
+              </p>
+              <div class="flex items-center gap-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Code</label>
+                <input
+                  v-model="emailVerifyCode"
+                  type="text"
+                  inputmode="numeric"
+                  pattern="[0-9]*"
+                  maxlength="7"
+                  autocomplete="one-time-code"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
+                  style="letter-spacing: 0.15em"
+                />
+              </div>
+              <div class="flex gap-2 justify-end pt-1">
+                <button
+                  @click="cancelEmailChange"
+                  :disabled="emailBusy"
+                  class="px-4 py-1.5 text-sm rounded"
+                  style="background: transparent; border: 1px solid var(--color-border)"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  @click="verifyEmailChange"
+                  :disabled="emailBusy || !emailVerifyCode"
+                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+                  :style="{ opacity: emailBusy || !emailVerifyCode ? 0.5 : 1 }"
+                >
+                  {{ emailBusy ? "..." : "Bestätigen" }}
+                </button>
+              </div>
+            </div>
+          </section>
+        </template>
 
-      <!-- ── Microsoft-Konto (Outlook-Calendar) ─────────────────────── -->
-      <template v-if="activeSection === 'microsoft'">
-      <section>
-        <h3 class="settings-h3 mb-3">
-          Microsoft-Konto
-          <span
-            class="ml-2 text-xs px-2 py-0.5 rounded-full"
-            :style="
-              !msStatus.available
-                ? 'background:#f4f4f5; color:#52525b'
-                : msStatus.connected
-                  ? 'background:#dcfce7; color:#166534'
-                  : 'background:#fef3c7; color:#92400e'
-            "
-          >
-            {{
-              !msStatus.available
-                ? "Nicht konfiguriert"
-                : msStatus.connected
-                  ? "Verbunden"
-                  : "Nicht verbunden"
-            }}
-          </span>
-        </h3>
-
-        <!-- Backend ist nicht konfiguriert -->
-        <div v-if="!msStatus.available" class="settings-card p-4">
-          <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
-            Microsoft-Integration ist auf diesem Server nicht aktiviert.
-            <span v-if="msStatus.reason">{{ msStatus.reason }}</span>
-            <span v-else>Admin muss <code class="font-mono">MS_CLIENT_ID</code>, <code class="font-mono">MS_CLIENT_SECRET</code> und <code class="font-mono">MS_TENANT_ID</code> in der <code class="font-mono">.env</code> setzen.</span>
-          </p>
-        </div>
-
-        <!-- Nicht verbunden — Connect-Button -->
-        <div v-else-if="!msStatus.connected" class="settings-card p-4">
-          <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
-            Verbinde dein Microsoft-Konto, um Outlook-Kalender mit Bau-OS zu synchronisieren.
-            Termine landen in deinem Outlook und Outlook-Termine erscheinen in Bau-OS.
-          </p>
-          <div v-if="msMessage" class="ms-message" :class="msMessage.type === 'ok' ? 'ms-msg-ok' : 'ms-msg-err'">
-            {{ msMessage.text }}
-          </div>
-          <div class="flex justify-end" style="margin-top: 12px">
-            <button
-              @click="connectMicrosoft"
-              :disabled="msBusy"
-              class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition flex items-center gap-2"
-              :style="{ opacity: msBusy ? 0.5 : 1 }"
-            >
-              <!-- Microsoft-Logo: vier Quadrate als CSS -->
-              <span class="ms-logo-mini">
-                <span style="background:#F25022"></span>
-                <span style="background:#7FBA00"></span>
-                <span style="background:#00A4EF"></span>
-                <span style="background:#FFB900"></span>
+        <!-- ── Microsoft-Konto (Outlook-Calendar) ─────────────────────── -->
+        <template v-if="activeSection === 'microsoft'">
+          <section>
+            <h3 class="settings-h3 mb-3">
+              Microsoft-Konto
+              <span
+                class="ml-2 text-xs px-2 py-0.5 rounded-full"
+                :style="
+                  !msStatus.available
+                    ? 'background:#f4f4f5; color:#52525b'
+                    : msStatus.connected
+                      ? 'background:#dcfce7; color:#166534'
+                      : 'background:#fef3c7; color:#92400e'
+                "
+              >
+                {{ !msStatus.available ? "Nicht konfiguriert" : msStatus.connected ? "Verbunden" : "Nicht verbunden" }}
               </span>
-              {{ msBusy ? "..." : "Mit Microsoft verbinden" }}
-            </button>
-          </div>
-        </div>
+            </h3>
 
-        <!-- Verbunden — Anzeige + Settings + Trennen -->
-        <div v-else class="settings-card p-4 space-y-3">
-          <div class="settings-row flex items-center justify-between px-0 py-1">
-            <span class="text-sm settings-label">Verbunden mit</span>
-            <span class="text-sm font-mono settings-value">
-              {{ msStatus.account?.msEmail }}
-            </span>
-          </div>
-          <div v-if="msStatus.account?.msDisplayName" class="settings-row flex items-center justify-between px-0 py-1">
-            <span class="text-sm settings-label">Name</span>
-            <span class="text-sm settings-value">{{ msStatus.account.msDisplayName }}</span>
-          </div>
+            <!-- Backend ist nicht konfiguriert -->
+            <div v-if="!msStatus.available" class="settings-card p-4">
+              <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
+                Microsoft-Integration ist auf diesem Server nicht aktiviert.
+                <span v-if="msStatus.reason">{{ msStatus.reason }}</span>
+                <span v-else
+                  >Admin muss <code class="font-mono">MS_CLIENT_ID</code>,
+                  <code class="font-mono">MS_CLIENT_SECRET</code> und <code class="font-mono">MS_TENANT_ID</code> in der
+                  <code class="font-mono">.env</code> setzen.</span
+                >
+              </p>
+            </div>
 
-          <!-- Multi-Calendar-Liste (Phase 5c).
+            <!-- Nicht verbunden — Connect-Button -->
+            <div v-else-if="!msStatus.connected" class="settings-card p-4">
+              <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
+                Verbinde dein Microsoft-Konto, um Outlook-Kalender mit Bau-OS zu synchronisieren. Termine landen in
+                deinem Outlook und Outlook-Termine erscheinen in Bau-OS.
+              </p>
+              <div v-if="msMessage" class="ms-message" :class="msMessage.type === 'ok' ? 'ms-msg-ok' : 'ms-msg-err'">
+                {{ msMessage.text }}
+              </div>
+              <div class="flex justify-end" style="margin-top: 12px">
+                <button
+                  @click="connectMicrosoft"
+                  :disabled="msBusy"
+                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition flex items-center gap-2"
+                  :style="{ opacity: msBusy ? 0.5 : 1 }"
+                >
+                  <!-- Microsoft-Logo: vier Quadrate als CSS -->
+                  <span class="ms-logo-mini">
+                    <span style="background: #f25022"></span>
+                    <span style="background: #7fba00"></span>
+                    <span style="background: #00a4ef"></span>
+                    <span style="background: #ffb900"></span>
+                  </span>
+                  {{ msBusy ? "..." : "Mit Microsoft verbinden" }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Verbunden — Anzeige + Settings + Trennen -->
+            <div v-else class="settings-card p-4 space-y-3">
+              <div class="settings-row flex items-center justify-between px-0 py-1">
+                <span class="text-sm settings-label">Verbunden mit</span>
+                <span class="text-sm font-mono settings-value">
+                  {{ msStatus.account?.msEmail }}
+                </span>
+              </div>
+              <div
+                v-if="msStatus.account?.msDisplayName"
+                class="settings-row flex items-center justify-between px-0 py-1"
+              >
+                <span class="text-sm settings-label">Name</span>
+                <span class="text-sm settings-value">{{ msStatus.account.msDisplayName }}</span>
+              </div>
+
+              <!-- Multi-Calendar-Liste (Phase 5c).
                User waehlt aus seinen Outlook-Kalendern beliebig viele aus
                die mit Bau-OS gesyncet werden sollen. Pro aktiviertem
                Kalender legt das Backend eine eigene Webhook-Subscription
                an. Default-Push-Ziel fuer neue Bau-OS-Termine ist der
                Kalender mit Anzeigename "Bau-OS" (wird beim Connect
                automatisch erstellt). -->
-          <div class="settings-row flex flex-col gap-2 px-0 py-2">
-            <div class="flex items-center justify-between">
-              <label class="text-sm settings-label">Outlook-Kalender</label>
-              <button
-                @click="refreshMsCalendars"
-                :disabled="msCalendarsBusy"
-                class="text-xs"
-                style="
-                  padding: 4px 10px;
-                  border-radius: 4px;
-                  background: transparent;
-                  border: 1px solid var(--color-border);
-                  cursor: pointer;
-                "
-              >
-                {{ msCalendarsBusy ? "..." : "Aus Outlook neu laden" }}
-              </button>
-            </div>
-            <div
-              v-if="msCalendars.length === 0"
-              class="text-xs"
-              style="
-                color: var(--color-text-muted);
-                padding: 12px;
-                background: var(--color-bg-subtle);
-                border: 1px dashed var(--color-border);
-                border-radius: 6px;
-              "
-            >
-              Keine Kalender geladen. Klick „Aus Outlook neu laden".
-            </div>
-            <div v-else class="flex flex-col" style="gap: 4px">
-              <label
-                v-for="cal in msCalendars"
-                :key="cal.calendarId"
-                class="flex items-center gap-3"
-                style="
-                  cursor: pointer;
-                  padding: 8px 10px;
-                  border-radius: 6px;
-                  border: 1px solid var(--color-border-subtle);
-                  background: var(--color-bg-subtle);
-                "
-              >
+              <div class="settings-row flex flex-col gap-2 px-0 py-2">
+                <div class="flex items-center justify-between">
+                  <label class="text-sm settings-label">Outlook-Kalender</label>
+                  <button
+                    @click="refreshMsCalendars"
+                    :disabled="msCalendarsBusy"
+                    class="text-xs"
+                    style="
+                      padding: 4px 10px;
+                      border-radius: 4px;
+                      background: transparent;
+                      border: 1px solid var(--color-border);
+                      cursor: pointer;
+                    "
+                  >
+                    {{ msCalendarsBusy ? "..." : "Aus Outlook neu laden" }}
+                  </button>
+                </div>
+                <div
+                  v-if="msCalendars.length === 0"
+                  class="text-xs"
+                  style="
+                    color: var(--color-text-muted);
+                    padding: 12px;
+                    background: var(--color-bg-subtle);
+                    border: 1px dashed var(--color-border);
+                    border-radius: 6px;
+                  "
+                >
+                  Keine Kalender geladen. Klick „Aus Outlook neu laden".
+                </div>
+                <div v-else class="flex flex-col" style="gap: 4px">
+                  <label
+                    v-for="cal in msCalendars"
+                    :key="cal.calendarId"
+                    class="flex items-center gap-3"
+                    style="
+                      cursor: pointer;
+                      padding: 8px 10px;
+                      border-radius: 6px;
+                      border: 1px solid var(--color-border-subtle);
+                      background: var(--color-bg-subtle);
+                    "
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="cal.enabled"
+                      :disabled="msCalendarsBusy"
+                      @change="toggleMsCalendar(cal, ($event.target as HTMLInputElement).checked)"
+                    />
+                    <div style="flex: 1; min-width: 0">
+                      <div class="text-sm" style="font-weight: 500">
+                        {{ cal.displayName || cal.calendarId }}
+                      </div>
+                      <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 2px">
+                        <span v-if="cal.enabled && cal.subscriptionId">Instant-Sync · </span>
+                        <span v-else-if="cal.enabled">Polling · </span>
+                        <span v-if="cal.lastSyncAt">letzter Sync: {{ cal.lastSyncAt }}</span>
+                        <span v-else>noch nicht synchronisiert</span>
+                      </div>
+                      <div
+                        v-if="cal.lastSyncError"
+                        class="text-xs ms-msg-err"
+                        style="margin-top: 4px; padding: 4px 6px; border-radius: 4px"
+                      >
+                        Fehler: {{ cal.lastSyncError }}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+                <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 4px">
+                  Aktivierte Kalender werden bidirektional mit Bau-OS synchronisiert. Neue Bau-OS-Termine landen im
+                  Kalender „Bau-OS" (oder im ersten aktivierten falls keiner so heißt).
+                </div>
+              </div>
+
+              <!-- Sync-Schalter -->
+              <label class="settings-row flex items-center gap-3 px-0 py-2" style="cursor: pointer">
                 <input
                   type="checkbox"
-                  :checked="cal.enabled"
-                  :disabled="msCalendarsBusy"
-                  @change="toggleMsCalendar(cal, ($event.target as HTMLInputElement).checked)"
+                  :checked="msStatus.account?.syncEnabled"
+                  :disabled="msBusy"
+                  @change="updateMsSettings({ syncEnabled: ($event.target as HTMLInputElement).checked })"
                 />
-                <div style="flex: 1; min-width: 0">
-                  <div class="text-sm" style="font-weight: 500">
-                    {{ cal.displayName || cal.calendarId }}
-                  </div>
-                  <div
-                    class="text-xs"
-                    style="color: var(--color-text-tertiary); margin-top: 2px"
-                  >
-                    <span v-if="cal.enabled && cal.subscriptionId">Instant-Sync · </span>
-                    <span v-else-if="cal.enabled">Polling · </span>
-                    <span v-if="cal.lastSyncAt">letzter Sync: {{ cal.lastSyncAt }}</span>
-                    <span v-else>noch nicht synchronisiert</span>
-                  </div>
-                  <div
-                    v-if="cal.lastSyncError"
-                    class="text-xs ms-msg-err"
-                    style="margin-top: 4px; padding: 4px 6px; border-radius: 4px"
-                  >
-                    Fehler: {{ cal.lastSyncError }}
+                <div style="flex: 1">
+                  <div class="text-sm">Sync aktiv</div>
+                  <div class="text-xs" style="color: var(--color-text-muted); margin-top: 2px">
+                    Wenn aktiviert: Bau-OS-Termine werden in Outlook angelegt und Outlook-Termine in Bau-OS importiert.
                   </div>
                 </div>
               </label>
-            </div>
-            <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 4px">
-              Aktivierte Kalender werden bidirektional mit Bau-OS synchronisiert.
-              Neue Bau-OS-Termine landen im Kalender „Bau-OS" (oder im ersten
-              aktivierten falls keiner so heißt).
-            </div>
-          </div>
 
-          <!-- Sync-Schalter -->
-          <label
-            class="settings-row flex items-center gap-3 px-0 py-2"
-            style="cursor: pointer"
-          >
-            <input
-              type="checkbox"
-              :checked="msStatus.account?.syncEnabled"
-              :disabled="msBusy"
-              @change="updateMsSettings({ syncEnabled: ($event.target as HTMLInputElement).checked })"
-            />
-            <div style="flex: 1">
-              <div class="text-sm">Sync aktiv</div>
-              <div class="text-xs" style="color: var(--color-text-muted); margin-top: 2px">
-                Wenn aktiviert: Bau-OS-Termine werden in Outlook angelegt und Outlook-Termine in Bau-OS importiert.
-              </div>
-            </div>
-          </label>
-
-          <!-- Phase 4: Webhook-Status. Wenn aktiv, hat Bau-OS bei Microsoft
+              <!-- Phase 4: Webhook-Status. Wenn aktiv, hat Bau-OS bei Microsoft
                eine Subscription registriert und bekommt Push-Notifications
                sobald sich was im Outlook-Calendar aendert (<1s Latenz).
                Wenn nicht aktiv, laeuft das 5-min-Polling als Fallback. -->
-          <div
-            v-if="msStatus.account?.syncEnabled"
-            class="flex items-center"
-            style="gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--color-bg-subtle); border: 1px solid var(--color-border-subtle)"
-          >
-            <span
-              :style="{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: msStatus.account.webhookActive ? '#16a34a' : '#f59e0b',
-                flexShrink: 0,
-              }"
-            ></span>
-            <div class="text-xs" style="flex: 1">
-              <span v-if="msStatus.account.webhookActive">
-                <strong>Instant-Sync aktiv</strong> — Aenderungen in Outlook erscheinen sofort in Bau-OS.
-              </span>
-              <span v-else>
-                <strong>Polling-Modus</strong> — Sync alle 5 Minuten. Webhook-Subscription wird beim naechsten Lauf eingerichtet.
-              </span>
-            </div>
-          </div>
-
-          <div v-if="msStatus.account?.lastSyncAt" class="text-xs" style="color: var(--color-text-tertiary)">
-            Letzte Synchronisation: {{ msStatus.account.lastSyncAt }}
-          </div>
-          <div v-if="msStatus.account?.lastSyncError" class="text-xs ms-msg-err" style="padding: 8px 10px; border-radius: 6px">
-            Letzter Sync-Fehler: {{ msStatus.account.lastSyncError }}
-          </div>
-
-          <div v-if="msMessage" class="ms-message" :class="msMessage.type === 'ok' ? 'ms-msg-ok' : 'ms-msg-err'">
-            {{ msMessage.text }}
-          </div>
-
-          <div class="flex justify-end" style="margin-top: 12px">
-            <button
-              @click="disconnectMicrosoft"
-              :disabled="msBusy"
-              class="px-4 py-1.5 text-sm rounded"
-              style="background:transparent; border:1px solid #dc2626; color:#dc2626"
-            >
-              Verbindung trennen
-            </button>
-          </div>
-        </div>
-      </section>
-      </template>
-
-      <!-- ── LLM / Laufzeit ─────────────────────────────────────────── -->
-      <template v-if="activeSection === 'modelle'">
-      <section>
-        <h3 class="settings-h3 mb-3">LLM</h3>
-        <div class="settings-card settings-divide">
-          <div class="settings-row flex items-center gap-3 px-4 py-3">
-            <label class="text-sm settings-label w-40 flex-shrink-0">Aktives Modell</label>
-            <input
-              v-model="modelInput"
-              type="text"
-              class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
-              :placeholder="data.system.defaultModel"
-            />
-            <button
-              @click="applyModel"
-              :disabled="savingModel || !modelInput.trim() || modelInput.trim() === data.runtime.currentModel"
-              class="settings-ghost-btn px-3 py-1.5 text-sm font-medium rounded disabled:opacity-50 transition"
-            >
-              Setzen
-            </button>
-          </div>
-          <div class="settings-row px-4 py-3">
-            <p class="text-xs settings-label mb-2">Cloud-Modelle (Ollama Cloud):</p>
-            <div class="flex flex-wrap gap-2">
-              <button
-                v-for="m in CLOUD_MODELS"
-                :key="m.id"
-                @click="pickModel(m.id)"
-                :title="m.desc"
-                :class="[
-                  'settings-chip px-2.5 py-1 text-xs rounded transition text-left',
-                  modelInput === m.id ? 'settings-chip-active' : '',
-                ]"
-              >
-                <span class="font-mono">{{ m.label }}</span>
-              </button>
-            </div>
-            <p class="text-[11px] mt-2" style="color: var(--color-text-tertiary)">
-              Klick waehlt das Modell vor — mit "Setzen" wird es aktiv. Braucht einen Ollama-Cloud-Account (<code class="font-mono">ollama signin</code>) und <code class="font-mono">OLLAMA_BASE_URL=https://ollama.com</code> in der .env.
-            </p>
-          </div>
-          <div class="settings-row flex items-center justify-between px-4 py-3">
-            <div>
-              <p class="text-sm" style="color: var(--color-text-secondary)">Fast-Mode</p>
-              <p class="text-xs" style="color: var(--color-text-tertiary)">
-                Nutzt das Schnell-Modell ({{ data.system.fastModel }}) statt {{ data.system.defaultModel }}
-              </p>
-            </div>
-            <button
-              @click="toggleFast"
-              :class="[
-                'px-3 py-1 text-xs font-medium rounded transition',
-                data.runtime.fastMode ? 'primary-btn' : 'settings-ghost-btn',
-              ]"
-            >
-              {{ data.runtime.fastMode ? "An" : "Aus" }}
-            </button>
-          </div>
-          <div
-            class="settings-row flex items-center justify-between px-4 py-3 text-xs"
-            style="color: var(--color-text-tertiary)"
-          >
-            <span>Subagent-Modell</span>
-            <span class="font-mono">{{ data.system.subagentModel }}</span>
-          </div>
-        </div>
-      </section>
-      </template>
-
-      <!-- ── Praeferenzen ───────────────────────────────────────────── -->
-      <template v-if="activeSection === 'praeferenzen'">
-      <section>
-        <h3 class="settings-h3 mb-3">Praeferenzen</h3>
-        <div class="settings-card settings-divide">
-          <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
-            <div>
-              <p class="text-sm" style="color: var(--color-text-secondary)">Benachrichtigungen</p>
-              <p class="text-xs" style="color: var(--color-text-tertiary)">
-                Telegram-Toasts bei neuen Aufgaben und Terminen
-              </p>
-            </div>
-            <input v-model="notificationsEnabled" type="checkbox" class="settings-checkbox" />
-          </label>
-
-          <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
-            <div>
-              <p class="text-sm" style="color: var(--color-text-secondary)">
-                Dateisuche im Chat standardmaessig an
-              </p>
-              <p class="text-xs" style="color: var(--color-text-tertiary)">
-                Der Chat startet mit aktiver Vault-Suche (+-Menue)
-              </p>
-            </div>
-            <input v-model="chatSearchMode" type="checkbox" class="settings-checkbox" />
-          </label>
-
-          <div class="settings-row flex items-center gap-3 px-4 py-3">
-            <label class="text-sm settings-label w-40 flex-shrink-0">Standard-Projekt</label>
-            <select
-              v-model="defaultProject"
-              class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-            >
-              <option :value="null">Kein Standard</option>
-              <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="flex justify-end mt-3">
-          <button
-            @click="saveSettings"
-            :disabled="savingSettings || !dirty"
-            class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-            :style="{ opacity: (savingSettings || !dirty) ? 0.5 : 1 }"
-          >
-            {{ savingSettings ? "..." : "Speichern" }}
-          </button>
-        </div>
-      </section>
-      </template>
-
-      <!-- ── Branding (Phase 6b) ────────────────────────────────────── -->
-      <template v-if="activeSection === 'branding'">
-        <section>
-          <h3 class="settings-h3 mb-3">Branding</h3>
-          <p
-            class="text-sm"
-            style="color: var(--color-text-muted); margin: 0 0 16px"
-          >
-            Logo und Firmenstammdaten. Werden in Word-/PDF-Exports,
-            Visitenkarten-Drucken und Email-Templates verwendet.
-          </p>
-
-          <!-- Logo-Upload + Vorschau -->
-          <div class="settings-card p-5" style="margin-bottom: 16px">
-            <div class="text-sm" style="font-weight: 600; margin-bottom: 12px">
-              Logo
-            </div>
-            <div class="flex items-center" style="gap: 16px; flex-wrap: wrap">
               <div
+                v-if="msStatus.account?.syncEnabled"
+                class="flex items-center"
                 style="
-                  width: 160px;
-                  height: 100px;
-                  border: 1px dashed var(--color-border);
-                  border-radius: 8px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
+                  gap: 8px;
+                  padding: 8px 10px;
+                  border-radius: 6px;
                   background: var(--color-bg-subtle);
-                  flex-shrink: 0;
-                  overflow: hidden;
+                  border: 1px solid var(--color-border-subtle);
                 "
               >
-                <img
-                  v-if="branding?.logoUrl"
-                  :src="`${branding.logoUrl}?bust=${brandingLogoBust}`"
-                  :alt="branding.companyName ?? 'Logo'"
-                  style="max-width: 100%; max-height: 100%; object-fit: contain"
-                />
                 <span
-                  v-else
-                  class="text-xs"
-                  style="color: var(--color-text-tertiary)"
-                >
-                  Kein Logo
-                </span>
-              </div>
-              <div style="flex: 1; min-width: 200px">
-                <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                  :disabled="brandingBusy"
-                  @change="uploadLogo"
-                  style="font-size: 13px"
-                />
-                <div
-                  class="text-xs"
-                  style="color: var(--color-text-tertiary); margin-top: 6px"
-                >
-                  PNG, JPEG, SVG oder WebP. Max 2 MB.
-                  <span v-if="branding?.logoFilename"
-                    >Aktuell: {{ branding.logoFilename }}</span
-                  >
+                  :style="{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: msStatus.account.webhookActive ? '#16a34a' : '#f59e0b',
+                    flexShrink: 0,
+                  }"
+                ></span>
+                <div class="text-xs" style="flex: 1">
+                  <span v-if="msStatus.account.webhookActive">
+                    <strong>Instant-Sync aktiv</strong> — Aenderungen in Outlook erscheinen sofort in Bau-OS.
+                  </span>
+                  <span v-else>
+                    <strong>Polling-Modus</strong> — Sync alle 5 Minuten. Webhook-Subscription wird beim naechsten Lauf
+                    eingerichtet.
+                  </span>
                 </div>
+              </div>
+
+              <div v-if="msStatus.account?.lastSyncAt" class="text-xs" style="color: var(--color-text-tertiary)">
+                Letzte Synchronisation: {{ msStatus.account.lastSyncAt }}
+              </div>
+              <div
+                v-if="msStatus.account?.lastSyncError"
+                class="text-xs ms-msg-err"
+                style="padding: 8px 10px; border-radius: 6px"
+              >
+                Letzter Sync-Fehler: {{ msStatus.account.lastSyncError }}
+              </div>
+
+              <div v-if="msMessage" class="ms-message" :class="msMessage.type === 'ok' ? 'ms-msg-ok' : 'ms-msg-err'">
+                {{ msMessage.text }}
+              </div>
+
+              <div class="flex justify-end" style="margin-top: 12px">
                 <button
-                  v-if="branding?.logoUrl"
-                  @click="removeLogo"
-                  :disabled="brandingBusy"
-                  class="text-xs"
-                  style="
-                    margin-top: 10px;
-                    padding: 4px 10px;
-                    border-radius: 4px;
-                    background: transparent;
-                    border: 1px solid #dc2626;
-                    color: #dc2626;
-                    cursor: pointer;
-                  "
+                  @click="disconnectMicrosoft"
+                  :disabled="msBusy"
+                  class="px-4 py-1.5 text-sm rounded"
+                  style="background: transparent; border: 1px solid #dc2626; color: #dc2626"
                 >
-                  Logo entfernen
+                  Verbindung trennen
                 </button>
               </div>
             </div>
-          </div>
+          </section>
+        </template>
 
-          <!-- Stammdaten-Formular -->
-          <div class="settings-card settings-divide">
-            <div class="settings-row flex items-center gap-3 px-4 py-3">
-              <label class="text-sm settings-label w-40 flex-shrink-0">Firmenname</label>
-              <input
-                v-model="brandingDraft.companyName"
-                placeholder="Sima Architecture e.U."
-                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-              />
-            </div>
-            <div class="settings-row flex items-start gap-3 px-4 py-3">
-              <label class="text-sm settings-label w-40 flex-shrink-0">Adresse</label>
-              <textarea
-                v-model="brandingDraft.address"
-                rows="2"
-                placeholder="Straße, PLZ Ort, Land"
-                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-                style="resize: vertical; font-family: inherit"
-              ></textarea>
-            </div>
-            <div class="settings-row flex items-center gap-3 px-4 py-3">
-              <label class="text-sm settings-label w-40 flex-shrink-0">Telefon</label>
-              <input
-                v-model="brandingDraft.phone"
-                placeholder="+43 ..."
-                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-              />
-            </div>
-            <div class="settings-row flex items-center gap-3 px-4 py-3">
-              <label class="text-sm settings-label w-40 flex-shrink-0">Email</label>
-              <input
-                v-model="brandingDraft.email"
-                type="email"
-                placeholder="kontakt@firma.at"
-                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-              />
-            </div>
-            <div class="settings-row flex items-center gap-3 px-4 py-3">
-              <label class="text-sm settings-label w-40 flex-shrink-0">Website</label>
-              <input
-                v-model="brandingDraft.website"
-                placeholder="https://firma.at"
-                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-              />
-            </div>
-            <div class="settings-row flex items-center gap-3 px-4 py-3">
-              <label class="text-sm settings-label w-40 flex-shrink-0">Primärfarbe</label>
-              <input
-                v-model="brandingDraft.primaryColor"
-                placeholder="#111827"
-                class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none font-mono"
-                style="max-width: 140px"
-              />
-              <span
-                v-if="brandingDraft.primaryColor"
-                :style="{
-                  width: '24px',
-                  height: '24px',
-                  borderRadius: '4px',
-                  background: brandingDraft.primaryColor,
-                  border: '1px solid var(--color-border)',
-                }"
-              ></span>
-            </div>
-            <div class="flex justify-end px-4 py-3" style="gap: 8px">
-              <button
-                @click="saveBranding"
-                :disabled="brandingBusy || !brandingDirty"
-                class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-                :style="{ opacity: brandingBusy || !brandingDirty ? 0.5 : 1 }"
+        <!-- ── LLM / Laufzeit ─────────────────────────────────────────── -->
+        <template v-if="activeSection === 'modelle'">
+          <section>
+            <h3 class="settings-h3 mb-3">LLM</h3>
+            <div class="settings-card settings-divide">
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Aktives Modell</label>
+                <input
+                  v-model="modelInput"
+                  type="text"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
+                  :placeholder="data.system.defaultModel"
+                />
+                <button
+                  @click="applyModel"
+                  :disabled="savingModel || !modelInput.trim() || modelInput.trim() === data.runtime.currentModel"
+                  class="settings-ghost-btn px-3 py-1.5 text-sm font-medium rounded disabled:opacity-50 transition"
+                >
+                  Setzen
+                </button>
+              </div>
+              <div class="settings-row px-4 py-3">
+                <p class="text-xs settings-label mb-2">Cloud-Modelle (Ollama Cloud):</p>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="m in CLOUD_MODELS"
+                    :key="m.id"
+                    @click="pickModel(m.id)"
+                    :title="m.desc"
+                    :class="[
+                      'settings-chip px-2.5 py-1 text-xs rounded transition text-left',
+                      modelInput === m.id ? 'settings-chip-active' : '',
+                    ]"
+                  >
+                    <span class="font-mono">{{ m.label }}</span>
+                  </button>
+                </div>
+                <p class="text-[11px] mt-2" style="color: var(--color-text-tertiary)">
+                  Klick waehlt das Modell vor — mit "Setzen" wird es aktiv. Braucht einen Ollama-Cloud-Account (<code
+                    class="font-mono"
+                    >ollama signin</code
+                  >) und <code class="font-mono">OLLAMA_BASE_URL=https://ollama.com</code> in der .env.
+                </p>
+              </div>
+              <div class="settings-row flex items-center justify-between px-4 py-3">
+                <div>
+                  <p class="text-sm" style="color: var(--color-text-secondary)">Fast-Mode</p>
+                  <p class="text-xs" style="color: var(--color-text-tertiary)">
+                    Nutzt das Schnell-Modell ({{ data.system.fastModel }}) statt {{ data.system.defaultModel }}
+                  </p>
+                </div>
+                <button
+                  @click="toggleFast"
+                  :class="[
+                    'px-3 py-1 text-xs font-medium rounded transition',
+                    data.runtime.fastMode ? 'primary-btn' : 'settings-ghost-btn',
+                  ]"
+                >
+                  {{ data.runtime.fastMode ? "An" : "Aus" }}
+                </button>
+              </div>
+              <div
+                class="settings-row flex items-center justify-between px-4 py-3 text-xs"
+                style="color: var(--color-text-tertiary)"
               >
-                {{ brandingBusy ? "..." : "Speichern" }}
+                <span>Subagent-Modell</span>
+                <span class="font-mono">{{ data.system.subagentModel }}</span>
+              </div>
+            </div>
+          </section>
+        </template>
+
+        <!-- ── Praeferenzen ───────────────────────────────────────────── -->
+        <template v-if="activeSection === 'praeferenzen'">
+          <section>
+            <h3 class="settings-h3 mb-3">Praeferenzen</h3>
+            <div class="settings-card settings-divide">
+              <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+                <div>
+                  <p class="text-sm" style="color: var(--color-text-secondary)">Benachrichtigungen</p>
+                  <p class="text-xs" style="color: var(--color-text-tertiary)">
+                    Telegram-Toasts bei neuen Aufgaben und Terminen
+                  </p>
+                </div>
+                <input v-model="notificationsEnabled" type="checkbox" class="settings-checkbox" />
+              </label>
+
+              <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+                <div>
+                  <p class="text-sm" style="color: var(--color-text-secondary)">
+                    Dateisuche im Chat standardmaessig an
+                  </p>
+                  <p class="text-xs" style="color: var(--color-text-tertiary)">
+                    Der Chat startet mit aktiver Vault-Suche (+-Menue)
+                  </p>
+                </div>
+                <input v-model="chatSearchMode" type="checkbox" class="settings-checkbox" />
+              </label>
+
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Standard-Projekt</label>
+                <select v-model="defaultProject" class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none">
+                  <option :value="null">Kein Standard</option>
+                  <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="flex justify-end mt-3">
+              <button
+                @click="saveSettings"
+                :disabled="savingSettings || !dirty"
+                class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+                :style="{ opacity: savingSettings || !dirty ? 0.5 : 1 }"
+              >
+                {{ savingSettings ? "..." : "Speichern" }}
               </button>
             </div>
-          </div>
-        </section>
-      </template>
+          </section>
+        </template>
 
-      <!-- ── Vorlagen (Phase 6c) ────────────────────────────────────── -->
-      <template v-if="activeSection === 'vorlagen'">
-        <section>
-          <h3 class="settings-h3 mb-3">Vorlagen</h3>
-          <div class="settings-card p-6">
+        <!-- ── Branding (Phase 6b) ────────────────────────────────────── -->
+        <template v-if="activeSection === 'branding'">
+          <section>
+            <h3 class="settings-h3 mb-3">Branding</h3>
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 16px">
+              Logo und Firmenstammdaten. Werden in Word-/PDF-Exports, Visitenkarten-Drucken und Email-Templates
+              verwendet.
+            </p>
+
+            <!-- Logo-Upload + Vorschau -->
+            <div class="settings-card p-5" style="margin-bottom: 16px">
+              <div class="text-sm" style="font-weight: 600; margin-bottom: 12px">Logo</div>
+              <div class="flex items-center" style="gap: 16px; flex-wrap: wrap">
+                <div
+                  style="
+                    width: 160px;
+                    height: 100px;
+                    border: 1px dashed var(--color-border);
+                    border-radius: 8px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    background: var(--color-bg-subtle);
+                    flex-shrink: 0;
+                    overflow: hidden;
+                  "
+                >
+                  <img
+                    v-if="branding?.logoUrl"
+                    :src="`${branding.logoUrl}?bust=${brandingLogoBust}`"
+                    :alt="branding.companyName ?? 'Logo'"
+                    style="max-width: 100%; max-height: 100%; object-fit: contain"
+                  />
+                  <span v-else class="text-xs" style="color: var(--color-text-tertiary)"> Kein Logo </span>
+                </div>
+                <div style="flex: 1; min-width: 200px">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                    :disabled="brandingBusy"
+                    @change="uploadLogo"
+                    style="font-size: 13px"
+                  />
+                  <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 6px">
+                    PNG, JPEG, SVG oder WebP. Max 2 MB.
+                    <span v-if="branding?.logoFilename">Aktuell: {{ branding.logoFilename }}</span>
+                  </div>
+                  <button
+                    v-if="branding?.logoUrl"
+                    @click="removeLogo"
+                    :disabled="brandingBusy"
+                    class="text-xs"
+                    style="
+                      margin-top: 10px;
+                      padding: 4px 10px;
+                      border-radius: 4px;
+                      background: transparent;
+                      border: 1px solid #dc2626;
+                      color: #dc2626;
+                      cursor: pointer;
+                    "
+                  >
+                    Logo entfernen
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stammdaten-Formular -->
+            <div class="settings-card settings-divide">
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Firmenname</label>
+                <input
+                  v-model="brandingDraft.companyName"
+                  placeholder="Sima Architecture e.U."
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                />
+              </div>
+              <div class="settings-row flex items-start gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Adresse</label>
+                <textarea
+                  v-model="brandingDraft.address"
+                  rows="2"
+                  placeholder="Straße, PLZ Ort, Land"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                  style="resize: vertical; font-family: inherit"
+                ></textarea>
+              </div>
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Telefon</label>
+                <input
+                  v-model="brandingDraft.phone"
+                  placeholder="+43 ..."
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                />
+              </div>
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Email</label>
+                <input
+                  v-model="brandingDraft.email"
+                  type="email"
+                  placeholder="kontakt@firma.at"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                />
+              </div>
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Website</label>
+                <input
+                  v-model="brandingDraft.website"
+                  placeholder="https://firma.at"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                />
+              </div>
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Primärfarbe</label>
+                <input
+                  v-model="brandingDraft.primaryColor"
+                  placeholder="#111827"
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none font-mono"
+                  style="max-width: 140px"
+                />
+                <span
+                  v-if="brandingDraft.primaryColor"
+                  :style="{
+                    width: '24px',
+                    height: '24px',
+                    borderRadius: '4px',
+                    background: brandingDraft.primaryColor,
+                    border: '1px solid var(--color-border)',
+                  }"
+                ></span>
+              </div>
+              <div class="flex justify-end px-4 py-3" style="gap: 8px">
+                <button
+                  @click="saveBranding"
+                  :disabled="brandingBusy || !brandingDirty"
+                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
+                  :style="{ opacity: brandingBusy || !brandingDirty ? 0.5 : 1 }"
+                >
+                  {{ brandingBusy ? "..." : "Speichern" }}
+                </button>
+              </div>
+            </div>
+          </section>
+        </template>
+
+        <!-- ── Vorlagen (Phase 6c) ────────────────────────────────────── -->
+        <template v-if="activeSection === 'vorlagen'">
+          <section>
+            <h3 class="settings-h3 mb-3">Vorlagen</h3>
             <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
-              Notiz- und Meeting-Vorlagen mit Platzhaltern wie
-              <code class="font-mono">&#123;&#123;Projekt&#125;&#125;</code> oder
-              <code class="font-mono">&#123;&#123;Datum&#125;&#125;</code>. Beim Anlegen einer
-              neuen Notiz wird die ausgewählte Vorlage automatisch eingefügt.
+              Markdown-Vorlagen mit Platzhaltern wie
+              <code class="font-mono">&#123;&#123;Projekt&#125;&#125;</code>,
+              <code class="font-mono">&#123;&#123;Bauherr&#125;&#125;</code>,
+              <code class="font-mono">&#123;&#123;Datum&#125;&#125;</code>. Beim Anlegen einer Notiz oder eines Meetings
+              wird die gewählte Vorlage mit Live-Daten gerendert.
             </p>
-            <p class="text-xs" style="color: var(--color-text-tertiary)">
-              ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
-            </p>
-          </div>
-        </section>
-      </template>
 
-      <!-- ── Word-Export (Phase 6d) ─────────────────────────────────── -->
-      <template v-if="activeSection === 'word-export'">
-        <section>
-          <h3 class="settings-h3 mb-3">Word-Export</h3>
-          <div class="settings-card p-6">
-            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
-              Lade Word-Dokumente (.docx) als Layout-Template hoch. Beim Export
-              eines Meetings, Bautagebuch-Eintrags oder Stundenzettels werden die
-              Daten in dein Layout eingefügt.
-            </p>
-            <p class="text-xs" style="color: var(--color-text-tertiary)">
-              ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
-            </p>
-          </div>
-        </section>
-      </template>
+            <!-- Kind-Tabs -->
+            <div class="flex" style="gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--color-border)">
+              <button
+                v-for="k in TEMPLATE_KINDS"
+                :key="k.id"
+                :class="['tpl-kind-tab', templateKindFilter === k.id ? 'tpl-kind-tab-active' : '']"
+                @click="templateKindFilter = k.id"
+              >
+                {{ k.label }}
+              </button>
+            </div>
 
-      <!-- ── Projekt-Module (Phase 6e) ──────────────────────────────── -->
-      <template v-if="activeSection === 'projekt-module'">
-        <section>
-          <h3 class="settings-h3 mb-3">Projekt-Module</h3>
-          <div class="settings-card p-6">
-            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
-              Welche Bereiche sollen in Projekten verfügbar sein? Hier
-              aktivierst/deaktivierst du Notizen, Aufgaben, Termine,
-              Bautagebuch, Meetings, Stundenerfassung etc.
-            </p>
-            <p class="text-xs" style="color: var(--color-text-tertiary)">
-              ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
-            </p>
-          </div>
-        </section>
-      </template>
+            <div class="tpl-grid">
+              <!-- Liste links -->
+              <div class="tpl-list">
+                <button @click="startNewTemplate" class="tpl-list-item tpl-new-btn">
+                  <span class="font-mono">+</span> Neue Vorlage
+                </button>
+                <button
+                  v-for="t in templatesByKind"
+                  :key="t.id"
+                  @click="startEditTemplate(t)"
+                  :class="['tpl-list-item', templateEditing?.id === t.id ? 'tpl-list-item-active' : '']"
+                >
+                  <div class="flex items-center" style="gap: 6px">
+                    <span style="font-weight: 500; flex: 1">{{ t.name }}</span>
+                    <span v-if="t.isDefault" class="tpl-default-pill" title="Standard-Vorlage fuer diese Kategorie">
+                      Standard
+                    </span>
+                  </div>
+                  <div v-if="t.description" class="text-xs" style="color: var(--color-text-tertiary); margin-top: 2px">
+                    {{ t.description }}
+                  </div>
+                </button>
+                <div
+                  v-if="templatesByKind.length === 0"
+                  class="text-xs"
+                  style="color: var(--color-text-tertiary); padding: 12px; text-align: center"
+                >
+                  Keine Vorlagen — leg eine neue an.
+                </div>
+              </div>
 
-      <!-- ── System-Info ───────────────────────────────────────────── -->
-      <template v-if="activeSection === 'system'">
-      <section>
-        <h3 class="settings-h3 mb-3">System</h3>
-        <div class="settings-card settings-divide text-sm">
-          <div class="settings-row flex items-center justify-between px-4 py-2.5">
-            <span class="settings-label">Datenbank</span>
-            <span
-              :style="{
-                color: data.runtime.dbEnabled
-                  ? 'var(--color-text-secondary)'
-                  : 'var(--color-text-tertiary)'
-              }"
-            >
-              {{ data.runtime.dbEnabled ? "Aktiv (PostgreSQL + pgvector)" : "Nicht aktiv (Dateisystem-Fallback)" }}
-            </span>
-          </div>
-          <div class="settings-row flex items-center justify-between px-4 py-2.5">
-            <span class="settings-label">Sprache</span>
-            <span class="settings-value">{{ data.system.language }} ({{ data.system.locale }})</span>
-          </div>
-          <div class="settings-row flex items-center justify-between px-4 py-2.5">
-            <span class="settings-label">Zeitzone</span>
-            <span class="settings-value">{{ data.system.timezone }}</span>
-          </div>
-          <div class="settings-row flex items-center justify-between px-4 py-2.5">
-            <span class="settings-label">Ollama-URL</span>
-            <span class="settings-value font-mono text-xs">{{ data.system.ollamaBaseUrl }}</span>
-          </div>
-          <div class="settings-row flex items-center justify-between px-4 py-2.5">
-            <span class="settings-label">Auto-Kompaktieren ab</span>
-            <span class="settings-value">{{ data.system.compactThreshold.toLocaleString() }} Zeichen</span>
-          </div>
-        </div>
-      </section>
-      </template>
-    </div>
+              <!-- Editor rechts -->
+              <div class="tpl-editor">
+                <div class="tpl-editor-row">
+                  <input
+                    v-model="templateDraft.name"
+                    placeholder="Name der Vorlage"
+                    class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                    style="font-weight: 500"
+                  />
+                  <select
+                    v-if="!templateEditing"
+                    v-model="templateDraft.kind"
+                    class="settings-input px-3 py-1.5 rounded text-sm outline-none"
+                  >
+                    <option value="meeting">Meeting</option>
+                    <option value="note">Notiz</option>
+                    <option value="bautagebuch">Bautagebuch</option>
+                  </select>
+                </div>
+                <input
+                  v-model="templateDraft.description"
+                  placeholder="Kurzbeschreibung (optional)"
+                  class="settings-input w-full px-3 py-1.5 rounded text-sm outline-none"
+                  style="margin-top: 8px"
+                />
+
+                <div class="tpl-body-grid">
+                  <div class="tpl-body-col">
+                    <div class="eyebrow" style="margin-bottom: 6px">Markdown-Body</div>
+                    <textarea
+                      v-model="templateDraft.body"
+                      rows="18"
+                      placeholder="Body mit &#123;&#123;Platzhaltern&#125;&#125;…"
+                      class="settings-input w-full px-3 py-2 rounded text-sm outline-none font-mono"
+                      style="resize: vertical; font-family: ui-monospace, SFMono-Regular, monospace"
+                    ></textarea>
+                  </div>
+                  <div class="tpl-body-col">
+                    <div class="eyebrow" style="margin-bottom: 6px">
+                      Vorschau
+                      <span style="color: var(--color-text-tertiary); font-weight: normal">
+                        (Platzhalter ersetzt)
+                      </span>
+                    </div>
+                    <pre class="tpl-preview" style="white-space: pre-wrap; word-break: break-word">{{
+                      templatePreview || templateDraft.body || "(leer)"
+                    }}</pre>
+                  </div>
+                </div>
+
+                <details class="tpl-vars-help">
+                  <summary>Verfügbare Platzhalter</summary>
+                  <div class="tpl-vars-grid">
+                    <div v-for="v in templateVariables" :key="v.name" class="tpl-var-item">
+                      <code class="font-mono" v-text="placeholderRef(v.name)"></code>
+                      <span style="color: var(--color-text-tertiary)">— {{ v.description }}</span>
+                    </div>
+                  </div>
+                </details>
+
+                <div class="flex items-center justify-between" style="margin-top: 12px">
+                  <label class="flex items-center" style="gap: 6px; cursor: pointer">
+                    <input type="checkbox" v-model="templateDraft.isDefault" />
+                    <span class="text-xs">Als Standard für {{ templateDraft.kind }} setzen</span>
+                  </label>
+                  <div class="flex" style="gap: 8px">
+                    <button
+                      v-if="templateEditing"
+                      @click="removeTemplate(templateEditing)"
+                      :disabled="templateBusy"
+                      class="text-sm px-3 py-1.5 rounded"
+                      style="background: transparent; border: 1px solid #dc2626; color: #dc2626; cursor: pointer"
+                    >
+                      Löschen
+                    </button>
+                    <button
+                      v-if="templateEditing && !templateEditing.isDefault"
+                      @click="setTemplateDefault(templateEditing)"
+                      :disabled="templateBusy"
+                      class="text-sm px-3 py-1.5 rounded settings-ghost-btn"
+                    >
+                      Als Standard
+                    </button>
+                    <button
+                      @click="cancelTemplate"
+                      :disabled="templateBusy"
+                      class="text-sm px-3 py-1.5 rounded settings-ghost-btn"
+                    >
+                      Abbrechen
+                    </button>
+                    <button
+                      @click="saveTemplate"
+                      :disabled="templateBusy || !templateDraft.name.trim()"
+                      class="primary-btn text-sm px-4 py-1.5 rounded font-medium"
+                      :style="{ opacity: templateBusy || !templateDraft.name.trim() ? 0.5 : 1 }"
+                    >
+                      {{ templateBusy ? "..." : templateEditing ? "Speichern" : "Anlegen" }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </template>
+
+        <!-- ── Word-Export (Phase 6d) ─────────────────────────────────── -->
+        <template v-if="activeSection === 'word-export'">
+          <section>
+            <h3 class="settings-h3 mb-3">Word-Export</h3>
+            <div class="settings-card p-6">
+              <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+                Lade Word-Dokumente (.docx) als Layout-Template hoch. Beim Export eines Meetings, Bautagebuch-Eintrags
+                oder Stundenzettels werden die Daten in dein Layout eingefügt.
+              </p>
+              <p class="text-xs" style="color: var(--color-text-tertiary)">
+                ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
+              </p>
+            </div>
+          </section>
+        </template>
+
+        <!-- ── Projekt-Module (Phase 6e) ──────────────────────────────── -->
+        <template v-if="activeSection === 'projekt-module'">
+          <section>
+            <h3 class="settings-h3 mb-3">Projekt-Module</h3>
+            <div class="settings-card p-6">
+              <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+                Welche Bereiche sollen in Projekten verfügbar sein? Hier aktivierst/deaktivierst du Notizen, Aufgaben,
+                Termine, Bautagebuch, Meetings, Stundenerfassung etc.
+              </p>
+              <p class="text-xs" style="color: var(--color-text-tertiary)">
+                ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
+              </p>
+            </div>
+          </section>
+        </template>
+
+        <!-- ── System-Info ───────────────────────────────────────────── -->
+        <template v-if="activeSection === 'system'">
+          <section>
+            <h3 class="settings-h3 mb-3">System</h3>
+            <div class="settings-card settings-divide text-sm">
+              <div class="settings-row flex items-center justify-between px-4 py-2.5">
+                <span class="settings-label">Datenbank</span>
+                <span
+                  :style="{
+                    color: data.runtime.dbEnabled ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)',
+                  }"
+                >
+                  {{ data.runtime.dbEnabled ? "Aktiv (PostgreSQL + pgvector)" : "Nicht aktiv (Dateisystem-Fallback)" }}
+                </span>
+              </div>
+              <div class="settings-row flex items-center justify-between px-4 py-2.5">
+                <span class="settings-label">Sprache</span>
+                <span class="settings-value">{{ data.system.language }} ({{ data.system.locale }})</span>
+              </div>
+              <div class="settings-row flex items-center justify-between px-4 py-2.5">
+                <span class="settings-label">Zeitzone</span>
+                <span class="settings-value">{{ data.system.timezone }}</span>
+              </div>
+              <div class="settings-row flex items-center justify-between px-4 py-2.5">
+                <span class="settings-label">Ollama-URL</span>
+                <span class="settings-value font-mono text-xs">{{ data.system.ollamaBaseUrl }}</span>
+              </div>
+              <div class="settings-row flex items-center justify-between px-4 py-2.5">
+                <span class="settings-label">Auto-Kompaktieren ab</span>
+                <span class="settings-value">{{ data.system.compactThreshold.toLocaleString() }} Zeichen</span>
+              </div>
+            </div>
+          </section>
+        </template>
+      </div>
     </div>
   </div>
 </template>
@@ -1724,6 +2037,147 @@ onMounted(() => {
   }
   .settings-content {
     padding: 20px 16px 40px;
+  }
+}
+
+/* ── Vorlagen-Editor (Phase 6c) ────────────────────────────────────── */
+.tpl-kind-tab {
+  background: transparent;
+  border: 0;
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 120ms ease;
+}
+.tpl-kind-tab:hover {
+  color: var(--color-text);
+}
+.tpl-kind-tab-active {
+  color: var(--color-text);
+  font-weight: 500;
+  border-bottom-color: var(--color-text);
+}
+
+.tpl-grid {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.tpl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--color-bg);
+}
+.tpl-list-item {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--color-text);
+  transition: background 120ms ease;
+}
+.tpl-list-item:hover {
+  background: var(--color-bg-subtle);
+}
+.tpl-list-item-active {
+  background: var(--color-border-subtle);
+}
+.tpl-new-btn {
+  color: var(--color-text-muted);
+  font-style: italic;
+  border-bottom: 1px dashed var(--color-border-subtle);
+  border-radius: 0;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+}
+.tpl-default-pill {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background: var(--color-text);
+  color: var(--color-bg);
+  font-weight: 600;
+}
+
+.tpl-editor {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 14px;
+}
+.tpl-editor-row {
+  display: flex;
+  gap: 8px;
+}
+.tpl-body-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+.tpl-body-col {
+  display: flex;
+  flex-direction: column;
+}
+.tpl-preview {
+  flex: 1;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  padding: 12px;
+  background: var(--color-bg-subtle);
+  font-size: 13px;
+  color: var(--color-text);
+  min-height: 380px;
+  max-height: 440px;
+  overflow-y: auto;
+  margin: 0;
+  font-family: inherit;
+}
+.tpl-vars-help {
+  margin-top: 12px;
+  padding: 10px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  font-size: 12px;
+}
+.tpl-vars-help summary {
+  cursor: pointer;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+.tpl-vars-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px 12px;
+  margin-top: 8px;
+}
+.tpl-var-item {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 11px;
+}
+
+@media (max-width: 900px) {
+  .tpl-grid {
+    grid-template-columns: 1fr;
+  }
+  .tpl-body-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

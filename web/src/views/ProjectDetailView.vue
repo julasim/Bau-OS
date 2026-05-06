@@ -788,9 +788,7 @@ async function loadAllProjectsForPicker() {
 const parentCandidates = computed<ProjectSummary[]>(() => {
   if (!info.value) return [];
   const childIds = new Set(children.value.map((c) => c.id));
-  return allProjectsForPicker.value.filter(
-    (p) => p.id !== info.value!.id && !childIds.has(p.id),
-  );
+  return allProjectsForPicker.value.filter((p) => p.id !== info.value!.id && !childIds.has(p.id));
 });
 
 async function openParentPicker() {
@@ -879,6 +877,8 @@ async function openTab(t: Tab) {
     // Team brauchen wir fuer den Teilnehmer-Picker.
     if (!teamLoaded.value) await loadTeam();
     if (!meetingsLoaded.value) await loadMeetings();
+    // Vorlagen einmalig fuer den Apply-Dropdown
+    if (meetingTemplates.value.length === 0) await loadMeetingTemplates();
   }
   if (t === "stunden") {
     if (!teamLoaded.value) await loadTeam();
@@ -1049,8 +1049,7 @@ async function uploadFiles(fileList: FileList) {
     if (!res.ok || !data.success) {
       // HTTP-Fehler oder Backend hat success=false geliefert. Echte
       // Fehlermeldung anzeigen statt "Upload fehlgeschlagen".
-      const detail =
-        data.failures?.[0]?.error ?? data.error ?? `HTTP ${res.status} ${res.statusText}`;
+      const detail = data.failures?.[0]?.error ?? data.error ?? `HTTP ${res.status} ${res.statusText}`;
       uploadError.value = `Upload fehlgeschlagen: ${detail}`;
       return;
     }
@@ -1180,9 +1179,7 @@ async function unassignMember(m: TeamMember) {
   try {
     // Junction-Delete: Mitglied bleibt erhalten, nur die Zuordnung zu
     // diesem einen Projekt wird aufgehoben (andere Zuordnungen bleiben).
-    await api.delete(
-      `/team/${encodeURIComponent(m.id)}/projects/${encodeURIComponent(info.value.id)}`,
-    );
+    await api.delete(`/team/${encodeURIComponent(m.id)}/projects/${encodeURIComponent(info.value.id)}`);
     await loadTeam();
   } catch (e) {
     teamError.value = e instanceof Error ? e.message : "Entfernen fehlgeschlagen";
@@ -1314,9 +1311,7 @@ async function quickAddTermin() {
 
 // ── Uebersicht: Top-Daten aus bestehenden Listen ──────────
 // Kein neuer Fetch noetig — tasks/termine sind schon geladen.
-const openTasksTop = computed(() =>
-  tasks.value.filter((t) => t.status !== "done").slice(0, 5),
-);
+const openTasksTop = computed(() => tasks.value.filter((t) => t.status !== "done").slice(0, 5));
 
 const upcomingTermine = computed(() => {
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -1565,6 +1560,38 @@ async function loadMeetings() {
 function newMeeting() {
   meetingError.value = null;
   meetingDraft.value = emptyMeetingDraft();
+  selectedMeetingTemplateId.value = "";
+}
+
+// ── Vorlagen (Phase 6c) ──────────────────────────────────────────────────
+// User waehlt eine Meeting-Vorlage → Backend rendert mit Live-Daten
+// (Projekt, Bauherr, Datum, Branding) → Inhalt landet im "minutes"-Feld.
+interface MeetingTemplateSummary {
+  id: string;
+  kind: string;
+  name: string;
+  isDefault: boolean;
+}
+const meetingTemplates = ref<MeetingTemplateSummary[]>([]);
+const selectedMeetingTemplateId = ref<string>("");
+
+async function loadMeetingTemplates() {
+  try {
+    meetingTemplates.value = await api.get<MeetingTemplateSummary[]>("/templates?kind=meeting");
+  } catch {
+    meetingTemplates.value = [];
+  }
+}
+
+async function applyMeetingTemplate() {
+  if (!selectedMeetingTemplateId.value || !meetingDraft.value) return;
+  try {
+    const url = `/templates/${selectedMeetingTemplateId.value}/render?project=${encodeURIComponent(projectName.value)}`;
+    const res = await api.get<{ rendered: string }>(url);
+    meetingDraft.value.minutes = res.rendered;
+  } catch {
+    /* fail silently */
+  }
 }
 
 function selectMeeting(m: Meeting) {
@@ -1963,7 +1990,10 @@ async function deleteMeeting() {
 </script>
 
 <template>
-  <div class="proj-detail-page" style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div
+    class="proj-detail-page"
+    style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)"
+  >
     <!-- Back-Link -->
     <button @click="router.push('/projects')" class="back-link">
       <BIcon name="arrowLeft" :size="12" />
@@ -1982,30 +2012,25 @@ async function deleteMeeting() {
           <!-- Parent-Breadcrumb (Migration 005) — klickbar zum Parent -->
           <div v-if="info.parentName" class="parent-crumb">
             <BIcon name="layers" :size="10" />
-            <router-link
-              :to="`/projects/${encodeURIComponent(info.parentName)}`"
-              class="parent-link"
-            >
+            <router-link :to="`/projects/${encodeURIComponent(info.parentName)}`" class="parent-link">
               {{ info.parentName }}
             </router-link>
             <span style="color: var(--color-text-faint)">/</span>
           </div>
           <div v-else class="eyebrow" style="margin-bottom: 6px">Projekt</div>
-          <h1
-            style="
-              font-size: 28px;
-              font-weight: 600;
-              margin: 0;
-              letter-spacing: -0.01em;
-              color: var(--color-text);
-            "
-          >
+          <h1 style="font-size: 28px; font-weight: 600; margin: 0; letter-spacing: -0.01em; color: var(--color-text)">
             {{ info.name }}
           </h1>
           <!-- Phase 3: "Angelegt von ..." als kleiner Hinweis unter dem Titel. -->
           <p
             v-if="info.createdByUsername"
-            style="font-size: 11px; color: var(--color-text-faint); margin: 4px 0 0 0; letter-spacing: 0.04em; text-transform: uppercase"
+            style="
+              font-size: 11px;
+              color: var(--color-text-faint);
+              margin: 4px 0 0 0;
+              letter-spacing: 0.04em;
+              text-transform: uppercase;
+            "
           >
             Angelegt von {{ info.createdByUsername }}
           </p>
@@ -2013,12 +2038,7 @@ async function deleteMeeting() {
                Standort ist klickbar und oeffnet Google Maps in neuem Tab. -->
           <p
             v-if="info.projektart || info.nutzung || info.standort"
-            style="
-              font-size: 13px;
-              color: var(--color-text-muted);
-              margin: 6px 0 0 0;
-              line-height: 1.5;
-            "
+            style="font-size: 13px; color: var(--color-text-muted); margin: 6px 0 0 0; line-height: 1.5"
           >
             <span v-if="info.projektart">{{ info.projektart }}</span>
             <span v-if="info.projektart && info.nutzung"> · </span>
@@ -2082,27 +2102,15 @@ async function deleteMeeting() {
               <BIcon name="more" :size="14" />
             </button>
             <div v-if="showActionMenu" class="action-menu">
-              <button
-                v-if="info.status !== 'aktiv'"
-                class="action-menu-item"
-                @click="setStatus('aktiv')"
-              >
+              <button v-if="info.status !== 'aktiv'" class="action-menu-item" @click="setStatus('aktiv')">
                 <BIcon name="check" :size="12" />
                 <span>Aktivieren</span>
               </button>
-              <button
-                v-if="info.status !== 'pausiert'"
-                class="action-menu-item"
-                @click="setStatus('pausiert')"
-              >
+              <button v-if="info.status !== 'pausiert'" class="action-menu-item" @click="setStatus('pausiert')">
                 <BIcon name="clock" :size="12" />
                 <span>Pausieren</span>
               </button>
-              <button
-                v-if="info.status !== 'archiviert'"
-                class="action-menu-item"
-                @click="setStatus('archiviert')"
-              >
+              <button v-if="info.status !== 'archiviert'" class="action-menu-item" @click="setStatus('archiviert')">
                 <BIcon name="archive" :size="12" />
                 <span>Archivieren</span>
               </button>
@@ -2195,11 +2203,9 @@ async function deleteMeeting() {
                   {{ saving ? "…" : "Speichern" }}
                 </button>
                 <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
-                <span
-                  v-if="saveError"
-                  style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px"
-                  >{{ saveError }}</span
-                >
+                <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">{{
+                  saveError
+                }}</span>
               </div>
               <!-- Freitext-Suggestions als Chips -->
               <div
@@ -2247,11 +2253,7 @@ async function deleteMeeting() {
             <span v-else style="color: var(--color-text-muted)">Bauherr verknüpfen…</span>
           </button>
           <div v-if="showBauherrPicker" class="link-dropdown">
-            <button
-              v-if="info.bauherrId"
-              class="link-dropdown-item link-dropdown-clear"
-              @click="unlinkBauherr"
-            >
+            <button v-if="info.bauherrId" class="link-dropdown-item link-dropdown-clear" @click="unlinkBauherr">
               <BIcon name="x" :size="11" />
               <span>Verknüpfung aufheben</span>
             </button>
@@ -2274,9 +2276,7 @@ async function deleteMeeting() {
                 </div>
               </div>
             </button>
-            <p v-if="allTeam.length === 0" class="link-dropdown-empty">
-              Keine Team-Mitglieder vorhanden.
-            </p>
+            <p v-if="allTeam.length === 0" class="link-dropdown-empty">Keine Team-Mitglieder vorhanden.</p>
           </div>
         </div>
 
@@ -2292,11 +2292,7 @@ async function deleteMeeting() {
             <span v-else style="color: var(--color-text-muted)">Sub-Projekt von…</span>
           </button>
           <div v-if="showParentPicker" class="link-dropdown">
-            <button
-              v-if="info.parentId"
-              class="link-dropdown-item link-dropdown-clear"
-              @click="setParent(null)"
-            >
+            <button v-if="info.parentId" class="link-dropdown-item link-dropdown-clear" @click="setParent(null)">
               <BIcon name="x" :size="11" />
               <span>Verknüpfung aufheben</span>
             </button>
@@ -2312,9 +2308,7 @@ async function deleteMeeting() {
               <BIcon name="folder" :size="11" style="color: var(--color-text-muted)" />
               <span style="font-size: 12px; color: var(--color-text)">{{ p.name }}</span>
             </button>
-            <p v-if="parentCandidates.length === 0" class="link-dropdown-empty">
-              Keine weiteren Projekte vorhanden.
-            </p>
+            <p v-if="parentCandidates.length === 0" class="link-dropdown-empty">Keine weiteren Projekte vorhanden.</p>
           </div>
         </div>
       </div>
@@ -2350,7 +2344,19 @@ async function deleteMeeting() {
       style="gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); overflow-x: auto"
     >
       <template
-        v-for="t in (['uebersicht', 'notes', 'tasks', 'termine', 'files', 'team', 'bautagebuch', 'meetings', 'stunden', 'verlauf', 'zugriff'] as const)"
+        v-for="t in [
+          'uebersicht',
+          'notes',
+          'tasks',
+          'termine',
+          'files',
+          'team',
+          'bautagebuch',
+          'meetings',
+          'stunden',
+          'verlauf',
+          'zugriff',
+        ] as const"
         :key="t"
       >
         <!-- "zugriff" nur fuer Admins. Alle anderen Tabs immer sichtbar. -->
@@ -2392,11 +2398,7 @@ async function deleteMeeting() {
       <div class="ueb-card" style="margin-bottom: 16px">
         <div class="flex items-center justify-between" style="margin-bottom: 8px">
           <div class="eyebrow">Beschreibung</div>
-          <button
-            v-if="editingField !== 'description'"
-            class="desc-edit-btn"
-            @click="startEditDescription"
-          >
+          <button v-if="editingField !== 'description'" class="desc-edit-btn" @click="startEditDescription">
             <BIcon name="pencil" :size="11" />
             <span style="margin-left: 4px">{{ info.description ? "Bearbeiten" : "Hinzufügen" }}</span>
           </button>
@@ -2467,12 +2469,7 @@ async function deleteMeeting() {
           </div>
           <!-- Quick-Add Termin: Datum + Text nebeneinander -->
           <div class="quick-add">
-            <input
-              v-model="quickTerminDate"
-              type="date"
-              class="quick-input"
-              style="width: 120px"
-            />
+            <input v-model="quickTerminDate" type="date" class="quick-input" style="width: 120px" />
             <input
               v-model="quickTerminText"
               placeholder="Termin…"
@@ -2536,9 +2533,7 @@ async function deleteMeeting() {
             <button class="link-btn" @click="openTab('verlauf')">Alle →</button>
           </div>
           <div v-if="!recentActivityLoaded" class="ueb-empty">Lade…</div>
-          <div v-else-if="recentActivity.length === 0" class="ueb-empty">
-            Noch keine Aktivität für dieses Projekt.
-          </div>
+          <div v-else-if="recentActivity.length === 0" class="ueb-empty">Noch keine Aktivität für dieses Projekt.</div>
           <div v-for="log in recentActivity" :key="log.id ?? `${log.sessionId}-${log.createdAt}`" class="ueb-row">
             <div style="flex: 1; min-width: 0">
               <div class="ueb-row-title">{{ activityLabel(log) }}</div>
@@ -2639,14 +2634,14 @@ async function deleteMeeting() {
           <span v-else-if="t.assignee" class="assignee-chip assignee-chip-free">
             {{ t.assignee }}
           </span>
-          <span v-if="t.date" class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary)">{{ t.date }}</span>
+          <span v-if="t.date" class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary)">{{
+            t.date
+          }}</span>
         </div>
       </div>
       <div v-else class="empty-state">
         <div class="empty-state-icon">📋</div>
-        <div class="empty-state-text">
-          Noch keine offenen Aufgaben in diesem Projekt.
-        </div>
+        <div class="empty-state-text">Noch keine offenen Aufgaben in diesem Projekt.</div>
         <button class="bauos-btn solid sm" @click="focusNewTaskInput">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erste Aufgabe anlegen
@@ -2744,12 +2739,7 @@ async function deleteMeeting() {
             <span v-if="uploadMsg" style="font-size: 11px; color: var(--color-success-text)">
               {{ uploadMsg }}
             </span>
-            <button
-              type="button"
-              class="bauos-btn solid sm"
-              :disabled="uploading"
-              @click="triggerFileUpload"
-            >
+            <button type="button" class="bauos-btn solid sm" :disabled="uploading" @click="triggerFileUpload">
               <BIcon name="paperclip" :size="12" />
               <span style="margin-left: 4px">{{ uploading ? "Lädt…" : "Hochladen" }}</span>
             </button>
@@ -2788,18 +2778,19 @@ async function deleteMeeting() {
           >
             <BIcon name="file" :size="14" style="color: var(--color-text-muted)" />
             <span class="flex-1" style="font-size: 13px; color: var(--color-text)">{{ f.name }}</span>
-            <span class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary); width: 70px; text-align: right">
+            <span
+              class="font-mono"
+              style="font-size: 11px; color: var(--color-text-tertiary); width: 70px; text-align: right"
+            >
               {{ formatSize(f.size) }}
             </span>
-            <span class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary); width: 90px; text-align: right">
+            <span
+              class="font-mono"
+              style="font-size: 11px; color: var(--color-text-tertiary); width: 90px; text-align: right"
+            >
               {{ formatFileDate(f.modified) }}
             </span>
-            <button
-              @click.stop="deleteFile(f)"
-              class="file-del-btn"
-              :title="'Datei löschen'"
-              type="button"
-            >
+            <button @click.stop="deleteFile(f)" class="file-del-btn" :title="'Datei löschen'" type="button">
               <BIcon name="x" :size="12" />
             </button>
           </button>
@@ -2835,11 +2826,7 @@ async function deleteMeeting() {
               <template v-if="m.projectId"> (aktuell: anderes Projekt)</template>
             </option>
           </select>
-          <button
-            class="bauos-btn solid sm"
-            :disabled="!assignMemberId || teamAssigning"
-            @click="assignExisting"
-          >
+          <button class="bauos-btn solid sm" :disabled="!assignMemberId || teamAssigning" @click="assignExisting">
             Zuordnen
           </button>
           <span style="color: var(--color-text-faint); font-size: 12px">oder</span>
@@ -2986,12 +2973,7 @@ async function deleteMeeting() {
               <h3 style="margin: 0; font-size: 16px; font-weight: 600">
                 {{ formatBautagDate(bautagebuchSelectedDate) }}
               </h3>
-              <button
-                class="bt-day-nav"
-                @click="navigateBautagebuch(1)"
-                title="Nächster Tag"
-                aria-label="Nächster Tag"
-              >
+              <button class="bt-day-nav" @click="navigateBautagebuch(1)" title="Nächster Tag" aria-label="Nächster Tag">
                 <BIcon name="chevronRight" :size="14" />
               </button>
               <span
@@ -3017,9 +2999,7 @@ async function deleteMeeting() {
               <label class="bt-label">Wetter</label>
               <select v-model="bautagebuchDraft.weather" class="stamm-input" style="max-width: 220px">
                 <option value="">— wählen —</option>
-                <option v-for="w in WEATHER_OPTIONS" :key="w.value" :value="w.value">
-                  {{ w.icon }} {{ w.label }}
-                </option>
+                <option v-for="w in WEATHER_OPTIONS" :key="w.value" :value="w.value">{{ w.icon }} {{ w.label }}</option>
               </select>
             </div>
 
@@ -3144,7 +3124,10 @@ async function deleteMeeting() {
                 <span v-if="m.meetingType" class="mt-row-type">{{ m.meetingType }}</span>
               </div>
               <div class="mt-row-title">{{ m.title }}</div>
-              <div v-if="m.attendeesResolved && m.attendeesResolved.length > 0 || m.attendeesExternal.length > 0" class="mt-row-attendees">
+              <div
+                v-if="(m.attendeesResolved && m.attendeesResolved.length > 0) || m.attendeesExternal.length > 0"
+                class="mt-row-attendees"
+              >
                 {{ (m.attendeesResolved ?? []).length + m.attendeesExternal.length }} Teilnehmer
               </div>
             </div>
@@ -3165,12 +3148,7 @@ async function deleteMeeting() {
                 <BIcon name="trash" :size="11" />
                 <span style="margin-left: 4px">Löschen</span>
               </button>
-              <button
-                v-else
-                class="bauos-btn ghost sm"
-                style="margin-left: auto"
-                @click="cancelMeetingEdit"
-              >
+              <button v-else class="bauos-btn ghost sm" style="margin-left: auto" @click="cancelMeetingEdit">
                 Abbrechen
               </button>
             </div>
@@ -3221,6 +3199,38 @@ async function deleteMeeting() {
                 @update:free-text="(v) => meetingDraft && (meetingDraft.attendeesExternal = v)"
                 placeholder="Mitarbeiter wählen oder externen Namen eintragen…"
               />
+            </div>
+
+            <!-- Vorlage anwenden (Phase 6c) — nur fuer NEUE Meetings.
+                 Beim Edit waere das Risiko zu hoch dass User existing-Inhalt
+                 versehentlich ueberschreibt. -->
+            <div
+              v-if="!meetingDraft.id && meetingTemplates.length > 0"
+              class="mt-field"
+              style="
+                background: var(--color-bg-subtle);
+                border: 1px solid var(--color-border-subtle);
+                border-radius: 6px;
+                padding: 10px 12px;
+              "
+            >
+              <label class="mt-label" style="font-size: 11px">
+                Vorlage anwenden
+                <span style="color: var(--color-text-tertiary); font-weight: normal">
+                  (ersetzt das Protokoll-Feld)
+                </span>
+              </label>
+              <select
+                v-model="selectedMeetingTemplateId"
+                @change="applyMeetingTemplate"
+                class="stamm-input"
+                style="font-size: 13px"
+              >
+                <option value="">— keine Vorlage —</option>
+                <option v-for="t in meetingTemplates" :key="t.id" :value="t.id">
+                  {{ t.name }}{{ t.isDefault ? " (Standard)" : "" }}
+                </option>
+              </select>
             </div>
 
             <!-- Agenda -->
@@ -3392,21 +3402,11 @@ async function deleteMeeting() {
               <h3 style="margin: 0; font-size: 16px; font-weight: 600">
                 {{ timeDraft.id ? "Eintrag bearbeiten" : "Neuer Stunden-Eintrag" }}
               </h3>
-              <button
-                v-if="timeDraft.id"
-                class="bauos-btn ghost sm"
-                style="margin-left: auto"
-                @click="deleteTimeEntry"
-              >
+              <button v-if="timeDraft.id" class="bauos-btn ghost sm" style="margin-left: auto" @click="deleteTimeEntry">
                 <BIcon name="trash" :size="11" />
                 <span style="margin-left: 4px">Löschen</span>
               </button>
-              <button
-                v-else
-                class="bauos-btn ghost sm"
-                style="margin-left: auto"
-                @click="cancelTimeEdit"
-              >
+              <button v-else class="bauos-btn ghost sm" style="margin-left: auto" @click="cancelTimeEdit">
                 Abbrechen
               </button>
             </div>
@@ -3524,7 +3524,11 @@ async function deleteMeeting() {
             </div>
           </div>
 
-          <div v-else class="time-editor empty-hint" style="display: flex; align-items: center; justify-content: center">
+          <div
+            v-else
+            class="time-editor empty-hint"
+            style="display: flex; align-items: center; justify-content: center"
+          >
             Eintrag links auswählen oder „Stunden eintragen" klicken.
           </div>
         </div>
@@ -3562,11 +3566,7 @@ async function deleteMeeting() {
         </div>
       </div>
       <div v-if="fullActivityHasMore" class="flex" style="justify-content: center; margin-top: 12px">
-        <button
-          class="bauos-btn ghost sm"
-          :disabled="fullActivityLoading"
-          @click="loadFullActivity(false)"
-        >
+        <button class="bauos-btn ghost sm" :disabled="fullActivityLoading" @click="loadFullActivity(false)">
           {{ fullActivityLoading ? "Lädt…" : "Mehr laden" }}
         </button>
       </div>
@@ -3616,12 +3616,15 @@ async function deleteMeeting() {
       </div>
 
       <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-        <div
-          v-for="entry in accessList"
-          :key="entry.userId"
-          class="access-row"
-        >
-          <div class="member-avatar member-avatar-sm" style="background: var(--color-bg-subtle); color: var(--color-text-secondary); border: 1px solid var(--color-border)">
+        <div v-for="entry in accessList" :key="entry.userId" class="access-row">
+          <div
+            class="member-avatar member-avatar-sm"
+            style="
+              background: var(--color-bg-subtle);
+              color: var(--color-text-secondary);
+              border: 1px solid var(--color-border);
+            "
+          >
             {{ initial(entry.displayName ?? entry.username) }}
           </div>
           <div style="flex: 1; min-width: 0">
@@ -3635,9 +3638,7 @@ async function deleteMeeting() {
             <BIcon name="x" :size="12" />
           </button>
         </div>
-        <p v-if="accessLoaded && accessList.length === 0" class="empty-hint">
-          Noch keine Nutzer freigegeben.
-        </p>
+        <p v-if="accessLoaded && accessList.length === 0" class="empty-hint">Noch keine Nutzer freigegeben.</p>
         <p v-else-if="!accessLoaded" class="empty-hint">Lade…</p>
       </div>
     </div>
@@ -3674,9 +3675,7 @@ async function deleteMeeting() {
           {{ renameError }}
         </div>
         <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="bauos-btn ghost" @click="renameDialogOpen = false" :disabled="renaming">
-            Abbrechen
-          </button>
+          <button class="bauos-btn ghost" @click="renameDialogOpen = false" :disabled="renaming">Abbrechen</button>
           <button
             class="bauos-btn solid"
             @click="submitRename"
@@ -3689,15 +3688,9 @@ async function deleteMeeting() {
     </div>
 
     <!-- ═══ Loesch-Bestaetigung ═══════════════════════════════ -->
-    <div
-      v-if="deleteConfirmOpen"
-      class="modal-overlay"
-      @click.self="deleteConfirmOpen = false"
-    >
+    <div v-if="deleteConfirmOpen" class="modal-overlay" @click.self="deleteConfirmOpen = false">
       <div class="modal-card" style="max-width: 480px">
-        <div class="eyebrow" style="color: var(--color-danger-text); margin-bottom: 6px">
-          Achtung
-        </div>
+        <div class="eyebrow" style="color: var(--color-danger-text); margin-bottom: 6px">Achtung</div>
         <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 12px 0; color: var(--color-text)">
           Projekt „{{ info?.name }}" wirklich löschen?
         </h2>
@@ -3727,15 +3720,16 @@ async function deleteMeeting() {
         <div class="flex items-center justify-between" style="margin-top: 20px">
           <button
             class="bauos-btn ghost"
-            @click="setStatus('archiviert'); deleteConfirmOpen = false"
+            @click="
+              setStatus('archiviert');
+              deleteConfirmOpen = false;
+            "
             :disabled="deleting || info?.status === 'archiviert'"
           >
             Stattdessen archivieren
           </button>
           <div class="flex items-center" style="gap: 8px">
-            <button class="bauos-btn ghost" @click="deleteConfirmOpen = false" :disabled="deleting">
-              Abbrechen
-            </button>
+            <button class="bauos-btn ghost" @click="deleteConfirmOpen = false" :disabled="deleting">Abbrechen</button>
             <button class="bauos-btn danger" @click="confirmDelete" :disabled="deleting">
               {{ deleting ? "Lösche…" : "Ja, löschen" }}
             </button>
@@ -4989,7 +4983,9 @@ async function deleteMeeting() {
   border-radius: 50%;
   border: 1px solid var(--color-border);
   cursor: pointer;
-  transition: transform 120ms ease, border-color 180ms ease;
+  transition:
+    transform 120ms ease,
+    border-color 180ms ease;
 }
 .color-swatch:hover {
   transform: scale(1.1);
@@ -5036,7 +5032,9 @@ async function deleteMeeting() {
   transform: scale(1.15);
 }
 .color-option-active {
-  box-shadow: 0 0 0 2px var(--color-bg), 0 0 0 3px var(--color-text);
+  box-shadow:
+    0 0 0 2px var(--color-bg),
+    0 0 0 3px var(--color-text);
 }
 .color-option-empty {
   background: transparent !important;
