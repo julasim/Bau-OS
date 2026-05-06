@@ -96,6 +96,7 @@ import { webhooksMicrosoftRoutes } from "./routes/webhooks-microsoft.js";
 import { brandingRoutes, publicBrandingRoutes } from "./routes/branding.js";
 import { templatesRoutes } from "./routes/templates.js";
 import { exportTemplatesRoutes } from "./routes/export-templates.js";
+import { projectModulesRoutes } from "./routes/project-modules.js";
 // Old TOTP-Routes (auth2faRoutes): durch Email-2FA in Migration 020
 // abgeloest. Endpoints werden nicht mehr exposed, damit nicht parallel
 // zwei 2FA-Mechanismen laufen koennen. Datei bleibt im Code als Recovery-
@@ -774,6 +775,7 @@ app.route("/api", agentLogsRoutes);
 app.route("/api", brandingRoutes);
 app.route("/api", templatesRoutes);
 app.route("/api", exportTemplatesRoutes);
+app.route("/api", projectModulesRoutes);
 // authMicrosoftRoutes wird oben VOR der globalen authMiddleware registriert,
 // damit /callback public bleibt — siehe Kommentar bei Zeile ~696.
 // app.route("/api", auth2faRoutes); — siehe Kommentar oben

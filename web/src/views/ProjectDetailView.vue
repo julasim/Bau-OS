@@ -212,6 +212,115 @@ type Tab =
   | "zugriff";
 const tab = ref<Tab>("uebersicht");
 
+// ── Projekt-Module (Phase 6e) ────────────────────────────────────────────
+// Effektive Modul-Sicht (globale Defaults + per-Projekt-Override). Tabs
+// deren Modul auf false ist werden ausgeblendet. uebersicht/verlauf/zugriff
+// sind immer sichtbar (kein Modul-Mapping).
+interface ProjectModuleFlags {
+  stammdaten: boolean;
+  notes: boolean;
+  tasks: boolean;
+  termine: boolean;
+  files: boolean;
+  team: boolean;
+  bautagebuch: boolean;
+  meetings: boolean;
+  time_entries: boolean;
+}
+const PM_DEFAULTS: ProjectModuleFlags = {
+  stammdaten: true,
+  notes: true,
+  tasks: true,
+  termine: true,
+  files: true,
+  team: true,
+  bautagebuch: true,
+  meetings: true,
+  time_entries: true,
+};
+const moduleFlags = ref<ProjectModuleFlags>({ ...PM_DEFAULTS });
+const moduleHasOverride = ref(false);
+const moduleGlobal = ref<ProjectModuleFlags>({ ...PM_DEFAULTS });
+const moduleSettingsOpen = ref(false);
+const moduleBusy = ref(false);
+
+const PROJECT_MODULE_LIST: { key: keyof ProjectModuleFlags; label: string }[] = [
+  { key: "stammdaten", label: "Stammdaten" },
+  { key: "notes", label: "Notizen" },
+  { key: "tasks", label: "Aufgaben" },
+  { key: "termine", label: "Termine" },
+  { key: "files", label: "Dateien" },
+  { key: "team", label: "Team" },
+  { key: "bautagebuch", label: "Bautagebuch" },
+  { key: "meetings", label: "Meetings" },
+  { key: "time_entries", label: "Stunden" },
+];
+
+// Tab-Sichtbarkeit pro Modul. Tabs ohne Modul-Mapping sind immer aktiv.
+function tabVisible(t: Tab): boolean {
+  if (t === "uebersicht" || t === "verlauf" || t === "zugriff") return true;
+  if (t === "stunden") return moduleFlags.value.time_entries;
+  return moduleFlags.value[t as keyof ProjectModuleFlags];
+}
+
+async function loadProjectModules() {
+  try {
+    const n = encodeURIComponent(projectName.value);
+    const res = await api.get<{
+      effective: ProjectModuleFlags;
+      hasOverride: boolean;
+      global: ProjectModuleFlags;
+    }>(`/projects/${n}/modules`);
+    moduleFlags.value = res.effective;
+    moduleHasOverride.value = res.hasOverride;
+    moduleGlobal.value = res.global;
+  } catch {
+    moduleFlags.value = { ...PM_DEFAULTS };
+  }
+}
+
+async function setProjectModule(key: keyof ProjectModuleFlags, value: boolean) {
+  moduleBusy.value = true;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    const res = await api.patch<{
+      effective: ProjectModuleFlags;
+      hasOverride: boolean;
+      global: ProjectModuleFlags;
+    }>(`/projects/${n}/modules`, { [key]: value });
+    moduleFlags.value = res.effective;
+    moduleHasOverride.value = res.hasOverride;
+    moduleGlobal.value = res.global;
+    // Wenn aktueller Tab ausgeblendet wurde → auf Uebersicht zurueck.
+    if (!tabVisible(tab.value)) tab.value = "uebersicht";
+  } catch (e) {
+    alert(e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  } finally {
+    moduleBusy.value = false;
+  }
+}
+
+async function resetProjectModulesToGlobal() {
+  if (!confirm("Per-Projekt-Override zurücksetzen? Globale Defaults gelten dann.")) return;
+  moduleBusy.value = true;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    const res = await api.delete<{
+      effective: ProjectModuleFlags;
+      hasOverride: boolean;
+      global: ProjectModuleFlags;
+    }>(`/projects/${n}/modules`);
+    moduleFlags.value = res.effective;
+    moduleHasOverride.value = res.hasOverride;
+    moduleGlobal.value = res.global;
+    if (!tabVisible(tab.value)) tab.value = "uebersicht";
+  } catch (e) {
+    alert(e instanceof Error ? e.message : "Reset fehlgeschlagen");
+  } finally {
+    moduleBusy.value = false;
+  }
+}
+
 // ── Stunden (Migration 014) ─────────────────────────────────────────
 interface TimeEntry {
   id: string;
@@ -440,6 +549,7 @@ const STATUS_OPTIONS = ["aktiv", "pausiert", "archiviert"] as const;
 onMounted(async () => {
   projectName.value = route.params.name as string;
   await loadAll();
+  void loadProjectModules();
   // Uebersicht ist Default-Tab — Activity + Children erst nach loadAll laden,
   // weil info.id als Filter fuer beides gebraucht wird.
   if (tab.value === "uebersicht") {
@@ -2384,8 +2494,14 @@ async function deleteMeeting() {
 
     <!-- ═══ Tab-Nav ════════════════════════════════════════════ -->
     <div
-      class="flex tab-nav"
-      style="gap: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); overflow-x: auto"
+      class="flex items-center tab-nav"
+      style="
+        gap: 24px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--color-border);
+        overflow-x: auto;
+        position: relative;
+      "
     >
       <template
         v-for="t in [
@@ -2403,9 +2519,11 @@ async function deleteMeeting() {
         ] as const"
         :key="t"
       >
-        <!-- "zugriff" nur fuer Admins. Alle anderen Tabs immer sichtbar. -->
+        <!-- "zugriff" nur fuer Admins. Module-gemappte Tabs respektieren
+             projects.modules_override (Phase 6e). uebersicht/verlauf/zugriff
+             sind immer sichtbar (oder admin-only). -->
         <button
-          v-if="t !== 'zugriff' || isAdmin"
+          v-if="(t !== 'zugriff' || isAdmin) && tabVisible(t)"
           @click="openTab(t)"
           :class="['tab-btn', tab === t ? 'tab-btn-active' : '']"
         >
@@ -2434,6 +2552,70 @@ async function deleteMeeting() {
           }}
         </button>
       </template>
+
+      <!-- Module konfigurieren (Phase 6e) — am Ende der Tab-Bar -->
+      <div style="margin-left: auto; position: relative">
+        <button
+          @click="moduleSettingsOpen = !moduleSettingsOpen"
+          class="tab-btn"
+          :title="moduleHasOverride ? 'Module konfigurieren — Override aktiv' : 'Module konfigurieren'"
+          style="padding: 8px 10px"
+        >
+          <BIcon name="settings" :size="13" />
+          <span
+            v-if="moduleHasOverride"
+            style="
+              display: inline-block;
+              width: 6px;
+              height: 6px;
+              border-radius: 50%;
+              background: var(--color-primary, #f59e0b);
+              margin-left: 4px;
+            "
+            title="Override fuer dieses Projekt aktiv"
+          ></span>
+        </button>
+        <div v-if="moduleSettingsOpen" @click.self="moduleSettingsOpen = false" class="pm-popover-overlay">
+          <div class="pm-popover" @click.stop>
+            <div class="flex items-center justify-between" style="margin-bottom: 12px">
+              <div style="font-size: 13px; font-weight: 600">Module für dieses Projekt</div>
+              <button @click="moduleSettingsOpen = false" class="bauos-btn ghost sm">×</button>
+            </div>
+            <p class="text-xs" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Tabs deaktivieren die für dieses Projekt nicht relevant sind. Die Daten bleiben erhalten — nur die
+              UI-Anzeige verschwindet.
+            </p>
+            <div class="settings-card settings-divide">
+              <label
+                v-for="m in PROJECT_MODULE_LIST"
+                :key="m.key"
+                class="settings-row flex items-center justify-between gap-3 px-3 py-2 cursor-pointer"
+              >
+                <span style="font-size: 13px">{{ m.label }}</span>
+                <input
+                  type="checkbox"
+                  :checked="moduleFlags[m.key]"
+                  :disabled="moduleBusy"
+                  @change="setProjectModule(m.key, ($event.target as HTMLInputElement).checked)"
+                />
+              </label>
+            </div>
+            <div class="flex items-center justify-between" style="margin-top: 12px; gap: 8px">
+              <button
+                v-if="moduleHasOverride"
+                @click="resetProjectModulesToGlobal"
+                :disabled="moduleBusy"
+                class="bauos-btn ghost sm"
+                title="Override entfernen — globale Defaults gelten"
+              >
+                Auf Default zurücksetzen
+              </button>
+              <span v-else class="text-xs" style="color: var(--color-text-tertiary)"> Globale Defaults aktiv </span>
+              <button @click="moduleSettingsOpen = false" class="bauos-btn solid sm">Schließen</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Uebersicht (Stufe 3d) -->
@@ -3808,6 +3990,36 @@ async function deleteMeeting() {
 </template>
 
 <style scoped>
+/* ── Module-Popover (Phase 6e) ──────────────────────────────────────── */
+.pm-popover-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.pm-popover {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
+}
+.settings-row {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.settings-row:last-child {
+  border-bottom: 0;
+}
+.settings-divide > .settings-row + .settings-row {
+  border-top: 0;
+}
+
 /* ── Back-Link ──────────────────────────────────────────── */
 .back-link {
   display: inline-flex;

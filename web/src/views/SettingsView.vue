@@ -419,6 +419,58 @@ async function toggleFast() {
   }
 }
 
+// ── Projekt-Module (Phase 6e) ──────────────────────────────────────────────
+// Globale Defaults welche Tabs/Module in Projekten verfuegbar sind.
+
+interface ProjectModuleFlags {
+  stammdaten: boolean;
+  notes: boolean;
+  tasks: boolean;
+  termine: boolean;
+  files: boolean;
+  team: boolean;
+  bautagebuch: boolean;
+  meetings: boolean;
+  time_entries: boolean;
+}
+
+const PROJECT_MODULES: { key: keyof ProjectModuleFlags; label: string; help: string }[] = [
+  { key: "stammdaten", label: "Stammdaten", help: "Projektnummer, Bauherr, Standort, Phase…" },
+  { key: "notes", label: "Notizen", help: "Markdown-Notizen zum Projekt." },
+  { key: "tasks", label: "Aufgaben", help: "To-Dos mit Zuweisung + Fälligkeit." },
+  { key: "termine", label: "Termine", help: "Kalender-Termine für dieses Projekt." },
+  { key: "files", label: "Dateien", help: "Pläne, Verträge, Fotos." },
+  { key: "team", label: "Team", help: "Beteiligte Personen + Rollen." },
+  { key: "bautagebuch", label: "Bautagebuch", help: "Tagesberichte mit Wetter, Personal, Vorkommnissen." },
+  { key: "meetings", label: "Meetings", help: "Bauherrenmeetings, Baubesprechungen." },
+  { key: "time_entries", label: "Stunden", help: "Stundenerfassung pro Mitarbeiter." },
+];
+
+const projectModules = ref<ProjectModuleFlags | null>(null);
+const projectModulesBusy = ref(false);
+
+async function loadProjectModules() {
+  try {
+    const res = await api.get<{ modules: ProjectModuleFlags }>("/project-modules");
+    projectModules.value = res.modules;
+  } catch {
+    projectModules.value = null;
+  }
+}
+
+async function toggleProjectModule(key: keyof ProjectModuleFlags, value: boolean) {
+  if (!projectModules.value) return;
+  projectModulesBusy.value = true;
+  try {
+    const res = await api.patch<{ modules: ProjectModuleFlags }>("/project-modules", { [key]: value });
+    projectModules.value = res.modules;
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  } finally {
+    projectModulesBusy.value = false;
+  }
+}
+
 // ── Word-Export-Templates (Phase 6d) ────────────────────────────────────────
 type ExportKind = "meeting" | "bautagebuch" | "time-entry" | "project-summary";
 
@@ -984,6 +1036,7 @@ onMounted(() => {
   void loadTemplateVariables();
   void loadExportTemplates();
   void loadExportVariables();
+  void loadProjectModules();
 });
 </script>
 
@@ -1994,14 +2047,35 @@ onMounted(() => {
         <template v-if="activeSection === 'projekt-module'">
           <section>
             <h3 class="settings-h3 mb-3">Projekt-Module</h3>
-            <div class="settings-card p-6">
-              <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
-                Welche Bereiche sollen in Projekten verfügbar sein? Hier aktivierst/deaktivierst du Notizen, Aufgaben,
-                Termine, Bautagebuch, Meetings, Stundenerfassung etc.
-              </p>
-              <p class="text-xs" style="color: var(--color-text-tertiary)">
-                ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
-              </p>
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Welche Bereiche stehen in Projekten zur Verfügung? Diese globalen Defaults gelten für alle Projekte —
+              einzelne Projekte können davon abweichen (Override im Projekt-Detail).
+            </p>
+            <div class="settings-card settings-divide" v-if="projectModules">
+              <label
+                v-for="m in PROJECT_MODULES"
+                :key="m.key"
+                class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+              >
+                <div style="flex: 1; min-width: 0">
+                  <div style="font-size: 13px; font-weight: 500; color: var(--color-text)">{{ m.label }}</div>
+                  <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 2px">{{ m.help }}</div>
+                </div>
+                <input
+                  type="checkbox"
+                  :checked="projectModules[m.key]"
+                  :disabled="projectModulesBusy"
+                  @change="toggleProjectModule(m.key, ($event.target as HTMLInputElement).checked)"
+                />
+              </label>
+            </div>
+            <div v-else class="text-xs" style="color: var(--color-text-tertiary); padding: 12px">
+              Lade Module-Konfiguration…
+            </div>
+            <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 12px">
+              <strong style="color: var(--color-text-secondary)">Tipp:</strong>
+              Im Projekt-Detail oben rechts kannst du diese Defaults pro Projekt überschreiben — z.B. bei reinen
+              Planungs-Projekten ohne Baustelle das Bautagebuch ausblenden.
             </div>
           </section>
         </template>
