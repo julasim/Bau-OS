@@ -1563,6 +1563,50 @@ function newMeeting() {
   selectedMeetingTemplateId.value = "";
 }
 
+// ── Word-Export (Phase 6d) ────────────────────────────────────────────────
+// Helper: GET zur API mit Auth-Header, Response als Blob herunterladen.
+// Wenn das Backend einen Fehler liefert, parsen wir die JSON-Error-Message
+// und zeigen einen Alert.
+async function downloadDocx(url: string, fallbackFilename: string) {
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Export fehlgeschlagen" }));
+      alert(err.error || `HTTP ${res.status}`);
+      return;
+    }
+    const blob = await res.blob();
+    const cd = res.headers.get("Content-Disposition") ?? "";
+    const m = cd.match(/filename="([^"]+)"/);
+    const filename = m ? m[1] : fallbackFilename;
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    a.download = filename!;
+    a.click();
+    URL.revokeObjectURL(objUrl);
+  } catch (e) {
+    alert(e instanceof Error ? e.message : "Export fehlgeschlagen");
+  }
+}
+
+async function exportMeetingDocx(id: string) {
+  await downloadDocx(`/api/exports/meeting/${id}`, `Meeting-${id}.docx`);
+}
+async function exportBautagebuchDocx(id: string) {
+  await downloadDocx(`/api/exports/bautagebuch/${id}`, `Bautagebuch-${id}.docx`);
+}
+async function exportTimeEntriesDocx() {
+  const project = encodeURIComponent(projectName.value);
+  await downloadDocx(`/api/exports/time-entries?project=${project}`, `Stundenzettel-${projectName.value}.docx`);
+}
+async function exportProjectSummaryDocx() {
+  const n = encodeURIComponent(projectName.value);
+  await downloadDocx(`/api/exports/project/${n}/summary`, `Projekt-${projectName.value}.docx`);
+}
+
 // ── Vorlagen (Phase 6c) ──────────────────────────────────────────────────
 // User waehlt eine Meeting-Vorlage → Backend rendert mit Live-Daten
 // (Projekt, Bauherr, Datum, Branding) → Inhalt landet im "minutes"-Feld.
@@ -2987,6 +3031,15 @@ async function deleteMeeting() {
                 v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
                 class="bauos-btn ghost sm"
                 style="margin-left: auto"
+                @click="exportBautagebuchDocx(bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)!.id)"
+                title="Diesen Tag als Word herunterladen"
+              >
+                <BIcon name="download" :size="11" />
+                <span style="margin-left: 4px">Word</span>
+              </button>
+              <button
+                v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
+                class="bauos-btn ghost sm"
                 @click="deleteBautagebuch"
               >
                 <BIcon name="trash" :size="11" />
@@ -3143,8 +3196,13 @@ async function deleteMeeting() {
                 v-if="meetingDraft.id"
                 class="bauos-btn ghost sm"
                 style="margin-left: auto"
-                @click="deleteMeeting"
+                @click="exportMeetingDocx(meetingDraft.id)"
+                title="Als Word-Datei herunterladen"
               >
+                <BIcon name="download" :size="11" />
+                <span style="margin-left: 4px">Word</span>
+              </button>
+              <button v-if="meetingDraft.id" class="bauos-btn ghost sm" @click="deleteMeeting">
                 <BIcon name="trash" :size="11" />
                 <span style="margin-left: 4px">Löschen</span>
               </button>
@@ -3349,6 +3407,15 @@ async function deleteMeeting() {
           <button class="bauos-btn solid sm" @click="newTimeEntry">
             <BIcon name="plus" :size="11" />
             <span style="margin-left: 4px">Stunden eintragen</span>
+          </button>
+          <button
+            v-if="timeEntries.length > 0"
+            class="bauos-btn ghost sm"
+            @click="exportTimeEntriesDocx"
+            title="Stundenzettel als Word herunterladen"
+          >
+            <BIcon name="download" :size="11" />
+            <span style="margin-left: 4px">Stundenzettel</span>
           </button>
           <span class="empty-hint" style="margin-left: auto; font-size: 12px">
             <strong style="color: var(--color-text)">{{ timeTotalHours.toFixed(1) }}h</strong>

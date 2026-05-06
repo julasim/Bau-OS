@@ -419,6 +419,172 @@ async function toggleFast() {
   }
 }
 
+// ── Word-Export-Templates (Phase 6d) ────────────────────────────────────────
+type ExportKind = "meeting" | "bautagebuch" | "time-entry" | "project-summary";
+
+interface ExportTemplate {
+  id: string;
+  kind: ExportKind;
+  name: string;
+  description: string | null;
+  filename: string;
+  isDefault: boolean;
+  uploadedAt: string;
+  sizeBytes: number;
+}
+
+const EXPORT_KINDS: { id: ExportKind; label: string; help: string }[] = [
+  { id: "meeting", label: "Meeting-Protokolle", help: "Word-Vorlage für Meeting-Exports." },
+  { id: "bautagebuch", label: "Bautagebuch", help: "Tagesberichte als Word-Datei." },
+  { id: "time-entry", label: "Stundenzettel", help: "Stunden-Auszüge im eigenen Layout." },
+  { id: "project-summary", label: "Projekt-Übersicht", help: "Stammdaten als Deckblatt o.ä." },
+];
+
+const exportTemplates = ref<ExportTemplate[]>([]);
+const exportKindFilter = ref<ExportKind>("meeting");
+const exportBusy = ref(false);
+const exportVariables = ref<{ tag: string; description: string }[]>([]);
+
+const exportTemplatesByKind = computed(() => exportTemplates.value.filter((t) => t.kind === exportKindFilter.value));
+
+async function loadExportTemplates() {
+  try {
+    exportTemplates.value = await api.get<ExportTemplate[]>("/export-templates");
+  } catch {
+    exportTemplates.value = [];
+  }
+}
+
+async function loadExportVariables() {
+  try {
+    exportVariables.value = await api.get<{ tag: string; description: string }[]>(
+      `/export-templates/_variables?kind=${exportKindFilter.value}`,
+    );
+  } catch {
+    exportVariables.value = [];
+  }
+}
+
+watch(exportKindFilter, () => void loadExportVariables());
+
+async function uploadExportTemplate(event: Event) {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  if (!/\.docx$/i.test(file.name)) {
+    flash("error", "Nur .docx-Dateien erlaubt");
+    input.value = "";
+    return;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    flash("error", "Datei zu groß (max 10 MB)");
+    input.value = "";
+    return;
+  }
+  const name = file.name.replace(/\.docx$/i, "");
+  exportBusy.value = true;
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", exportKindFilter.value);
+    fd.append("name", name);
+    if (exportTemplatesByKind.value.length === 0) fd.append("isDefault", "true");
+    const res = await fetch("/api/export-templates", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: "Upload fehlgeschlagen" }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    await loadExportTemplates();
+    flash("success", `Vorlage "${name}" hochgeladen`);
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Upload fehlgeschlagen");
+  } finally {
+    exportBusy.value = false;
+    input.value = "";
+  }
+}
+
+async function setExportTemplateDefault(t: ExportTemplate) {
+  exportBusy.value = true;
+  try {
+    await api.post(`/export-templates/${t.id}/default`, {});
+    await loadExportTemplates();
+    flash("success", `"${t.name}" ist jetzt Standard`);
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Default-Setzen fehlgeschlagen");
+  } finally {
+    exportBusy.value = false;
+  }
+}
+
+async function removeExportTemplate(t: ExportTemplate) {
+  if (!confirm(`Vorlage "${t.name}" wirklich löschen?`)) return;
+  exportBusy.value = true;
+  try {
+    await api.delete(`/export-templates/${t.id}`);
+    await loadExportTemplates();
+    flash("success", "Vorlage gelöscht");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Löschen fehlgeschlagen");
+  } finally {
+    exportBusy.value = false;
+  }
+}
+
+function downloadExportOriginal(t: ExportTemplate) {
+  void (async () => {
+    try {
+      const res = await fetch(`/api/export-templates/${t.id}/file`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+      });
+      if (!res.ok) throw new Error("Download fehlgeschlagen");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = t.filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      flash("error", e instanceof Error ? e.message : "Download fehlgeschlagen");
+    }
+  })();
+}
+
+function testRenderExportTemplate(t: ExportTemplate) {
+  void (async () => {
+    try {
+      const res = await fetch(`/api/export-templates/${t.id}/test`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Test-Render fehlgeschlagen" }));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `test-${t.filename}`;
+      a.click();
+      URL.revokeObjectURL(url);
+      flash("success", "Test-Datei wurde erzeugt");
+    } catch (e) {
+      flash("error", e instanceof Error ? e.message : "Test-Render fehlgeschlagen");
+    }
+  })();
+}
+
+function formatBytes(b: number): string {
+  if (b < 1024) return `${b} B`;
+  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+  return `${(b / 1024 / 1024).toFixed(1)} MB`;
+}
+
 // ── Vorlagen (Phase 6c) ─────────────────────────────────────────────────────
 // Markdown-Vorlagen fuer Notizen, Meetings, Bautagebuch-Eintraege.
 // Settings-UI: links Liste pro Kind, rechts Editor mit Live-Preview.
@@ -816,6 +982,8 @@ onMounted(() => {
   void loadBranding();
   void loadTemplates();
   void loadTemplateVariables();
+  void loadExportTemplates();
+  void loadExportVariables();
 });
 </script>
 
@@ -1714,16 +1882,111 @@ onMounted(() => {
         <!-- ── Word-Export (Phase 6d) ─────────────────────────────────── -->
         <template v-if="activeSection === 'word-export'">
           <section>
-            <h3 class="settings-h3 mb-3">Word-Export</h3>
-            <div class="settings-card p-6">
-              <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
-                Lade Word-Dokumente (.docx) als Layout-Template hoch. Beim Export eines Meetings, Bautagebuch-Eintrags
-                oder Stundenzettels werden die Daten in dein Layout eingefügt.
-              </p>
-              <p class="text-xs" style="color: var(--color-text-tertiary)">
-                ⚙ <em>In Vorbereitung</em> — kommt mit dem nächsten Deploy.
-              </p>
+            <h3 class="settings-h3 mb-3">Word-Export-Vorlagen</h3>
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Lade Word-Dokumente (.docx) als Layout-Template hoch. Im Word-File verwendest du Tags wie
+              <code class="font-mono">{Datum}</code>, <code class="font-mono">{Projekt}</code>,
+              <code class="font-mono">{Meeting.Titel}</code> oder Loops:
+              <code class="font-mono">{#Teilnehmer}{Name}{/Teilnehmer}</code>. Beim Export werden die Tags durch
+              Live-Daten ersetzt.
+            </p>
+
+            <div class="flex" style="gap: 4px; margin-bottom: 12px; border-bottom: 1px solid var(--color-border)">
+              <button
+                v-for="k in EXPORT_KINDS"
+                :key="k.id"
+                :class="['tpl-kind-tab', exportKindFilter === k.id ? 'tpl-kind-tab-active' : '']"
+                @click="exportKindFilter = k.id"
+              >
+                {{ k.label }}
+              </button>
             </div>
+
+            <div class="settings-card p-4" style="margin-bottom: 12px">
+              <div class="flex items-center" style="gap: 12px; flex-wrap: wrap">
+                <input
+                  type="file"
+                  accept=".docx"
+                  :disabled="exportBusy"
+                  @change="uploadExportTemplate"
+                  style="font-size: 13px"
+                />
+                <span class="text-xs" style="color: var(--color-text-tertiary)">
+                  Max 10 MB. Erste Vorlage wird automatisch Standard.
+                </span>
+              </div>
+            </div>
+
+            <div class="settings-card settings-divide">
+              <div
+                v-for="t in exportTemplatesByKind"
+                :key="t.id"
+                class="settings-row flex items-center"
+                style="gap: 12px; padding: 12px 14px"
+              >
+                <div style="flex: 1; min-width: 0">
+                  <div class="flex items-center" style="gap: 8px; flex-wrap: wrap">
+                    <span style="font-size: 13px; font-weight: 500">{{ t.name }}</span>
+                    <span v-if="t.isDefault" class="tpl-default-pill">Standard</span>
+                  </div>
+                  <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 2px">
+                    {{ t.filename }} · {{ formatBytes(t.sizeBytes) }} · hochgeladen am
+                    {{ new Date(t.uploadedAt).toLocaleDateString("de-AT") }}
+                  </div>
+                </div>
+                <div class="flex items-center" style="gap: 6px; flex-wrap: wrap">
+                  <button
+                    @click="testRenderExportTemplate(t)"
+                    :disabled="exportBusy"
+                    class="text-xs settings-ghost-btn px-2 py-1 rounded"
+                    title="Mit Dummy-Daten rendern und herunterladen"
+                  >
+                    Test
+                  </button>
+                  <button
+                    @click="downloadExportOriginal(t)"
+                    :disabled="exportBusy"
+                    class="text-xs settings-ghost-btn px-2 py-1 rounded"
+                    title="Original-Vorlage herunterladen"
+                  >
+                    Download
+                  </button>
+                  <button
+                    v-if="!t.isDefault"
+                    @click="setExportTemplateDefault(t)"
+                    :disabled="exportBusy"
+                    class="text-xs settings-ghost-btn px-2 py-1 rounded"
+                  >
+                    Als Standard
+                  </button>
+                  <button
+                    @click="removeExportTemplate(t)"
+                    :disabled="exportBusy"
+                    class="text-xs px-2 py-1 rounded"
+                    style="background: transparent; border: 1px solid #dc2626; color: #dc2626; cursor: pointer"
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </div>
+              <div
+                v-if="exportTemplatesByKind.length === 0"
+                class="text-xs"
+                style="color: var(--color-text-tertiary); padding: 24px; text-align: center"
+              >
+                Keine Vorlagen für diese Kategorie. Lade ein .docx hoch.
+              </div>
+            </div>
+
+            <details class="tpl-vars-help" style="margin-top: 12px">
+              <summary>Verfügbare Tags für diese Kategorie</summary>
+              <div class="tpl-vars-grid">
+                <div v-for="v in exportVariables" :key="v.tag" class="tpl-var-item">
+                  <code class="font-mono">{{ v.tag }}</code>
+                  <span style="color: var(--color-text-tertiary)">— {{ v.description }}</span>
+                </div>
+              </div>
+            </details>
           </section>
         </template>
 
