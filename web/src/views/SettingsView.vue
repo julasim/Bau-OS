@@ -1383,8 +1383,8 @@ onMounted(() => {
           <div class="settings-card p-6">
             <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
               Notiz- und Meeting-Vorlagen mit Platzhaltern wie
-              <code class="font-mono">{{ "{{Projekt}}" }}</code> oder
-              <code class="font-mono">{{ "{{Datum}}" }}</code>. Beim Anlegen einer
+              <code class="font-mono">&#123;&#123;Projekt&#125;&#125;</code> oder
+              <code class="font-mono">&#123;&#123;Datum&#125;&#125;</code>. Beim Anlegen einer
               neuen Notiz wird die ausgewählte Vorlage automatisch eingefügt.
             </p>
             <p class="text-xs" style="color: var(--color-text-tertiary)">
