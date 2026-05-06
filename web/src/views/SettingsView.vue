@@ -419,6 +419,83 @@ async function toggleFast() {
   }
 }
 
+// ── Theme + UI-Praeferenzen (Phase 6f) ─────────────────────────────────────
+import { useTheme } from "../composables/useTheme";
+
+const themeApi = useTheme();
+type ThemeMode = "light" | "dark" | "system";
+type FontSize = "small" | "medium" | "large";
+
+interface ServerPreferences {
+  theme: ThemeMode;
+  accentColor: string;
+  fontSize: FontSize;
+  compactUI: boolean;
+  weekStart: "monday" | "sunday";
+  calendarDefaultView: "month" | "week" | "day" | "list";
+  dateFormat: "DD.MM.YYYY" | "YYYY-MM-DD";
+  telegramNotifications: {
+    termine: boolean;
+    tasks: boolean;
+    meetings: boolean;
+    bautagebuch: boolean;
+  };
+}
+
+const serverPrefs = ref<ServerPreferences | null>(null);
+const prefsBusy = ref(false);
+
+const ACCENT_PRESETS: { hex: string; name: string }[] = [
+  { hex: "#111827", name: "Schwarz (Default)" },
+  { hex: "#0078d4", name: "Microsoft-Blau" },
+  { hex: "#16a34a", name: "Grün" },
+  { hex: "#f59e0b", name: "Bernstein" },
+  { hex: "#dc2626", name: "Rot" },
+  { hex: "#7c3aed", name: "Violett" },
+  { hex: "#0891b2", name: "Türkis" },
+  { hex: "#db2777", name: "Pink" },
+];
+
+async function loadPreferences() {
+  try {
+    serverPrefs.value = await api.get<ServerPreferences>("/me/preferences");
+    // Lokales useTheme an den Server-Stand syncen.
+    themeApi.applyFromServer({
+      theme: serverPrefs.value.theme,
+      accentColor: serverPrefs.value.accentColor,
+      fontSize: serverPrefs.value.fontSize,
+      compactUI: serverPrefs.value.compactUI,
+    });
+  } catch {
+    serverPrefs.value = null;
+  }
+}
+
+// Patch erlaubt auch Teil-Updates fuer telegramNotifications (Backend
+// macht Deep-Merge), daher loosere Signatur.
+type PreferencesPatch = Partial<Omit<ServerPreferences, "telegramNotifications">> & {
+  telegramNotifications?: Partial<ServerPreferences["telegramNotifications"]>;
+};
+
+async function patchPreferences(patch: PreferencesPatch) {
+  prefsBusy.value = true;
+  try {
+    const updated = await api.patch<ServerPreferences>("/me/preferences", patch);
+    serverPrefs.value = updated;
+    // Theme-relevante Felder lokal sofort anwenden.
+    themeApi.applyFromServer({
+      theme: updated.theme,
+      accentColor: updated.accentColor,
+      fontSize: updated.fontSize,
+      compactUI: updated.compactUI,
+    });
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  } finally {
+    prefsBusy.value = false;
+  }
+}
+
 // ── Projekt-Module (Phase 6e) ──────────────────────────────────────────────
 // Globale Defaults welche Tabs/Module in Projekten verfuegbar sind.
 
@@ -1037,6 +1114,7 @@ onMounted(() => {
   void loadExportTemplates();
   void loadExportVariables();
   void loadProjectModules();
+  void loadPreferences();
 });
 </script>
 
@@ -1580,30 +1658,219 @@ onMounted(() => {
         <!-- ── Praeferenzen ───────────────────────────────────────────── -->
         <template v-if="activeSection === 'praeferenzen'">
           <section>
-            <h3 class="settings-h3 mb-3">Praeferenzen</h3>
+            <h3 class="settings-h3 mb-3">Erscheinungsbild</h3>
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Theme, Akzentfarbe und Schriftgröße. Änderungen werden sofort live übernommen.
+            </p>
+
+            <!-- Theme-Kacheln: Hell / Dunkel / System -->
+            <div class="theme-tile-grid" v-if="serverPrefs">
+              <button
+                v-for="opt in [
+                  { id: 'light', label: 'Hell', desc: 'Klassisch hell' },
+                  { id: 'dark', label: 'Dunkel', desc: 'Schwarz, kontrastreich' },
+                  { id: 'system', label: 'System', desc: 'Folgt dem OS' },
+                ] as const"
+                :key="opt.id"
+                @click="patchPreferences({ theme: opt.id })"
+                :class="['theme-tile', serverPrefs.theme === opt.id ? 'theme-tile-active' : '']"
+                :disabled="prefsBusy"
+              >
+                <div :class="['theme-tile-preview', `theme-tile-preview-${opt.id}`]">
+                  <div class="theme-tile-bar"></div>
+                  <div class="theme-tile-content"></div>
+                </div>
+                <div class="theme-tile-label">{{ opt.label }}</div>
+                <div class="theme-tile-desc">{{ opt.desc }}</div>
+              </button>
+            </div>
+
+            <!-- Akzentfarbe -->
+            <div class="settings-card p-4" style="margin-top: 16px" v-if="serverPrefs">
+              <div class="text-sm" style="font-weight: 600; margin-bottom: 10px">Akzentfarbe</div>
+              <div class="flex items-center" style="gap: 8px; flex-wrap: wrap">
+                <button
+                  v-for="c in ACCENT_PRESETS"
+                  :key="c.hex"
+                  @click="patchPreferences({ accentColor: c.hex })"
+                  :title="c.name"
+                  :disabled="prefsBusy"
+                  :style="{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    background: c.hex,
+                    border:
+                      serverPrefs.accentColor.toLowerCase() === c.hex.toLowerCase()
+                        ? '3px solid var(--color-text)'
+                        : '2px solid var(--color-border)',
+                    cursor: 'pointer',
+                  }"
+                ></button>
+                <input
+                  type="color"
+                  :value="serverPrefs.accentColor"
+                  :disabled="prefsBusy"
+                  @change="patchPreferences({ accentColor: ($event.target as HTMLInputElement).value })"
+                  style="
+                    width: 32px;
+                    height: 32px;
+                    border: 1px dashed var(--color-border);
+                    border-radius: 50%;
+                    cursor: pointer;
+                    padding: 0;
+                    background: transparent;
+                  "
+                  title="Eigene Farbe wählen"
+                />
+                <span class="text-xs font-mono" style="color: var(--color-text-tertiary); margin-left: 8px">
+                  {{ serverPrefs.accentColor }}
+                </span>
+              </div>
+              <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 8px">
+                Die Akzentfarbe wirkt auf Buttons, Active-States und Highlights. Bei Schwarz wird das Theme-Default
+                verwendet.
+              </div>
+            </div>
+
+            <!-- Schriftgröße + Compact -->
+            <div class="settings-card settings-divide" style="margin-top: 16px" v-if="serverPrefs">
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Schriftgröße</label>
+                <div class="flex" style="gap: 6px">
+                  <button
+                    v-for="s in ['small', 'medium', 'large'] as FontSize[]"
+                    :key="s"
+                    @click="patchPreferences({ fontSize: s })"
+                    :disabled="prefsBusy"
+                    :class="['settings-chip', serverPrefs.fontSize === s ? 'settings-chip-active' : '']"
+                    style="padding: 4px 12px; border-radius: 6px; font-size: 12px"
+                  >
+                    {{ s === "small" ? "Klein" : s === "medium" ? "Mittel" : "Groß" }}
+                  </button>
+                </div>
+              </div>
+              <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
+                <div>
+                  <p class="text-sm" style="color: var(--color-text-secondary)">Kompakte Oberfläche</p>
+                  <p class="text-xs" style="color: var(--color-text-tertiary)">
+                    Engere Paddings für mehr Inhalt am Bildschirm
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  :checked="serverPrefs.compactUI"
+                  :disabled="prefsBusy"
+                  @change="patchPreferences({ compactUI: ($event.target as HTMLInputElement).checked })"
+                />
+              </label>
+            </div>
+
+            <h3 class="settings-h3 mb-3" style="margin-top: 28px">Kalender & Datum</h3>
+            <div class="settings-card settings-divide" v-if="serverPrefs">
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Wochenstart</label>
+                <div class="flex" style="gap: 6px">
+                  <button
+                    v-for="w in ['monday', 'sunday'] as const"
+                    :key="w"
+                    @click="patchPreferences({ weekStart: w })"
+                    :disabled="prefsBusy"
+                    :class="['settings-chip', serverPrefs.weekStart === w ? 'settings-chip-active' : '']"
+                    style="padding: 4px 12px; border-radius: 6px; font-size: 12px"
+                  >
+                    {{ w === "monday" ? "Montag" : "Sonntag" }}
+                  </button>
+                </div>
+              </div>
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Kalender-Default</label>
+                <select
+                  :value="serverPrefs.calendarDefaultView"
+                  :disabled="prefsBusy"
+                  @change="
+                    patchPreferences({
+                      calendarDefaultView: ($event.target as HTMLSelectElement)
+                        .value as ServerPreferences['calendarDefaultView'],
+                    })
+                  "
+                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
+                >
+                  <option value="month">Monat</option>
+                  <option value="week">Woche</option>
+                  <option value="day">Tag</option>
+                  <option value="list">Liste</option>
+                </select>
+              </div>
+              <div class="settings-row flex items-center gap-3 px-4 py-3">
+                <label class="text-sm settings-label w-40 flex-shrink-0">Datums-Format</label>
+                <div class="flex" style="gap: 6px">
+                  <button
+                    v-for="f in ['DD.MM.YYYY', 'YYYY-MM-DD'] as const"
+                    :key="f"
+                    @click="patchPreferences({ dateFormat: f })"
+                    :disabled="prefsBusy"
+                    :class="['settings-chip', serverPrefs.dateFormat === f ? 'settings-chip-active' : '']"
+                    style="padding: 4px 12px; border-radius: 6px; font-size: 12px; font-family: ui-monospace, monospace"
+                  >
+                    {{ f }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <h3 class="settings-h3 mb-3" style="margin-top: 28px">Telegram-Benachrichtigungen</h3>
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 8px">
+              Welche Events sollen via Telegram gesendet werden?
+            </p>
+            <div class="settings-card settings-divide" v-if="serverPrefs">
+              <label
+                v-for="t in [
+                  { key: 'termine', label: 'Termine', desc: 'Neue Einladungen, Änderungen' },
+                  { key: 'tasks', label: 'Aufgaben', desc: 'Zugewiesene To-Dos' },
+                  { key: 'meetings', label: 'Meetings', desc: 'Neue Action-Items' },
+                  { key: 'bautagebuch', label: 'Bautagebuch', desc: 'Tägliche Erinnerung' },
+                ] as const"
+                :key="t.key"
+                class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
+              >
+                <div>
+                  <p class="text-sm" style="color: var(--color-text-secondary)">{{ t.label }}</p>
+                  <p class="text-xs" style="color: var(--color-text-tertiary)">{{ t.desc }}</p>
+                </div>
+                <input
+                  type="checkbox"
+                  :checked="serverPrefs.telegramNotifications[t.key]"
+                  :disabled="prefsBusy"
+                  @change="
+                    patchPreferences({
+                      telegramNotifications: { [t.key]: ($event.target as HTMLInputElement).checked },
+                    })
+                  "
+                />
+              </label>
+            </div>
+
+            <h3 class="settings-h3 mb-3" style="margin-top: 28px">Sonstiges</h3>
             <div class="settings-card settings-divide">
               <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
                 <div>
-                  <p class="text-sm" style="color: var(--color-text-secondary)">Benachrichtigungen</p>
+                  <p class="text-sm" style="color: var(--color-text-secondary)">Globale Telegram-Benachrichtigungen</p>
                   <p class="text-xs" style="color: var(--color-text-tertiary)">
-                    Telegram-Toasts bei neuen Aufgaben und Terminen
+                    Master-Schalter — wenn aus, werden keine Telegram-Toasts gesendet
                   </p>
                 </div>
                 <input v-model="notificationsEnabled" type="checkbox" class="settings-checkbox" />
               </label>
-
               <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
                 <div>
-                  <p class="text-sm" style="color: var(--color-text-secondary)">
-                    Dateisuche im Chat standardmaessig an
-                  </p>
+                  <p class="text-sm" style="color: var(--color-text-secondary)">Dateisuche im Chat standardmäßig an</p>
                   <p class="text-xs" style="color: var(--color-text-tertiary)">
-                    Der Chat startet mit aktiver Vault-Suche (+-Menue)
+                    Der Chat startet mit aktiver Vault-Suche (+-Menü)
                   </p>
                 </div>
                 <input v-model="chatSearchMode" type="checkbox" class="settings-checkbox" />
               </label>
-
               <div class="settings-row flex items-center gap-3 px-4 py-3">
                 <label class="text-sm settings-label w-40 flex-shrink-0">Standard-Projekt</label>
                 <select v-model="defaultProject" class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none">
@@ -1620,7 +1887,7 @@ onMounted(() => {
                 class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
                 :style="{ opacity: savingSettings || !dirty ? 0.5 : 1 }"
               >
-                {{ savingSettings ? "..." : "Speichern" }}
+                {{ savingSettings ? "..." : "Sonstiges speichern" }}
               </button>
             </div>
           </section>
@@ -2374,6 +2641,95 @@ onMounted(() => {
   }
   .settings-content {
     padding: 20px 16px 40px;
+  }
+}
+
+/* ── Theme-Tiles (Phase 6f) ────────────────────────────────────────── */
+.theme-tile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.theme-tile {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 200ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.theme-tile:hover {
+  border-color: var(--color-text-faint);
+  transform: translateY(-1px);
+}
+.theme-tile-active {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary);
+}
+.theme-tile-preview {
+  height: 80px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  position: relative;
+  overflow: hidden;
+}
+.theme-tile-preview-light {
+  background: #ffffff;
+}
+.theme-tile-preview-dark {
+  background: #0f0f11;
+}
+.theme-tile-preview-system {
+  background: linear-gradient(135deg, #ffffff 50%, #0f0f11 50%);
+}
+.theme-tile-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.06);
+}
+.theme-tile-preview-dark .theme-tile-bar {
+  background: rgba(255, 255, 255, 0.08);
+}
+.theme-tile-content {
+  position: absolute;
+  top: 20px;
+  left: 8px;
+  width: 60%;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 2px;
+  box-shadow:
+    0 8px rgba(0, 0, 0, 0.15),
+    0 16px rgba(0, 0, 0, 0.12),
+    -10px 24px 0 -10px rgba(0, 0, 0, 0.08);
+}
+.theme-tile-preview-dark .theme-tile-content {
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 8px rgba(255, 255, 255, 0.2),
+    0 16px rgba(255, 255, 255, 0.15),
+    -10px 24px 0 -10px rgba(255, 255, 255, 0.1);
+}
+.theme-tile-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+.theme-tile-desc {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+@media (max-width: 600px) {
+  .theme-tile-grid {
+    grid-template-columns: 1fr;
   }
 }
 

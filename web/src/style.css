@@ -66,6 +66,46 @@ html.dark {
 }
 html {
   color-scheme: light;
+  /* Smooth Theme-Wechsel — sonst flackert die ganze App auf einmal. */
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+/* ── Phase 6f: User-konfigurierbarer Akzent ─────────────────────────── */
+/* User waehlt eine Akzentfarbe → --color-accent gesetzt vom useTheme().
+   Wir mappen es auf --color-primary (existiert ueberall im UI: Buttons,
+   Active-States, Nav-Highlights). Wenn Akzent ungesetzt ist (oder neutral
+   schwarz/weiss), faellt auf das Theme-Default zurueck.
+   color-scheme=auto unterstuetzt: --color-accent existiert in :root und
+   die dark-Variante kann es ueberschreiben.
+
+   Wir ueberschreiben --color-primary nur wenn die Akzentfarbe
+   absichtlich gesetzt wurde (nicht das Theme-Schwarz). Dafuer prueft
+   die JS-Logik — wenn der User #111827 (light-default) waehlt, behaelt
+   das Theme die Hand.
+*/
+:root[data-accent-active="true"] {
+  --color-primary: var(--color-accent);
+}
+
+/* ── Phase 6f: Schriftgroessen ───────────────────────────────────────── */
+:root[data-font-size="small"] body {
+  font-size: 13px;
+}
+:root[data-font-size="medium"] body {
+  font-size: 14px;
+}
+:root[data-font-size="large"] body {
+  font-size: 16px;
+}
+
+/* ── Phase 6f: Kompakte UI ───────────────────────────────────────────── */
+/* Leichteres vertikales Padding bei Listen + Cards. */
+:root[data-compact="1"] .settings-row {
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+:root[data-compact="1"] .settings-card {
+  padding: 8px !important;
 }
 
 /* ── Typographie ──────────────────────────────────────────────────────────── */

@@ -9,7 +9,7 @@ import BIcon from "./BIcon.vue";
 
 const router = useRouter();
 const route = useRoute();
-const { theme, toggle } = useTheme();
+const { isDark, toggle } = useTheme();
 const { open, close } = useSidebar();
 const { displayName, initials, role, isAdmin } = useCurrentUser();
 
@@ -95,26 +95,14 @@ function onNavClick() {
 
 <template>
   <!-- Backdrop (nur auf Mobile sichtbar, wenn offen) -->
-  <div
-    v-if="open"
-    class="sidebar-backdrop"
-    @click="close"
-    aria-hidden="true"
-  />
+  <div v-if="open" class="sidebar-backdrop" @click="close" aria-hidden="true" />
 
   <aside
     :class="['sidebar-root flex flex-col flex-shrink-0', open ? 'sidebar-open' : 'sidebar-closed']"
-    style="
-      width: 240px;
-      background: var(--color-bg-subtle);
-      border-right: 1px solid var(--color-border);
-    "
+    style="width: 240px; background: var(--color-bg-subtle); border-right: 1px solid var(--color-border)"
   >
     <!-- Logo -->
-    <div
-      class="flex items-center gap-2.5"
-      style="padding: 16px 20px; border-bottom: 1px solid var(--color-border)"
-    >
+    <div class="flex items-center gap-2.5" style="padding: 16px 20px; border-bottom: 1px solid var(--color-border)">
       <div
         class="flex items-center justify-center font-semibold"
         style="
@@ -130,9 +118,7 @@ function onNavClick() {
         B
       </div>
       <div class="leading-tight">
-        <div style="color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.2">
-          Bau-OS
-        </div>
+        <div style="color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.2">Bau-OS</div>
         <div class="eyebrow" style="margin-top: 2px">Workspace</div>
       </div>
     </div>
@@ -187,10 +173,7 @@ function onNavClick() {
     </nav>
 
     <!-- Footer -->
-    <div
-      class="flex items-center"
-      style="padding: 10px 12px; border-top: 1px solid var(--color-border); gap: 10px"
-    >
+    <div class="flex items-center" style="padding: 10px 12px; border-top: 1px solid var(--color-border); gap: 10px">
       <div
         class="flex items-center justify-center font-semibold"
         style="
@@ -205,10 +188,7 @@ function onNavClick() {
         {{ initials }}
       </div>
       <div class="flex-1 min-w-0 leading-tight">
-        <div
-          class="truncate"
-          style="font-size: 12px; font-weight: 500; color: var(--color-text)"
-        >
+        <div class="truncate" style="font-size: 12px; font-weight: 500; color: var(--color-text)">
           {{ displayName }}
         </div>
         <div
@@ -221,11 +201,11 @@ function onNavClick() {
       </div>
       <button
         @click="toggle"
-        :title="theme === 'dark' ? 'Hellen Modus' : 'Dunklen Modus'"
+        :title="isDark() ? 'Hellen Modus' : 'Dunklen Modus'"
         class="nav-icon-btn"
         aria-label="Theme wechseln"
       >
-        <BIcon :name="theme === 'dark' ? 'sun' : 'moon'" :size="14" />
+        <BIcon :name="isDark() ? 'sun' : 'moon'" :size="14" />
       </button>
       <button @click="logout" title="Abmelden" class="nav-icon-btn" aria-label="Abmelden">
         <BIcon name="logout" :size="14" />
