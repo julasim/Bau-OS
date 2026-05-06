@@ -90,6 +90,9 @@ export async function updateUiPreferences(
       ...(patch.telegramNotifications ?? {}),
     },
   };
-  await db`UPDATE users SET ui_preferences = ${db.json(next)} WHERE id = ${userId}`;
+  // postgres.js' JSONValue-Constraint ist sehr eng (Index-Signature + nicht-Date),
+  // typisierte Interfaces matchen nicht. `as never` umgeht das ohne Lauffzeit-
+  // Effekt — db.json akzeptiert beliebige JSON-serialisierbare Werte.
+  await db`UPDATE users SET ui_preferences = ${db.json(next as never)} WHERE id = ${userId}`;
   return next;
 }

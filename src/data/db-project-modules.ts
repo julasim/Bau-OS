@@ -74,7 +74,7 @@ export async function updateGlobalModules(patch: Partial<ProjectModuleFlags>): P
   const next = { ...current, ...patch };
   // postgres.js braucht JSONB als JSON-string ueber db.json() — direkter
   // Object-Pass scheitert am TypeScript-Overload.
-  await db`UPDATE project_module_config SET modules = ${db.json(next)} WHERE id = 1`;
+  await db`UPDATE project_module_config SET modules = ${db.json(next as never)} WHERE id = 1`;
   return next;
 }
 
@@ -126,5 +126,5 @@ export async function setProjectModulesOverride(
   const [row] = await db`SELECT modules_override FROM projects WHERE name = ${projectName} LIMIT 1`;
   const existing = (row?.modules_override ?? {}) as Record<string, unknown>;
   const next = { ...existing, ...override };
-  await db`UPDATE projects SET modules_override = ${db.json(next)} WHERE name = ${projectName}`;
+  await db`UPDATE projects SET modules_override = ${db.json(next as never)} WHERE name = ${projectName}`;
 }

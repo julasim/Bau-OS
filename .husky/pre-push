@@ -23,14 +23,21 @@
 
 set -e
 
-echo "▸ Pre-Push: Backend tsc..."
-npx tsc --noEmit
+# WICHTIG: build:all benutzt — das ist exakt der gleiche Befehl wie im
+# Docker-Build (Dockerfile Zeile ~30). `npx tsc --noEmit` verwendet eine
+# leicht andere TS-Auflösung und hat in der Vergangenheit Type-Errors
+# durchgehen lassen die im Docker-Build dann doch knallen (z.B. strict
+# JSONValue-Constraints von postgres.js). build:all ist langsamer
+# (~10s vs. 3s) — wir nehmen die Zeit mit, das ist's wert.
+echo "▸ Pre-Push: Backend + Frontend Production-Build (npm run build:all)..."
+npm run build:all > /tmp/bauos-pre-push.log 2>&1 || {
+    echo "✗ Build-Fehler:"
+    tail -30 /tmp/bauos-pre-push.log
+    exit 1
+}
 
 echo "▸ Pre-Push: Frontend vue-tsc..."
 npx vue-tsc --noEmit -p web/tsconfig.json
-
-echo "▸ Pre-Push: Frontend Vite-Production-Build (faengt SFC-Parse-Errors)..."
-npx vite build --config web/vite.config.ts > /dev/null
 
 echo "▸ Pre-Push: Tests..."
 npm test --silent
