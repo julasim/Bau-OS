@@ -1,0 +1,38 @@
+#!/usr/bin/env sh
+# ─────────────────────────────────────────────────────────────────────────────
+# Bau-OS — Pre-Push-Hook
+# ─────────────────────────────────────────────────────────────────────────────
+# Verhindert dass kaputter Code auf main/origin landet. Runs einmal pro
+# `git push`, nicht bei jedem Commit (nicht ueberlasten).
+#
+# Was geprueft wird:
+#   1. tsc --noEmit         → Backend-Typen
+#   2. vue-tsc --noEmit     → Frontend-Typen (kein Production-Build)
+#   3. vite build           → Production-Build der SPA — faengt SFC-Parse-
+#                              Errors die vue-tsc NICHT faengt (z.B. invalides
+#                              {{ }} im Template, fehlende Imports zur
+#                              Build-Zeit, usw.). Dies ist der wichtigste
+#                              Check — frueher haben wir's regelmaessig erst
+#                              im docker compose build gemerkt, wenn das
+#                              Image schon kaputt war.
+#   4. vitest               → Unit-Tests
+#
+# Wenn einer fehlschlaegt → Push wird abgebrochen.
+# Bypass im Notfall: `git push --no-verify`
+# ─────────────────────────────────────────────────────────────────────────────
+
+set -e
+
+echo "▸ Pre-Push: Backend tsc..."
+npx tsc --noEmit
+
+echo "▸ Pre-Push: Frontend vue-tsc..."
+npx vue-tsc --noEmit -p web/tsconfig.json
+
+echo "▸ Pre-Push: Frontend Vite-Production-Build (faengt SFC-Parse-Errors)..."
+npx vite build --config web/vite.config.ts > /dev/null
+
+echo "▸ Pre-Push: Tests..."
+npm test --silent
+
+echo "✓ Pre-Push: alles gruen — Push laeuft."

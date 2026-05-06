@@ -87,6 +87,9 @@
     "tests/**/*.ts": [
       "prettier --write",
       "eslint --fix --no-warn-ignored"
+    ],
+    "web/src/**/*.{ts,vue}": [
+      "prettier --write"
     ]
   }
 }

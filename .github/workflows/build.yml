@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Bau-OS — CI Build & Test
+# ─────────────────────────────────────────────────────────────────────────────
+# Letzte Verteidigungslinie: laeuft auf jeden Push und PR. Faengt Fehler die
+# der Pre-Push-Hook lokal nicht gefangen hat (--no-verify, fremde Maschine,
+# Race-Condition).
+#
+# Was geprueft wird (gleiche Checks wie .husky/pre-push):
+#   - Backend-TypeScript (tsc --noEmit)
+#   - Frontend-TypeScript (vue-tsc --noEmit)
+#   - Vite-Production-Build der SPA — faengt SFC-Parse-Errors,
+#     Import-Fehler, fehlende Assets etc.
+#   - Vitest-Suite
+#
+# Wenn was rot wird: GitHub markiert den Commit mit X, du siehst es sofort
+# auf der PR-Seite oder am main-Branch-Status. Der Bug-Workflow wird damit
+# nicht stiller (man pusht, geht ins Bett, am naechsten Morgen ist die
+# Production kaputt — passiert nicht mehr).
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Concurrency: nur ein CI-Run pro Branch parallel — neue Pushes brechen
+# alte Runs ab, sparen Minuten.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: tsc + vue-tsc + vite build + vitest
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Backend TypeScript
+        run: npx tsc --noEmit
+
+      - name: Frontend TypeScript (vue-tsc)
+        run: npx vue-tsc --noEmit -p web/tsconfig.json
+
+      - name: Vite Production Build
+        # Faengt Vue-SFC-Parse-Errors, fehlerhafte {{ }}-Mustaches,
+        # fehlende Imports etc. — Klasse Fehler die vue-tsc NICHT faengt.
+        run: npx vite build --config web/vite.config.ts
+
+      - name: Vitest
+        run: npm test
