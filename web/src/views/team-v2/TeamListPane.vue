@@ -89,6 +89,54 @@ async function load() {
   }
 }
 
+// ── Create-Dialog ─────────────────────────────────────────────────────
+const showCreate = ref(false);
+const createSaving = ref(false);
+const createError = ref<string | null>(null);
+const createForm = ref({
+  name: "",
+  role: "",
+  memberType: "",
+  companyName: "",
+  email: "",
+  phone: "",
+});
+
+function openCreate() {
+  showCreate.value = true;
+  createError.value = null;
+  createForm.value = { name: "", role: "", memberType: "", companyName: "", email: "", phone: "" };
+}
+
+async function submitCreate() {
+  const name = createForm.value.name.trim();
+  if (!name || createSaving.value) return;
+  if (members.value.some((m) => m.name.toLowerCase() === name.toLowerCase())) {
+    createError.value = "Ein Mitglied mit diesem Namen existiert bereits.";
+    return;
+  }
+  createSaving.value = true;
+  createError.value = null;
+  try {
+    const payload = {
+      name,
+      role: createForm.value.role.trim() || undefined,
+      memberType: createForm.value.memberType || undefined,
+      companyName: createForm.value.companyName.trim() || undefined,
+      email: createForm.value.email.trim() || undefined,
+      phone: createForm.value.phone.trim() || undefined,
+    };
+    const created = await api.post<{ id: string }>("/team", payload);
+    showCreate.value = false;
+    await load();
+    router.push(`/team/${encodeURIComponent(created.id)}`);
+  } catch (e) {
+    createError.value = e instanceof Error ? e.message : "Anlegen fehlgeschlagen";
+  } finally {
+    createSaving.value = false;
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -110,6 +158,24 @@ onMounted(load);
     :active-tab="tab"
     @tab-change="tab = $event as Tab"
   >
+    <template #action>
+      <button class="v2-icon-btn" title="Neues Mitglied" @click="openCreate">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <line x1="12" y1="5" x2="12" y2="19" />
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      </button>
+    </template>
+
     <button
       v-for="m in filtered"
       :key="m.id"
@@ -136,4 +202,76 @@ onMounted(load);
       <span v-else>Noch keine Team-Mitglieder.</span>
     </div>
   </ListPane>
+
+  <!-- Create-Modal -->
+  <div v-if="showCreate" class="create-overlay" @click.self="showCreate = false">
+    <div class="create-card">
+      <h3 style="margin: 0 0 12px; font-size: 15px; font-weight: 600">Neues Team-Mitglied</h3>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <input v-model="createForm.name" placeholder="Name *" class="create-input" @keyup.enter="submitCreate" />
+        <input v-model="createForm.role" placeholder="Rolle (z.B. Architekt)" class="create-input" />
+        <select v-model="createForm.memberType" class="create-input">
+          <option value="">— Kategorie —</option>
+          <option value="Intern">Intern</option>
+          <option value="Planer">Planer</option>
+          <option value="Ausführende">Ausführende</option>
+          <option value="Behörde">Behörde</option>
+          <option value="Lieferant">Lieferant</option>
+          <option value="Bauherr">Bauherr</option>
+        </select>
+        <input v-model="createForm.companyName" placeholder="Firma" class="create-input" />
+        <input v-model="createForm.email" placeholder="Email" type="email" class="create-input" />
+        <input v-model="createForm.phone" placeholder="Telefon" class="create-input" />
+      </div>
+      <div v-if="createError" style="margin-top: 8px; color: var(--status-error); font-size: 12px">
+        {{ createError }}
+      </div>
+      <div style="margin-top: 16px; display: flex; gap: 8px; justify-content: flex-end">
+        <button class="v2-btn" :disabled="createSaving" @click="showCreate = false">Abbrechen</button>
+        <button
+          class="v2-btn v2-btn-primary"
+          :disabled="!createForm.name.trim() || createSaving"
+          :style="{ opacity: !createForm.name.trim() || createSaving ? 0.5 : 1 }"
+          @click="submitCreate"
+        >
+          {{ createSaving ? "Speichert…" : "Anlegen" }}
+        </button>
+      </div>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.create-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.create-card {
+  background: var(--bg-app);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 20px;
+  width: 100%;
+  max-width: 420px;
+  margin: 16px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+}
+.create-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: var(--bg-app);
+  color: var(--fg-primary);
+  font-size: 13px;
+  outline: none;
+}
+.create-input:focus {
+  border-color: var(--accent);
+}
+</style>
