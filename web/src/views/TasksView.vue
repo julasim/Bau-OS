@@ -84,10 +84,7 @@ async function create() {
 async function save(task: Task) {
   // Defensive: falls assignee aus alten kaputten Daten ein Object ist
   // ("[object Object]"-String oder echtes Object), normalisieren auf null.
-  const cleanAssignee =
-    typeof task.assignee === "string" && task.assignee !== "[object Object]"
-      ? task.assignee
-      : null;
+  const cleanAssignee = typeof task.assignee === "string" && task.assignee !== "[object Object]" ? task.assignee : null;
   await api.put(`/tasks/${task.id}`, {
     text: task.text,
     status: task.status,
@@ -146,29 +143,34 @@ onMounted(load);
 useEvents(["task"], () => load());
 
 const kanbanColumns = computed(() => [
-  { key: "open" as const, title: "Offen", dotClass: "status-open", items: tasks.value.filter((t) => t.status === "open") },
-  { key: "in_progress" as const, title: "In Arbeit", dotClass: "status-progress", items: tasks.value.filter((t) => t.status === "in_progress") },
-  { key: "done" as const, title: "Erledigt", dotClass: "status-done", items: tasks.value.filter((t) => t.status === "done") },
+  {
+    key: "open" as const,
+    title: "Offen",
+    dotClass: "status-open",
+    items: tasks.value.filter((t) => t.status === "open"),
+  },
+  {
+    key: "in_progress" as const,
+    title: "In Arbeit",
+    dotClass: "status-progress",
+    items: tasks.value.filter((t) => t.status === "in_progress"),
+  },
+  {
+    key: "done" as const,
+    title: "Erledigt",
+    dotClass: "status-done",
+    items: tasks.value.filter((t) => t.status === "done"),
+  },
 ]);
 </script>
 
 <template>
-  <div
-    style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)"
-  >
+  <div style="padding: 24px 32px 32px; color: var(--color-text)">
     <!-- Header -->
     <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
       <div class="min-w-0">
         <div class="eyebrow" style="margin-bottom: 6px">Arbeit</div>
-        <h1
-          style="
-            font-size: 24px;
-            font-weight: 600;
-            margin: 0;
-            letter-spacing: -0.01em;
-            color: var(--color-text);
-          "
-        >
+        <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em; color: var(--color-text)">
           Aufgaben
         </h1>
         <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
@@ -176,10 +178,7 @@ const kanbanColumns = computed(() => [
         </p>
       </div>
       <!-- Segmented View-Switcher -->
-      <div
-        class="flex"
-        style="border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden"
-      >
+      <div class="flex" style="border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden">
         <button
           v-for="(m, i) in ['list', 'kanban', 'timeline'] as ViewMode[]"
           :key="m"
@@ -219,7 +218,7 @@ const kanbanColumns = computed(() => [
     <!-- Filter-Pills -->
     <div class="flex" style="gap: 6px; margin-bottom: 16px">
       <button
-        v-for="f in (['all', 'open', 'in_progress', 'done'] as const)"
+        v-for="f in ['all', 'open', 'in_progress', 'done'] as const"
         :key="f"
         @click="filter = f"
         :class="['filter-pill', filter === f ? 'filter-pill-active' : '']"
@@ -289,102 +288,95 @@ const kanbanColumns = computed(() => [
       class="task-list-wrap"
       style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden"
     >
-     <div class="task-list-inner">
-      <!-- Header — auf Mobile via CSS hidden, weil dort keine Tabelle mehr -->
-      <div class="task-list-header flex items-center">
-        <span style="width: 14px" />
-        <span class="eyebrow flex-1">Aufgabe</span>
-        <span class="eyebrow" style="width: 120px">Projekt</span>
-        <span class="eyebrow" style="width: 100px">Person</span>
-        <span class="eyebrow" style="width: 90px">Fällig</span>
-      </div>
-      <div v-if="filtered.length === 0" class="empty-state">
-        <div class="empty-state-icon">📋</div>
-        <div class="empty-state-text">
-          {{ filter === "all" ? "Noch keine Aufgaben." : "Keine Aufgaben in dieser Ansicht." }}
+      <div class="task-list-inner">
+        <!-- Header — auf Mobile via CSS hidden, weil dort keine Tabelle mehr -->
+        <div class="task-list-header flex items-center">
+          <span style="width: 14px" />
+          <span class="eyebrow flex-1">Aufgabe</span>
+          <span class="eyebrow" style="width: 120px">Projekt</span>
+          <span class="eyebrow" style="width: 100px">Person</span>
+          <span class="eyebrow" style="width: 90px">Fällig</span>
         </div>
-        <button v-if="filter === 'all'" class="bauos-btn solid sm" @click="focusQuickAdd">
-          <BIcon name="plus" :size="11" :stroke-width="2" />
-          Erste Aufgabe anlegen
-        </button>
-      </div>
-      <div
-        v-for="task in filtered"
-        :key="task.id"
-        class="task-row flex items-center"
-        style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
-      >
-        <button
-          @click="cycleStatus(task)"
-          :class="['status-box', `status-${task.status}`]"
-          :aria-label="statusLabel[task.status]"
-        >
-          <BIcon v-if="task.status === 'done'" name="check" :size="10" :stroke-width="2.5" />
-        </button>
-        <div class="task-text flex-1 min-w-0" @click="edit(task)" style="cursor: pointer">
-          <div
-            :class="{ 'line-through': task.status === 'done' }"
-            :style="{
-              fontSize: '13px',
-              color:
-                task.status === 'done'
-                  ? 'var(--color-text-tertiary)'
-                  : 'var(--color-text-secondary)',
-            }"
-            class="truncate"
-          >
-            {{ task.text }}
+        <div v-if="filtered.length === 0" class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <div class="empty-state-text">
+            {{ filter === "all" ? "Noch keine Aufgaben." : "Keine Aufgaben in dieser Ansicht." }}
           </div>
-          <div
-            v-if="task.location"
-            style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px"
-          >
-            {{ task.location }}
-          </div>
-          <!-- Mobile-Meta-Zeile: Projekt + Person + Datum als Chips, nur unter
-               768px sichtbar (CSS unten). Verhindert Tabellen-Quetsche auf Phone. -->
-          <div class="task-meta-mobile">
-            <span v-if="task.project" class="task-meta-chip">{{ task.project }}</span>
-            <span v-if="task.assigneeName || (task.assignee && task.assignee !== '[object Object]')" class="task-meta-text">
-              👤 {{ displayAssignee(task) }}
-            </span>
-            <span v-if="task.date" class="task-meta-text font-mono">📅 {{ formatDate(task.date) }}</span>
-          </div>
-        </div>
-        <div class="task-col-project" style="width: 120px; font-size: 12px; color: var(--color-text-muted)">
-          <span
-            v-if="task.project"
-            style="
-              background: var(--color-border-subtle);
-              padding: 2px 8px;
-              border-radius: 4px;
-              font-size: 11px;
-            "
-            class="truncate"
-            >{{ task.project }}</span
-          >
-          <span v-else style="color: var(--color-text-faint)">—</span>
-        </div>
-        <div class="task-col-person truncate" style="width: 100px; font-size: 12px; color: var(--color-text-muted)">
-          {{ displayAssignee(task) }}
-        </div>
-        <div
-          class="task-col-date font-mono"
-          style="width: 90px; font-size: 11px; color: var(--color-text-muted)"
-        >
-          {{ formatDate(task.date) || "—" }}
-        </div>
-        <div class="task-actions flex" style="gap: 6px">
-          <button class="icon-btn" @click="remove(task.id)" title="Löschen">
-            <BIcon name="x" :size="12" />
+          <button v-if="filter === 'all'" class="bauos-btn solid sm" @click="focusQuickAdd">
+            <BIcon name="plus" :size="11" :stroke-width="2" />
+            Erste Aufgabe anlegen
           </button>
         </div>
+        <div
+          v-for="task in filtered"
+          :key="task.id"
+          class="task-row flex items-center"
+          style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
+        >
+          <button
+            @click="cycleStatus(task)"
+            :class="['status-box', `status-${task.status}`]"
+            :aria-label="statusLabel[task.status]"
+          >
+            <BIcon v-if="task.status === 'done'" name="check" :size="10" :stroke-width="2.5" />
+          </button>
+          <div class="task-text flex-1 min-w-0" @click="edit(task)" style="cursor: pointer">
+            <div
+              :class="{ 'line-through': task.status === 'done' }"
+              :style="{
+                fontSize: '13px',
+                color: task.status === 'done' ? 'var(--color-text-tertiary)' : 'var(--color-text-secondary)',
+              }"
+              class="truncate"
+            >
+              {{ task.text }}
+            </div>
+            <div v-if="task.location" style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px">
+              {{ task.location }}
+            </div>
+            <!-- Mobile-Meta-Zeile: Projekt + Person + Datum als Chips, nur unter
+               768px sichtbar (CSS unten). Verhindert Tabellen-Quetsche auf Phone. -->
+            <div class="task-meta-mobile">
+              <span v-if="task.project" class="task-meta-chip">{{ task.project }}</span>
+              <span
+                v-if="task.assigneeName || (task.assignee && task.assignee !== '[object Object]')"
+                class="task-meta-text"
+              >
+                👤 {{ displayAssignee(task) }}
+              </span>
+              <span v-if="task.date" class="task-meta-text font-mono">📅 {{ formatDate(task.date) }}</span>
+            </div>
+          </div>
+          <div class="task-col-project" style="width: 120px; font-size: 12px; color: var(--color-text-muted)">
+            <span
+              v-if="task.project"
+              style="background: var(--color-border-subtle); padding: 2px 8px; border-radius: 4px; font-size: 11px"
+              class="truncate"
+              >{{ task.project }}</span
+            >
+            <span v-else style="color: var(--color-text-faint)">—</span>
+          </div>
+          <div class="task-col-person truncate" style="width: 100px; font-size: 12px; color: var(--color-text-muted)">
+            {{ displayAssignee(task) }}
+          </div>
+          <div class="task-col-date font-mono" style="width: 90px; font-size: 11px; color: var(--color-text-muted)">
+            {{ formatDate(task.date) || "—" }}
+          </div>
+          <div class="task-actions flex" style="gap: 6px">
+            <button class="icon-btn" @click="remove(task.id)" title="Löschen">
+              <BIcon name="x" :size="12" />
+            </button>
+          </div>
+        </div>
       </div>
-     </div>
     </div>
 
     <!-- KANBAN VIEW -->
-    <div v-else-if="viewMode === 'kanban'" class="grid kanban-grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px">
+    <div
+      v-else-if="viewMode === 'kanban'"
+      class="grid kanban-grid"
+      style="grid-template-columns: repeat(3, 1fr); gap: 12px"
+    >
       <div
         v-for="col in kanbanColumns"
         :key="col.key"
@@ -408,21 +400,13 @@ const kanbanColumns = computed(() => [
           </div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px">
-          <div
-            v-for="task in col.items"
-            :key="task.id"
-            class="kanban-card"
-            @click="edit(task)"
-          >
+          <div v-for="task in col.items" :key="task.id" class="kanban-card" @click="edit(task)">
             <div
               :class="{ 'line-through': task.status === 'done' }"
               :style="{
                 fontSize: '13px',
                 fontWeight: 500,
-                color:
-                  task.status === 'done'
-                    ? 'var(--color-text-tertiary)'
-                    : 'var(--color-text)',
+                color: task.status === 'done' ? 'var(--color-text-tertiary)' : 'var(--color-text)',
                 marginBottom: '8px',
               }"
             >
@@ -467,17 +451,9 @@ const kanbanColumns = computed(() => [
         <div
           v-for="task in filtered"
           :key="task.id"
-          style="
-            height: 36px;
-            display: flex;
-            align-items: center;
-            border-bottom: 1px solid var(--color-border-subtle);
-          "
+          style="height: 36px; display: flex; align-items: center; border-bottom: 1px solid var(--color-border-subtle)"
         >
-          <div
-            :class="['timeline-pill', `status-${task.status}`]"
-            @click="edit(task)"
-          >
+          <div :class="['timeline-pill', `status-${task.status}`]" @click="edit(task)">
             <span :class="['dot', `status-${task.status}`]" />
             <span class="truncate" style="flex: 1">{{ task.text }}</span>
             <span class="font-mono" style="font-size: 10px; opacity: 0.7">
@@ -502,7 +478,9 @@ const kanbanColumns = computed(() => [
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 180ms ease, color 180ms ease;
+  transition:
+    background 180ms ease,
+    color 180ms ease;
 }
 .seg-btn-active {
   background: var(--color-border-subtle);

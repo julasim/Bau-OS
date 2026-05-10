@@ -108,11 +108,7 @@ const filtered = computed(() => {
 });
 
 const anyFilterActive = computed(
-  () =>
-    !!searchQuery.value.trim() ||
-    !!filterProjektart.value ||
-    !!filterPhase.value ||
-    filterStatus.value !== "aktiv",
+  () => !!searchQuery.value.trim() || !!filterProjektart.value || !!filterPhase.value || filterStatus.value !== "aktiv",
 );
 
 function resetFilters() {
@@ -322,15 +318,13 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div style="padding: 24px 32px 32px; color: var(--color-text)">
     <!-- Header -->
     <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
       <div class="min-w-0">
         <div class="eyebrow" style="margin-bottom: 6px">Arbeit</div>
         <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">Projekte</h1>
-        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
-          {{ projects.length }} Projekte
-        </p>
+        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">{{ projects.length }} Projekte</p>
       </div>
       <div class="flex items-center" style="gap: 8px">
         <button @click="cycleViewMode" class="bauos-btn ghost">
@@ -381,11 +375,7 @@ onMounted(async () => {
         <option value="pausiert">Pausiert</option>
         <option value="archiviert">Archiviert</option>
       </select>
-      <select
-        v-if="projektartOptions.length > 0"
-        v-model="filterProjektart"
-        class="filter-select"
-      >
+      <select v-if="projektartOptions.length > 0" v-model="filterProjektart" class="filter-select">
         <option value="">Alle Projektarten</option>
         <option v-for="opt in projektartOptions" :key="opt" :value="opt">{{ opt }}</option>
       </select>
@@ -421,12 +411,9 @@ onMounted(async () => {
       >
         <div class="flex items-center justify-between" style="margin-bottom: 10px">
           <div class="flex items-center" style="gap: 6px; min-width: 0">
-            <span
-              v-if="p.status"
-              :class="['pill', `pill-${p.status}`]"
-              style="font-size: 10px"
-              >{{ statusLabel(p.status) }}</span
-            >
+            <span v-if="p.status" :class="['pill', `pill-${p.status}`]" style="font-size: 10px">{{
+              statusLabel(p.status)
+            }}</span>
             <span
               v-if="p.projektnummer"
               class="font-mono"
@@ -434,12 +421,9 @@ onMounted(async () => {
               >#{{ p.projektnummer }}</span
             >
           </div>
-          <span
-            v-if="p.updatedAt"
-            class="font-mono"
-            style="font-size: 10px; color: var(--color-text-tertiary)"
-            >{{ relativeTime(p.updatedAt) }}</span
-          >
+          <span v-if="p.updatedAt" class="font-mono" style="font-size: 10px; color: var(--color-text-tertiary)">{{
+            relativeTime(p.updatedAt)
+          }}</span>
         </div>
         <!-- Parent-Breadcrumb, wenn Sub-Projekt. Klick navigiert zum Parent. -->
         <div
@@ -454,7 +438,13 @@ onMounted(async () => {
         <!-- Phase 3: angelegt-von kommt nur, wenn Username vorhanden ist. -->
         <div
           v-if="p.createdByUsername"
-          style="font-size: 10px; color: var(--color-text-faint); margin-bottom: 4px; letter-spacing: 0.04em; text-transform: uppercase"
+          style="
+            font-size: 10px;
+            color: var(--color-text-faint);
+            margin-bottom: 4px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+          "
         >
           von {{ p.createdByUsername }}
         </div>
@@ -478,10 +468,7 @@ onMounted(async () => {
           <span v-if="p.bauherr && p.standort"> · </span>
           <span v-if="p.standort">{{ p.standort }}</span>
         </p>
-        <p
-          v-if="p.description"
-          class="card-description"
-        >
+        <p v-if="p.description" class="card-description">
           {{ p.description }}
         </p>
         <div v-else-if="!p.bauherr && !p.standort" style="min-height: 18px; margin-bottom: 10px"></div>
@@ -496,10 +483,7 @@ onMounted(async () => {
           <span v-if="p.phase" class="card-chip card-chip-phase">{{ p.phase }}</span>
         </div>
 
-        <div
-          class="flex items-center"
-          style="gap: 12px; font-size: 11px; color: var(--color-text-muted)"
-        >
+        <div class="flex items-center" style="gap: 12px; font-size: 11px; color: var(--color-text-muted)">
           <span>{{ p.notes }} Notizen</span>
           <span :style="{ color: p.openTasks > 0 ? 'var(--color-warning-text)' : 'inherit' }">
             {{ p.openTasks }} Aufgaben
@@ -516,18 +500,18 @@ onMounted(async () => {
         </div>
 
         <!-- Fortschritts-Balken — nur, wenn ueberhaupt Aufgaben existieren. -->
-        <div v-if="taskTotal(p) > 0" class="progress-wrap" :title="`${p.doneTasks ?? 0} von ${taskTotal(p)} Aufgaben erledigt`">
+        <div
+          v-if="taskTotal(p) > 0"
+          class="progress-wrap"
+          :title="`${p.doneTasks ?? 0} von ${taskTotal(p)} Aufgaben erledigt`"
+        >
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: taskProgress(p) + '%' }"></div>
           </div>
           <span class="progress-label">{{ taskProgress(p) }}%</span>
         </div>
       </div>
-      <div
-        v-if="filtered.length === 0"
-        class="empty-state"
-        style="grid-column: 1 / -1"
-      >
+      <div v-if="filtered.length === 0" class="empty-state" style="grid-column: 1 / -1">
         <div class="empty-state-icon">📂</div>
         <div class="empty-state-text">
           {{ searchQuery ? "Keine Treffer." : "Noch keine Projekte." }}
@@ -597,84 +581,106 @@ onMounted(async () => {
 
     <!-- List -->
     <!-- Mobile: outer wrapper scrollt horizontal, inner mit min-width -->
-    <div v-else class="proj-list-wrap" style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-     <div class="proj-list-inner">
-      <div
-        class="flex items-center"
-        style="
-          gap: 12px;
-          padding: 10px 16px;
-          background: var(--color-bg-subtle);
-          border-bottom: 1px solid var(--color-border);
-        "
-      >
-        <span class="eyebrow" style="width: 80px">Nr.</span>
-        <span class="eyebrow flex-1">Projekt</span>
-        <span class="eyebrow" style="width: 120px">Bauherr</span>
-        <span class="eyebrow" style="width: 100px">Projektart</span>
-        <span class="eyebrow" style="width: 80px">Status</span>
-        <span class="eyebrow" style="width: 60px; text-align: center">Aufgaben</span>
-        <span class="eyebrow" style="width: 90px; text-align: right">Geändert</span>
-      </div>
-      <div
-        v-for="p in filtered"
-        :key="p.name"
-        class="proj-row flex items-center"
-        style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
-        @click="router.push(`/projects/${encodeURIComponent(p.name)}`)"
-      >
-        <span
-          class="font-mono"
-          style="width: 80px; font-size: 11px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+    <div
+      v-else
+      class="proj-list-wrap"
+      style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden"
+    >
+      <div class="proj-list-inner">
+        <div
+          class="flex items-center"
+          style="
+            gap: 12px;
+            padding: 10px 16px;
+            background: var(--color-bg-subtle);
+            border-bottom: 1px solid var(--color-border);
+          "
         >
-          {{ p.projektnummer || "—" }}
-        </span>
-        <div class="flex-1 min-w-0 flex items-center" style="gap: 8px">
-          <BIcon name="folder" :size="14" style="color: var(--color-text-muted); flex-shrink: 0" />
-          <span style="font-size: 13px; color: var(--color-text)" class="truncate">{{ p.name }}</span>
+          <span class="eyebrow" style="width: 80px">Nr.</span>
+          <span class="eyebrow flex-1">Projekt</span>
+          <span class="eyebrow" style="width: 120px">Bauherr</span>
+          <span class="eyebrow" style="width: 100px">Projektart</span>
+          <span class="eyebrow" style="width: 80px">Status</span>
+          <span class="eyebrow" style="width: 60px; text-align: center">Aufgaben</span>
+          <span class="eyebrow" style="width: 90px; text-align: right">Geändert</span>
         </div>
-        <span
-          style="width: 120px; font-size: 12px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+        <div
+          v-for="p in filtered"
+          :key="p.name"
+          class="proj-row flex items-center"
+          style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
+          @click="router.push(`/projects/${encodeURIComponent(p.name)}`)"
         >
-          {{ p.bauherr || "—" }}
-        </span>
-        <span
-          style="width: 100px; font-size: 11px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
-        >
-          {{ p.projektart || "—" }}
-        </span>
-        <div style="width: 80px">
           <span
-            v-if="p.status"
-            :class="['pill', `pill-${p.status}`]"
-            style="font-size: 10px"
-            >{{ statusLabel(p.status) }}</span
+            class="font-mono"
+            style="
+              width: 80px;
+              font-size: 11px;
+              color: var(--color-text-muted);
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            "
           >
+            {{ p.projektnummer || "—" }}
+          </span>
+          <div class="flex-1 min-w-0 flex items-center" style="gap: 8px">
+            <BIcon name="folder" :size="14" style="color: var(--color-text-muted); flex-shrink: 0" />
+            <span style="font-size: 13px; color: var(--color-text)" class="truncate">{{ p.name }}</span>
+          </div>
+          <span
+            style="
+              width: 120px;
+              font-size: 12px;
+              color: var(--color-text-muted);
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            "
+          >
+            {{ p.bauherr || "—" }}
+          </span>
+          <span
+            style="
+              width: 100px;
+              font-size: 11px;
+              color: var(--color-text-muted);
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            "
+          >
+            {{ p.projektart || "—" }}
+          </span>
+          <div style="width: 80px">
+            <span v-if="p.status" :class="['pill', `pill-${p.status}`]" style="font-size: 10px">{{
+              statusLabel(p.status)
+            }}</span>
+          </div>
+          <span
+            style="width: 60px; text-align: center; font-size: 11px"
+            :style="{ color: p.openTasks > 0 ? 'var(--color-warning-text)' : 'var(--color-text-muted)' }"
+          >
+            {{ p.openTasks }}
+          </span>
+          <span
+            class="font-mono"
+            style="width: 90px; text-align: right; font-size: 11px; color: var(--color-text-tertiary)"
+          >
+            {{ formatDate(p.updatedAt) }}
+          </span>
         </div>
-        <span
-          style="width: 60px; text-align: center; font-size: 11px"
-          :style="{ color: p.openTasks > 0 ? 'var(--color-warning-text)' : 'var(--color-text-muted)' }"
-        >
-          {{ p.openTasks }}
-        </span>
-        <span
-          class="font-mono"
-          style="width: 90px; text-align: right; font-size: 11px; color: var(--color-text-tertiary)"
-        >
-          {{ formatDate(p.updatedAt) }}
-        </span>
-      </div>
-      <div v-if="filtered.length === 0" class="empty-state">
-        <div class="empty-state-icon">📂</div>
-        <div class="empty-state-text">
-          {{ anyFilterActive ? "Keine Treffer." : "Noch keine Projekte." }}
+        <div v-if="filtered.length === 0" class="empty-state">
+          <div class="empty-state-icon">📂</div>
+          <div class="empty-state-text">
+            {{ anyFilterActive ? "Keine Treffer." : "Noch keine Projekte." }}
+          </div>
+          <button v-if="!anyFilterActive" class="bauos-btn solid sm" @click="openCreateDialog">
+            <BIcon name="plus" :size="11" :stroke-width="2" />
+            Erstes Projekt anlegen
+          </button>
         </div>
-        <button v-if="!anyFilterActive" class="bauos-btn solid sm" @click="openCreateDialog">
-          <BIcon name="plus" :size="11" :stroke-width="2" />
-          Erstes Projekt anlegen
-        </button>
       </div>
-     </div>
     </div>
 
     <!-- ═══ Neues-Projekt-Dialog (Phase 4) ═══════════════ -->
@@ -683,9 +689,7 @@ onMounted(async () => {
         <div class="flex items-center justify-between" style="margin-bottom: 16px">
           <div>
             <div class="eyebrow" style="margin-bottom: 4px">Neu</div>
-            <h2 style="font-size: 18px; font-weight: 600; margin: 0; color: var(--color-text)">
-              Projekt anlegen
-            </h2>
+            <h2 style="font-size: 18px; font-weight: 600; margin: 0; color: var(--color-text)">Projekt anlegen</h2>
           </div>
           <button class="modal-close" @click="closeCreateDialog" :disabled="createSaving">
             <BIcon name="x" :size="14" />
@@ -707,12 +711,7 @@ onMounted(async () => {
 
           <label class="form-field">
             <span class="eyebrow">Projektnummer</span>
-            <input
-              v-model="createForm.projektnummer"
-              type="text"
-              placeholder="2026-037"
-              class="form-input-lg"
-            />
+            <input v-model="createForm.projektnummer" type="text" placeholder="2026-037" class="form-input-lg" />
           </label>
 
           <label class="form-field">
@@ -726,42 +725,22 @@ onMounted(async () => {
 
           <label class="form-field">
             <span class="eyebrow">Bauherr</span>
-            <input
-              v-model="createForm.bauherr"
-              type="text"
-              placeholder="Name + Kontakt"
-              class="form-input-lg"
-            />
+            <input v-model="createForm.bauherr" type="text" placeholder="Name + Kontakt" class="form-input-lg" />
           </label>
 
           <label class="form-field">
             <span class="eyebrow">Standort</span>
-            <input
-              v-model="createForm.standort"
-              type="text"
-              placeholder="Ort / Adresse"
-              class="form-input-lg"
-            />
+            <input v-model="createForm.standort" type="text" placeholder="Ort / Adresse" class="form-input-lg" />
           </label>
 
           <label class="form-field">
             <span class="eyebrow">Nutzung</span>
-            <input
-              v-model="createForm.nutzung"
-              type="text"
-              placeholder="z.B. Wohnbau"
-              class="form-input-lg"
-            />
+            <input v-model="createForm.nutzung" type="text" placeholder="z.B. Wohnbau" class="form-input-lg" />
           </label>
 
           <label class="form-field">
             <span class="eyebrow">Phase</span>
-            <input
-              v-model="createForm.phase"
-              type="text"
-              placeholder="z.B. Vorentwurf"
-              class="form-input-lg"
-            />
+            <input v-model="createForm.phase" type="text" placeholder="z.B. Vorentwurf" class="form-input-lg" />
           </label>
 
           <label class="form-field">
@@ -805,14 +784,8 @@ onMounted(async () => {
             * Pflichtfeld — alle anderen Felder lassen sich später noch befüllen.
           </span>
           <div class="flex items-center" style="gap: 8px">
-            <button class="bauos-btn ghost" @click="closeCreateDialog" :disabled="createSaving">
-              Abbrechen
-            </button>
-            <button
-              class="bauos-btn solid"
-              @click="submitCreate"
-              :disabled="!createForm.name.trim() || createSaving"
-            >
+            <button class="bauos-btn ghost" @click="closeCreateDialog" :disabled="createSaving">Abbrechen</button>
+            <button class="bauos-btn solid" @click="submitCreate" :disabled="!createForm.name.trim() || createSaving">
               {{ createSaving ? "Lege an…" : "Projekt anlegen" }}
             </button>
           </div>
@@ -1006,7 +979,10 @@ onMounted(async () => {
   padding: 10px 12px;
   margin-bottom: 8px;
   cursor: grab;
-  transition: border-color 180ms ease, transform 120ms ease, opacity 180ms ease;
+  transition:
+    border-color 180ms ease,
+    transform 120ms ease,
+    opacity 180ms ease;
 }
 .kanban-card:hover {
   border-color: var(--color-text-faint);

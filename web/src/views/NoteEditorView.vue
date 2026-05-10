@@ -14,9 +14,7 @@ const preview = ref(false);
 
 onMounted(async () => {
   name.value = route.params.name as string;
-  const note = await api.get<{ name: string; content: string }>(
-    `/notes/${encodeURIComponent(name.value)}`,
-  );
+  const note = await api.get<{ name: string; content: string }>(`/notes/${encodeURIComponent(name.value)}`);
   content.value = note.content;
 });
 
@@ -31,7 +29,7 @@ async function save() {
 </script>
 
 <template>
-  <div style="max-width: 760px; margin: 0 auto; padding: 40px 48px; color: var(--color-text)">
+  <div style="padding: 24px 32px 32px; color: var(--color-text)">
     <button
       @click="router.back()"
       class="flex items-center"
@@ -57,10 +55,7 @@ async function save() {
         </h1>
       </div>
       <div class="flex" style="gap: 8px">
-        <button
-          @click="preview = !preview"
-          class="bauos-btn ghost"
-        >
+        <button @click="preview = !preview" class="bauos-btn ghost">
           {{ preview ? "Bearbeiten" : "Vorschau" }}
         </button>
         <button @click="save" :disabled="saving" class="bauos-btn solid">
@@ -105,4 +100,3 @@ async function save() {
     />
   </div>
 </template>
-

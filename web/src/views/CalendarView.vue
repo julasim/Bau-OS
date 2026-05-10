@@ -29,8 +29,7 @@ const VIEW_KEY = "bau-os-calendar-view";
 // Auf Phone (<768px): Default auf "list" — Monats-/Wochengrid ist auf
 // 375px schlicht unbenutzbar (5px-Spalten, ueberlappende Events).
 // User kann via View-Switcher trotzdem auf Monat umschalten.
-const isMobileViewport =
-  typeof window !== "undefined" && window.innerWidth < 768;
+const isMobileViewport = typeof window !== "undefined" && window.innerWidth < 768;
 const view = ref<ViewMode>(
   ((): ViewMode => {
     const v = localStorage.getItem(VIEW_KEY);
@@ -101,9 +100,7 @@ function formatDateLong(d: string): string {
 }
 
 // ── Monats-Grid ──────────────────────────────────────────────────────────────
-const monthTitle = computed(() =>
-  current.value.toLocaleDateString("de-AT", { month: "long", year: "numeric" }),
-);
+const monthTitle = computed(() => current.value.toLocaleDateString("de-AT", { month: "long", year: "numeric" }));
 
 const monthDays = computed(() => {
   const y = current.value.getFullYear();
@@ -344,7 +341,7 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
 </script>
 
 <template>
-  <div class="cal-page" style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div class="cal-page" style="padding: 24px 32px 32px; color: var(--color-text)">
     <!-- ── Flash-Message ──────────────────────────────────────── -->
     <div
       v-if="message"
@@ -382,10 +379,7 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
 
         <div class="cal-actions">
           <!-- Segmented View-Switcher -->
-          <div
-            class="flex"
-            style="border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden"
-          >
+          <div class="flex" style="border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden">
             <button
               v-for="(v, i) in VIEWS"
               :key="v.id"
@@ -417,12 +411,7 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
         </div>
         <div>
           <label class="eyebrow" style="display: block; margin-bottom: 4px">Beschreibung</label>
-          <input
-            v-model="newText"
-            placeholder="Termin…"
-            @keyup.enter="create"
-            class="form-input"
-          />
+          <input v-model="newText" placeholder="Termin…" @keyup.enter="create" class="form-input" />
         </div>
       </div>
       <div class="flex gap-2">
@@ -453,11 +442,7 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
       </div>
       <div style="margin-bottom: 12px">
         <label class="eyebrow" style="display: block; margin-bottom: 4px">Ort</label>
-        <input
-          v-model="editing.location"
-          placeholder="z. B. Büro, Baustelle…"
-          class="form-input"
-        />
+        <input v-model="editing.location" placeholder="z. B. Büro, Baustelle…" class="form-input" />
       </div>
       <div v-if="team.length > 0" style="margin-bottom: 16px">
         <label class="eyebrow" style="display: block; margin-bottom: 4px">Personen</label>
@@ -477,7 +462,10 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
         <button @click="editing = null" class="bauos-btn ghost">Abbrechen</button>
         <div class="flex-1" />
         <button
-          @click="remove(editing.id); editing = null"
+          @click="
+            remove(editing.id);
+            editing = null;
+          "
           class="bauos-btn ghost"
           style="color: var(--color-danger-text)"
         >
@@ -490,14 +478,14 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
     <div v-if="view === 'month'">
       <div
         class="grid"
-        style="grid-template-columns: repeat(7, minmax(0, 1fr)); background: var(--color-bg-subtle); border: 1px solid var(--color-border); border-bottom: 0"
+        style="
+          grid-template-columns: repeat(7, minmax(0, 1fr));
+          background: var(--color-bg-subtle);
+          border: 1px solid var(--color-border);
+          border-bottom: 0;
+        "
       >
-        <div
-          v-for="wd in weekdays"
-          :key="wd"
-          class="eyebrow"
-          style="padding: 8px; text-align: center"
-        >
+        <div v-for="wd in weekdays" :key="wd" class="eyebrow" style="padding: 8px; text-align: center">
           {{ wd }}
         </div>
       </div>
@@ -520,11 +508,9 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
           @click="startCreate(day.iso)"
         >
           <div class="flex items-start justify-between">
-            <span
-              @click.stop="goToDate(day.iso)"
-              :class="['cal-day-num', day.today ? 'cal-day-num-today' : '']"
-              >{{ day.date.getDate() }}</span
-            >
+            <span @click.stop="goToDate(day.iso)" :class="['cal-day-num', day.today ? 'cal-day-num-today' : '']">{{
+              day.date.getDate()
+            }}</span>
           </div>
           <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px">
             <button
@@ -552,19 +538,8 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
 
     <!-- ── WOCHEN-ANSICHT ─────────────────────────────────────── -->
     <div v-if="view === 'week'">
-      <div
-        class="grid"
-        style="
-          grid-template-columns: repeat(7, minmax(0, 1fr));
-          border: 1px solid var(--color-border);
-        "
-      >
-        <div
-          v-for="day in weekDays"
-          :key="day.iso"
-          class="cal-week-cell"
-          :class="{ 'cal-day-today': day.today }"
-        >
+      <div class="grid" style="grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--color-border)">
+        <div v-for="day in weekDays" :key="day.iso" class="cal-week-cell" :class="{ 'cal-day-today': day.today }">
           <div class="flex items-center justify-between" style="margin-bottom: 8px">
             <button
               @click="goToDate(day.iso)"
@@ -583,12 +558,7 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
             <button @click="startCreate(day.iso)" class="cal-add-btn">+</button>
           </div>
           <div style="display: flex; flex-direction: column; gap: 4px">
-            <button
-              v-for="t in termineForDate(day.iso)"
-              :key="t.id"
-              @click="edit(t)"
-              class="cal-event"
-            >
+            <button v-for="t in termineForDate(day.iso)" :key="t.id" @click="edit(t)" class="cal-event">
               <span v-if="t.uhrzeit" class="font-mono" style="color: var(--color-text-tertiary)">
                 {{ t.uhrzeit }}
               </span>
@@ -611,13 +581,7 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
         >
           <div
             class="font-mono"
-            style="
-              width: 56px;
-              padding: 8px 10px;
-              font-size: 11px;
-              color: var(--color-text-tertiary);
-              flex-shrink: 0;
-            "
+            style="width: 56px; padding: 8px 10px; font-size: 11px; color: var(--color-text-tertiary); flex-shrink: 0"
           >
             {{ String(h).padStart(2, "0") }}:00
           </div>
@@ -644,7 +608,13 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
               <span v-if="t.location" style="color: var(--color-text-muted); font-size: 11px">
                 · {{ t.location }}
               </span>
-              <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title" style="margin-left: auto">O</span>
+              <span
+                v-if="msBadgeFor(t).show"
+                :class="msBadgeFor(t).cls"
+                :title="msBadgeFor(t).title"
+                style="margin-left: auto"
+                >O</span
+              >
             </button>
           </div>
         </div>
@@ -660,10 +630,14 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
             class="cal-event-big"
           >
             <span style="font-weight: 500">{{ t.text }}</span>
-            <span v-if="t.location" style="color: var(--color-text-muted); font-size: 11px">
-              · {{ t.location }}
-            </span>
-            <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title" style="margin-left: auto">O</span>
+            <span v-if="t.location" style="color: var(--color-text-muted); font-size: 11px"> · {{ t.location }} </span>
+            <span
+              v-if="msBadgeFor(t).show"
+              :class="msBadgeFor(t).cls"
+              :title="msBadgeFor(t).title"
+              style="margin-left: auto"
+              >O</span
+            >
           </button>
         </div>
       </div>
@@ -674,47 +648,37 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
       <div v-for="group in grouped" :key="group.date" style="margin-bottom: 24px">
         <div class="eyebrow" style="margin-bottom: 8px">{{ group.label }}</div>
         <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-          <div
-            v-for="t in group.items"
-            :key="t.id"
-            class="cal-list-row"
-          >
+          <div v-for="t in group.items" :key="t.id" class="cal-list-row">
             <button @click="edit(t)" class="cal-list-btn">
               <span
                 v-if="t.uhrzeit"
                 class="font-mono"
-                style="
-                  font-size: 12px;
-                  color: var(--color-text-muted);
-                  width: 52px;
-                  flex-shrink: 0;
-                "
+                style="font-size: 12px; color: var(--color-text-muted); width: 52px; flex-shrink: 0"
                 >{{ t.uhrzeit }}</span
               >
               <span
                 v-else
                 class="font-mono"
-                style="
-                  font-size: 12px;
-                  color: var(--color-text-faint);
-                  width: 52px;
-                  flex-shrink: 0;
-                "
+                style="font-size: 12px; color: var(--color-text-faint); width: 52px; flex-shrink: 0"
                 >–:–</span
               >
               <div class="min-w-0" style="flex: 1">
-                <div style="font-size: 13px; color: var(--color-text); font-weight: 500; display: flex; align-items: center; gap: 6px">
+                <div
+                  style="
+                    font-size: 13px;
+                    color: var(--color-text);
+                    font-weight: 500;
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                  "
+                >
                   <span>{{ t.text }}</span>
                   <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
                 </div>
                 <div
                   class="flex flex-wrap"
-                  style="
-                    gap: 12px;
-                    margin-top: 2px;
-                    font-size: 11px;
-                    color: var(--color-text-tertiary);
-                  "
+                  style="gap: 12px; margin-top: 2px; font-size: 11px; color: var(--color-text-tertiary)"
                 >
                   <span v-if="t.endzeit" class="font-mono">bis {{ t.endzeit }}</span>
                   <span v-if="t.location">{{ t.location }}</span>
@@ -730,12 +694,7 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
       </div>
       <p
         v-if="termine.length === 0"
-        style="
-          font-size: 13px;
-          color: var(--color-text-tertiary);
-          text-align: center;
-          padding: 32px 0;
-        "
+        style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
       >
         Keine Termine vorhanden.
       </p>
@@ -777,7 +736,9 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 180ms ease, color 180ms ease;
+  transition:
+    background 180ms ease,
+    color 180ms ease;
 }
 .seg-btn-active {
   background: var(--color-border-subtle);
@@ -908,8 +869,7 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
   font-size: 9px;
   font-weight: 700;
   line-height: 1;
-  font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   letter-spacing: -0.5px;
   user-select: none;
 }

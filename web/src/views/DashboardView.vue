@@ -86,9 +86,7 @@ const upcomingTermine = computed(() =>
 // Letzte 4 Projekte (nach Aktualisierung sortiert) — unabhaengig vom Status.
 // So sieht der Nutzer auf dem Dashboard immer seine juengste Arbeit.
 const recentProjects = computed(() =>
-  [...projects.value]
-    .sort((a, b) => (b.updated ?? "").localeCompare(a.updated ?? ""))
-    .slice(0, 4),
+  [...projects.value].sort((a, b) => (b.updated ?? "").localeCompare(a.updated ?? "")).slice(0, 4),
 );
 
 async function load() {
@@ -165,26 +163,15 @@ const statCards = computed(() => [
 </script>
 
 <template>
-  <div
-    style="
-      max-width: 1120px;
-      margin: 0 auto;
-      padding: 28px 32px 48px;
-      color: var(--color-text);
-    "
-  >
+  <div style="padding: 24px 32px 32px; color: var(--color-text)">
     <!-- Header -->
     <div class="dash-header">
       <div class="min-w-0">
         <div class="eyebrow" style="margin-bottom: 6px">Dashboard</div>
-        <h1 class="dash-greeting">
-          {{ greeting }}{{ firstName ? `, ${firstName}` : "" }}.
-        </h1>
+        <h1 class="dash-greeting">{{ greeting }}{{ firstName ? `, ${firstName}` : "" }}.</h1>
         <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 6px; margin-bottom: 0">
           {{ todayDE }} ·
-          <span style="color: var(--color-text); font-weight: 500"
-            >{{ stats.openTasks }} offene Aufgaben</span
-          >
+          <span style="color: var(--color-text); font-weight: 500">{{ stats.openTasks }} offene Aufgaben</span>
           · {{ stats.termine }} Termine diese Woche
         </p>
       </div>
@@ -210,24 +197,13 @@ const statCards = computed(() => [
 
     <!-- Stat-Grid (4 cards) -->
     <div class="grid gap-3 dash-stat-grid" style="grid-template-columns: repeat(4, 1fr); margin-bottom: 28px">
-      <router-link
-        v-for="s in statCards"
-        :key="s.key"
-        :to="s.to"
-        class="stat-card"
-      >
+      <router-link v-for="s in statCards" :key="s.key" :to="s.to" class="stat-card">
         <div class="flex items-start justify-between" style="margin-bottom: 14px">
           <BIcon :name="s.icon" :size="16" style="color: var(--color-text-muted)" />
           <BIcon name="arrowUpRight" :size="14" style="color: var(--color-text-faint)" />
         </div>
         <div
-          style="
-            font-size: 28px;
-            font-weight: 600;
-            letter-spacing: -0.02em;
-            line-height: 1;
-            color: var(--color-text);
-          "
+          style="font-size: 28px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; color: var(--color-text)"
         >
           {{ s.value }}
         </div>
@@ -241,16 +217,11 @@ const statCards = computed(() => [
     </div>
 
     <!-- Two-Column: Aufgaben | Termine -->
-    <div
-      class="grid gap-5 dash-two-col"
-      style="grid-template-columns: 1.3fr 1fr; margin-bottom: 28px"
-    >
+    <div class="grid gap-5 dash-two-col" style="grid-template-columns: 1.3fr 1fr; margin-bottom: 28px">
       <!-- Aufgaben -->
       <section class="surface-card">
         <div class="flex items-center justify-between" style="margin-bottom: 12px">
-          <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">
-            Offene Aufgaben
-          </h2>
+          <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">Offene Aufgaben</h2>
           <router-link
             to="/tasks"
             style="font-size: 11px; color: var(--color-text-muted); text-decoration: none"
@@ -258,17 +229,9 @@ const statCards = computed(() => [
             >Alle →</router-link
           >
         </div>
-        <div
-          v-if="openTasks.length === 0"
-          class="flex items-center"
-          style="gap: 10px; padding: 8px 0"
-        >
+        <div v-if="openTasks.length === 0" class="flex items-center" style="gap: 10px; padding: 8px 0">
           <span style="font-size: 12px; color: var(--color-text-tertiary)">Keine offenen Aufgaben.</span>
-          <router-link
-            to="/tasks"
-            class="bauos-btn ghost sm"
-            style="text-decoration: none; margin-left: auto"
-          >
+          <router-link to="/tasks" class="bauos-btn ghost sm" style="text-decoration: none; margin-left: auto">
             <BIcon name="plus" :size="11" :stroke-width="2" /> Anlegen
           </router-link>
         </div>
@@ -285,10 +248,7 @@ const statCards = computed(() => [
                 height: '14px',
                 borderRadius: '4px',
                 flexShrink: 0,
-                background:
-                  task.status === 'in_progress'
-                    ? 'var(--color-warning)'
-                    : 'transparent',
+                background: task.status === 'in_progress' ? 'var(--color-warning)' : 'transparent',
                 border:
                   task.status === 'in_progress'
                     ? '1px solid var(--color-warning)'
@@ -315,9 +275,7 @@ const statCards = computed(() => [
       <!-- Naechste Termine -->
       <section class="surface-card">
         <div class="flex items-center justify-between" style="margin-bottom: 12px">
-          <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">
-            Naechste Termine
-          </h2>
+          <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">Naechste Termine</h2>
           <router-link
             to="/calendar"
             style="font-size: 11px; color: var(--color-text-muted); text-decoration: none"
@@ -325,10 +283,7 @@ const statCards = computed(() => [
             >Kalender →</router-link
           >
         </div>
-        <div
-          v-if="upcomingTermine.length === 0"
-          style="font-size: 12px; color: var(--color-text-tertiary)"
-        >
+        <div v-if="upcomingTermine.length === 0" style="font-size: 12px; color: var(--color-text-tertiary)">
           Keine anstehenden Termine.
         </div>
         <div v-else>
@@ -338,10 +293,7 @@ const statCards = computed(() => [
             class="flex items-start"
             style="gap: 12px; padding: 10px 0; border-top: 1px solid var(--color-border-subtle)"
           >
-            <div
-              class="flex-shrink-0 text-center"
-              style="width: 44px"
-            >
+            <div class="flex-shrink-0 text-center" style="width: 44px">
               <div class="eyebrow" style="font-size: 9px">{{ terminWeekday(t.datum) }}</div>
               <div
                 style="
@@ -358,9 +310,7 @@ const statCards = computed(() => [
                 {{ t.uhrzeit }}
               </div>
             </div>
-            <div
-              style="width: 1px; align-self: stretch; background: var(--color-border-subtle)"
-            />
+            <div style="width: 1px; align-self: stretch; background: var(--color-border-subtle)" />
             <div class="flex-1 min-w-0">
               <div style="font-size: 13px; color: var(--color-text); font-weight: 500" class="truncate">
                 {{ t.text }}
@@ -381,9 +331,7 @@ const statCards = computed(() => [
     <!-- Letzte Projekte -->
     <section>
       <div class="flex items-center justify-between" style="margin-bottom: 12px">
-        <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">
-          Letzte Projekte
-        </h2>
+        <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">Letzte Projekte</h2>
         <router-link
           to="/projects"
           style="font-size: 11px; color: var(--color-text-muted); text-decoration: none"
@@ -397,9 +345,7 @@ const statCards = computed(() => [
         style="border: 1px dashed var(--color-border); border-radius: 8px"
       >
         <div class="empty-state-icon">📂</div>
-        <div class="empty-state-text">
-          Noch keine Projekte. Im Chat ("leg ein Projekt … an") oder direkt anlegen.
-        </div>
+        <div class="empty-state-text">Noch keine Projekte. Im Chat ("leg ein Projekt … an") oder direkt anlegen.</div>
         <router-link to="/projects" class="bauos-btn solid sm" style="text-decoration: none">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erstes Projekt anlegen
@@ -414,25 +360,17 @@ const statCards = computed(() => [
         >
           <div class="flex items-center justify-between" style="margin-bottom: 10px">
             <span class="pill pill-success">aktiv</span>
-            <span
-              v-if="p.updated"
-              class="font-mono"
-              style="font-size: 10px; color: var(--color-text-tertiary)"
-              >{{ p.updated }}</span
-            >
+            <span v-if="p.updated" class="font-mono" style="font-size: 10px; color: var(--color-text-tertiary)">{{
+              p.updated
+            }}</span>
           </div>
           <div style="font-size: 14px; font-weight: 600; color: var(--color-text); margin-bottom: 4px">
             {{ p.name }}
           </div>
-          <div
-            v-if="p.client || p.phase"
-            style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 12px"
-          >
+          <div v-if="p.client || p.phase" style="font-size: 11px; color: var(--color-text-muted); margin-bottom: 12px">
             {{ [p.client, p.phase].filter(Boolean).join(" · ") }}
           </div>
-          <div
-            style="height: 2px; background: var(--color-border-subtle); border-radius: 2px; overflow: hidden"
-          >
+          <div style="height: 2px; background: var(--color-border-subtle); border-radius: 2px; overflow: hidden">
             <div
               :style="{
                 width: `${p.progress ?? 0}%`,
@@ -446,9 +384,7 @@ const statCards = computed(() => [
             style="margin-top: 8px; font-size: 10px; color: var(--color-text-tertiary)"
           >
             <span>{{ p.progress ?? 0 }} % abgeschlossen</span>
-            <span v-if="p.tasks"
-              >{{ p.tasks.open }} offen · {{ p.tasks.done }} erledigt</span
-            >
+            <span v-if="p.tasks">{{ p.tasks.open }} offen · {{ p.tasks.done }} erledigt</span>
           </div>
         </router-link>
       </div>
@@ -465,7 +401,9 @@ const statCards = computed(() => [
   background: var(--color-bg);
   color: inherit;
   text-decoration: none;
-  transition: border-color 180ms ease, background 180ms ease;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease;
 }
 .stat-card:hover {
   border-color: var(--color-text-faint);
@@ -481,7 +419,9 @@ const statCards = computed(() => [
 .hover-card {
   text-decoration: none;
   color: inherit;
-  transition: border-color 180ms ease, background 180ms ease;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease;
 }
 .hover-card:hover {
   border-color: var(--color-text-faint);

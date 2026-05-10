@@ -117,7 +117,14 @@ function formatVal(v: unknown): string {
 function eventClass(event: string, ok: boolean): string {
   if (!ok || event.endsWith(".fail")) return "audit-pill audit-pill-err";
   if (event === "user.delete") return "audit-pill audit-pill-warn";
-  if (event === "2fa.enable" || event === "user.create" || event === "login.success" || event === "login.2fa.success" || event === "pair.success") return "audit-pill audit-pill-ok";
+  if (
+    event === "2fa.enable" ||
+    event === "user.create" ||
+    event === "login.success" ||
+    event === "login.2fa.success" ||
+    event === "pair.success"
+  )
+    return "audit-pill audit-pill-ok";
   return "audit-pill audit-pill-neutral";
 }
 
@@ -155,8 +162,8 @@ const filteredCount = computed(() => entries.value.length);
         <div class="eyebrow">System</div>
         <h1>Audit-Log</h1>
         <p class="audit-subtitle">
-          Sicherheitsrelevante Events: Logins, 2FA, User-CRUD, Bot-Token, Telegram-Pairing.
-          Append-only — Eintraege werden nicht editiert.
+          Sicherheitsrelevante Events: Logins, 2FA, User-CRUD, Bot-Token, Telegram-Pairing. Append-only — Eintraege
+          werden nicht editiert.
         </p>
       </div>
     </header>
@@ -170,20 +177,8 @@ const filteredCount = computed(() => entries.value.length);
           {{ opt.label }}
         </option>
       </select>
-      <input
-        v-model="filterActor"
-        type="text"
-        placeholder="Actor-User-ID"
-        class="audit-input"
-        @keyup.enter="load"
-      />
-      <input
-        v-model="filterIp"
-        type="text"
-        placeholder="IP"
-        class="audit-input"
-        @keyup.enter="load"
-      />
+      <input v-model="filterActor" type="text" placeholder="Actor-User-ID" class="audit-input" @keyup.enter="load" />
+      <input v-model="filterIp" type="text" placeholder="IP" class="audit-input" @keyup.enter="load" />
       <select v-model.number="limit" @change="load" class="audit-select">
         <option :value="50">50 Eintraege</option>
         <option :value="100">100 Eintraege</option>
@@ -212,9 +207,7 @@ const filteredCount = computed(() => entries.value.length);
         </thead>
         <tbody>
           <tr v-if="!loading && entries.length === 0">
-            <td colspan="6" class="audit-empty">
-              Keine Eintraege fuer diese Filter.
-            </td>
+            <td colspan="6" class="audit-empty">Keine Eintraege fuer diese Filter.</td>
           </tr>
           <tr v-for="e in entries" :key="e.id" :class="{ 'audit-row-fail': !e.ok }">
             <td class="col-ts mono">{{ formatTs(e.ts) }}</td>
@@ -239,9 +232,7 @@ const filteredCount = computed(() => entries.value.length);
 
     <!-- Mobile-Karten (<768px) -->
     <div class="audit-cards">
-      <div v-if="!loading && entries.length === 0" class="audit-empty-card">
-        Keine Eintraege fuer diese Filter.
-      </div>
+      <div v-if="!loading && entries.length === 0" class="audit-empty-card">Keine Eintraege fuer diese Filter.</div>
       <div v-for="e in entries" :key="'card-' + e.id" class="audit-card">
         <div class="audit-card-head">
           <span :class="eventClass(e.event, e.ok)">{{ eventLabel(e.event) }}</span>
@@ -249,7 +240,9 @@ const filteredCount = computed(() => entries.value.length);
         </div>
         <div class="audit-card-row">
           <span class="audit-card-key">Actor</span>
-          <span>{{ e.actorUsername ?? "—" }}<span v-if="e.actorRole" class="audit-role">{{ e.actorRole }}</span></span>
+          <span
+            >{{ e.actorUsername ?? "—" }}<span v-if="e.actorRole" class="audit-role">{{ e.actorRole }}</span></span
+          >
         </div>
         <div v-if="e.targetLabel" class="audit-card-row">
           <span class="audit-card-key">Ziel</span>
@@ -269,9 +262,7 @@ const filteredCount = computed(() => entries.value.length);
 
 <style scoped>
 .admin-audit-wrap {
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 28px 32px 48px;
+  padding: 24px 32px 32px;
   color: var(--color-text);
 }
 

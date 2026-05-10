@@ -17,9 +17,7 @@ interface SemanticResult {
   project?: string | null;
 }
 
-type SearchResponse =
-  | { mode: "text"; results: TextResult[] }
-  | { mode: "semantic"; results: SemanticResult[] };
+type SearchResponse = { mode: "text"; results: TextResult[] } | { mode: "semantic"; results: SemanticResult[] };
 
 const query = ref("");
 const searched = ref(false);
@@ -52,7 +50,7 @@ async function search() {
 </script>
 
 <template>
-  <div style="max-width: 760px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div style="padding: 24px 32px 32px; color: var(--color-text)">
     <div class="eyebrow" style="margin-bottom: 6px; text-align: center">Inhalte</div>
     <h1
       style="
@@ -66,14 +64,7 @@ async function search() {
     >
       Suche
     </h1>
-    <p
-      style="
-        font-size: 13px;
-        color: var(--color-text-muted);
-        text-align: center;
-        margin-bottom: 24px;
-      "
-    >
+    <p style="font-size: 13px; color: var(--color-text-muted); text-align: center; margin-bottom: 24px">
       Hybrid-Suche über Notizen, Dateien und Projekte.
     </p>
 
@@ -94,31 +85,16 @@ async function search() {
         v-model="query"
         placeholder="Suchbegriff oder Frage…"
         @keyup.enter="search"
-        style="
-          flex: 1;
-          border: none;
-          outline: none;
-          background: transparent;
-          font-size: 14px;
-          color: var(--color-text);
-        "
+        style="flex: 1; border: none; outline: none; background: transparent; font-size: 14px; color: var(--color-text)"
       />
-      <button
-        @click="search"
-        :disabled="loading"
-        class="bauos-btn solid"
-        style="padding: 4px 12px; font-size: 12px"
-      >
+      <button @click="search" :disabled="loading" class="bauos-btn solid" style="padding: 4px 12px; font-size: 12px">
         {{ loading ? "…" : "Suchen" }}
       </button>
     </div>
 
-    <p
-      v-if="searched"
-      style="font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 12px"
-    >
-      {{ (responseMode === "semantic" ? semanticResults.length : textResults.length) }} Treffer für
-      „{{ query }}" · {{ responseMode === "semantic" ? "Hybrid-Suche (Keyword + Embedding)" : "Text-Suche" }}
+    <p v-if="searched" style="font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 12px">
+      {{ responseMode === "semantic" ? semanticResults.length : textResults.length }} Treffer für „{{ query }}" ·
+      {{ responseMode === "semantic" ? "Hybrid-Suche (Keyword + Embedding)" : "Text-Suche" }}
     </p>
 
     <!-- Semantic Results -->

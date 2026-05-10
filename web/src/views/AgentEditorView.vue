@@ -23,10 +23,9 @@ onMounted(async () => {
 async function save() {
   saving.value = true;
   try {
-    await api.put(
-      `/agents/${encodeURIComponent(agentName.value)}/files/${encodeURIComponent(filename.value)}`,
-      { content: content.value },
-    );
+    await api.put(`/agents/${encodeURIComponent(agentName.value)}/files/${encodeURIComponent(filename.value)}`, {
+      content: content.value,
+    });
   } finally {
     saving.value = false;
   }
@@ -34,7 +33,7 @@ async function save() {
 </script>
 
 <template>
-  <div style="max-width: 960px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div style="padding: 24px 32px 32px; color: var(--color-text)">
     <button
       @click="router.back()"
       class="flex items-center"
@@ -54,24 +53,14 @@ async function save() {
 
     <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
       <div class="min-w-0">
-        <div
-          class="font-mono eyebrow"
-          style="margin-bottom: 6px"
-        >
+        <div class="font-mono eyebrow" style="margin-bottom: 6px">
           {{ agentName }}
         </div>
-        <h1
-          class="font-mono"
-          style="font-size: 20px; font-weight: 600; margin: 0; color: var(--color-text)"
-        >
+        <h1 class="font-mono" style="font-size: 20px; font-weight: 600; margin: 0; color: var(--color-text)">
           {{ filename }}
         </h1>
       </div>
-      <button
-        @click="save"
-        :disabled="saving"
-        class="bauos-btn solid"
-      >
+      <button @click="save" :disabled="saving" class="bauos-btn solid">
         {{ saving ? "Speichert…" : "Speichern" }}
       </button>
     </div>
@@ -95,4 +84,3 @@ async function save() {
     />
   </div>
 </template>
-

@@ -155,9 +155,7 @@ async function openBotTokenDialog(user: AdminUser) {
   botStatus.value = null;
   showBotDialog.value = true;
   try {
-    botStatus.value = await api.get<BotStatus>(
-      `/admin/users/${encodeURIComponent(user.id)}/telegram-bot`,
-    );
+    botStatus.value = await api.get<BotStatus>(`/admin/users/${encodeURIComponent(user.id)}/telegram-bot`);
   } catch (e) {
     botDialogError.value = e instanceof Error ? e.message : "Status nicht abrufbar";
   }
@@ -188,9 +186,7 @@ async function saveBotToken() {
       botDialogMessage.value = "Token gespeichert, aber Bot startet nicht. Token bei @BotFather noch gültig?";
     }
     // Status frisch laden
-    botStatus.value = await api.get<BotStatus>(
-      `/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`,
-    );
+    botStatus.value = await api.get<BotStatus>(`/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`);
   } catch (e) {
     botDialogError.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
   } finally {
@@ -207,9 +203,7 @@ async function removeBotToken() {
       token: null,
     });
     botDialogMessage.value = "Bot entfernt.";
-    botStatus.value = await api.get<BotStatus>(
-      `/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`,
-    );
+    botStatus.value = await api.get<BotStatus>(`/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`);
   } catch (e) {
     botDialogError.value = e instanceof Error ? e.message : "Entfernen fehlgeschlagen";
   } finally {
@@ -231,9 +225,7 @@ let pairCountdownTimer: ReturnType<typeof setInterval> | null = null;
 // Voller Befehl, den der User in Telegram an den Bot schickt — als Block
 // fuers Copy-to-Clipboard. Inkl. /pair-Praefix damit nichts vergessen wird.
 const pairCommand = computed(() => (pairToken.value ? `/pair ${pairToken.value}` : ""));
-const pairBotLink = computed(() =>
-  pairBotUsername.value ? `https://t.me/${pairBotUsername.value}` : null,
-);
+const pairBotLink = computed(() => (pairBotUsername.value ? `https://t.me/${pairBotUsername.value}` : null));
 
 async function openPairDialog(user: AdminUser) {
   pairTarget.value = user;
@@ -392,15 +384,13 @@ function formatDate(iso?: string) {
 </script>
 
 <template>
-  <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div style="padding: 24px 32px 32px; color: var(--color-text)">
     <!-- Header -->
     <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
       <div class="min-w-0">
         <div class="eyebrow" style="margin-bottom: 6px">System</div>
         <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">Nutzer</h1>
-        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
-          {{ users.length }} Konten
-        </p>
+        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">{{ users.length }} Konten</p>
       </div>
       <button @click="openCreate" class="bauos-btn solid">
         <BIcon name="plus" :size="14" />
@@ -424,124 +414,127 @@ function formatDate(iso?: string) {
 
     <!-- Liste -->
     <div class="users-list-wrap" style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-     <div class="users-list-inner">
-      <!-- Header — auf Mobile via CSS hidden -->
-      <div class="users-list-header flex items-center">
-        <span class="eyebrow flex-1">Name</span>
-        <span class="eyebrow" style="width: 90px">Rolle</span>
-        <span class="eyebrow" style="width: 70px">Telegram</span>
-        <span class="eyebrow" style="width: 100px">Angelegt</span>
-        <span class="eyebrow" style="width: 148px; text-align: right">Aktionen</span>
-      </div>
-      <div
-        v-for="u in users"
-        :key="u.id"
-        class="user-row"
-        :class="{ 'user-row-protected': u.isProtected, 'user-row-self': u.id === currentUserId }"
-      >
-        <div class="user-name-block flex items-center" style="gap: 10px; flex: 1; min-width: 0">
-          <div class="user-avatar">{{ initials(u.displayName ?? u.username) }}</div>
-          <div style="min-width: 0; flex: 1">
-            <div style="font-size: 13px; color: var(--color-text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
-              <span>{{ u.displayName ?? u.username }}</span>
-              <BIcon
-                v-if="u.isProtected"
-                name="lock"
-                :size="11"
-                style="color: var(--color-text-muted)"
-                :title="'Geschützter Erst-Admin — kann nicht herabgestuft oder gelöscht werden'"
-              />
-              <span
-                v-if="u.id === currentUserId"
+      <div class="users-list-inner">
+        <!-- Header — auf Mobile via CSS hidden -->
+        <div class="users-list-header flex items-center">
+          <span class="eyebrow flex-1">Name</span>
+          <span class="eyebrow" style="width: 90px">Rolle</span>
+          <span class="eyebrow" style="width: 70px">Telegram</span>
+          <span class="eyebrow" style="width: 100px">Angelegt</span>
+          <span class="eyebrow" style="width: 148px; text-align: right">Aktionen</span>
+        </div>
+        <div
+          v-for="u in users"
+          :key="u.id"
+          class="user-row"
+          :class="{ 'user-row-protected': u.isProtected, 'user-row-self': u.id === currentUserId }"
+        >
+          <div class="user-name-block flex items-center" style="gap: 10px; flex: 1; min-width: 0">
+            <div class="user-avatar">{{ initials(u.displayName ?? u.username) }}</div>
+            <div style="min-width: 0; flex: 1">
+              <div
                 style="
-                  font-size: 9px;
-                  padding: 1px 6px;
-                  border-radius: 999px;
-                  background: var(--color-bg-subtle);
-                  color: var(--color-text-muted);
-                  text-transform: uppercase;
-                  letter-spacing: 0.04em;
+                  font-size: 13px;
+                  color: var(--color-text);
+                  display: flex;
+                  align-items: center;
+                  gap: 6px;
+                  flex-wrap: wrap;
                 "
-                >Du</span
               >
-            </div>
-            <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 1px">
-              <span v-if="u.displayName">{{ u.username }}</span>
-            </div>
-            <!-- Mobile-Meta-Zeile: Rolle + Telegram-Status + Datum als Chips,
+                <span>{{ u.displayName ?? u.username }}</span>
+                <BIcon
+                  v-if="u.isProtected"
+                  name="lock"
+                  :size="11"
+                  style="color: var(--color-text-muted)"
+                  :title="'Geschützter Erst-Admin — kann nicht herabgestuft oder gelöscht werden'"
+                />
+                <span
+                  v-if="u.id === currentUserId"
+                  style="
+                    font-size: 9px;
+                    padding: 1px 6px;
+                    border-radius: 999px;
+                    background: var(--color-bg-subtle);
+                    color: var(--color-text-muted);
+                    text-transform: uppercase;
+                    letter-spacing: 0.04em;
+                  "
+                  >Du</span
+                >
+              </div>
+              <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 1px">
+                <span v-if="u.displayName">{{ u.username }}</span>
+              </div>
+              <!-- Mobile-Meta-Zeile: Rolle + Telegram-Status + Datum als Chips,
                  nur unter 768px sichtbar (CSS unten). -->
-            <div class="user-meta-mobile">
-              <button
-                class="role-btn"
-                :class="`role-btn-${u.role}`"
-                :disabled="u.isProtected || u.id === currentUserId"
-                @click="toggleRole(u)"
-              >
-                {{ u.role === "admin" ? "Admin" : "Nutzer" }}
-              </button>
-              <span class="user-meta-text">
-                {{ u.hasTelegram ? "✓ Telegram" : "kein Telegram" }}
-              </span>
-              <span class="user-meta-text font-mono">📅 {{ formatDate(u.createdAt) }}</span>
+              <div class="user-meta-mobile">
+                <button
+                  class="role-btn"
+                  :class="`role-btn-${u.role}`"
+                  :disabled="u.isProtected || u.id === currentUserId"
+                  @click="toggleRole(u)"
+                >
+                  {{ u.role === "admin" ? "Admin" : "Nutzer" }}
+                </button>
+                <span class="user-meta-text">
+                  {{ u.hasTelegram ? "✓ Telegram" : "kein Telegram" }}
+                </span>
+                <span class="user-meta-text font-mono">📅 {{ formatDate(u.createdAt) }}</span>
+              </div>
             </div>
           </div>
+          <div class="user-col-role" style="width: 90px">
+            <button
+              class="role-btn"
+              :class="`role-btn-${u.role}`"
+              :disabled="u.isProtected || u.id === currentUserId"
+              @click="toggleRole(u)"
+              :title="u.isProtected ? 'Geschützter Admin' : 'Rolle wechseln'"
+            >
+              {{ u.role === "admin" ? "Admin" : "Nutzer" }}
+            </button>
+          </div>
+          <div class="user-col-telegram" style="width: 70px; font-size: 11px; color: var(--color-text-muted)">
+            {{ u.hasTelegram ? "✓" : "—" }}
+          </div>
+          <div class="user-col-date font-mono" style="width: 100px; font-size: 11px; color: var(--color-text-tertiary)">
+            {{ formatDate(u.createdAt) }}
+          </div>
+          <div class="user-actions" style="display: flex; justify-content: flex-end; gap: 4px">
+            <button class="row-action" @click="openBotTokenDialog(u)" :title="'Bot-Token verwalten'">
+              <BIcon name="cpu" :size="12" />
+            </button>
+            <button class="row-action" @click="openPairDialog(u)" :title="'Telegram pairen'">
+              <BIcon name="message" :size="12" />
+            </button>
+            <button class="row-action" @click="openPasswordReset(u)" :title="'Passwort zurücksetzen'">
+              <BIcon name="lock" :size="12" />
+            </button>
+            <button
+              class="row-action row-action-danger"
+              @click="deleteUser(u)"
+              :disabled="u.isProtected || u.id === currentUserId"
+              :title="u.isProtected ? 'Geschützter Admin' : u.id === currentUserId ? 'Du selbst' : 'Löschen'"
+            >
+              <BIcon name="x" :size="12" />
+            </button>
+          </div>
         </div>
-        <div class="user-col-role" style="width: 90px">
-          <button
-            class="role-btn"
-            :class="`role-btn-${u.role}`"
-            :disabled="u.isProtected || u.id === currentUserId"
-            @click="toggleRole(u)"
-            :title="u.isProtected ? 'Geschützter Admin' : 'Rolle wechseln'"
-          >
-            {{ u.role === "admin" ? "Admin" : "Nutzer" }}
-          </button>
-        </div>
-        <div class="user-col-telegram" style="width: 70px; font-size: 11px; color: var(--color-text-muted)">
-          {{ u.hasTelegram ? "✓" : "—" }}
-        </div>
-        <div class="user-col-date font-mono" style="width: 100px; font-size: 11px; color: var(--color-text-tertiary)">
-          {{ formatDate(u.createdAt) }}
-        </div>
-        <div class="user-actions" style="display: flex; justify-content: flex-end; gap: 4px">
-          <button class="row-action" @click="openBotTokenDialog(u)" :title="'Bot-Token verwalten'">
-            <BIcon name="cpu" :size="12" />
-          </button>
-          <button class="row-action" @click="openPairDialog(u)" :title="'Telegram pairen'">
-            <BIcon name="message" :size="12" />
-          </button>
-          <button class="row-action" @click="openPasswordReset(u)" :title="'Passwort zurücksetzen'">
-            <BIcon name="lock" :size="12" />
-          </button>
-          <button
-            class="row-action row-action-danger"
-            @click="deleteUser(u)"
-            :disabled="u.isProtected || u.id === currentUserId"
-            :title="
-              u.isProtected
-                ? 'Geschützter Admin'
-                : u.id === currentUserId
-                  ? 'Du selbst'
-                  : 'Löschen'
-            "
-          >
-            <BIcon name="x" :size="12" />
-          </button>
-        </div>
+        <p
+          v-if="!loading && users.length === 0"
+          style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px"
+        >
+          Noch keine Nutzer.
+        </p>
+        <p
+          v-else-if="loading"
+          style="font-size: 13px; color: var(--color-text-muted); text-align: center; padding: 24px"
+        >
+          Lade…
+        </p>
       </div>
-      <p
-        v-if="!loading && users.length === 0"
-        style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px"
-      >
-        Noch keine Nutzer.
-      </p>
-      <p
-        v-else-if="loading"
-        style="font-size: 13px; color: var(--color-text-muted); text-align: center; padding: 24px"
-      >
-        Lade…
-      </p>
-     </div>
     </div>
 
     <!-- Anlegen-Dialog -->
@@ -635,9 +628,7 @@ function formatDate(iso?: string) {
           {{ createError }}
         </p>
         <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="bauos-btn ghost" @click="showCreateDialog = false" :disabled="createSaving">
-            Abbrechen
-          </button>
+          <button class="bauos-btn ghost" @click="showCreateDialog = false" :disabled="createSaving">Abbrechen</button>
           <button class="bauos-btn solid" :disabled="!createCanSubmit" @click="submitCreate">
             {{ createSaving ? "Lege an…" : "Anlegen" }}
           </button>
@@ -653,8 +644,7 @@ function formatDate(iso?: string) {
           Passwort für „{{ passwordTarget.username }}" zurücksetzen
         </h2>
         <p style="font-size: 12px; color: var(--color-text-muted); margin: 0 0 12px 0">
-          Der Nutzer kann sich nach dem Reset mit dem neuen Passwort anmelden. Das alte Passwort
-          wird sofort ungültig.
+          Der Nutzer kann sich nach dem Reset mit dem neuen Passwort anmelden. Das alte Passwort wird sofort ungültig.
         </p>
         <input
           v-model="passwordValue"
@@ -739,9 +729,9 @@ function formatDate(iso?: string) {
                 </div>
               </template>
               <div v-else style="font-size: 12px; color: var(--color-warning-text, #b45309)">
-                ⚠ Kein Bot bekannt. Wenn der User einen <strong>eigenen Bot</strong> nutzen soll,
-                muss er sich erst einloggen → Settings → „Mein Telegram-Bot" einrichten. Sonst
-                muss der <code class="inline-cmd">BOT_TOKEN</code> in der <code class="inline-cmd">.env</code> gesetzt sein.
+                ⚠ Kein Bot bekannt. Wenn der User einen <strong>eigenen Bot</strong> nutzen soll, muss er sich erst
+                einloggen → Settings → „Mein Telegram-Bot" einrichten. Sonst muss der
+                <code class="inline-cmd">BOT_TOKEN</code> in der <code class="inline-cmd">.env</code> gesetzt sein.
               </div>
             </div>
           </div>
@@ -752,19 +742,14 @@ function formatDate(iso?: string) {
             <div class="pair-step-body">
               <div class="pair-cmd-box">
                 <code class="pair-cmd">{{ pairCommand }}</code>
-                <button class="bauos-btn ghost sm" @click="copyPairCommand" title="Befehl kopieren">
-                  Kopieren
-                </button>
+                <button class="bauos-btn ghost sm" @click="copyPairCommand" title="Befehl kopieren">Kopieren</button>
               </div>
               <div
                 v-if="copyMessage"
                 :style="{
                   fontSize: '11px',
                   marginTop: '4px',
-                  color:
-                    copyMessage.type === 'success'
-                      ? 'var(--color-success-text)'
-                      : 'var(--color-danger-text)',
+                  color: copyMessage.type === 'success' ? 'var(--color-success-text)' : 'var(--color-danger-text)',
                 }"
               >
                 {{ copyMessage.type === "success" ? "✓ " : "⚠ " }}{{ copyMessage.text }}
@@ -778,7 +763,12 @@ function formatDate(iso?: string) {
             <span class="font-mono" :class="{ 'pair-token-expired': pairCountdown === 'abgelaufen' }">
               {{ pairCountdown }}
             </span>
-            <button class="bauos-btn ghost sm" @click="copyToken" :title="'Nur Code kopieren'" style="margin-left: auto">
+            <button
+              class="bauos-btn ghost sm"
+              @click="copyToken"
+              :title="'Nur Code kopieren'"
+              style="margin-left: auto"
+            >
               Nur Code
             </button>
           </div>
@@ -794,9 +784,7 @@ function formatDate(iso?: string) {
     <div v-if="showBotDialog && botTarget" class="modal-overlay" @click.self="closeBotTokenDialog">
       <div class="modal-card" style="max-width: 540px">
         <div class="eyebrow" style="margin-bottom: 4px">Telegram-Bot</div>
-        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 14px 0">
-          Bot für „{{ botTarget.username }}"
-        </h2>
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 14px 0">Bot für „{{ botTarget.username }}"</h2>
 
         <!-- Status-Block -->
         <div v-if="botStatus" class="bot-status-block">

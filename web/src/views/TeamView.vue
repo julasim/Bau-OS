@@ -44,14 +44,7 @@ type SortKey = "name" | "company" | "type" | "updated";
 const sortKey = ref<SortKey>("name");
 const viewMode = ref<"grid" | "list">("grid");
 
-const MEMBER_TYPES: MemberType[] = [
-  "Intern",
-  "Planer",
-  "Ausführende",
-  "Behörde",
-  "Lieferant",
-  "Bauherr",
-];
+const MEMBER_TYPES: MemberType[] = ["Intern", "Planer", "Ausführende", "Behörde", "Lieferant", "Bauherr"];
 
 // ── Filter + Sort ────────────────────────────────────────
 const filtered = computed(() => {
@@ -96,9 +89,7 @@ const filtered = computed(() => {
   return sorted;
 });
 
-const anyFilterActive = computed(
-  () => !!searchQuery.value.trim() || !!filterType.value || !!filterCompany.value,
-);
+const anyFilterActive = computed(() => !!searchQuery.value.trim() || !!filterType.value || !!filterCompany.value);
 function resetFilters() {
   searchQuery.value = "";
   filterType.value = "";
@@ -213,16 +204,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div style="padding: 24px 32px 32px; color: var(--color-text)">
     <!-- Header -->
     <div class="flex items-end justify-between gap-4" style="margin-bottom: 20px">
       <div class="min-w-0">
         <div class="eyebrow" style="margin-bottom: 6px">Kontakte</div>
         <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">Team</h1>
         <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
-          {{ members.length }} Mitglieder<span v-if="companies.length > 0">
-            · {{ companies.length }} Firmen</span
-          >
+          {{ members.length }} Mitglieder<span v-if="companies.length > 0"> · {{ companies.length }} Firmen</span>
         </p>
       </div>
       <div class="flex items-center" style="gap: 8px">
@@ -241,13 +230,26 @@ onMounted(async () => {
     <div v-if="members.length > 3" class="filter-bar">
       <div
         class="flex items-center"
-        style="gap: 8px; padding: 6px 12px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg)"
+        style="
+          gap: 8px;
+          padding: 6px 12px;
+          border: 1px solid var(--color-border);
+          border-radius: 6px;
+          background: var(--color-bg);
+        "
       >
         <BIcon name="search" :size="14" style="color: var(--color-text-muted)" />
         <input
           v-model="searchQuery"
           placeholder="Name, Rolle, Firma, E-Mail, Telefon…"
-          style="flex: 1; border: none; outline: none; background: transparent; font-size: 13px; color: var(--color-text)"
+          style="
+            flex: 1;
+            border: none;
+            outline: none;
+            background: transparent;
+            font-size: 13px;
+            color: var(--color-text);
+          "
         />
         <span style="font-size: 11px; color: var(--color-text-tertiary)">
           {{ filtered.length }} / {{ members.length }}
@@ -311,10 +313,7 @@ onMounted(async () => {
         >
           {{ m.memberType }}
         </div>
-        <div
-          v-if="m.projects.length > 0"
-          style="margin-top: 10px; font-size: 11px; color: var(--color-text-muted)"
-        >
+        <div v-if="m.projects.length > 0" style="margin-top: 10px; font-size: 11px; color: var(--color-text-muted)">
           <BIcon name="folder" :size="10" />
           <span style="margin-left: 4px">
             {{ m.projects.length }} Projekt<span v-if="m.projects.length !== 1">e</span>
@@ -323,63 +322,81 @@ onMounted(async () => {
       </div>
       <p
         v-if="filtered.length === 0 && !loading"
-        style="grid-column: 1 / -1; font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
+        style="
+          grid-column: 1 / -1;
+          font-size: 13px;
+          color: var(--color-text-tertiary);
+          text-align: center;
+          padding: 32px 0;
+        "
       >
         {{ anyFilterActive ? "Keine Treffer." : "Noch keine Team-Mitglieder." }}
       </p>
     </div>
 
     <!-- List -->
-    <div v-else class="team-list-wrap" style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-     <div class="team-list-inner">
-      <div
-        class="flex items-center"
-        style="gap: 12px; padding: 10px 16px; background: var(--color-bg-subtle); border-bottom: 1px solid var(--color-border)"
-      >
-        <span class="eyebrow flex-1">Name</span>
-        <span class="eyebrow" style="width: 140px">Firma</span>
-        <span class="eyebrow" style="width: 100px">Kategorie</span>
-        <span class="eyebrow" style="width: 60px; text-align: center">Projekte</span>
-      </div>
-      <div
-        v-for="m in filtered"
-        :key="m.id"
-        class="member-row"
-        @click="router.push(`/team/${encodeURIComponent(m.id)}`)"
-      >
-        <div class="flex-1 min-w-0 flex items-center" style="gap: 10px">
-          <div class="member-avatar member-avatar-sm" :style="{ background: typeColor(m.memberType) }">
-            {{ initial(m.name) }}
-          </div>
-          <div style="min-width: 0">
-            <div style="font-size: 13px; color: var(--color-text)">{{ m.name }}</div>
-            <div v-if="m.role" class="member-row-role">{{ m.role }}</div>
-          </div>
+    <div
+      v-else
+      class="team-list-wrap"
+      style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden"
+    >
+      <div class="team-list-inner">
+        <div
+          class="flex items-center"
+          style="
+            gap: 12px;
+            padding: 10px 16px;
+            background: var(--color-bg-subtle);
+            border-bottom: 1px solid var(--color-border);
+          "
+        >
+          <span class="eyebrow flex-1">Name</span>
+          <span class="eyebrow" style="width: 140px">Firma</span>
+          <span class="eyebrow" style="width: 100px">Kategorie</span>
+          <span class="eyebrow" style="width: 60px; text-align: center">Projekte</span>
         </div>
-        <span
-          style="width: 140px; font-size: 12px; color: var(--color-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap"
+        <div
+          v-for="m in filtered"
+          :key="m.id"
+          class="member-row"
+          @click="router.push(`/team/${encodeURIComponent(m.id)}`)"
         >
-          {{ m.companyName ?? m.company ?? "—" }}
-        </span>
-        <span
-          v-if="m.memberType"
-          style="width: 100px; font-size: 11px"
-          :style="{ color: typeColor(m.memberType) }"
+          <div class="flex-1 min-w-0 flex items-center" style="gap: 10px">
+            <div class="member-avatar member-avatar-sm" :style="{ background: typeColor(m.memberType) }">
+              {{ initial(m.name) }}
+            </div>
+            <div style="min-width: 0">
+              <div style="font-size: 13px; color: var(--color-text)">{{ m.name }}</div>
+              <div v-if="m.role" class="member-row-role">{{ m.role }}</div>
+            </div>
+          </div>
+          <span
+            style="
+              width: 140px;
+              font-size: 12px;
+              color: var(--color-text-muted);
+              overflow: hidden;
+              text-overflow: ellipsis;
+              white-space: nowrap;
+            "
+          >
+            {{ m.companyName ?? m.company ?? "—" }}
+          </span>
+          <span v-if="m.memberType" style="width: 100px; font-size: 11px" :style="{ color: typeColor(m.memberType) }">
+            {{ m.memberType }}
+          </span>
+          <span v-else style="width: 100px; font-size: 11px; color: var(--color-text-faint)">—</span>
+          <span style="width: 60px; text-align: center; font-size: 11px; color: var(--color-text-muted)">
+            {{ m.projects.length }}
+          </span>
+        </div>
+        <p
+          v-if="filtered.length === 0 && !loading"
+          style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
         >
-          {{ m.memberType }}
-        </span>
-        <span v-else style="width: 100px; font-size: 11px; color: var(--color-text-faint)">—</span>
-        <span style="width: 60px; text-align: center; font-size: 11px; color: var(--color-text-muted)">
-          {{ m.projects.length }}
-        </span>
+          {{ anyFilterActive ? "Keine Treffer." : "Noch keine Team-Mitglieder." }}
+        </p>
       </div>
-      <p
-        v-if="filtered.length === 0 && !loading"
-        style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
-      >
-        {{ anyFilterActive ? "Keine Treffer." : "Noch keine Team-Mitglieder." }}
-      </p>
-     </div>
     </div>
 
     <!-- Neu-anlegen-Dialog -->
@@ -415,12 +432,7 @@ onMounted(async () => {
           </label>
           <label class="form-field">
             <span class="eyebrow">Rolle / Beruf</span>
-            <input
-              v-model="createForm.role"
-              type="text"
-              placeholder="z.B. Statiker"
-              class="form-input-lg"
-            />
+            <input v-model="createForm.role" type="text" placeholder="z.B. Statiker" class="form-input-lg" />
           </label>
           <label class="form-field form-field-span-2">
             <span class="eyebrow">Firma</span>
@@ -437,26 +449,23 @@ onMounted(async () => {
           </label>
           <label class="form-field">
             <span class="eyebrow">E-Mail</span>
-            <input
-              v-model="createForm.email"
-              type="email"
-              placeholder="max@beispiel.at"
-              class="form-input-lg"
-            />
+            <input v-model="createForm.email" type="email" placeholder="max@beispiel.at" class="form-input-lg" />
           </label>
           <label class="form-field">
             <span class="eyebrow">Telefon</span>
-            <input
-              v-model="createForm.phone"
-              type="tel"
-              placeholder="+43 …"
-              class="form-input-lg"
-            />
+            <input v-model="createForm.phone" type="tel" placeholder="+43 …" class="form-input-lg" />
           </label>
         </div>
         <div
           v-if="createError"
-          style="margin-top: 12px; padding: 8px 12px; font-size: 12px; color: var(--color-danger-text); background: color-mix(in srgb, var(--color-danger-text) 10%, transparent); border-radius: 6px"
+          style="
+            margin-top: 12px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--color-danger-text);
+            background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+            border-radius: 6px;
+          "
         >
           {{ createError }}
         </div>
@@ -465,14 +474,8 @@ onMounted(async () => {
             * Pflichtfeld — Rest im Detail nachtragbar.
           </span>
           <div class="flex items-center" style="gap: 8px">
-            <button class="bauos-btn ghost" @click="closeCreateDialog" :disabled="createSaving">
-              Abbrechen
-            </button>
-            <button
-              class="bauos-btn solid"
-              @click="submitCreate"
-              :disabled="!createForm.name.trim() || createSaving"
-            >
+            <button class="bauos-btn ghost" @click="closeCreateDialog" :disabled="createSaving">Abbrechen</button>
+            <button class="bauos-btn solid" @click="submitCreate" :disabled="!createForm.name.trim() || createSaving">
               {{ createSaving ? "…" : "Anlegen" }}
             </button>
           </div>

@@ -140,14 +140,7 @@ const renameDraft = ref("");
 const renaming = ref(false);
 const renameError = ref<string | null>(null);
 
-const MEMBER_TYPES: MemberType[] = [
-  "Intern",
-  "Planer",
-  "Ausführende",
-  "Behörde",
-  "Lieferant",
-  "Bauherr",
-];
+const MEMBER_TYPES: MemberType[] = ["Intern", "Planer", "Ausführende", "Behörde", "Lieferant", "Bauherr"];
 
 // ── Computed ─────────────────────────────────────────────
 function typeColor(t: MemberType | null): string {
@@ -214,10 +207,7 @@ async function loadAllProjects() {
 async function loadAssignedTasksAndTermine() {
   if (tasksLoaded.value || !memberId.value) return;
   try {
-    const [allTasks, allTermine] = await Promise.all([
-      api.get<Task[]>("/tasks"),
-      api.get<Termin[]>("/termine"),
-    ]);
+    const [allTasks, allTermine] = await Promise.all([api.get<Task[]>("/tasks"), api.get<Termin[]>("/termine")]);
     tasks.value = allTasks.filter((t) => t.assigneeId === memberId.value);
     termine.value = allTermine.filter((te) => te.assigneeIds?.includes(memberId.value));
     tasksLoaded.value = true;
@@ -244,6 +234,14 @@ async function completeTask(task: Task) {
 }
 
 // ── Inline-Edit ──────────────────────────────────────────
+/** Liefert den Wert eines beliebigen Member-Felds als string|null.
+ *  Wrapper um den TS-Cast, damit Vue-SFC-Parser nicht ueber das
+ *  generic `Record<string, unknown>` im Template stolpert (`<` wird
+ *  sonst als Tag-Anfang interpretiert → prettier-Parse-Error). */
+function memberField(key: string): unknown {
+  return (member.value as unknown as Record<string, unknown>)[key];
+}
+
 function startEdit(key: EditableKey) {
   if (!member.value) return;
   editingField.value = key;
@@ -262,10 +260,7 @@ async function saveField(key: EditableKey) {
   (member.value as unknown as Record<string, unknown>)[key] = newValue;
   editingField.value = null;
   try {
-    member.value = await api.patch<TeamMember>(
-      `/team/${encodeURIComponent(memberId.value)}`,
-      { [key]: newValue },
-    );
+    member.value = await api.patch<TeamMember>(`/team/${encodeURIComponent(memberId.value)}`, { [key]: newValue });
   } catch {
     (member.value as unknown as Record<string, unknown>)[key] = before;
   } finally {
@@ -286,13 +281,10 @@ async function assignProject() {
   assigning.value = true;
   assignError.value = null;
   try {
-    member.value = await api.post<TeamMember>(
-      `/team/${encodeURIComponent(memberId.value)}/projects`,
-      {
-        projectId: assignProjectId.value,
-        projectRole: assignProjectRole.value.trim() || null,
-      },
-    );
+    member.value = await api.post<TeamMember>(`/team/${encodeURIComponent(memberId.value)}/projects`, {
+      projectId: assignProjectId.value,
+      projectRole: assignProjectRole.value.trim() || null,
+    });
     assignProjectId.value = "";
     assignProjectRole.value = "";
   } catch (e) {
@@ -306,9 +298,7 @@ async function unassignProject(projectId: string) {
   if (!member.value) return;
   if (!confirm("Zuordnung zu diesem Projekt entfernen?")) return;
   try {
-    await api.delete(
-      `/team/${encodeURIComponent(memberId.value)}/projects/${encodeURIComponent(projectId)}`,
-    );
+    await api.delete(`/team/${encodeURIComponent(memberId.value)}/projects/${encodeURIComponent(projectId)}`);
     await loadMember();
   } catch {
     /* no-op */
@@ -317,10 +307,9 @@ async function unassignProject(projectId: string) {
 
 async function updateProjectRole(projectId: string, newRole: string) {
   try {
-    await api.patch(
-      `/team/${encodeURIComponent(memberId.value)}/projects/${encodeURIComponent(projectId)}`,
-      { projectRole: newRole.trim() || null },
-    );
+    await api.patch(`/team/${encodeURIComponent(memberId.value)}/projects/${encodeURIComponent(projectId)}`, {
+      projectRole: newRole.trim() || null,
+    });
     await loadMember();
   } catch {
     /* no-op */
@@ -373,10 +362,7 @@ async function submitRename() {
   }
   renaming.value = true;
   try {
-    member.value = await api.patch<TeamMember>(
-      `/team/${encodeURIComponent(memberId.value)}`,
-      { name: newName },
-    );
+    member.value = await api.patch<TeamMember>(`/team/${encodeURIComponent(memberId.value)}`, { name: newName });
     renameDialogOpen.value = false;
   } catch (e) {
     renameError.value = e instanceof Error ? e.message : "Umbenennen fehlgeschlagen";
@@ -482,7 +468,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)">
+  <div style="padding: 24px 32px 32px; color: var(--color-text)">
     <!-- Back -->
     <button @click="router.push('/team')" class="back-link">
       <BIcon name="arrowLeft" :size="12" />
@@ -491,9 +477,7 @@ onUnmounted(() => {
 
     <div v-if="loading" style="font-size: 13px; color: var(--color-text-muted)">Lade…</div>
 
-    <div v-else-if="!member" class="empty-hint">
-      Mitglied nicht gefunden.
-    </div>
+    <div v-else-if="!member" class="empty-hint">Mitglied nicht gefunden.</div>
 
     <template v-else>
       <!-- Hero -->
@@ -545,7 +529,10 @@ onUnmounted(() => {
                 <div class="action-menu-divider"></div>
                 <button
                   class="action-menu-item action-menu-danger"
-                  @click="showActionMenu = false; deleteConfirmOpen = true"
+                  @click="
+                    showActionMenu = false;
+                    deleteConfirmOpen = true;
+                  "
                 >
                   <BIcon name="x" :size="12" /><span>Person löschen…</span>
                 </button>
@@ -617,8 +604,8 @@ onUnmounted(() => {
               </div>
             </div>
             <button v-else class="stamm-value" @click="startEdit(f.key)">
-              <span v-if="(member as unknown as Record<string, unknown>)[f.key]" class="stamm-value-text">
-                {{ (member as unknown as Record<string, unknown>)[f.key] }}
+              <span v-if="memberField(f.key)" class="stamm-value-text">
+                {{ memberField(f.key) }}
               </span>
               <span v-else class="stamm-value-empty">—</span>
               <BIcon name="pencil" :size="11" class="stamm-edit-icon" />
@@ -633,26 +620,42 @@ onUnmounted(() => {
       <div v-if="isAdmin" :class="['link-card', !member.userId ? 'link-card-warn' : '']">
         <div class="flex items-center" style="gap: 8px; margin-bottom: 8px">
           <BIcon name="link" :size="13" />
-          <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-muted)">
+          <span
+            style="
+              font-size: 12px;
+              font-weight: 600;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+              color: var(--color-text-muted);
+            "
+          >
             Verknüpfung mit Benutzer-Account
           </span>
           <span
             v-if="!member.userId"
-            style="font-size: 10px; padding: 2px 8px; background:#fef3c7; color:#92400e; border-radius: 999px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em"
+            style="
+              font-size: 10px;
+              padding: 2px 8px;
+              background: #fef3c7;
+              color: #92400e;
+              border-radius: 999px;
+              font-weight: 500;
+              text-transform: uppercase;
+              letter-spacing: 0.04em;
+            "
           >
             Kein Telegram
           </span>
         </div>
         <p style="font-size: 12px; color: var(--color-text-muted); margin: 0 0 10px 0; line-height: 1.4">
           <template v-if="!member.userId">
-            <strong>Diese Person bekommt keine Telegram-Benachrichtigung</strong> bei Aufgaben,
-            Terminen oder Meetings, die ihr zugewiesen werden — weil kein Bau-OS-Konto verknüpft ist.
-            Verlinke unten ein bestehendes Konto, oder lege im Admin-Bereich einen neuen User an
-            (gleicher Name → automatische Verknüpfung).
+            <strong>Diese Person bekommt keine Telegram-Benachrichtigung</strong> bei Aufgaben, Terminen oder Meetings,
+            die ihr zugewiesen werden — weil kein Bau-OS-Konto verknüpft ist. Verlinke unten ein bestehendes Konto, oder
+            lege im Admin-Bereich einen neuen User an (gleicher Name → automatische Verknüpfung).
           </template>
           <template v-else>
-            Aufgaben, Termine und Meetings, die dieser Person zugewiesen werden, lösen
-            automatisch eine Telegram-Benachrichtigung aus.
+            Aufgaben, Termine und Meetings, die dieser Person zugewiesen werden, lösen automatisch eine
+            Telegram-Benachrichtigung aus.
           </template>
         </p>
         <div class="flex items-center" style="gap: 8px; flex-wrap: wrap">
@@ -677,22 +680,22 @@ onUnmounted(() => {
       <!-- Tabs -->
       <div
         class="flex"
-        style="gap: 24px; margin-top: 24px; margin-bottom: 20px; border-bottom: 1px solid var(--color-border); overflow-x: auto"
+        style="
+          gap: 24px;
+          margin-top: 24px;
+          margin-bottom: 20px;
+          border-bottom: 1px solid var(--color-border);
+          overflow-x: auto;
+        "
       >
         <button
-          v-for="t in (['projekte', 'aufgaben', 'termine', 'log'] as const)"
+          v-for="t in ['projekte', 'aufgaben', 'termine', 'log'] as const"
           :key="t"
           @click="openTab(t)"
           :class="['tab-btn', tab === t ? 'tab-btn-active' : '']"
         >
           {{
-            t === "projekte"
-              ? "Projekte"
-              : t === "aufgaben"
-                ? "Aufgaben"
-                : t === "termine"
-                  ? "Termine"
-                  : "Kontakt-Log"
+            t === "projekte" ? "Projekte" : t === "aufgaben" ? "Aufgaben" : t === "termine" ? "Termine" : "Kontakt-Log"
           }}
         </button>
       </div>
@@ -728,11 +731,7 @@ onUnmounted(() => {
         </div>
 
         <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-          <div
-            v-for="p in member.projects"
-            :key="p.id"
-            class="project-row"
-          >
+          <div v-for="p in member.projects" :key="p.id" class="project-row">
             <router-link :to="`/projects/${encodeURIComponent(p.name)}`" class="project-link">
               <BIcon name="folder" :size="14" style="color: var(--color-text-muted); flex-shrink: 0" />
               <span style="font-size: 13px; color: var(--color-text)">{{ p.name }}</span>
@@ -748,9 +747,7 @@ onUnmounted(() => {
               <BIcon name="x" :size="12" />
             </button>
           </div>
-          <p v-if="member.projects.length === 0" class="empty-hint">
-            Noch keinem Projekt zugeordnet.
-          </p>
+          <p v-if="member.projects.length === 0" class="empty-hint">Noch keinem Projekt zugeordnet.</p>
         </div>
       </div>
 
@@ -763,11 +760,7 @@ onUnmounted(() => {
             class="flex items-center"
             style="gap: 12px; padding: 10px 16px; border-top: 1px solid var(--color-border-subtle)"
           >
-            <input
-              type="checkbox"
-              @change="completeTask(t)"
-              style="accent-color: var(--color-primary)"
-            />
+            <input type="checkbox" @change="completeTask(t)" style="accent-color: var(--color-primary)" />
             <div style="flex: 1; min-width: 0">
               <div style="font-size: 13px; color: var(--color-text)">{{ t.text }}</div>
               <div
@@ -797,9 +790,7 @@ onUnmounted(() => {
               {{ t.text }}
             </div>
           </div>
-          <p v-if="tasksLoaded && tasks.length === 0" class="empty-hint">
-            Keine Aufgaben zugewiesen.
-          </p>
+          <p v-if="tasksLoaded && tasks.length === 0" class="empty-hint">Keine Aufgaben zugewiesen.</p>
           <p v-else-if="!tasksLoaded" class="empty-hint">Lade Aufgaben…</p>
         </div>
       </div>
@@ -815,10 +806,7 @@ onUnmounted(() => {
           >
             <div style="flex: 1; min-width: 0">
               <div style="font-size: 13px; color: var(--color-text)">{{ te.text }}</div>
-              <div
-                style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px"
-                class="font-mono"
-              >
+              <div style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px" class="font-mono">
                 {{ te.datum }}<span v-if="te.uhrzeit"> · {{ te.uhrzeit }}</span>
                 <template v-if="te.project">
                   ·
@@ -833,9 +821,7 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
-          <p v-if="tasksLoaded && termine.length === 0" class="empty-hint">
-            Keine Termine mit dieser Person.
-          </p>
+          <p v-if="tasksLoaded && termine.length === 0" class="empty-hint">Keine Termine mit dieser Person.</p>
           <p v-else-if="!tasksLoaded" class="empty-hint">Lade Termine…</p>
         </div>
       </div>
@@ -856,22 +842,14 @@ onUnmounted(() => {
           </button>
         </div>
         <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-          <div
-            v-for="(entry, i) in [...member.contactLog].reverse()"
-            :key="`${entry.ts}-${i}`"
-            class="log-row"
-          >
+          <div v-for="(entry, i) in [...member.contactLog].reverse()" :key="`${entry.ts}-${i}`" class="log-row">
             <div class="log-meta">
               <span class="font-mono">{{ formatLogTime(entry.ts) }}</span>
-              <span v-if="entry.author" style="color: var(--color-text-faint)">
-                · {{ entry.author }}
-              </span>
+              <span v-if="entry.author" style="color: var(--color-text-faint)"> · {{ entry.author }} </span>
             </div>
             <div class="log-text">{{ entry.text }}</div>
           </div>
-          <p v-if="member.contactLog.length === 0" class="empty-hint">
-            Noch keine Einträge. Tippe oben einen neuen.
-          </p>
+          <p v-if="member.contactLog.length === 0" class="empty-hint">Noch keine Einträge. Tippe oben einen neuen.</p>
         </div>
       </div>
     </template>
@@ -892,14 +870,19 @@ onUnmounted(() => {
         />
         <div
           v-if="renameError"
-          style="margin-top: 12px; padding: 8px 12px; font-size: 12px; color: var(--color-danger-text); background: color-mix(in srgb, var(--color-danger-text) 10%, transparent); border-radius: 6px"
+          style="
+            margin-top: 12px;
+            padding: 8px 12px;
+            font-size: 12px;
+            color: var(--color-danger-text);
+            background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+            border-radius: 6px;
+          "
         >
           {{ renameError }}
         </div>
         <div class="flex justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="bauos-btn ghost" @click="renameDialogOpen = false" :disabled="renaming">
-            Abbrechen
-          </button>
+          <button class="bauos-btn ghost" @click="renameDialogOpen = false" :disabled="renaming">Abbrechen</button>
           <button
             class="bauos-btn solid"
             :disabled="!renameDraft.trim() || renameDraft.trim() === member?.name || renaming"
@@ -932,18 +915,13 @@ onUnmounted(() => {
     <div v-if="deleteConfirmOpen" class="modal-overlay" @click.self="deleteConfirmOpen = false">
       <div class="modal-card" style="max-width: 480px">
         <div class="eyebrow" style="color: var(--color-danger-text); margin-bottom: 6px">Achtung</div>
-        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 12px 0">
-          „{{ member?.name }}" wirklich löschen?
-        </h2>
+        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 12px 0">„{{ member?.name }}" wirklich löschen?</h2>
         <p style="font-size: 13px; color: var(--color-text-muted); line-height: 1.6; margin: 0">
-          Das Mitglied wird aus allen Projekten entfernt und dauerhaft gelöscht.
-          Aufgaben/Termine mit Verknüpfung zu dieser Person verlieren die Zuordnung
-          (bleiben aber erhalten).
+          Das Mitglied wird aus allen Projekten entfernt und dauerhaft gelöscht. Aufgaben/Termine mit Verknüpfung zu
+          dieser Person verlieren die Zuordnung (bleiben aber erhalten).
         </p>
         <div class="flex justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="bauos-btn ghost" @click="deleteConfirmOpen = false" :disabled="deleting">
-            Abbrechen
-          </button>
+          <button class="bauos-btn ghost" @click="deleteConfirmOpen = false" :disabled="deleting">Abbrechen</button>
           <button class="bauos-btn danger" @click="confirmDelete" :disabled="deleting">
             {{ deleting ? "Lösche…" : "Ja, löschen" }}
           </button>

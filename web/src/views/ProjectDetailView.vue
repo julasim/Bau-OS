@@ -2144,10 +2144,7 @@ async function deleteMeeting() {
 </script>
 
 <template>
-  <div
-    class="proj-detail-page"
-    style="max-width: 1120px; margin: 0 auto; padding: 28px 32px 48px; color: var(--color-text)"
-  >
+  <div class="proj-detail-page" style="padding: 24px 32px 32px; color: var(--color-text)">
     <!-- Back-Link -->
     <button @click="router.push('/projects')" class="back-link">
       <BIcon name="arrowLeft" :size="12" />
