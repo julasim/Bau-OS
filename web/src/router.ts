@@ -25,14 +25,38 @@ const router = createRouter({
         },
         // Backward-Compat: alte note-editor-Route leitet auf neue Master-Detail.
         { path: "notes-old/:name", redirect: (to) => `/notes/${to.params.name}` },
-        { path: "tasks", name: "tasks", component: () => import("./views/TasksView.vue") },
+        // Workspace v2: Tasks Master/Detail mit Tabs (Offen/Aktiv/Erledigt/Alle).
+        {
+          path: "tasks/:id?",
+          name: "tasks",
+          components: {
+            listpane: () => import("./views/tasks-v2/TasksListPane.vue"),
+            default: () => import("./views/tasks-v2/TaskDetail.vue"),
+          },
+        },
         { path: "calendar", name: "calendar", component: () => import("./views/CalendarView.vue") },
         // Backward-Compat: /termine leitet auf den zusammengefuehrten Kalender weiter
         { path: "termine", redirect: "/calendar" },
-        { path: "projects", name: "projects", component: () => import("./views/ProjectsView.vue") },
-        { path: "projects/:name", name: "project-detail", component: () => import("./views/ProjectDetailView.vue") },
-        { path: "team", name: "team", component: () => import("./views/TeamView.vue") },
-        { path: "team/:id", name: "team-detail", component: () => import("./views/TeamDetailView.vue") },
+        // Workspace v2: Projekte Master/Detail. ListPane = Projekt-Index,
+        // Detail wrappt das ProjectDetailView (mit Inner-Sidebar + Tabs).
+        {
+          path: "projects/:name?",
+          name: "projects",
+          components: {
+            listpane: () => import("./views/projects-v2/ProjectsListPane.vue"),
+            default: () => import("./views/projects-v2/ProjectDetailHost.vue"),
+          },
+        },
+        // Workspace v2: Team Master/Detail. ListPane mit Filter nach
+        // Kategorie (Intern/Planer/...). Detail wrappt TeamDetailView.
+        {
+          path: "team/:id?",
+          name: "team",
+          components: {
+            listpane: () => import("./views/team-v2/TeamListPane.vue"),
+            default: () => import("./views/team-v2/TeamDetailHost.vue"),
+          },
+        },
         { path: "agents", name: "agents", component: () => import("./views/AgentsView.vue") },
         {
           path: "agents/:name/:filename",
