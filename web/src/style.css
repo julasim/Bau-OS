@@ -625,12 +625,19 @@ html.dark .text-red-700 {
   display: none;
 }
 /* Wenn ein View KEINEN ListPane braucht (z.B. Settings full-width),
-   data-no-list="true" → ListPane wird ausgeblendet. */
+   data-no-list="true" → 2-Spalten-Grid (56px + 1fr). KEIN 0-Width-
+   Slot in der Mitte: das wuerde den 2. Direct-Child (RouterView) in
+   die mittlere 0-Spalte zwingen statt in 1fr → schmaler Streifen-Bug. */
 .app-v2[data-no-list="true"] {
-  grid-template-columns: var(--rail-w) 0 1fr;
+  grid-template-columns: var(--rail-w) 1fr;
 }
 .app-v2[data-no-list="true"] .pane-list {
   display: none;
+}
+/* Gleiches gilt fuer komplett collapsed (rail+list) — wir bleiben dann
+   auf 1-Spalten-Grid, die Inhalts-Komponente nimmt die ganze Breite. */
+.app-v2[data-rail-collapsed="true"][data-no-list="true"] {
+  grid-template-columns: 1fr;
 }
 
 /* ── Nav-Rail ────────────────────────────────────────────────────── */
