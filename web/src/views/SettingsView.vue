@@ -421,8 +421,10 @@ async function toggleFast() {
 
 // ── Theme + UI-Praeferenzen (Phase 6f) ─────────────────────────────────────
 import { useTheme } from "../composables/useTheme";
+import { useWorkspaceShell } from "../composables/useWorkspaceShell";
 
 const themeApi = useTheme();
+const shell = useWorkspaceShell();
 type ThemeMode = "light" | "dark" | "system";
 type FontSize = "small" | "medium" | "large";
 
@@ -1687,6 +1689,45 @@ onMounted(() => {
             <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
               Theme, Akzentfarbe und Schriftgröße. Änderungen werden sofort live übernommen.
             </p>
+
+            <!-- Variant: Studio (neutral) vs Atelier (warm) — Workspace v2 -->
+            <div class="settings-card p-4" style="margin-bottom: 12px">
+              <div class="text-sm" style="font-weight: 600; margin-bottom: 8px">Workspace-Variante</div>
+              <div class="flex" style="gap: 8px; flex-wrap: wrap">
+                <button
+                  v-for="v in ['studio', 'atelier'] as const"
+                  :key="v"
+                  @click="shell.setVariant(v)"
+                  :class="['settings-chip', shell.state.value.variant === v ? 'settings-chip-active' : '']"
+                  style="padding: 6px 14px; border-radius: 6px; font-size: 12px"
+                >
+                  {{ v === "studio" ? "Studio (neutral, dicht)" : "Atelier (warm, ruhig)" }}
+                </button>
+              </div>
+              <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 6px">
+                Studio = Schwarz, dichte Listen, scharfe Kanten. Atelier = warmes Papier-Farbschema, weichere Radien,
+                Slate-Akzent.
+              </div>
+            </div>
+
+            <!-- Density: compact vs cozy -->
+            <div class="settings-card p-4" style="margin-bottom: 12px">
+              <div class="text-sm" style="font-weight: 600; margin-bottom: 8px">Dichte</div>
+              <div class="flex" style="gap: 8px">
+                <button
+                  v-for="d in ['compact', 'cozy'] as const"
+                  :key="d"
+                  @click="shell.setDensity(d)"
+                  :class="['settings-chip', shell.state.value.density === d ? 'settings-chip-active' : '']"
+                  style="padding: 6px 14px; border-radius: 6px; font-size: 12px"
+                >
+                  {{ d === "compact" ? "Kompakt" : "Locker" }}
+                </button>
+              </div>
+              <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 6px">
+                Wirkt auf Listen-Höhe, Card-Padding, Detail-Padding.
+              </div>
+            </div>
 
             <!-- Theme-Kacheln: Hell / Dunkel / System -->
             <div class="theme-tile-grid" v-if="serverPrefs">
