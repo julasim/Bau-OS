@@ -9,15 +9,17 @@ Bau-OS ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe 
 ## Wie funktioniert es?
 
 ```
-Du schreibst eine Nachricht in Telegram
-        |
-Bau-OS versteht was du willst (lokales LLM)
-        |
-Führt die Aufgabe aus (Notiz speichern, Termin anlegen, ...)
-        |
-Speichert alles im Obsidian Vault (plain Markdown)
-        |
-Antwortet dir in Telegram
+Du schreibst in Telegram  ODER  Web-UI (Browser)
+            |                         |
+[Zugriffskontrolle: Auto-Owner / ALLOWED_CHAT_IDS]
+            |
+[Session-Queue — serialisiert pro Chat-ID]
+            |
+[Agent Runtime — Agentic Loop, bis zu 56 Tools]
+            |
+[LLM: Ollama lokal ODER OpenAI cloud]
+            |
+[Datenschicht: Workspace (Markdown) ODER PostgreSQL]
 ```
 
 ## Für wen?
@@ -26,7 +28,8 @@ Antwortet dir in Telegram
 - **Planungs- und Statikbüros** für Aufgabenverteilung im Team
 - **Projektsteuerer und Bauleiter** (im Büro, nicht auf der Baustelle) für
   Bautagebuch, Meeting-Protokolle, Stundenerfassung
-- **Datenschutz-bewusste Firmen** die keine Cloud-KI nutzen wollen
+- **Datenschutz-bewusste Firmen** die keine Cloud-KI nutzen wollen (Ollama lokal)
+  oder maximale Qualität bevorzugen (OpenAI cloud)
 
 **NICHT für:** Echtzeit-Bedienung von der Baustelle, Polier-Schnellein-
 gabe vom Gerüst, gewerbliches Personal als primäre Bediener. Diese
@@ -38,12 +41,14 @@ Hauptzielgruppe.
 
 | Feature | Beschreibung |
 |---|---|
-| **Self-hosted** | Läuft auf deinem eigenen Server — keine Daten an Dritte |
-| **DSGVO-konform** | EU-Server, lokales LLM, keine externen API-Calls |
-| **Markdown-basiert** | Alle Daten sind plain Text — lesbar, editierbar, versionierbar |
-| **Multi-Agent** | Mehrere spezialisierte KI-Agenten mit eigener Persönlichkeit |
-| **Anpassbar ohne Code** | Charakter, Regeln, Erinnerungen — alles über Markdown-Dateien steuerbar |
-| **Proaktiv** | Der Agent meldet sich von selbst bei wichtigen Terminen oder Aufgaben |
+| **Self-hosted** | Läuft auf eigenem Server — keine Daten an Dritte (by default) |
+| **Dual-Backend** | Ollama lokal (Datensouveränität) oder OpenAI cloud (höchste Qualität) |
+| **56 LLM-Tools** | Notizen, Aufgaben, Termine, Projekte, Suche, PDF/DOCX, Team, Web, und mehr |
+| **Multi-Agent** | Mehrere spezialisierte KI-Agenten mit eigenem Workspace |
+| **Web-UI** | Browser-Interface (Vue 3) zusätzlich zu Telegram |
+| **Anpassbar ohne Code** | Charakter, Regeln, Erinnerungen über Markdown-Dateien steuerbar |
+| **Proaktiv** | Heartbeat-System: Agent meldet sich selbst bei Terminen |
+| **PostgreSQL optional** | Semantische Suche mit pgvector, Supabase Realtime |
 
 ## Geschäftsmodell
 

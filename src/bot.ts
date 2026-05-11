@@ -8,8 +8,39 @@ import { setReplyContext, setSendFileContext, setSendBufferContext } from "./llm
 import { logError } from "./logger.js";
 import { enqueue } from "./queue.js";
 import { fmt, stripMarkdown } from "./format.js";
-import { saveChatId } from "./heartbeat.js";
-import { TYPING_INTERVAL_MS, WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "./config.js";
+import { saveChatId, loadChatId } from "./heartbeat.js";
+import {
+  TYPING_INTERVAL_MS,
+  WORKSPACE_PATH,
+  DB_ENABLED,
+  MAX_UPLOAD_BYTES,
+  MAX_UPLOAD_MB,
+  ALLOWED_CHAT_IDS,
+} from "./config.js";
+
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+  "pdf",
+  "docx",
+  "doc",
+  "xlsx",
+  "xls",
+  "csv",
+  "txt",
+  "md",
+  "png",
+  "jpg",
+  "jpeg",
+  "gif",
+  "webp",
+  "zip",
+  "json",
+  "xml",
+]);
+
+function isAllowedUpload(filename: string): boolean {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+  return ALLOWED_UPLOAD_EXTENSIONS.has(ext);
+}
 import { fileRepo } from "./data/index.js";
 import { findDbUserByChatId, redeemPairToken, countDbUsers, type DbUser } from "./api/auth.js";
 import { runWithUserCtx } from "./llm/user-context.js";
@@ -65,6 +96,30 @@ function startTyping(ctx: { replyWithChatAction: (action: "typing") => Promise<u
  */
 export function createBot(token: string, ownerUser?: DbUser | null): Bot {
   const bot = new Bot(token);
+
+  // Zugriffskontrolle:
+  // 1. ALLOWED_CHAT_IDS (aus .env) gesetzt → nur diese IDs
+  // 2. Sonst: automatisch die erste Chat-ID die schreibt als Owner merken (.chat_id-Datei)
+  // 3. Erster Start ohne gespeicherte ID → alle dürfen rein (Setup-Phase)
+  bot.use((ctx, next) => {
+    const chatId = ctx.chat?.id;
+    if (!chatId) return;
+
+    // Explizite Whitelist aus .env hat Vorrang
+    if (ALLOWED_CHAT_IDS.size > 0) {
+      if (!ALLOWED_CHAT_IDS.has(chatId)) return;
+      return next();
+    }
+
+    // Kein explizites Config → gespeicherte Owner-ID prüfen
+    const savedId = loadChatId();
+    if (savedId === null) {
+      // Erster Kontakt: diese ID wird als Owner gespeichert (geschieht via saveChatId in Handlern)
+      return next();
+    }
+    if (chatId !== savedId) return; // Fremde ID abweisen
+    return next();
+  });
 
   // --- System ---
   bot.command("start", (ctx) => handleHilfe(ctx));
@@ -311,6 +366,12 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
         await ctx.reply(
           `Die Datei "${doc.file_name || "Dokument"}" ist zu groß (max ${MAX_UPLOAD_MB} MB). Bitte kleinere Datei senden.`,
         );
+        return;
+      }
+
+      // Dateityp-Whitelist prüfen
+      if (doc.file_name && !isAllowedUpload(doc.file_name)) {
+        await ctx.reply(`Dateityp nicht erlaubt. Erlaubt: ${[...ALLOWED_UPLOAD_EXTENSIONS].join(", ")}`);
         return;
       }
 

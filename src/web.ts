@@ -425,33 +425,56 @@ export async function newsSearch(query: string, maxResults = 5): Promise<NewsRes
 
 // ── Webseite lesen ─────────────────────────────────────────────────────────
 
+function decimalToIpv4(hostname: string): string {
+  const n = parseInt(hostname, 10);
+  if (isNaN(n) || n < 0 || n > 0xffffffff) return "";
+  return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".");
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+  const ip = /^\d+$/.test(hostname) ? decimalToIpv4(hostname) : hostname;
+  return (
+    ip === "0.0.0.0" ||
+    ip === "127.0.0.1" ||
+    ip.startsWith("10.") ||
+    ip.startsWith("192.168.") ||
+    ip.startsWith("169.254.") ||
+    ip.startsWith("172.16.") ||
+    ip.startsWith("172.17.") ||
+    ip.startsWith("172.18.") ||
+    ip.startsWith("172.19.") ||
+    ip.startsWith("172.2") ||
+    ip.startsWith("172.30.") ||
+    ip.startsWith("172.31.")
+  );
+}
+
+function isBlockedHostname(hostname: string): boolean {
+  if (hostname === "localhost") return true;
+  if (isPrivateIpv4(hostname)) return true;
+  if (hostname === "::1") return true;
+  if (
+    hostname.startsWith("fd") ||
+    hostname.startsWith("fc") ||
+    hostname.startsWith("fe80") ||
+    hostname.startsWith("::ffff:")
+  )
+    return true;
+  if (hostname.endsWith(".local") || hostname.endsWith(".internal")) return true;
+  return false;
+}
+
 /** Webseite abrufen, Hauptinhalt extrahieren, als Markdown zurueckgeben */
 export async function fetchPage(url: string, maxChars = 12000): Promise<string> {
   const cacheKey = `page:${url}`;
   const cached = getCached(pageCache, cacheKey);
   if (cached) return cached;
 
-  // SSRF-Schutz: Private IPs blocken
+  // SSRF-Schutz: Private IPs, IPv6-Ranges und Dezimal-IPs blocken
   try {
     const parsed = new URL(url);
     const hostname = parsed.hostname;
-    if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname === "0.0.0.0" ||
-      hostname.startsWith("192.168.") ||
-      hostname.startsWith("10.") ||
-      hostname.startsWith("172.16.") ||
-      hostname.startsWith("172.17.") ||
-      hostname.startsWith("172.18.") ||
-      hostname.startsWith("172.19.") ||
-      hostname.startsWith("172.2") ||
-      hostname.startsWith("172.30.") ||
-      hostname.startsWith("172.31.") ||
-      hostname === "::1" ||
-      hostname.endsWith(".local") ||
-      hostname.endsWith(".internal")
-    ) {
+    if (isBlockedHostname(hostname)) {
       return "[Fehler: Zugriff auf interne/private Adressen nicht erlaubt]";
     }
   } catch {

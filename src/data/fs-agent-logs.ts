@@ -9,9 +9,19 @@ import type { AgentLog, AgentLogRepository } from "./types.js";
 
 const LOG_DIR = path.join(process.cwd(), "logs");
 const LOG_FILE = path.join(LOG_DIR, "agent-logs.jsonl");
+const LOG_MAX_LINES = 5_000;
+const LOG_TRIM_TO = 4_000;
 
 function ensureFile(): void {
   if (!fs.existsSync(LOG_DIR)) fs.mkdirSync(LOG_DIR, { recursive: true });
+}
+
+function trimLogFileIfNeeded(): void {
+  if (!fs.existsSync(LOG_FILE)) return;
+  const lines = fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean);
+  if (lines.length <= LOG_MAX_LINES) return;
+  const kept = lines.slice(-LOG_TRIM_TO);
+  fs.writeFileSync(LOG_FILE, kept.join("\n") + "\n", "utf-8");
 }
 
 function readAll(): AgentLog[] {
@@ -36,6 +46,7 @@ export const fsAgentLogs: AgentLogRepository = {
       createdAt: new Date().toISOString(),
     };
     fs.appendFileSync(LOG_FILE, JSON.stringify(entry) + "\n");
+    trimLogFileIfNeeded();
     return entry;
   },
 

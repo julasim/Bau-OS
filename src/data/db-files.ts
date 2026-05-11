@@ -69,6 +69,8 @@ export const dbFiles: FileRepository = {
       RETURNING id, filename, filepath, filetype, filesize, mime_type, content_text, summary, tags, analyzed, created_at, updated_at, (SELECT name FROM projects WHERE id = project_id) as project_name
     `;
 
+    if (!row) throw new Error("Datei konnte nicht gespeichert werden");
+
     // Auto-Embed wenn Text vorhanden (fire-and-forget). Nutzt den
     // bereits gesaeuberten Text — sonst wuerde das Embedding-Modell
     // den NUL-haltigen Original sehen.

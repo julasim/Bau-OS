@@ -179,5 +179,13 @@ const dim = computed(() => props.size);
       <circle cx="12" cy="12" r="9" />
       <polyline points="12 7 12 12 15 14" />
     </template>
+    <path v-else-if="name === 'book'" d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20" />
+    <template v-else-if="name === 'graduation'">
+      <path d="M22 10v6M2 10l10-5 10 5-10 5z" />
+      <path d="M6 12v5c3 3 9 3 12 0v-5" />
+    </template>
+    <template v-else-if="name === 'zap'">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </template>
   </svg>
 </template>

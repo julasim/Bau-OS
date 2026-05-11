@@ -76,6 +76,7 @@ const allSections: NavSection[] = [
       { to: "/admin/users", label: "Nutzer", icon: "user", adminOnly: true },
       { to: "/admin/audit", label: "Audit-Log", icon: "lock", adminOnly: true },
       { to: "/settings", label: "Einstellungen", icon: "settings" },
+      { to: "/docs", label: "Dokumentation", icon: "book" },
     ],
   },
 ];

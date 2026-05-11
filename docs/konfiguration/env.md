@@ -7,93 +7,149 @@ Alle Einstellungen werden über eine `.env`-Datei im Projekt-Root gesteuert. Bau
 | Variable | Pflicht | Standardwert | Beschreibung |
 |---|---|---|---|
 | `BOT_TOKEN` | Ja | — | Telegram Bot Token von [@BotFather](https://t.me/BotFather) |
-| `VAULT_PATH` | Ja | — | Absoluter Pfad zum Obsidian Vault |
+| `WORKSPACE_PATH` | Ja | — | Absoluter Pfad zum Obsidian Vault (alias: `VAULT_PATH`) |
+| `OPENAI_API_KEY` | Nein | — | OpenAI API Key — wenn gesetzt, wird OpenAI statt Ollama verwendet |
 | `OLLAMA_BASE_URL` | Nein | `http://localhost:11434/v1` | Basis-URL der Ollama-API |
 | `OLLAMA_MODEL` | Nein | `qwen2.5:7b` | Standard-Modell für den Haupt-Agenten |
-| `OLLAMA_FAST_MODEL` | Nein | Wert von `OLLAMA_MODEL` | Schnelles Modell für einfache Aufgaben |
+| `OLLAMA_FAST_MODEL` | Nein | Wert von `OLLAMA_MODEL` | Schnelles Modell (via `/fast`) |
 | `OLLAMA_SUBAGENT_MODEL` | Nein | Wert von `OLLAMA_MODEL` | Modell für Sub-Agenten |
+| `DATABASE_URL` | Nein | — | PostgreSQL-Verbindungsstring — aktiviert DB-Modus |
+| `JWT_SECRET` | Nein | — | Secret für JWT-Signierung — aktiviert Web-API |
+| `ALLOWED_CHAT_IDS` | Nein | — | Komma-getrennte Telegram-Chat-IDs (leer = Auto-Owner) |
 
 ## Pflicht-Variablen
 
 ### BOT_TOKEN
 
-Das Telegram Bot Token erhältst du vom [@BotFather](https://t.me/BotFather). Ohne dieses Token kann der Bot nicht starten.
+Das Telegram Bot Token erhältst du vom [@BotFather](https://t.me/BotFather).
 
 ```bash
 BOT_TOKEN=7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ::: warning Sicherheitshinweis
-Das Bot Token ist ein Geheimnis. Teile es nicht öffentlich und committe die `.env`-Datei niemals in ein Git-Repository. Die `.gitignore` schließt `.env` bereits aus.
+Das Bot Token ist ein Geheimnis. Committe die `.env`-Datei niemals in ein Git-Repository. Die `.gitignore` schließt `.env` bereits aus.
 :::
 
-### VAULT_PATH
+### WORKSPACE_PATH
 
-Der absolute Pfad zu deinem Obsidian Vault. Hier speichert Bau-OS Agent-Dateien, Tagesberichte und Erinnerungen.
+Der absolute Pfad zum Obsidian Vault. Alternativ auch als `VAULT_PATH` (Legacy-Alias).
 
 ```bash
 # Windows
-VAULT_PATH=C:\Users\max\Documents\MeinVault
+WORKSPACE_PATH=C:\Users\max\Documents\MeinVault
 
 # macOS / Linux
-VAULT_PATH=/home/max/MeinVault
+WORKSPACE_PATH=/home/max/MeinVault
 ```
 
 ::: tip
-Der Vault muss bereits existieren. Bau-OS erstellt die Unterordner `Agents/` und `Inbox/` automatisch beim ersten Start.
+Der Vault muss bereits existieren. Bau-OS erstellt `Agents/`, `Inbox/` und `Logs/` automatisch.
 :::
 
 ## LLM-Konfiguration
 
+Bau-OS unterstützt zwei LLM-Backends: **OpenAI** (Cloud) und **Ollama** (lokal). Die Wahl erfolgt automatisch anhand des `OPENAI_API_KEY`.
+
+### OPENAI_API_KEY
+
+Wenn gesetzt, verwendet Bau-OS OpenAI statt Ollama. Empfohlen für höchste Antwortqualität.
+
+```bash
+OPENAI_API_KEY=sk-...
+```
+
+| Variable | OpenAI-Modus | Ollama-Modus |
+|---|---|---|
+| Haupt-Modell | `gpt-4o` | `qwen2.5:7b` |
+| Fast-Modell | `gpt-4o-mini` | `qwen2.5:3b` |
+| Embedding | `text-embedding-3-small` (1536 dims) | `nomic-embed-text` (768 dims) |
+
 ### OLLAMA_BASE_URL
 
-Die Basis-URL der Ollama-API. Nur ändern, wenn Ollama auf einem anderen Rechner oder Port läuft.
+Nur relevant im Ollama-Modus. Ändern wenn Ollama auf einem anderen Rechner läuft.
 
 ```bash
-# Standard (lokal)
 OLLAMA_BASE_URL=http://localhost:11434/v1
-
-# Remote-Server
-OLLAMA_BASE_URL=http://192.168.1.50:11434/v1
 ```
 
-### OLLAMA_MODEL
-
-Das Haupt-Modell, das für alle Agenten verwendet wird. Muss in Ollama bereits heruntergeladen sein.
+### OLLAMA_MODEL / OLLAMA_FAST_MODEL / OLLAMA_SUBAGENT_MODEL
 
 ```bash
-OLLAMA_MODEL=qwen2.5:7b
-```
-
-### OLLAMA_FAST_MODEL
-
-Ein optionales schnelleres Modell für einfache Aufgaben wie Zusammenfassungen oder kurze Antworten. Wird über den `/fast`-Befehl aktiviert.
-
-```bash
+OLLAMA_MODEL=qwen2.5:14b
 OLLAMA_FAST_MODEL=qwen2.5:3b
-```
-
-Wenn nicht gesetzt, wird das Standardmodell (`OLLAMA_MODEL`) verwendet.
-
-### OLLAMA_SUBAGENT_MODEL
-
-Das Modell, das für Sub-Agenten verwendet wird. Kann ein leichteres Modell sein, um Ressourcen zu sparen.
-
-```bash
 OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
 ```
+
+## Datenbank (PostgreSQL)
+
+### DATABASE_URL
+
+Aktiviert den PostgreSQL-Modus. Ohne diese Variable läuft Bau-OS im reinen Filesystem-Modus.
+
+```bash
+DATABASE_URL=postgresql://user:password@localhost:5432/bauos
+```
+
+Beim Start wird automatisch geprüft ob die DB erreichbar ist. Wenn nicht, beendet sich der Prozess mit Exit-Code 1.
+
+### DB_AUTO_MIGRATE
+
+Steuert ob SQL-Migrations beim Start automatisch ausgeführt werden.
+
+```bash
+DB_AUTO_MIGRATE=true   # Standard
+DB_AUTO_MIGRATE=false  # Nur für Produktionsumgebungen empfohlen
+```
+
+### Supabase (optional)
+
+Für Supabase Realtime und Storage:
+
+```bash
+SUPABASE_URL=https://xxx.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_KEY=eyJ...   # Optional — für Admin-Operationen
+```
+
+### Embeddings
+
+Nur relevant wenn `pgvector` installiert ist:
+
+```bash
+EMBEDDING_MODEL=text-embedding-3-small   # Standard bei OpenAI
+EMBEDDING_DIMENSIONS=1536                # Muss zum Modell passen
+```
+
+::: warning Modellwechsel
+Wenn du das Embedding-Modell änderst, muss das Schema per Migration angepasst werden (andere Dimension). Bau-OS warnt beim Start wenn Konfiguration und Schema nicht übereinstimmen.
+:::
+
+## Zugriffskontrolle
+
+### ALLOWED_CHAT_IDS
+
+Optionale Whitelist für Telegram-Chat-IDs. Wenn leer, gilt der **Auto-Owner-Mechanismus**: Die erste Chat-ID die eine Nachricht sendet, wird als Owner gespeichert — alle anderen werden danach ignoriert.
+
+```bash
+# Explizite Whitelist (mehrere IDs komma-getrennt)
+ALLOWED_CHAT_IDS=123456789,987654321
+
+# Nicht gesetzt → Auto-Owner-Modus (empfohlen für Single-User)
+```
+
+Eigene Chat-ID herausfinden: `/whoami` im Bot.
 
 ## Web-API & Sicherheit
 
 | Variable | Pflicht | Standardwert | Beschreibung |
 |---|---|---|---|
-| `JWT_SECRET` | Nein | — | Secret fuer JWT-Token-Signierung. Wenn gesetzt, wird die Web-API aktiviert |
-| `API_PORT` | Nein | `3000` | Port der Web-API |
-| `CORS_ORIGINS` | Nein | `*` (alle) | Erlaubte CORS-Origins, komma-getrennt |
+| `JWT_SECRET` | Nein | — | Aktiviert Web-API mit JWT-Auth |
+| `API_PORT` | Nein | `3000` | Port der Hono-API |
+| `CORS_ORIGINS` | Nein | `http://localhost:3000` | Erlaubte CORS-Origins, komma-getrennt |
+| `MAX_UPLOAD_MB` | Nein | `50` | Maximale Datei-Upload-Größe |
 
 ### JWT_SECRET
-
-Aktiviert die Web-API mit JWT-Authentifizierung. Ohne diese Variable ist die Web-API deaktiviert.
 
 ```bash
 # Sicheres Secret generieren:
@@ -102,70 +158,54 @@ openssl rand -hex 32
 JWT_SECRET=dein_sicheres_secret_hier
 ```
 
-### CORS_ORIGINS
+Wenn nicht gesetzt, ist die Web-API vollständig deaktiviert.
 
-Beschraenkt Cross-Origin-Anfragen auf bestimmte Domains. Wenn nicht gesetzt, sind alle Origins erlaubt (`*`).
-
-```bash
-# Nur bestimmte Origins erlauben:
-CORS_ORIGINS=https://bauos.example.com,http://localhost:5173
-
-# Alle Origins erlauben (Standard, wenn nicht gesetzt):
-# CORS_ORIGINS wird weggelassen
-```
-
-::: warning Produktionsumgebung
-In der Produktion sollte `CORS_ORIGINS` auf die tatsaechliche Domain beschraenkt werden, um CSRF-Angriffe zu verhindern.
-:::
-
-## Beispiel .env
-
-Eine vollständige `.env`-Datei sieht so aus:
+## Vollständige Beispiel-.env
 
 ```bash
-# Pflicht
+# === Pflicht ===
 BOT_TOKEN=7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-VAULT_PATH=/home/max/ObsidianVault
+WORKSPACE_PATH=/home/bauos/vault
 
-# Optional — LLM
-OLLAMA_BASE_URL=http://localhost:11434/v1
-OLLAMA_MODEL=qwen2.5:7b
-OLLAMA_FAST_MODEL=qwen2.5:3b
-OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
+# === LLM — OpenAI (empfohlen) ===
+OPENAI_API_KEY=sk-...
 
-# Optional — Web-API
-JWT_SECRET=dein_sicheres_secret
+# === LLM — Ollama (Alternative, lokal) ===
+# OLLAMA_BASE_URL=http://localhost:11434/v1
+# OLLAMA_MODEL=qwen2.5:14b
+# OLLAMA_FAST_MODEL=qwen2.5:3b
+# OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
+
+# === Datenbank (optional) ===
+DATABASE_URL=postgresql://bauos:password@localhost:5432/bauos
+# DB_AUTO_MIGRATE=true
+
+# === Web-API (optional) ===
+JWT_SECRET=abc123...
 API_PORT=3000
 CORS_ORIGINS=https://bauos.example.com
+
+# === Sicherheit ===
+ALLOWED_CHAT_IDS=123456789
+MAX_UPLOAD_MB=50
 ```
 
 ## Fest konfigurierte Werte
 
-Die folgenden Werte sind in `src/config.ts` definiert und nicht über Umgebungsvariablen änderbar:
+Definiert in `src/config.ts`, nur durch Quellcode-Änderung anpassbar:
 
 | Konstante | Wert | Beschreibung |
 |---|---|---|
-| `MAX_TOOL_ROUNDS` | `5` | Max. Iterationen im Agentic Loop |
+| `MAX_TOOL_ROUNDS` | `100` | Max. Iterationen im Agentic Loop |
 | `MAX_SPAWN_DEPTH` | `2` | Max. Tiefe für Sub-Agent-Erzeugung |
-| `MAX_HISTORY_CHARS` | `60000` | Pruning-Grenze für den Message-Buffer |
-| `COMPACT_THRESHOLD` | `8000` | Ab dieser Länge wird das Tageslog komprimiert |
+| `MAX_HISTORY_CHARS` | `60.000` | Pruning-Grenze für den Message-Buffer |
+| `COMPACT_THRESHOLD` | `8.000` | Ab dieser Länge wird das Tageslog komprimiert |
 | `KEEP_RECENT_LOGS` | `5` | Anzahl der letzten Log-Einträge die erhalten bleiben |
 | `HISTORY_LOAD_LIMIT` | `10` | Gesprächseinträge die beim Start geladen werden |
 | `TIMEZONE` | `Europe/Vienna` | Zeitzone für alle Datums-Operationen |
 | `LOCALE` | `de-AT` | Locale für Formatierungen |
 | `LANGUAGE` | `Deutsch` | Sprache für LLM-Antworten |
-| `VAULT_LOGS_DIR` | `MEMORY_LOGS` | Ordnername fuer Tageslog-Dateien |
-
-### Sicherheits-Konstanten
-
-| Konstante | Wert | Beschreibung |
-|---|---|---|
-| Rate Limit (Login) | 5 Versuche / 15 Min | Brute-Force-Schutz fuer `/api/auth/login` |
-| Shell-Allowlist | ~40 Befehle | Nur erlaubte Befehle via `befehl_ausfuehren` |
-| Path-Traversal-Schutz | `safePath()` | Validiert Pfade gegen Vault-Grenze |
-| Sandbox (Dynamic Tools) | kein `fetch` | Netzwerkzugriff in dynamischen Tools deaktiviert |
-| Env-Var-Filter (Shell) | PATH, HOME, USER, LANG | Shell-Scripts bekommen keine Secrets |
 
 ::: tip Werte anpassen
-Um diese Werte zu ändern, bearbeite `src/config.ts` direkt und starte den Bot neu. Ein Rebuild ist nach Änderungen nötig (`npm run build`).
+Um diese Werte zu ändern, bearbeite `src/config.ts` direkt und starte den Bot neu. Ein Rebuild ist nötig (`npm run build`).
 :::

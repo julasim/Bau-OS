@@ -11,6 +11,7 @@ export interface SearchResult {
 export function searchWorkspace(query: string, limitTo?: string): SearchResult[] {
   const results: SearchResult[] = [];
   const lowerQuery = query.toLowerCase();
+  if (limitTo && /[/\\.]/.test(limitTo)) return [];
   const searchRoot = limitTo ? path.join(workspacePath, "Projekte", limitTo) : workspacePath;
 
   function searchDir(dir: string): void {

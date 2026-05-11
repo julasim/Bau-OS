@@ -63,4 +63,26 @@ Der Main Agent ist geschuetzt — er kann nicht gelöscht oder überschrieben we
 
 ## Tool-Runden
 
-Pro Anfrage kann ein Agent maximal **5 Tool-Aufrufe** machen. Danach gibt er eine Antwort, auch wenn die Aufgabe nicht vollständig erledigt ist. Das verhindert Endlosschleifen.
+Pro Anfrage kann ein Agent maximal **100 Tool-Aufrufe** machen. Danach gibt er eine Antwort, auch wenn die Aufgabe nicht vollständig erledigt ist. Das verhindert Endlosschleifen.
+
+Der hohe Wert ist bewusst gewählt: kleine Ollama-Modelle rufen Tools oft sequenziell statt gebündelt auf — jeder Aufruf zählt als eine Runde. Das Limit ist ein Sicherheitsnetz, kein Budget pro Anfrage.
+
+## Halluzinations-Schutz
+
+### Action-Detection
+
+Bau-OS erkennt automatisch ob eine Anfrage eine **Aktion** ist (Notiz speichern, Termin anlegen, etc.) — über ein Regex-Muster auf Verben wie "leg an", "speicher", "erstell", "lösch", etc.
+
+Bei erkannter Aktion:
+1. Das `antworten`-Tool wird in Runde 1 herausgefiltert — das Modell KANN nicht direkt antworten ohne zuerst ein Tool aufzurufen
+2. Zusätzlicher Hint im System-Prompt erzwingt echten Tool-Call
+
+### Tool-Skip-Correction
+
+Wenn das Modell `tool_choice: "required"` ignoriert (bekanntes Problem bei kleinen Modellen):
+- Bau-OS erkennt das (leeres `tool_calls`-Array in der Antwort)
+- Injiziert einen Korrektur-Prompt ins Gespräch
+- Wiederholt bis zu 2 Mal (MAX_TOOL_SKIP_RETRIES)
+- Nach 3 erfolglosen Versuchen: User-sichtbare Warnung mit Empfehlung größeres Modell zu verwenden
+
+**Warum das wichtig ist:** Verhindert dass das Modell "Termin gespeichert ✓" behauptet ohne tatsächlich einen Tool-Call gemacht zu haben.

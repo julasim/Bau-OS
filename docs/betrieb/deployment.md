@@ -2,7 +2,49 @@
 
 Bau-OS auf den Server bringen, konfigurieren und erstmals starten.
 
-## 1. Repository klonen
+## Automatische Installation (empfohlen)
+
+```bash
+sudo bash scripts/install.sh
+```
+
+Der Installer fragt interaktiv nach:
+1. **Telegram Bot Token**
+2. **LLM-Modus**: Cloud (kimi-k2.5, qwen3, gemma4) oder Lokal (qwen2.5:7b, llama3.1:8b)
+3. **Installationsverzeichnis** (Standard: `/opt/bau-os`)
+4. **Workspace-Verzeichnis** (Standard: `/opt/bau-os-workspace`)
+5. **Web-Admin Benutzername**
+6. **Web-Admin Passwort**
+7. **API-Port** (Standard: 3000)
+
+Was automatisch eingerichtet wird:
+- Node.js 20 LTS
+- Ollama + Modell-Download (im Lokal-Modus)
+- systemd-Service `bau-os` (Autostart, Restart bei Fehler)
+- CLI-Tool `/usr/local/bin/bau-os`
+- `.env` und `data/users.json`
+
+### bau-os CLI
+
+Nach der Installation steht ein interaktives CLI zur Verfügung:
+
+```bash
+bau-os              # Interaktives Menü
+bau-os status       # Service-Status
+bau-os logs         # Letzte Logs
+bau-os logs live    # Logs live verfolgen
+sudo bau-os restart # Bot neu starten
+sudo bau-os update  # Updates einspielen
+sudo bau-os user add  # Web-Benutzer anlegen
+```
+
+---
+
+## Manuelle Installation
+
+Falls du die Installation Schritt für Schritt selbst durchführen möchtest.
+
+### 1. Repository klonen
 
 ```bash
 cd /home/bauos
@@ -25,14 +67,14 @@ cat ~/.ssh/id_ed25519.pub
 ```
 :::
 
-## 2. Dependencies installieren
+### 2. Dependencies installieren
 
 ```bash
 cd /home/bauos/bau-os
 npm install
 ```
 
-## 3. TypeScript kompilieren
+### 3. TypeScript kompilieren
 
 ```bash
 npm run build
@@ -40,7 +82,7 @@ npm run build
 
 Das erstellt den `dist/` Ordner mit dem kompilierten JavaScript.
 
-## 4. Setup ausführen
+### 4. Setup ausführen
 
 ```bash
 npm run setup
@@ -59,9 +101,9 @@ Der interaktive Installer fragt nach:
 Verwende einen **absoluten Pfad**. Der Ordner wird automatisch erstellt, falls er nicht existiert.
 :::
 
-## 5. Ergebnis prüfen
+### 5. Ergebnis prüfen
 
-### .env Datei
+#### .env Datei
 
 ```bash
 cat .env
@@ -76,7 +118,7 @@ OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=qwen2.5:7b
 ```
 
-### Workspace-Dateien
+#### Workspace-Dateien
 
 ```bash
 ls /home/bauos/vault/Agents/Main/
@@ -86,11 +128,11 @@ Erwartete Ausgabe:
 
 ```
 AGENTS.md    BOOT.md       BOOTSTRAP.md  HEARTBEAT.md
-IDENTITY.md  MEMORY.md     MEMORY_LOGS/  SOUL.md
+IDENTITY.md  MEMORY.md     Logs/         SOUL.md
 TOOLS.md     USER.md
 ```
 
-## 6. Erststart (manuell)
+### 6. Erststart (manuell)
 
 ```bash
 npm start
@@ -111,7 +153,7 @@ Beim ersten Start führt der Bot dich durch die Ersteinrichtung (Bootstrap). Bea
 
 Stoppe den Bot mit `Ctrl+C`.
 
-## 7. Verzeichnisstruktur
+### 7. Verzeichnisstruktur
 
 Nach dem erfolgreichen Start sieht die Struktur so aus:
 

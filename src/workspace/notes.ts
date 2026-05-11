@@ -1,7 +1,14 @@
 import fs from "fs";
 import path from "path";
 import { WORKSPACE_INBOX, LOCALE } from "../config.js";
-import { workspacePath, timestampFilename, frontmatter, ensureDir, resolveNotePath } from "./helpers.js";
+import {
+  workspacePath,
+  timestampFilename,
+  frontmatter,
+  ensureDir,
+  resolveNotePath,
+  atomicWriteSync,
+} from "./helpers.js";
 
 export function saveNote(content: string, project?: string): string {
   const folder = project
@@ -52,7 +59,7 @@ export function appendToNote(nameOrPath: string, content: string): boolean {
 export function updateNote(nameOrPath: string, content: string): boolean {
   const filepath = resolveNotePath(nameOrPath);
   if (!filepath) return false;
-  fs.writeFileSync(filepath, content, "utf-8");
+  atomicWriteSync(filepath, content);
   return true;
 }
 

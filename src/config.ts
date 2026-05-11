@@ -69,6 +69,19 @@ export const LANGUAGE = "Deutsch";
 export const CHAT_ID_FILE = path.join(process.cwd(), ".chat_id");
 export const LOG_FILE = path.join(process.cwd(), "logs", "bot.log");
 
+// ── Telegram-Zugriffskontrolle ───────────────────────────────────────────────
+// Kommagetrennte Chat-IDs in ALLOWED_CHAT_IDS — leer bedeutet kein Schutz.
+// Beispiel: ALLOWED_CHAT_IDS=123456789,987654321
+const _allowedRaw = process.env.ALLOWED_CHAT_IDS ?? "";
+export const ALLOWED_CHAT_IDS: Set<number> = _allowedRaw.trim()
+  ? new Set(
+      _allowedRaw
+        .split(",")
+        .map((s) => parseInt(s.trim(), 10))
+        .filter((n) => !isNaN(n)),
+    )
+  : new Set();
+
 // ── Dynamische Tools ─────────────────────────────────────────────────────────
 export const TOOLS_DIR = path.join(process.cwd(), "tools");
 

@@ -155,16 +155,147 @@ Diese Version betrifft 18 Quelldateien quer durch die gesamte Codebasis — von 
 
 ---
 
+---
+
+## v0.9.0 — Daten-Layer + Web-API
+**April 2026**
+
+Einführung eines abstrakten Daten-Layers mit PostgreSQL-Support und einer vollständigen Hono HTTP-API plus Vue 3 Frontend.
+
+### Daten-Layer
+- `src/data/index.ts` — Factory-Pattern: wählt automatisch DB- oder FS-Implementierung
+- `src/data/types.ts` — Typen-Interfaces (Task, Termin, Note, Project, TeamMember, FileEntry, etc.)
+- `db-*`-Implementierungen: PostgreSQL via `postgres.js` (direkt, kein ORM)
+- `fs-*`-Implementierungen: Markdown/JSONL auf dem Filesystem (Fallback ohne DB)
+- `src/db/migrate.ts` — SQL-Migrations-Runner (idempotent, nummerierte .sql-Dateien)
+- `DATABASE_URL` Env-Variable: wenn gesetzt → DB-Modus, sonst → FS-Modus
+- Chat-History und Agent-Logs bleiben **immer** im Filesystem (JSONL, leicht per grep)
+
+### Web-API
+- Hono HTTP-Server (`src/api/server.ts`) — kompakt, TypeScript-first
+- JWT-Authentifizierung (`JWT_SECRET`-Env-Variable)
+- Rate-Limiting Login-Endpoint: 5 Versuche / 15 Minuten
+- CORS konfigurierbar via `CORS_ORIGINS`
+- REST-Routen: notes, tasks, termine, projects, files, team, agents, search, chat, settings
+- Supabase Realtime Bridge: `startRealtimeBridge()` leitet DB-Events in den Bot
+
+### Vue 3 Frontend
+- Vue 3 + Pinia + Vue Router (`web/`)
+- Separate Vite-Konfiguration (`npm run dev:web`, `npm run build:all`)
+- SPA-Fallback über Hono's `serveStatic`
+
+---
+
+## v0.10.0 — OpenAI Dual-Backend + Embeddings
+**April 2026**
+
+Bau-OS unterstützt jetzt sowohl Ollama (lokal) als auch OpenAI — automatische Erkennung via `OPENAI_API_KEY`.
+
+### LLM-Backend
+- OpenAI SDK als einheitlicher Client — zeigt je nach Config auf Ollama oder OpenAI-API
+- `OPENAI_API_KEY` gesetzt → OpenAI-Modus (gpt-4o, etc.)
+- Kein Key → Ollama-Modus (localhost:11434)
+- Runtime-Modellwechsel via `/model` und `/fast` auch im Web-UI
+
+### Embeddings & Semantische Suche
+- `pgvector` Extension (optional — wenn fehlt, bleibt Volltext-Suche aktiv)
+- `text-embedding-3-small` (1536 dims) bei OpenAI-Modus
+- `nomic-embed-text` (768 dims) bei Ollama-Modus
+- `src/db/embeddings.ts` — Auto-Embed bei Notizen- und Datei-Speicherung
+- `src/db/semantic-search.ts` — Pure Vector, Hybrid (Vector + BM25) und Text-only Suche
+- `npm run db:embed` — nachträgliches Embedding für bestehende Einträge
+
+---
+
+## v0.11.0 — Dynamic Tools + MCP
+**April/Mai 2026**
+
+Zwei neue Erweiterungspunkte: Eigene Tools als Ordner im Filesystem und externe MCP-Server.
+
+### Dynamic Tools (`tools/`)
+- Jeder Unterordner ist ein Tool: `tool.json` (Schema) + `run.js` (Node.js) oder `run.sh` (Shell)
+- `run.js` läuft in einer Node.js-Sandbox (kein `fetch`, kein fs-Zugriff außerhalb des Tool-Ordners)
+- Änderungen sofort aktiv — kein Neustart nötig
+- Zusatzdateien (Templates, Daten) werden dem Script als `files()`-Map übergeben
+- LLM kann neue Tools über `tool_erstellen` anlegen und bestehende löschen
+
+### MCP-Server
+- `mcp.json` im Projekt-Root konfiguriert externe MCP-Server
+- stdio-Transport: MCP-Server laufen als Kindprozesse
+- Tool-Namen werden automatisch mit Server-Prefix versehen (`mcp_servername_toolname`)
+- Kollisionsprüfung gegen statische und bereits registrierte Tools
+- `npm run mcp` für manuellen Test
+
+---
+
+## v0.12.0 — Datei-Upload & Team
+**Mai 2026**
+
+Vollständiger Datei-Upload via Telegram und Web-API, plus Team-Verwaltung.
+
+### Datei-Upload
+- Telegram: PDF, DOCX, XLSX, TXT etc. direkt in den Chat senden
+- DB-Modus: Datei-Blob wird als `bytea` in der `files`-Tabelle gespeichert — kein Disk-Write
+- FS-Modus: Fallback nach `Uploads/` im Workspace
+- Text-Extraktion: PDF via `pdfjs-dist`, DOCX via `mammoth`
+- Auto-Embedding des extrahierten Textes (fire-and-forget)
+- Web-API: `/files/upload` (Drag & Drop), `/files/download` (Blob aus DB)
+- `MAX_UPLOAD_MB` Env-Variable (Standard: 50 MB)
+
+### Team-Verwaltung
+- `TeamRepository`: Mitglieder anlegen, auflisten, aktualisieren, entfernen
+- Projekt-Zuweisung per `projectId`
+- DB- und FS-Implementierung
+
+---
+
+## v0.13.0 — Sicherheits- & Stabilitäts-Hardening
+**Mai 2026**
+
+24 Bugs und Sicherheitslücken behoben — identifiziert durch systematische Multi-Agent-Code-Analyse.
+
+### Telegram-Zugriffskontrolle (neu)
+- **Auto-Owner-Detection**: Erster Nutzer der schreibt wird als Owner gespeichert (`.chat_id`)
+- **ALLOWED_CHAT_IDS**: Optionale Env-Variable für explizite Whitelist
+- Alle weiteren Chat-IDs werden **ohne Fehlermeldung** ignoriert
+- Middleware in `bot.ts` — greift vor allen Commands und Nachrichten
+
+### Sicherheits-Fixes
+- **SSRF**: IPv6-Ranges (`fd00::`, `fc00::`, `fe80::`, `::ffff:`) und Dezimal-IPs jetzt blockiert
+- **Path-Traversal**: `safePath()` prüft jetzt `startsWith(path + sep)` statt nur `startsWith(path)` — verhindert `/vault-backup` als `/vault`-Bypass
+- **Path-Traversal Dynamic Tools**: `safeToolDir()` Validation in `createTool()` und `deleteTool()`
+- **MIME-Whitelist**: Datei-Uploads (Telegram + API) nur erlaubte Endungen (pdf, docx, xlsx, csv, txt, md, png, jpg, zip, json, xml)
+- **Rate-Limit /api/chat**: 30 Anfragen / Minute pro User (zusätzlich zum Login-Rate-Limit)
+- **Security Headers**: `secureHeaders()`-Middleware für alle API-Responses (X-Frame-Options, CSP, etc.)
+- **Passwort-Mindestlänge**: 6 → 12 Zeichen
+- **MCP Filesystem**: Standardmäßig deaktiviert (verhindert Zugriff auf `.env`)
+
+### Stabilitäts-Fixes
+- **LLM-Crash-Schutz**: `choices[0]`-Guard nach jedem API-Call
+- **Message-Pruning**: assistant+tool-Runden werden als Paare entfernt (OpenAI-Anforderung)
+- **History-Parser**: Mehrzeilige User-Nachrichten korrekt erkannt
+- **Heartbeat-Race**: `startHeartbeat()` wird erst nach `bot.start()` aufgerufen
+- **compactNow()**: Vollständig in try/catch — kein Crash mehr bei LLM-Fehler
+- **Compaction-Lock**: `writeCompactedLog()` ist jetzt race-condition-sicher
+- **updateNote()**: Atomarer Write via `atomicWriteSync()` statt direktem `fs.writeFileSync`
+- **db-notes Prefix-Match**: `append()` und `update()` treffen jetzt exakt eine Zeile (SELECT id → UPDATE WHERE id = foundId)
+- **null-Check nach INSERT...RETURNING**: tasks, termine, team, files — wirft jetzt Fehler statt zu crashen
+- **JSONL-Größenbegrenzung**: fs-chat (10.000 Zeilen), fs-agent-logs (5.000 Zeilen)
+- **searchWorkspace limitTo**: Verhindert Path-Traversal via `limitTo`-Parameter
+- **MCP Reconnect**: Automatischer Reconnect nach Prozess-Absturz (3 Versuche, Backoff 5/10/15s)
+- **Embedding-Startup-Check**: Dimensions-Mismatch wird beim Start geloggt (kein process.exit)
+- **SQL-Migrations**: `005_fix_files_project_fk.sql` (ON DELETE SET NULL statt CASCADE), `006_projects_name_unique.sql`
+
+---
+
 ## Roadmap
 
-Geplante Features für zukuenftige Versionen:
-
-| Feature | Prioritaet | Status |
+| Feature | Priorität | Status |
 |---|---|---|
-| ALLOWED_USERS-Liste | Hoch | Geplant |
-| Rollenbasierte Zugriffskontrolle | Hoch | Geplant |
+| ALLOWED_CHAT_IDS (Telegram-Zugriffskontrolle) | Hoch | ✅ Implementiert |
 | Sprachnachrichten (Whisper) | Mittel | Vorbereitet |
 | ÖNORM-Kalkulations-Agent | Mittel | Geplant |
 | Telegram-Gruppen-Support | Mittel | Geplant |
+| Rollenbasierte Zugriffskontrolle (Admin/User) | Mittel | Geplant |
 | Webhook-Modus (statt Long Polling) | Niedrig | Geplant |
 | Audit-Log | Niedrig | Geplant |

@@ -25,6 +25,15 @@ export async function runCompaction(agentName: string): Promise<void> {
       ],
     });
 
+    if (!response.choices?.length) {
+      _compactionFailures.set(agentName, failures + 1);
+      logError(
+        `[${agentName}] Compaction fehlgeschlagen (leere Antwort, ${failures + 1}/${MAX_COMPACTION_RETRIES})`,
+        new Error("empty choices"),
+      );
+      return;
+    }
+
     const summary = response.choices[0].message.content ?? "";
     if (summary) {
       writeCompactedLog(agentName, summary);
@@ -41,19 +50,24 @@ export async function compactNow(agentName: string): Promise<string> {
   const toSummarize = getLogForCompaction(agentName);
   if (!toSummarize) return "Tageslog ist noch klein – kein Komprimieren noetig.";
 
-  const response = await client.chat.completions.create({
-    model: getModel(),
-    messages: [
-      {
-        role: "user",
-        content: `Fasse diese Gespraechseintraege in maximal 5 Stichpunkten zusammen.\nNur wichtige Fakten, Entscheidungen und offene Punkte. Auf Deutsch:\n\n${toSummarize}`,
-      },
-    ],
-  });
+  try {
+    const response = await client.chat.completions.create({
+      model: getModel(),
+      messages: [
+        {
+          role: "user",
+          content: `Fasse diese Gespraechseintraege in maximal 5 Stichpunkten zusammen.\nNur wichtige Fakten, Entscheidungen und offene Punkte. Auf Deutsch:\n\n${toSummarize}`,
+        },
+      ],
+    });
 
-  const summary = response.choices[0].message.content ?? "";
-  if (!summary) return "Zusammenfassung fehlgeschlagen.";
+    if (!response.choices?.length) return "Compaction fehlgeschlagen (leere Antwort vom LLM).";
+    const summary = response.choices[0].message.content ?? "";
+    if (!summary) return "Zusammenfassung fehlgeschlagen.";
 
-  writeCompactedLog(agentName, summary);
-  return `\u2705 Log komprimiert.\n\nZusammenfassung:\n${summary}`;
+    writeCompactedLog(agentName, summary);
+    return `✅ Log komprimiert.\n\nZusammenfassung:\n${summary}`;
+  } catch (err) {
+    return `Compaction fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`;
+  }
 }

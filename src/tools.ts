@@ -232,6 +232,13 @@ export async function executeDynamicTool(name: string, args: Record<string, stri
 
 // ---- Meta: Tool erstellen/loeschen ----
 
+function safeToolDir(folderName: string): string {
+  if (!/^[\w-]+$/.test(folderName)) throw new Error(`Ungültiger Tool-Name "${folderName}" — nur [a-z0-9_-] erlaubt`);
+  const resolved = path.resolve(TOOLS_DIR, folderName);
+  if (!resolved.startsWith(path.resolve(TOOLS_DIR) + path.sep)) throw new Error("Path-Traversal im Tool-Namen erkannt");
+  return resolved;
+}
+
 /** Erstellt ein neues dynamisches Tool */
 export function createTool(
   folderName: string,
@@ -241,7 +248,7 @@ export function createTool(
   extraFiles?: Record<string, string>,
 ): string {
   ensureToolsDir();
-  const toolDir = path.join(TOOLS_DIR, folderName);
+  const toolDir = safeToolDir(folderName);
 
   if (fs.existsSync(toolDir)) {
     // Update — Ordner existiert schon
@@ -266,7 +273,12 @@ export function createTool(
 
 /** Loescht ein dynamisches Tool */
 export function deleteTool(folderName: string): boolean {
-  const toolDir = path.join(TOOLS_DIR, folderName);
+  let toolDir: string;
+  try {
+    toolDir = safeToolDir(folderName);
+  } catch {
+    return false;
+  }
   if (!fs.existsSync(toolDir)) return false;
   fs.rmSync(toolDir, { recursive: true });
   logInfo(`[Tool] tools/${folderName}/ geloescht`);

@@ -1,17 +1,17 @@
 # DSGVO & Datenschutz
 
-Bau-OS wurde von Grund auf für **maximalen Datenschutz** konzipiert. Kein Cloud-AI, kein Tracking, keine Drittanbieter.
+Bau-OS wurde von Grund auf für **maximalen Datenschutz** konzipiert. Im Standard-Modus (Ollama) verlassen keine Daten deinen Server.
 
-## Grundprinzip: Alles bleibt auf deinem Server
+## Grundprinzip: Datensouveränität by default
 
 ```
 Telegram ──► Dein VPS (Hetzner) ──► Ollama (lokal) ──► Obsidian Vault (lokal)
-                    │
-                    └── Kein externer API-Call, kein Cloud-LLM
 ```
 
-::: tip Kein Cloud-AI
-Bau-OS verwendet **Ollama** als lokales LLM. Alle Anfragen werden direkt auf dem Server verarbeitet. Es werden **keine Daten an OpenAI, Google, Anthropic oder andere Cloud-Dienste** gesendet.
+::: tip Datensouveränität by default
+Im Standard-Modus (Ollama) werden alle Anfragen lokal verarbeitet — kein Datenabfluss.
+Wenn `OPENAI_API_KEY` gesetzt ist, werden Anfragen an OpenAI gesendet (opt-in).
+Für maximalen Datenschutz: Ollama verwenden.
 :::
 
 ## EU-Server
@@ -38,6 +38,8 @@ Bau-OS speichert ausschließlich Daten, die der Nutzer **aktiv sendet**:
 | Langzeitgedächtnis | `Agents/Main/MEMORY.md` | Dauerhaft gespeicherte Fakten |
 | Bot-Log | `logs/bot.log` | Technisches Log (max. 500 Zeilen) |
 | Chat-ID | `.chat_id` | Telegram Chat-ID für Heartbeat |
+| Chat-Sessions | PostgreSQL oder JSONL (je nach Modus) | Gesprächsverlauf der aktuellen Session |
+| Embeddings | PostgreSQL + pgvector (optional) | Vektoren für semantische Suche |
 
 ::: warning Keine automatische Datenerkennung
 Bau-OS erkennt **nicht** automatisch, ob eine Nachricht personenbezogene Daten enthaelt. Der Nutzer ist selbst verantwortlich dafür, welche Inhalte er dem Bot sendet.
@@ -45,13 +47,15 @@ Bau-OS erkennt **nicht** automatisch, ob eine Nachricht personenbezogene Daten e
 
 ## Was wird NICHT gespeichert?
 
-- **Keine Cookies** — Bau-OS hat kein Web-Frontend für Endnutzer
+- **Keine Tracking-Cookies** — Die Web-UI verwendet JWT im localStorage, kein Tracking
 - **Kein Tracking** — Keine Analytics, kein Google Analytics, kein Matomo
 - **Keine IP-Adressen** — Telegram-Nachrichten enthalten keine IP
 - **Keine Nutzungsprofile** — Kein Profiling, kein Scoring
-- **Keine Drittanbieter-APIs** — Kein Datenabfluss an externe Dienste
+- **Keine Drittanbieter-APIs** im Ollama-Modus — Im OpenAI-Modus gehen Anfragen an OpenAI (opt-in)
 
 ## Daten löschen
+
+### Markdown-Modus (Standard)
 
 Das vollständige Löschen aller Nutzerdaten ist trivial:
 
@@ -71,9 +75,19 @@ rm logs/bot.log
 rm .chat_id
 ```
 
-::: tip Einfache Datenloesung
+::: tip Einfache Datenloesung (Markdown-Modus)
 Da alle Daten als **Markdown-Dateien** im Vault liegen, reicht ein einfaches `rm -rf` auf den Vault-Ordner, um alle Nutzerdaten vollständig zu löschen. Keine Datenbank, kein Export nötig.
 :::
+
+### PostgreSQL-Modus (optional)
+
+```bash
+# Einzelne Tabellen bereinigen:
+psql bauos -c "DELETE FROM notes; DELETE FROM tasks; DELETE FROM termine; DELETE FROM projects;"
+
+# Oder: gesamte Datenbank löschen
+dropdb bauos
+```
 
 ## Auftragsverarbeitung (AVV)
 
@@ -85,9 +99,9 @@ Für den Einsatz bei Kunden ist ein **Auftragsverarbeitungsvertrag** (AVV) nach 
 | Art der Daten | Textnachrichten, Notizen, Aufgaben, Termine |
 | Betroffene Personen | Nutzer des Telegram-Bots |
 | Dauer | Solange der VPS betrieben wird |
-| Loeschung | Vault-Ordner löschen = vollständige Datenloesung |
-| Subauftragnehmer | Hetzner (Hosting), Telegram (Nachrichtenuebermittlung) |
-| Technische Massnahmen | SSH-Zugang, Firewall, eigener VPS, lokales LLM |
+| Loeschung | Vault-Ordner löschen = vollständige Datenloesung (Markdown-Modus) |
+| Subauftragnehmer | Hetzner (Hosting), Telegram (Nachrichtenuebermittlung), ggf. OpenAI (opt-in) |
+| Technische Massnahmen | SSH-Zugang, Firewall, eigener VPS, lokales LLM (Standard) |
 
 ::: warning Telegram als Transportweg
 Telegram übertraegt Nachrichten über seine Server. Die Telegram-API speichert Nachrichten für die Zustellung. Dies liegt ausserhalb der Kontrolle von Bau-OS. Für besonders sensible Daten sollte ein alternativer Kanal in Betracht gezogen werden.
@@ -104,6 +118,9 @@ Telegram übertraegt Nachrichten über seine Server. Die Telegram-API speichert 
 | Path-Traversal-Schutz | Alle Datei-Operationen validieren Pfade gegen Vault-Grenze |
 | Shell-Allowlist | Nur ~40 definierte Befehle ausfuehrbar (kein rm, shutdown etc.) |
 | Sandbox-Haertung | Dynamische Tools ohne Netzwerkzugriff, gefilterte Umgebungsvariablen |
+| SSRF-Schutz | IPv6-Adressen und dezimale IP-Darstellungen werden blockiert |
+| Security Headers | X-Frame-Options, Content-Security-Policy (Web-UI) |
+| MIME-Whitelist | Upload-Filter: nur erlaubte Dateitypen werden akzeptiert |
 | Trennungskontrolle | Jeder Kunde eigener VPS, eigener Vault, eigener Bot |
 | Pseudonymisierung | Chat-ID statt Klarnamen im System |
 | Verfügbarkeit | VPS mit Hetzner SLA, Bot-Neustart via `/restart` |

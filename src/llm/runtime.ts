@@ -77,6 +77,7 @@ export async function processAgent(
       tool_choice: "required",
     });
 
+    if (!response.choices?.length) throw new Error("LLM returned empty choices array");
     const reply = response.choices[0].message;
     messages.push(reply);
 
@@ -168,12 +169,21 @@ export async function processAgent(
           m.content = m.content.slice(0, TOOL_PRUNE_MAX_CHARS) + "\n[... gekuerzt]";
         }
       }
-      // 2. Wenn immer noch zu groß: aelteste Tool-Messages entfernen
-      const systemMsg = messages[0];
-      const toolMsgs = messages.filter((m) => m.role === "tool");
-      const nonToolMsgs = messages.filter((m) => m.role !== "tool");
-      const keptTools = toolMsgs.slice(-KEPT_TOOL_MESSAGES);
-      messages.splice(0, messages.length, systemMsg, ...nonToolMsgs.slice(1), ...keptTools);
+      totalChars = 0;
+      for (const m of messages) totalChars += typeof m.content === "string" ? m.content.length : 200;
+      // 2. Älteste assistant+tool-Runden als Paare entfernen — OpenAI erfordert
+      //    dass tool-Messages direkt nach ihrer assistant-Message stehen.
+      while (totalChars > MAX_HISTORY_CHARS && messages.length > 3) {
+        const idx = messages.findIndex((m, i) => i > 0 && m.role === "assistant");
+        if (idx === -1) break;
+        let end = idx + 1;
+        while (end < messages.length && messages[end].role === "tool") end++;
+        for (let j = idx; j < end; j++) {
+          const c = messages[j].content;
+          totalChars -= typeof c === "string" ? c.length : 200;
+        }
+        messages.splice(idx, end - idx);
+      }
     }
   }
 

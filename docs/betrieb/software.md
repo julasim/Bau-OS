@@ -123,6 +123,60 @@ ollama list
 ollama rm qwen2.5:3b
 ```
 
+## Datenbank (optional)
+
+Ohne `DATABASE_URL` läuft Bau-OS im reinen Filesystem-Modus — keine extra Installation nötig.
+
+### Option A — PostgreSQL + pgvector (self-hosted)
+
+```bash
+# PostgreSQL 16 installieren
+sudo apt install postgresql-16
+
+# pgvector Extension
+sudo apt install postgresql-16-pgvector
+
+# Datenbank anlegen
+sudo -u postgres createuser bauos
+sudo -u postgres createdb -O bauos bauos
+sudo -u postgres psql -c "GRANT ALL ON DATABASE bauos TO bauos;"
+
+# In .env eintragen:
+DATABASE_URL=postgresql://bauos:password@localhost:5432/bauos
+```
+
+### Option B — Supabase (managed, einfacher)
+
+1. Projekt auf supabase.com erstellen
+2. Connection String aus Settings → Database kopieren
+3. In `.env`:
+   ```
+   DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres
+   SUPABASE_URL=https://[ref].supabase.co
+   SUPABASE_ANON_KEY=eyJ...
+   ```
+
+## Docker Compose (vollständiger Stack)
+
+Startet PostgreSQL + Ollama + Bau-OS + Caddy (HTTPS) in einem Befehl:
+
+```bash
+# .env anpassen (BOT_TOKEN, WORKSPACE_PATH, etc.)
+cp .env.example .env
+nano .env
+
+# Stack starten
+docker compose up -d
+
+# Logs
+docker compose logs -f
+
+# Update
+docker compose pull && docker compose build app && docker compose up -d
+```
+
+Enthaltene Services: PostgreSQL 16 (pgvector), Ollama, Bau-OS App, Caddy (Auto-HTTPS).
+
 ## Nächster Schritt
 
 → [Bau-OS deployen](/betrieb/deployment)

@@ -12,11 +12,73 @@ Detaillierte Anleitung für die Installation auf einem frischen System.
 | **Speicher** | 10 GB frei | 20 GB frei |
 | **Node.js** | 20.x | 20.x LTS |
 
-::: warning RAM ist entscheidend
-Ollama braucht RAM für das LLM-Modell. Ein 7B-Modell benötigt ca. 4-5 GB RAM. Wenn der Server zu wenig RAM hat, wird das Modell sehr langsam oder stürzt ab.
+::: warning RAM ist entscheidend (nur Ollama-Modus)
+Ollama braucht RAM für das LLM-Modell. Ein 7B-Modell benötigt ca. 4–5 GB RAM. Wenn der Server zu wenig RAM hat, wird das Modell sehr langsam oder stürzt ab. Im OpenAI-Modus entfällt diese Anforderung.
 :::
 
-## Node.js installieren
+---
+
+## Empfohlener Weg: Automatischer Installer (Produktion)
+
+Für Ubuntu-Server gibt es einen vollautomatischen Installer:
+
+```bash
+sudo bash scripts/install.sh
+```
+
+Der Installer fragt interaktiv nach:
+
+1. **Telegram Bot Token** — von @BotFather
+2. **LLM-Modus** — Cloud (kimi-k2.5, gemma4, qwen3 via Ollama Cloud) oder Lokal (qwen2.5:7b, llama3.1:8b)
+3. **Installationsverzeichnis** — Standard: `/opt/bau-os`
+4. **Workspace-Verzeichnis** — Standard: `/opt/bau-os-workspace`
+5. **Web-Admin Benutzername** — für die Web-Oberfläche
+6. **Web-Admin Passwort**
+7. **API-Port** — Standard: `3000`
+
+Was der Installer automatisch einrichtet:
+
+- Node.js 20 LTS (via nodesource)
+- Ollama + gewähltes Modell
+- systemd-Service `bau-os` (autostart bei Reboot)
+- CLI-Tool `/usr/local/bin/bau-os`
+- Web-Admin-User in `data/users.json`
+- `.env` mit allen gesetzten Werten
+
+### CLI nach Installation
+
+```bash
+bau-os                   # Interaktives Menü
+bau-os status            # Status anzeigen
+bau-os logs              # Letzte Logs
+bau-os logs live         # Live-Logs (tail -f)
+sudo bau-os restart      # Service neu starten
+sudo bau-os update       # Update aus Git einspielen
+sudo bau-os user add     # Neuen Web-User anlegen
+```
+
+---
+
+## Alternative: Docker Compose
+
+Für Umgebungen mit Docker steht ein vollständiger Stack bereit:
+
+```bash
+cp .env.example .env
+# .env anpassen: BOT_TOKEN, WORKSPACE_PATH, etc.
+docker compose up -d
+```
+
+Stack-Komponenten:
+
+- **PostgreSQL 16 + pgvector** — Datenbankbackend mit Vektor-Suche
+- **Ollama** — lokales LLM (optional; weglassen wenn OpenAI genutzt wird)
+- **Bau-OS App** — der Bot + API
+- **Caddy** — Reverse Proxy mit automatischem HTTPS
+
+---
+
+## Manuell: Node.js installieren
 
 ::: code-group
 ```bash [Ubuntu/Debian]
@@ -42,7 +104,7 @@ node --version   # v20.x.x
 npm --version    # 10.x.x
 ```
 
-## Ollama installieren
+## Manuell: Ollama installieren (nur Ollama-Modus)
 
 ::: code-group
 ```bash [Linux]
@@ -82,15 +144,15 @@ curl http://localhost:11434/v1/models
 Deaktiviere "Group Privacy" mit `/setprivacy` → Disabled, falls der Bot in Gruppen funktionieren soll.
 :::
 
-## Bau-OS installieren
+## Manuell: Bau-OS installieren
 
 ```bash
-git clone https://github.com/your-repo/bau-os.git
+git clone <repository-url>
 cd bau-os
 npm install
 ```
 
-## Setup ausführen
+## Manuell: Setup ausführen
 
 ```bash
 npm run setup

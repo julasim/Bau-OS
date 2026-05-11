@@ -97,6 +97,20 @@ function isNameTaken(name: string): boolean {
   return false;
 }
 
+// ---- Reconnect ----
+
+function scheduleReconnect(name: string, config: McpServerConfig, attempt = 0): void {
+  if (attempt >= 3) {
+    logError(`MCP/${name}`, new Error(`Maximale Reconnect-Versuche (3) erschoepft`));
+    return;
+  }
+  const delay = (attempt + 1) * 5000;
+  setTimeout(() => {
+    logInfo(`[MCP] Reconnect ${name} (Versuch ${attempt + 1}/3)...`);
+    connectServer(name, config).catch((err) => logError(`MCP/${name}`, err));
+  }, delay);
+}
+
 // ---- Connect / Disconnect ----
 
 export async function connectServer(name: string, config: McpServerConfig): Promise<boolean> {
@@ -131,6 +145,22 @@ export async function connectServer(name: string, config: McpServerConfig): Prom
 
     _servers.set(name, { name, client, transport, tools: entries });
     logInfo(`[MCP] ${name} verbunden — ${entries.length} Tool(s): ${entries.map((t) => t.originalName).join(", ")}`);
+
+    // Exit-Handler für automatischen Reconnect
+    const proc = (transport as unknown as { process?: { on: (event: string, cb: () => void) => void } }).process;
+    const onExit = () => {
+      if (_servers.has(name)) {
+        _servers.delete(name);
+        logInfo(`[MCP] ${name} Prozess beendet — starte Reconnect...`);
+        scheduleReconnect(name, config);
+      }
+    };
+    if (proc) {
+      proc.on("exit", onExit);
+    } else {
+      transport.onclose = onExit;
+    }
+
     return true;
   } catch (err) {
     logError(`MCP/${name}`, err);

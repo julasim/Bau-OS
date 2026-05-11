@@ -38,7 +38,7 @@ export function atomicWriteSync(filepath: string, data: string): void {
 /** Sicherer Pfad innerhalb des Vaults — blockiert Traversal und Symlinks */
 export function safePath(relativePath: string): string | null {
   const resolved = path.resolve(workspacePath, relativePath);
-  if (!resolved.startsWith(workspacePath)) return null;
+  if (!resolved.startsWith(workspacePath + path.sep) && resolved !== workspacePath) return null;
   try {
     if (fs.existsSync(resolved) && fs.lstatSync(resolved).isSymbolicLink()) return null;
   } catch {

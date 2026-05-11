@@ -5,52 +5,82 @@ In 5 Minuten zum laufenden Bot — lokal auf deinem Rechner.
 ## Voraussetzungen
 
 - **Node.js 20+** — [nodejs.org](https://nodejs.org/)
-- **Ollama** — [ollama.ai](https://ollama.ai/) (lokales LLM)
 - **Telegram Bot Token** — von [@BotFather](https://t.me/BotFather)
+- **Entweder:** Ollama (lokal) — [ollama.ai](https://ollama.ai/)
+- **Oder:** OpenAI API Key — [platform.openai.com](https://platform.openai.com/)
 
-## 1. Ollama starten und Modell laden
+---
+
+## Option A — Lokal mit Ollama (Datensouveränität)
+
+Keine Daten verlassen deinen Rechner. Erfordert mindestens 8 GB RAM für ein 7B-Modell.
 
 ```bash
-# Ollama installieren (falls noch nicht)
+# 1. Ollama + Modell
 # macOS/Linux: curl -fsSL https://ollama.ai/install.sh | sh
 # Windows: Download von ollama.ai
-
-# Modell herunterladen
 ollama pull qwen2.5:7b
-```
 
-## 2. Repository klonen
-
-```bash
-git clone https://github.com/your-repo/bau-os.git
+# 2. Projekt klonen
+git clone <repository-url>
 cd bau-os
 npm install
-```
 
-## 3. Setup ausführen
+# 3. .env erstellen
+cat > .env << 'EOF'
+BOT_TOKEN=7123...:AAH...
+WORKSPACE_PATH=/pfad/zum/vault
+OLLAMA_BASE_URL=http://localhost:11434/v1
+EOF
 
-```bash
-npm run setup
-```
-
-Der Installer fragt nach:
-1. **BOT_TOKEN** — Dein Telegram Bot Token (von @BotFather)
-2. **VAULT_PATH** — Wo der Obsidian Vault gespeichert wird
-3. **OLLAMA_BASE_URL** — Standard: `http://localhost:11434/v1`
-4. **OLLAMA_MODEL** — Standard: `qwen2.5:7b`
-
-## 4. Bot starten
-
-```bash
-# Entwicklung (mit Auto-Reload)
+# 4. Starten
 npm run dev
-
-# Oder Produktion
-npm run build
-npm start
 ```
 
-## 5. Erste Nachricht
+---
+
+## Option B — Cloud mit OpenAI (einfacher, höhere Qualität)
+
+Kein Ollama nötig. Anfragen gehen an die OpenAI API.
+
+```bash
+# 1. Projekt klonen
+git clone <repository-url>
+cd bau-os
+npm install
+
+# 2. .env erstellen
+cat > .env << 'EOF'
+BOT_TOKEN=7123...:AAH...
+WORKSPACE_PATH=/pfad/zum/vault
+OPENAI_API_KEY=sk-...
+EOF
+
+# 3. Starten
+npm run dev
+```
+
+---
+
+## Web-UI aktivieren (optional)
+
+Zusätzlich zur Telegram-Schnittstelle gibt es eine Browser-Oberfläche (Vue 3).
+
+```bash
+# In .env ergänzen:
+JWT_SECRET=$(openssl rand -hex 32)
+API_PORT=3000
+
+# API + Frontend starten:
+npm run dev        # Backend (Bot + API)
+npm run dev:web    # Frontend (separates Terminal)
+
+# Dann: http://localhost:3000
+```
+
+---
+
+## Erste Nachricht
 
 Öffne Telegram, suche deinen Bot und schreibe:
 
@@ -64,7 +94,7 @@ Der Setup-Wizard startet automatisch und führt dich durch 6 kurze Fragen:
 5. Dein Name
 6. Name des Unternehmens
 
-Danach ist der Bot einsatzbereit.
+Danach ist der Bot sofort einsatzbereit.
 
 ## Was jetzt?
 
@@ -74,5 +104,5 @@ Danach ist der Bot einsatzbereit.
 - Lies [Konzepte](/konzepte/architektur) um zu verstehen wie alles zusammenhängt
 
 ::: tip Produktion
-Für den Einsatz auf einem Server lies das [Deployment-Playbook](/betrieb/voraussetzungen).
+Für den Einsatz auf einem Server lies das [Deployment-Playbook](/betrieb/voraussetzungen) oder nutze den Ein-Befehl-Installer: `sudo bash scripts/install.sh`.
 :::

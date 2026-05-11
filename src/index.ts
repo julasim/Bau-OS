@@ -40,6 +40,16 @@ if (DB_ENABLED) {
     const hasVector = await checkPgVector();
     if (hasVector) {
       logInfo("[DB] pgvector Extension aktiv");
+      const { checkEmbeddingSchemaDims } = await import("./db/index.js");
+      const dimsResult = await checkEmbeddingSchemaDims();
+      if (!dimsResult.ok) {
+        logError(
+          "[DB] Embedding-Dimensionen stimmen nicht ueberein — Embeddings koennen fehlschlagen",
+          new Error(
+            `Konfiguriert: ${dimsResult.configured}, Schema: notes=${dimsResult.schema?.notes ?? "n/a"}, files=${dimsResult.schema?.files ?? "n/a"}${dimsResult.error ? ` (${dimsResult.error})` : ""}`,
+          ),
+        );
+      }
     } else {
       logInfo("[DB] pgvector Extension nicht gefunden — Embeddings deaktiviert");
     }
@@ -79,13 +89,6 @@ const { setDefaultBot } = await import("./bot-manager.js");
 await setDefaultBot(bot);
 
 const { fmt } = await import("./format.js");
-startHeartbeat(async (chatId, text) => {
-  try {
-    await bot.api.sendMessage(chatId, fmt(text), { parse_mode: "HTML" });
-  } catch {
-    await bot.api.sendMessage(chatId, text);
-  }
-});
 
 // MCP-Server verbinden (wenn mcp.json vorhanden)
 import { initMcp } from "./mcp.js";
@@ -93,6 +96,15 @@ await initMcp();
 
 bot.start();
 logInfo("Bau-OS gestartet");
+
+// Heartbeat NACH bot.start() starten — bot.api.sendMessage() braucht eine aktive Verbindung
+startHeartbeat(async (chatId, text) => {
+  try {
+    await bot.api.sendMessage(chatId, fmt(text), { parse_mode: "HTML" });
+  } catch {
+    await bot.api.sendMessage(chatId, text);
+  }
+});
 
 // Phase 6: per-User-Bots aus DB starten (parallel zum env-Bot).
 // Wirft nur Logs, kein process.exit — wenn ein User-Bot kaputt ist,

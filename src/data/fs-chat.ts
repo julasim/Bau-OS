@@ -11,6 +11,8 @@ import type { ChatRepository, ChatSession, ChatMessage } from "./types.js";
 import { atomicWriteSync } from "../workspace/helpers.js";
 
 const CHAT_DIR = path.join(process.cwd(), "data", "chat");
+const CHAT_MAX_LINES = 10_000;
+const CHAT_TRIM_TO = 8_000;
 
 function ensureDir(): void {
   if (!fs.existsSync(CHAT_DIR)) fs.mkdirSync(CHAT_DIR, { recursive: true });
@@ -20,6 +22,14 @@ function fileFor(agent: string): string {
   ensureDir();
   const safe = agent.replace(/[^\w.-]+/g, "_");
   return path.join(CHAT_DIR, `${safe}.jsonl`);
+}
+
+function trimChatFileIfNeeded(filepath: string): void {
+  if (!fs.existsSync(filepath)) return;
+  const lines = fs.readFileSync(filepath, "utf-8").split("\n").filter(Boolean);
+  if (lines.length <= CHAT_MAX_LINES) return;
+  const kept = lines.slice(-CHAT_TRIM_TO);
+  fs.writeFileSync(filepath, kept.join("\n") + "\n", "utf-8");
 }
 
 type SessionLine = {
@@ -67,7 +77,9 @@ function readLines(agent: string): AnyLine[] {
 }
 
 function appendLine(agent: string, line: AnyLine): void {
-  fs.appendFileSync(fileFor(agent), JSON.stringify(line) + "\n");
+  const fp = fileFor(agent);
+  fs.appendFileSync(fp, JSON.stringify(line) + "\n");
+  trimChatFileIfNeeded(fp);
 }
 
 function listAgentFiles(): string[] {

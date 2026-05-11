@@ -363,6 +363,89 @@ Symptom: Datei-Operationen geben `null` oder "Pfad ungueltig" zurueck.
 
 ---
 
+## Datenbank-Probleme
+
+### DB nicht erreichbar beim Start
+
+```
+[DB] DATABASE_URL ist gesetzt aber die DB antwortet nicht.
+```
+
+Bau-OS beendet sich mit Exit-Code 1 wenn `DATABASE_URL` gesetzt ist aber die DB nicht antwortet.
+
+Prüfen:
+```bash
+# PostgreSQL läuft?
+systemctl status postgresql
+
+# Verbindung testen
+psql "$DATABASE_URL" -c "SELECT 1"
+```
+
+Lösung: PostgreSQL starten oder `DATABASE_URL` aus `.env` entfernen (→ Filesystem-Modus).
+
+### Embedding-Dimensions Mismatch
+
+```
+[DB] Embedding-Dimensionen stimmen nicht überein
+```
+
+Das konfiguriete Modell liefert andere Dimensionen als das DB-Schema erwartet. Kein Bot-Absturz — nur Embeddings deaktiviert.
+
+Lösung: Migration schreiben oder Embedding-Tabellen leeren + neu befüllen:
+```bash
+npm run db:embed
+```
+
+---
+
+## MCP-Probleme
+
+### MCP-Server startet nicht
+
+Prüfen ob der Befehl in `mcp.json` stimmt:
+```bash
+npx @modelcontextprotocol/server-filesystem /pfad/zum/vault
+```
+
+Bau-OS versucht bei Absturz automatisch 3 Reconnects (5/10/15 Sekunden Backoff). Danach Log-Eintrag `[MCP] Reconnect failed`.
+
+---
+
+## LLM-Probleme
+
+### Modell ignoriert tool_choice=required
+
+```
+⚠️ Das Modell hat 3x behauptet, die Aktion ausgeführt zu haben, aber keinen Tool-Call gemacht
+```
+
+Das aktive Modell unterstützt Function-Calling nicht zuverlässig.
+
+Lösung: Größeres Modell verwenden:
+```
+/model qwen2.5:14b
+```
+
+Oder in OpenAI-Modus wechseln (OPENAI_API_KEY setzen).
+
+### Ollama nicht erreichbar (im Ollama-Modus)
+
+```
+Error: connect ECONNREFUSED 127.0.0.1:11434
+```
+
+```bash
+# Ollama starten
+ollama serve
+
+# Oder als Service
+systemctl start ollama
+systemctl enable ollama
+```
+
+---
+
 ## Schnelldiagnose
 
 Kopiere diesen Block und führe ihn auf dem Server aus:

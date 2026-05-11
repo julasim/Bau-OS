@@ -1,6 +1,6 @@
 # Agent Workspace
 
-Jeder Agent hat einen eigenen Ordner mit 10 Markdown-Dateien. Zusammen bilden sie das "Gehirn" des Agenten.
+Jeder Agent hat einen eigenen Ordner mit bis zu 10 Markdown-Dateien. Zusammen bilden sie das "Gehirn" des Agenten.
 
 ## Übersicht
 
@@ -9,13 +9,13 @@ Agents/Main/
 ├── IDENTITY.md      ← Wer bin ich?
 ├── SOUL.md          ← Wie bin ich?
 ├── BOOT.md          ← Grundregeln bei jedem Gespräch
-├── BOOTSTRAP.md     ← Ersteinrichtung (wird danach gelöscht)
+├── BOOTSTRAP.md     ← Ersteinrichtung (nur beim allerersten Start geladen)
 ├── AGENTS.md        ← Betriebsanweisungen & Limits
 ├── USER.md          ← Benutzerprofil
 ├── TOOLS.md         ← Tool-Konventionen
 ├── MEMORY.md        ← Langzeitgedächtnis
 ├── HEARTBEAT.md     ← Cron-basierte Erinnerungen
-└── MEMORY_LOGS/     ← Tages-Gesprächsprotokolle
+└── Logs/            ← Tages-Gesprächsprotokolle
     ├── 2026-04-07.md
     └── 2026-04-06.md
 ```
@@ -33,7 +33,7 @@ Agents/Main/
 | MEMORY.md | Ja | — |
 | HEARTBEAT.md | Ja | — |
 | BOOTSTRAP.md | Nur beim allerersten Start | — |
-| MEMORY_LOGS/ (heute) | Ja | — |
+| Logs/\<heute\>.md | Ja | — |
 
 **full-Modus:** Der Main Agent — bekommt den kompletten Kontext.
 **minimal-Modus:** Sub-Agents — nur das Nötigste für fokussierte Aufgaben.
@@ -42,6 +42,13 @@ Agents/Main/
 
 Die Dateien werden in dieser Reihenfolge als System-Prompt zusammengesetzt:
 
+**Minimal-Modus** (Sub-Agents):
+1. `Heute ist: Montag, 7. April 2026` ← einzige Code-Injektion
+2. IDENTITY.md
+3. SOUL.md
+4. BOOT.md
+
+**Full-Modus** (Haupt-Requests, Main Agent):
 1. `Heute ist: Montag, 7. April 2026` ← einzige Code-Injektion
 2. IDENTITY.md
 3. SOUL.md
@@ -51,8 +58,8 @@ Die Dateien werden in dieser Reihenfolge als System-Prompt zusammengesetzt:
 7. TOOLS.md
 8. MEMORY.md
 9. HEARTBEAT.md
-10. BOOTSTRAP.md (nur beim Erststart)
-11. Tageslog aus MEMORY_LOGS/
+10. BOOTSTRAP.md (nur beim allerersten Start — wenn noch kein Tageslog vorhanden)
+11. Tageslog aus `Logs/<datum>.md`
 
 ## Limits
 

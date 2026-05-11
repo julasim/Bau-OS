@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+
+type AppEnv = { Variables: { user: { username: string; role: string } } };
 import type OpenAI from "openai";
 import { client, buildDateLine } from "../../llm/client.js";
 import { TOOLS } from "../../llm/tools.js";
@@ -22,6 +24,23 @@ import { logInfo, logError } from "../../logger.js";
 import type { AppEnv } from "../server.js";
 
 export const chatRoutes = new Hono<AppEnv>();
+
+// Rate-Limit: max 30 Anfragen pro Minute pro User
+const chatAttempts = new Map<string, { count: number; resetAt: number }>();
+const CHAT_RATE_LIMIT = 30;
+const CHAT_RATE_WINDOW_MS = 60_000;
+
+function chatRateLimit(username: string): boolean {
+  const now = Date.now();
+  const entry = chatAttempts.get(username);
+  if (entry && now < entry.resetAt) {
+    if (entry.count >= CHAT_RATE_LIMIT) return false;
+    entry.count++;
+  } else {
+    chatAttempts.set(username, { count: 1, resetAt: now + CHAT_RATE_WINDOW_MS });
+  }
+  return true;
+}
 
 // ── Sessions auflisten ──────────────────────────────────────────────────────
 chatRoutes.get("/chat/sessions", async (c) => {
@@ -67,6 +86,15 @@ chatRoutes.post("/chat", (c) => {
 
     if (!body.message?.trim()) {
       await stream.writeSSE({ event: "error", data: JSON.stringify({ error: "Nachricht erforderlich" }) });
+      return;
+    }
+
+    const jwtUser = c.get("user") as { username: string; role: string };
+    if (!chatRateLimit(jwtUser.username)) {
+      await stream.writeSSE({
+        event: "error",
+        data: JSON.stringify({ error: "Zu viele Anfragen. Bitte kurz warten." }),
+      });
       return;
     }
 

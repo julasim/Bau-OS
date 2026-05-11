@@ -308,10 +308,13 @@ export function loadAgentHistory(agentName: string, limit = 10): ConversationEnt
     const blocks = content.split(/^## \d{2}:\d{2}/m).slice(1);
 
     for (const block of blocks) {
-      const userMatch = block.match(/\*\*User:\*\* (.+)/);
-      const botMatch = block.match(/\*\*[^*]+:\*\* ([\s\S]+?)(?=\n\n|\n##|$)/);
-      if (userMatch && botMatch) {
-        results.push({ user: userMatch[1].trim(), assistant: botMatch[1].trim() });
+      // Format pro Block: "\n**User:** <msg>\n**AgentName:** <reply>\n\n"
+      // matchAll statt match() damit User- und Bot-Eintrag korrekt getrennt werden
+      const entries = [...block.matchAll(/\*\*([^*]+):\*\* ([\s\S]+?)(?=\n\*\*[^*]+:\*\*|\n##|\n\n|$)/g)];
+      const userEntry = entries.find((m) => m[1].trim() === "User");
+      const botEntry = entries.find((m) => m[1].trim() !== "User");
+      if (userEntry && botEntry) {
+        results.push({ user: userEntry[2].trim(), assistant: botEntry[2].trim() });
       }
     }
   }
@@ -421,18 +424,26 @@ export function getLogForCompaction(agentName: string): string | null {
   return entries.slice(0, -KEEP_RECENT_LOGS).join("\n");
 }
 
+const _compactionLock = new Set<string>();
+
 export function writeCompactedLog(agentName: string, summary: string): void {
-  const today = new Date().toISOString().slice(0, 10);
-  const filepath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${today}.md`);
-  if (!fs.existsSync(filepath)) return;
+  if (_compactionLock.has(agentName)) return;
+  _compactionLock.add(agentName);
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const filepath = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR, `${today}.md`);
+    if (!fs.existsSync(filepath)) return;
 
-  const content = fs.readFileSync(filepath, "utf-8");
-  const header = content.match(/^(# .+\n\n)/)?.[1] ?? "";
-  const entries = content.match(/## \d{2}:\d{2}\n[\s\S]*?(?=\n## \d{2}:\d{2}|$)/g) ?? [];
-  if (entries.length <= KEEP_RECENT_LOGS) return;
+    const content = fs.readFileSync(filepath, "utf-8");
+    const header = content.match(/^(# .+\n\n)/)?.[1] ?? "";
+    const entries = content.match(/## \d{2}:\d{2}\n[\s\S]*?(?=\n## \d{2}:\d{2}|$)/g) ?? [];
+    if (entries.length <= KEEP_RECENT_LOGS) return;
 
-  const toKeep = entries.slice(-KEEP_RECENT_LOGS);
-  const time = new Date().toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
+    const toKeep = entries.slice(-KEEP_RECENT_LOGS);
+    const time = new Date().toLocaleTimeString(LOCALE, { hour: "2-digit", minute: "2-digit" });
 
-  fs.writeFileSync(filepath, `${header}## Zusammenfassung (${time})\n${summary}\n\n${toKeep.join("\n")}`, "utf-8");
+    fs.writeFileSync(filepath, `${header}## Zusammenfassung (${time})\n${summary}\n\n${toKeep.join("\n")}`, "utf-8");
+  } finally {
+    _compactionLock.delete(agentName);
+  }
 }

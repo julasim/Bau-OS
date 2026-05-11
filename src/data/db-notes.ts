@@ -78,36 +78,43 @@ export const dbNotes: NoteRepository = {
 
   async append(nameOrPath, content) {
     const db = getDb();
-    const now = new Date();
-    const time = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
-    const appendText = `\n**Nachtrag ${time}:** ${content}\n`;
-
-    const result = await db`
-      UPDATE notes SET
-        content = content || ${appendText},
-        updated_at = ${now.toISOString()}
+    const [found] = await db`
+      SELECT id FROM notes
       WHERE id::text = ${nameOrPath}
          OR title = ${nameOrPath}
          OR title LIKE ${nameOrPath + "%"}
+      ORDER BY created_at DESC LIMIT 1
     `;
-    return result.count > 0;
+    if (!found) return false;
+    const now = new Date();
+    const time = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
+    const appendText = `\n**Nachtrag ${time}:** ${content}\n`;
+    await db`
+      UPDATE notes SET
+        content = content || ${appendText},
+        updated_at = ${now.toISOString()}
+      WHERE id = ${found.id}
+    `;
+    return true;
   },
 
   async update(nameOrPath, content) {
     const db = getDb();
-    const now = new Date().toISOString();
-    const [row] = await db`
-      UPDATE notes SET content = ${content}, updated_at = ${now}
+    const [found] = await db`
+      SELECT id FROM notes
       WHERE id::text = ${nameOrPath}
          OR title = ${nameOrPath}
          OR title LIKE ${nameOrPath + "%"}
-      RETURNING id
+      ORDER BY created_at DESC LIMIT 1
     `;
-    if (row) {
-      // Re-embed mit neuem Content (fire-and-forget)
-      embedNote(String(row.id), content).catch((err) => logError("[Embedding]", err));
-    }
-    return !!row;
+    if (!found) return false;
+    const now = new Date().toISOString();
+    await db`
+      UPDATE notes SET content = ${content}, updated_at = ${now}
+      WHERE id = ${found.id}
+    `;
+    embedNote(String(found.id), content).catch((err) => logError("[Embedding]", err));
+    return true;
   },
 
   async delete(nameOrPath) {

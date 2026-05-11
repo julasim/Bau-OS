@@ -15,6 +15,7 @@ export type AppEnv = {
   };
 };
 import { cors } from "hono/cors";
+import { secureHeaders } from "hono/secure-headers";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import path from "path";
@@ -121,6 +122,8 @@ app.get("/api/health", (c) => {
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim()) : undefined;
+
+app.use("*", secureHeaders());
 
 app.use(
   "/api/*",
