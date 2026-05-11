@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 
-type AppEnv = { Variables: { user: { username: string; role: string } } };
 import type OpenAI from "openai";
 import { client, buildDateLine } from "../../llm/client.js";
 import { TOOLS } from "../../llm/tools.js";
