@@ -183,13 +183,24 @@ onMounted(load);
       </div>
     </button>
 
-    <div
-      v-if="filtered.length === 0"
-      style="padding: 32px 16px; text-align: center; font-size: 12px; color: var(--fg-muted)"
-    >
-      <span v-if="search">Keine Treffer für „{{ search }}"</span>
-      <span v-else-if="tab === 'active'">Keine aktiven Projekte.</span>
-      <span v-else>Noch keine Projekte angelegt.</span>
+    <div v-if="filtered.length === 0" class="empty-state">
+      <template v-if="search">
+        <div class="empty-icon">🔍</div>
+        <p class="empty-title">Keine Treffer</p>
+        <p class="empty-sub">Keine Projekte für „{{ search }}"</p>
+      </template>
+      <template v-else-if="tab === 'active'">
+        <div class="empty-icon">📁</div>
+        <p class="empty-title">Keine aktiven Projekte</p>
+        <p class="empty-sub">Alle Projekte sind abgeschlossen oder es gibt noch keine.</p>
+        <button class="empty-cta" @click="openCreate">+ Erstes Projekt</button>
+      </template>
+      <template v-else>
+        <div class="empty-icon">📁</div>
+        <p class="empty-title">Noch keine Projekte</p>
+        <p class="empty-sub">Lege dein erstes Projekt an um loszulegen.</p>
+        <button class="empty-cta" @click="openCreate">+ Erstes Projekt</button>
+      </template>
     </div>
   </ListPane>
 
@@ -280,5 +291,43 @@ onMounted(load);
 }
 .create-input:focus {
   border-color: var(--accent);
+}
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--fg-muted);
+}
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+.empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  margin: 0;
+}
+.empty-sub {
+  font-size: 12px;
+  margin: 0;
+}
+.empty-cta {
+  margin-top: 8px;
+  padding: 7px 16px;
+  background: var(--fg-primary);
+  color: var(--bg-app);
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.empty-cta:hover {
+  opacity: 0.85;
 }
 </style>

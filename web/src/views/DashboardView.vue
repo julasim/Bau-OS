@@ -285,6 +285,17 @@ const statCards = computed(() => [
         </div>
         <div v-if="upcomingTermine.length === 0" style="font-size: 12px; color: var(--color-text-tertiary)">
           Keine anstehenden Termine.
+          <router-link
+            to="/calendar"
+            style="
+              display: inline-block;
+              margin-top: 6px;
+              font-size: 11px;
+              color: var(--color-primary);
+              text-decoration: none;
+            "
+            >→ Zum Kalender</router-link
+          >
         </div>
         <div v-else>
           <div

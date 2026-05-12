@@ -575,7 +575,7 @@ onMounted(async () => {
             </div>
           </div>
         </div>
-        <p v-if="col.items.length === 0" class="kanban-empty">—</p>
+        <p v-if="col.items.length === 0" class="kanban-empty">Keine Projekte<br />in dieser Phase</p>
       </div>
     </div>
 
@@ -1026,11 +1026,12 @@ onMounted(async () => {
   margin-top: 6px;
 }
 .kanban-empty {
-  font-size: 11px;
-  color: var(--color-text-faint);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
   text-align: center;
-  font-style: italic;
-  margin: 8px 0 0 0;
+  padding: 20px 12px;
+  margin: 0;
+  line-height: 1.5;
 }
 
 /* ── Parent-Breadcrumb auf Karten ───────────────────────── */

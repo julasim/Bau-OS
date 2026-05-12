@@ -320,18 +320,20 @@ onMounted(async () => {
           </span>
         </div>
       </div>
-      <p
-        v-if="filtered.length === 0 && !loading"
-        style="
-          grid-column: 1 / -1;
-          font-size: 13px;
-          color: var(--color-text-tertiary);
-          text-align: center;
-          padding: 32px 0;
-        "
-      >
-        {{ anyFilterActive ? "Keine Treffer." : "Noch keine Team-Mitglieder." }}
-      </p>
+      <div v-if="filtered.length === 0 && !loading" class="tv-empty-state" style="grid-column: 1 / -1">
+        <template v-if="anyFilterActive">
+          <div class="tv-empty-icon">🔍</div>
+          <p class="tv-empty-title">Keine Treffer</p>
+          <p class="tv-empty-sub">Versuche andere Filtereinstellungen.</p>
+          <button class="tv-empty-cta" @click="resetFilters">Filter zurücksetzen</button>
+        </template>
+        <template v-else>
+          <div class="tv-empty-icon">👥</div>
+          <p class="tv-empty-title">Noch keine Team-Mitglieder</p>
+          <p class="tv-empty-sub">Lege deine erste Person an um loszulegen.</p>
+          <button class="tv-empty-cta" @click="openCreateDialog">+ Erste Person</button>
+        </template>
+      </div>
     </div>
 
     <!-- List -->
@@ -390,12 +392,20 @@ onMounted(async () => {
             {{ m.projects.length }}
           </span>
         </div>
-        <p
-          v-if="filtered.length === 0 && !loading"
-          style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
-        >
-          {{ anyFilterActive ? "Keine Treffer." : "Noch keine Team-Mitglieder." }}
-        </p>
+        <div v-if="filtered.length === 0 && !loading" class="tv-empty-state">
+          <template v-if="anyFilterActive">
+            <div class="tv-empty-icon">🔍</div>
+            <p class="tv-empty-title">Keine Treffer</p>
+            <p class="tv-empty-sub">Versuche andere Filtereinstellungen.</p>
+            <button class="tv-empty-cta" @click="resetFilters">Filter zurücksetzen</button>
+          </template>
+          <template v-else>
+            <div class="tv-empty-icon">👥</div>
+            <p class="tv-empty-title">Noch keine Team-Mitglieder</p>
+            <p class="tv-empty-sub">Lege deine erste Person an um loszulegen.</p>
+            <button class="tv-empty-cta" @click="openCreateDialog">+ Erste Person</button>
+          </template>
+        </div>
       </div>
     </div>
 
@@ -677,5 +687,46 @@ onMounted(async () => {
 }
 .team-list-inner {
   min-width: 600px;
+}
+
+/* ── Empty State ───────────────────────────────────────────── */
+.tv-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+.tv-empty-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+.tv-empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+.tv-empty-sub {
+  font-size: 12px;
+  margin: 0;
+  color: var(--color-text-tertiary);
+}
+.tv-empty-cta {
+  margin-top: 8px;
+  padding: 7px 16px;
+  background: var(--color-text);
+  color: var(--color-bg);
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.tv-empty-cta:hover {
+  opacity: 0.85;
 }
 </style>

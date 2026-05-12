@@ -495,8 +495,14 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
           grid-template-columns: repeat(7, minmax(0, 1fr));
           grid-auto-rows: 1fr;
           border: 1px solid var(--color-border);
+          position: relative;
         "
       >
+        <div v-if="termine.length === 0" class="cal-grid-empty">
+          <span class="cal-grid-empty-icon">📅</span>
+          <span class="cal-grid-empty-title">Noch keine Termine</span>
+          <span class="cal-grid-empty-hint">Klicke auf einen Tag um einen neuen Termin zu erstellen.</span>
+        </div>
         <div
           v-for="day in monthDays"
           :key="day.iso"
@@ -538,7 +544,19 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
 
     <!-- ── WOCHEN-ANSICHT ─────────────────────────────────────── -->
     <div v-if="view === 'week'">
-      <div class="grid" style="grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--color-border)">
+      <div
+        class="grid"
+        style="
+          grid-template-columns: repeat(7, minmax(0, 1fr));
+          border: 1px solid var(--color-border);
+          position: relative;
+        "
+      >
+        <div v-if="termine.length === 0" class="cal-grid-empty">
+          <span class="cal-grid-empty-icon">📅</span>
+          <span class="cal-grid-empty-title">Noch keine Termine</span>
+          <span class="cal-grid-empty-hint">Klicke auf einen Tag um einen neuen Termin zu erstellen.</span>
+        </div>
         <div v-for="day in weekDays" :key="day.iso" class="cal-week-cell" :class="{ 'cal-day-today': day.today }">
           <div class="flex items-center justify-between" style="margin-bottom: 8px">
             <button
@@ -572,6 +590,13 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
 
     <!-- ── TAGES-ANSICHT ──────────────────────────────────────── -->
     <div v-if="view === 'day'">
+      <div v-if="termineForDate(dayISO).length === 0" class="cal-day-empty">
+        <span style="font-size: 28px; line-height: 1">📅</span>
+        <span style="font-size: 14px; font-weight: 500; color: var(--color-text-muted)">Noch keine Termine</span>
+        <span style="font-size: 12px; color: var(--color-text-tertiary)"
+          >Klicke auf einen Tag um einen neuen Termin zu erstellen.</span
+        >
+      </div>
       <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
         <div
           v-for="h in hours"
@@ -1095,5 +1120,46 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
   .cal-page {
     padding: 16px 14px 32px !important;
   }
+}
+
+/* ── Grid Empty States (Monat + Woche) ────────────────── */
+/* Das Element spannt das gesamte 7-Spalten-Grid und
+   wird absolut über die Grid-Zellen gelegt. */
+.cal-grid-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 1;
+}
+.cal-grid-empty-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.cal-grid-empty-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+.cal-grid-empty-hint {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+  max-width: 280px;
+}
+
+/* ── Tages-Ansicht Empty State ─────────────────────────── */
+.cal-day-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 48px 24px;
+  text-align: center;
 }
 </style>

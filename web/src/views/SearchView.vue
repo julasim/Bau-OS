@@ -3,6 +3,8 @@ import { ref } from "vue";
 import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
 
+const EXAMPLE_CHIPS = ["Bautagebuch", "Offene Aufgaben", "Aktuell"];
+
 interface TextResult {
   file: string;
   line: string;
@@ -25,6 +27,11 @@ const loading = ref(false);
 const responseMode = ref<"text" | "semantic">("text");
 const textResults = ref<TextResult[]>([]);
 const semanticResults = ref<SemanticResult[]>([]);
+
+function fillAndSearch(term: string) {
+  query.value = term;
+  search();
+}
 
 async function search() {
   if (!query.value.trim()) return;
@@ -90,6 +97,17 @@ async function search() {
       <button @click="search" :disabled="loading" class="bauos-btn solid" style="padding: 4px 12px; font-size: 12px">
         {{ loading ? "…" : "Suchen" }}
       </button>
+    </div>
+
+    <!-- Startscreen — vor der ersten Suche -->
+    <div v-if="!searched" class="search-start">
+      <BIcon name="search" :size="36" class="search-start-icon" />
+      <p class="search-start-hint">Suche nach Projekten, Notizen, Aufgaben, Dateien…</p>
+      <div class="search-start-chips">
+        <button v-for="chip in EXAMPLE_CHIPS" :key="chip" class="search-chip" @click="fillAndSearch(chip)">
+          {{ chip }}
+        </button>
+      </div>
     </div>
 
     <p v-if="searched" style="font-size: 11px; color: var(--color-text-tertiary); margin-bottom: 12px">
@@ -172,5 +190,51 @@ async function search() {
 <style scoped>
 .search-card:hover {
   border-color: var(--color-text-faint);
+}
+
+/* ── Startscreen (vor erster Suche) ────────────────────── */
+.search-start {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 48px 24px 32px;
+  text-align: center;
+}
+.search-start-icon {
+  color: var(--color-text-tertiary);
+  opacity: 0.6;
+}
+.search-start-hint {
+  font-size: 14px;
+  color: var(--color-text-muted);
+  margin: 0;
+  max-width: 360px;
+  line-height: 1.5;
+}
+.search-start-chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 4px;
+}
+.search-chip {
+  padding: 6px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 180ms ease,
+    color 180ms ease,
+    background 180ms ease;
+}
+.search-chip:hover {
+  border-color: var(--color-text-faint);
+  color: var(--color-text);
+  background: var(--color-bg-subtle);
 }
 </style>

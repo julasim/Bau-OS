@@ -145,17 +145,30 @@ useEvents(["task"], () => load());
       </div>
     </button>
 
-    <div
-      v-if="filtered.length === 0"
-      style="padding: 32px 16px; text-align: center; font-size: 12px; color: var(--fg-muted)"
-    >
-      <span v-if="search">Keine Treffer für „{{ search }}"</span>
-      <span v-else-if="tab === 'open'">Keine offenen Aufgaben — alles erledigt 🎉</span>
-      <span v-else-if="tab === 'done'">Noch nichts erledigt.</span>
-      <span v-else>Keine Aufgaben.</span>
+    <div v-if="filtered.length === 0" class="empty-state">
+      <template v-if="search">
+        <div class="empty-icon">🔍</div>
+        <p class="empty-title">Keine Treffer</p>
+        <p class="empty-sub">Keine Aufgaben für „{{ search }}"</p>
+      </template>
+      <template v-else-if="tab === 'open'">
+        <div class="empty-icon">☑️</div>
+        <p class="empty-title">Alles erledigt</p>
+        <p class="empty-sub">Keine offenen Aufgaben — gut gemacht.</p>
+      </template>
+      <template v-else-if="tab === 'done'">
+        <div class="empty-icon">✓</div>
+        <p class="empty-title">Noch nichts erledigt</p>
+        <p class="empty-sub">Abgeschlossene Aufgaben erscheinen hier.</p>
+      </template>
+      <template v-else>
+        <div class="empty-icon">☑️</div>
+        <p class="empty-title">Noch keine Aufgaben</p>
+        <p class="empty-sub">Trage unten deine erste Aufgabe ein.</p>
+      </template>
     </div>
 
-    <!-- Quick-Add unten -->
+    <!-- Quick-Add unten  -->
     <div
       style="
         margin-top: auto;
@@ -184,3 +197,44 @@ useEvents(["task"], () => load());
     </div>
   </ListPane>
 </template>
+
+<style scoped>
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--fg-muted);
+}
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+.empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  margin: 0;
+}
+.empty-sub {
+  font-size: 12px;
+  margin: 0;
+}
+.empty-cta {
+  margin-top: 8px;
+  padding: 7px 16px;
+  background: var(--fg-primary);
+  color: var(--bg-app);
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.empty-cta:hover {
+  opacity: 0.85;
+}
+</style>
