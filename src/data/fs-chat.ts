@@ -152,7 +152,11 @@ export const fsChat: ChatRepository = {
     const all: (ChatSession & { lastActivity: string })[] = [];
     for (const a of agents) {
       const sessions = materializeSessions(readLines(a));
-      all.push(...sessions.values());
+      // Nur Web-Sessions im Web-Interface anzeigen — Heartbeat/Telegram-Sessions
+      // sollen nicht in der Session-Liste erscheinen.
+      for (const s of sessions.values()) {
+        if (s.source === "web") all.push(s);
+      }
     }
     all.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
     return all.slice(0, limit).map(({ lastActivity: _, ...rest }) => rest);
@@ -230,10 +234,13 @@ export const fsChat: ChatRepository = {
 
   async getRecentHistory(agent = "Main", limit = 10) {
     const lines = readLines(agent);
-    // Neueste Session finden
+    // Neueste Web-Session finden — Heartbeat/Telegram-Sessions ignorieren,
+    // damit deren Inhalt nicht faelschlicherweise im Web-Chat-Kontext landet.
     const sessions = materializeSessions(lines);
     if (sessions.size === 0) return [];
-    const newest = [...sessions.values()].sort((a, b) => b.lastActivity.localeCompare(a.lastActivity))[0];
+    const webSessions = [...sessions.values()].filter((s) => s.source === "web");
+    if (webSessions.length === 0) return [];
+    const newest = webSessions.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity))[0];
     const msgs = lines
       .filter((l): l is MessageLine => l.type === "message" && l.sessionId === newest.id)
       .filter((m) => m.role === "user" || m.role === "assistant");

@@ -262,8 +262,13 @@ export function inspectAgentWorkspace(agentName: string, mode: "full" | "minimal
 
 // ---- Conversation Logging ----
 
-export function appendAgentConversation(agentName: string, userMsg: string, botReply: string): void {
-  // 1. Filesystem-Log (Fallback, immer geschrieben)
+export function appendAgentConversation(
+  agentName: string,
+  userMsg: string,
+  botReply: string,
+  source: "telegram" | "web" | "heartbeat" = "telegram",
+): void {
+  // 1. Filesystem-Log (immer geschrieben — auch für Heartbeat-Runs)
   const today = new Date().toISOString().slice(0, 10);
   const memDir = path.join(getAgentPath(agentName), WORKSPACE_LOGS_DIR);
   const filepath = path.join(memDir, `${today}.md`);
@@ -282,15 +287,23 @@ export function appendAgentConversation(agentName: string, userMsg: string, botR
   const bootstrapPath = path.join(getAgentPath(agentName), "BOOTSTRAP.md");
   if (fs.existsSync(bootstrapPath)) fs.unlinkSync(bootstrapPath);
 
-  // 2. DB (fire-and-forget — Telegram-Chats auch in DB speichern)
-  _saveConversationToDB(agentName, userMsg, botReply).catch((err) => logError("[ChatDB]", err));
+  // 2. DB (fire-and-forget) — Heartbeat-Runs werden NICHT in den Chat-Store geschrieben,
+  //    da sie kein echtes User-Gespräch darstellen und nicht im Web-Chat erscheinen sollen.
+  if (source !== "heartbeat") {
+    _saveConversationToDB(agentName, userMsg, botReply, source).catch((err) => logError("[ChatDB]", err));
+  }
 }
 
-async function _saveConversationToDB(agentName: string, userMsg: string, botReply: string): Promise<void> {
+async function _saveConversationToDB(
+  agentName: string,
+  userMsg: string,
+  botReply: string,
+  source: "telegram" | "web" = "telegram",
+): Promise<void> {
   const { chatRepo } = await import("../data/index.js");
-  const sessionId = await chatRepo.getOrCreateTodaySession(agentName, "telegram");
-  await chatRepo.addMessage(sessionId, "user", userMsg, [], "telegram");
-  await chatRepo.addMessage(sessionId, "assistant", botReply, [], "telegram");
+  const sessionId = await chatRepo.getOrCreateTodaySession(agentName, source);
+  await chatRepo.addMessage(sessionId, "user", userMsg, [], source);
+  await chatRepo.addMessage(sessionId, "assistant", botReply, [], source);
 }
 
 export function loadAgentHistory(agentName: string, limit = 10): ConversationEntry[] {

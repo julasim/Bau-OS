@@ -28,6 +28,7 @@ export async function processAgent(
   userMessage: string,
   mode: "full" | "minimal" = "full",
   depth = 0,
+  source: "telegram" | "web" | "heartbeat" = "telegram",
 ): Promise<string> {
   if (depth > MAX_SPAWN_DEPTH) return `[${agentName}] Maximale Spawn-Tiefe erreicht (depth=${depth}).`;
   setCurrentDepth(depth);
@@ -101,7 +102,7 @@ export async function processAgent(
           `aber keinen Tool-Call gemacht — es wurde also NICHTS gespeichert. ` +
           `Das Modell "${activeModel}" ignoriert tool_choice=required hartnaeckig. ` +
           `Probiere ein groesseres Modell (/model) oder formuliere die Anfrage anders.`;
-        appendAgentConversation(agentName, userMessage, warnung);
+        appendAgentConversation(agentName, userMessage, warnung, source);
         logError(
           "[Runtime] Modell hat tool_choice=required nach Retries ignoriert",
           new Error(`Action-Request ohne tool_calls nach ${MAX_TOOL_SKIP_RETRIES} Retries. Modell: ${activeModel}.`),
@@ -110,7 +111,7 @@ export async function processAgent(
       }
 
       const antwort = reply.content ?? "Erledigt.";
-      appendAgentConversation(agentName, userMessage, antwort);
+      appendAgentConversation(agentName, userMessage, antwort, source);
       logInfo(`[${agentName}] Antwort ohne Tool (Runde ${i + 1}, ${antwort.length} Z)`);
       if (shouldCompact(agentName)) runCompaction(agentName).catch((err) => logError("Compaction", err));
       return antwort;
@@ -151,7 +152,7 @@ export async function processAgent(
       } catch {
         // Fallback bei fehlerhaften Argumenten
       }
-      appendAgentConversation(agentName, userMessage, antwortText);
+      appendAgentConversation(agentName, userMessage, antwortText, source);
       logInfo(`[${agentName}] Antwort via antworten-Tool (Runde ${i + 1}, ${antwortText.length} Z)`);
       if (shouldCompact(agentName)) runCompaction(agentName).catch((err) => logError("Compaction", err));
       return antwortText;
@@ -188,7 +189,7 @@ export async function processAgent(
   }
 
   const fallback = "Ich konnte deine Anfrage nicht vollstaendig bearbeiten.";
-  appendAgentConversation(agentName, userMessage, fallback);
+  appendAgentConversation(agentName, userMessage, fallback, source);
   logInfo(`[${agentName}] Fallback nach ${MAX_TOOL_ROUNDS} Runden`);
   if (shouldCompact(agentName)) runCompaction(agentName).catch((err) => logError("Compaction", err));
   return fallback;

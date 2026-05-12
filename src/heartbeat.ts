@@ -85,7 +85,7 @@ async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> 
 
   try {
     const { processAgent } = await import("./llm/runtime.js");
-    const antwort = await processAgent(agentName, config.prompt, "full");
+    const antwort = await processAgent(agentName, config.prompt, "full", 0, "heartbeat");
     logInfo(`[Heartbeat] ${agentName} abgeschlossen`);
 
     // Stille-Modus: Agent antwortet mit [STILL] wenn nichts zu melden ist
