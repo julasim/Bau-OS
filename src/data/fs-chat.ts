@@ -38,6 +38,10 @@ type SessionLine = {
   agent: string;
   title: string;
   source: string;
+  /** UUID des Erstellers — ab Multi-User-Support gesetzt. Alte Sessions ohne
+   *  userId gelten als "anonyme Admin-Sessions" und sind nur fuer Admins
+   *  sichtbar (listSessions mit userId=undefined = Admin-Ansicht). */
+  userId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -91,8 +95,10 @@ function agentFromFile(filename: string): string {
   return filename.replace(/\.jsonl$/, "");
 }
 
-function materializeSessions(lines: AnyLine[]): Map<string, ChatSession & { lastActivity: string }> {
-  const sessions = new Map<string, ChatSession & { lastActivity: string }>();
+function materializeSessions(
+  lines: AnyLine[],
+): Map<string, ChatSession & { lastActivity: string; userId?: string | null }> {
+  const sessions = new Map<string, ChatSession & { lastActivity: string; userId?: string | null }>();
   const counts = new Map<string, number>();
   const firstUser = new Map<string, string>();
 
@@ -103,6 +109,7 @@ function materializeSessions(lines: AnyLine[]): Map<string, ChatSession & { last
         agent: l.agent,
         title: l.title,
         source: l.source,
+        userId: l.userId ?? null,
         createdAt: l.createdAt,
         updatedAt: l.updatedAt,
         lastActivity: l.updatedAt,
@@ -133,21 +140,31 @@ function materializeSessions(lines: AnyLine[]): Map<string, ChatSession & { last
 }
 
 export const fsChat: ChatRepository = {
-  async createSession(agent = "Main", title = "Neuer Chat", source = "web") {
+  async createSession(agent = "Main", title = "Neuer Chat", source = "web", userId = null) {
     const now = new Date().toISOString();
     const session: ChatSession = {
       id: crypto.randomUUID(),
       agent,
       title,
       source,
+      userId,
       createdAt: now,
       updatedAt: now,
     };
-    appendLine(agent, { type: "session", ...session });
+    appendLine(agent, {
+      type: "session",
+      id: session.id,
+      agent,
+      title,
+      source,
+      userId,
+      createdAt: now,
+      updatedAt: now,
+    });
     return session;
   },
 
-  async listSessions(agent, limit = 50) {
+  async listSessions(agent, limit = 50, userId) {
     const agents = agent ? [agent] : listAgentFiles().map(agentFromFile);
     const all: (ChatSession & { lastActivity: string })[] = [];
     for (const a of agents) {
@@ -155,7 +172,14 @@ export const fsChat: ChatRepository = {
       // Nur Web-Sessions im Web-Interface anzeigen — Heartbeat/Telegram-Sessions
       // sollen nicht in der Session-Liste erscheinen.
       for (const s of sessions.values()) {
-        if (s.source === "web") all.push(s);
+        if (s.source !== "web") continue;
+        if (userId !== undefined && userId !== null) {
+          // User-Scoping: nur eigene Sessions zeigen.
+          // Sessions ohne userId (Legacy) werden nicht gezeigt —
+          // der Admin sieht sie ueber den "kein Filter"-Pfad (userId=undefined).
+          if (s.userId !== userId) continue;
+        }
+        all.push(s);
       }
     }
     all.sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));

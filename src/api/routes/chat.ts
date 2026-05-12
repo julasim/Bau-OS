@@ -43,13 +43,19 @@ function chatRateLimit(username: string): boolean {
 
 // ── Sessions auflisten ──────────────────────────────────────────────────────
 chatRoutes.get("/chat/sessions", async (c) => {
-  const sessions = await chatRepo.listSessions("Main");
+  const jwtUser = c.get("user") as { username: string; role: string };
+  const userId = c.get("userId") as string | null | undefined;
+  // Admins sehen alle Sessions (inkl. Legacy-Sessions ohne userId).
+  // Non-Admins sehen nur ihre eigenen Sessions.
+  const filterUserId = jwtUser.role === "admin" ? undefined : (userId ?? undefined);
+  const sessions = await chatRepo.listSessions("Main", 50, filterUserId);
   return c.json(sessions);
 });
 
 // ── Neue Session erstellen ──────────────────────────────────────────────────
 chatRoutes.post("/chat/sessions", async (c) => {
-  const session = await chatRepo.createSession("Main");
+  const userId = c.get("userId") as string | null | undefined;
+  const session = await chatRepo.createSession("Main", "Neuer Chat", "web", userId ?? null);
   return c.json(session);
 });
 
@@ -89,6 +95,7 @@ chatRoutes.post("/chat", (c) => {
     }
 
     const jwtUser = c.get("user") as { username: string; role: string };
+    const userId = c.get("userId") as string | null | undefined;
     if (!chatRateLimit(jwtUser.username)) {
       await stream.writeSSE({
         event: "error",
@@ -107,7 +114,7 @@ chatRoutes.post("/chat", (c) => {
     // Session bestimmen: explizit uebergeben oder neue erstellen
     let sessionId = body.sessionId;
     if (!sessionId) {
-      const session = await chatRepo.createSession(agentName);
+      const session = await chatRepo.createSession(agentName, "Neuer Chat", "web", userId ?? null);
       sessionId = session.id;
     }
     try {

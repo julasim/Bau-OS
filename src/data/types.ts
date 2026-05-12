@@ -702,7 +702,9 @@ export interface FileRepository {
      *  Admins, aber nicht im persoenlichen Workspace eines Users). */
     uploadedById?: string | null;
   }): Promise<FileEntry>;
-  list(project?: string, limit?: number): Promise<FileEntry[]>;
+  /** project → filtert auf ein Projekt. visibleProjectIds → zeigt nur Dateien
+   *  dieser Projekte (Non-Admin-Scoping). Beide undefined → alle Dateien. */
+  list(project?: string, limit?: number, visibleProjectIds?: string[]): Promise<FileEntry[]>;
   get(id: string): Promise<FileEntry | null>;
   /** Liefert den Blob einer Datei (oder null, wenn kein Blob hinterlegt ist,
    *  z.B. bei Legacy-Eintraegen die noch auf filepath zeigen). */
@@ -724,6 +726,9 @@ export interface ChatSession {
   agent: string;
   title: string;
   source: string;
+  /** UUID des Benutzers, der die Session erzeugt hat. NULL bei Legacy-Sessions
+   *  (vor Multi-User-Support) oder Bot/Heartbeat-Sessions. */
+  userId?: string | null;
   createdAt: string;
   updatedAt: string;
   messageCount?: number;
@@ -741,8 +746,9 @@ export interface ChatMessage {
 }
 
 export interface ChatRepository {
-  createSession(agent?: string, title?: string, source?: string): Promise<ChatSession>;
-  listSessions(agent?: string, limit?: number): Promise<ChatSession[]>;
+  createSession(agent?: string, title?: string, source?: string, userId?: string | null): Promise<ChatSession>;
+  /** userId=undefined → alle Sessions (Admin-Ansicht). userId=string → nur eigene. */
+  listSessions(agent?: string, limit?: number, userId?: string | null): Promise<ChatSession[]>;
   deleteSession(id: string): Promise<boolean>;
   addMessage(sessionId: string, role: string, content: string, tools?: string[], source?: string): Promise<ChatMessage>;
   getMessages(sessionId: string, limit?: number): Promise<ChatMessage[]>;

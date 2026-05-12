@@ -1,12 +1,25 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import fs from "fs";
 import path from "path";
 import { WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../../config.js";
 import { readFile, listFolder } from "../../workspace/index.js";
-import { fileRepo } from "../../data/index.js";
+import { fileRepo, projectRepo } from "../../data/index.js";
 import { emit } from "../events.js";
+import type { AppEnv } from "../server.js";
 
-export const filesRoutes = new Hono();
+export const filesRoutes = new Hono<AppEnv>();
+
+/** Gibt die Projekt-IDs zurueck, die der aktuelle User sehen darf.
+ *  Admin → undefined (kein Filter noetig, alle Dateien sichtbar).
+ *  Non-Admin → Array der zugaenglichen Projekt-IDs (kann leer sein). */
+async function getVisibleProjectIds(c: Context<AppEnv>): Promise<string[] | undefined> {
+  const userRole = c.get("userRole");
+  if (userRole === "admin") return undefined; // kein Filter
+  const userId = c.get("userId");
+  if (!userId || !projectRepo.listVisibleProjectIds) return [];
+  return projectRepo.listVisibleProjectIds(userId);
+}
 
 const ALLOWED_EXTENSIONS = new Set([
   "pdf",
@@ -47,7 +60,8 @@ filesRoutes.get("/files", async (c) => {
   // DB-Modus: Dateien aus Datenbank laden (nur Root-Ebene, kein Pfad)
   if (DB_ENABLED && fileRepo && !p && source !== "fs") {
     const project = c.req.query("project");
-    const files = await fileRepo.list(project ?? undefined);
+    const visibleProjectIds = project ? undefined : await getVisibleProjectIds(c);
+    const files = await fileRepo.list(project ?? undefined, 50, visibleProjectIds);
     return c.json(
       files.map((f) => ({
         name: f.filename,
@@ -63,6 +77,10 @@ filesRoutes.get("/files", async (c) => {
   }
 
   // Filesystem-Fallback (Ordner-Navigation, Agent-Dateien)
+  // Im FS-Modus zeigt der Browser den rohen Workspace — nur Admins haben
+  // Zugriff. Non-Admins sehen keine Dateien (es gibt keine User-Trennung im FS).
+  const userRole = c.get("userRole") as string | undefined;
+  if (userRole !== "admin") return c.json([]);
   if (p && !safePath(p)) return c.json({ error: "Zugriff verweigert" }, 403);
   const items = listFolder(p);
   return c.json(items);
@@ -154,7 +172,8 @@ filesRoutes.delete("/files", async (c) => {
 // Nur DB-Modus — im FS-Modus gibt es kein updatedAt aus der DB.
 filesRoutes.get("/files/recent", async (c) => {
   if (!DB_ENABLED || !fileRepo) return c.json([]);
-  const files = await fileRepo.list();
+  const visibleProjectIds = await getVisibleProjectIds(c);
+  const files = await fileRepo.list(undefined, 200, visibleProjectIds);
   const sorted = [...files]
     .filter((f) => !!f.updatedAt)
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))

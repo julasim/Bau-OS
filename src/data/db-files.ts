@@ -81,7 +81,7 @@ export const dbFiles: FileRepository = {
     return rowToFile(row);
   },
 
-  async list(project, limit = 50) {
+  async list(project, limit = 50, visibleProjectIds) {
     const db = getDb();
     if (project) {
       return (
@@ -93,6 +93,24 @@ export const dbFiles: FileRepository = {
         LIMIT ${limit}
       `
       ).map(rowToFile);
+    }
+    // Non-Admin-Scoping: nur Dateien aus sichtbaren Projekten.
+    // Dateien ohne Projekt-Zuordnung (project_id IS NULL) werden nicht
+    // gezeigt — ohne Projekt-Kontext gibt es keinen ACL-Anhaltspunkt.
+    if (visibleProjectIds && visibleProjectIds.length > 0) {
+      return (
+        await db`
+        SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
+        LEFT JOIN projects p ON f.project_id = p.id
+        WHERE f.project_id = ANY(${db.array(visibleProjectIds)})
+        ORDER BY f.created_at DESC
+        LIMIT ${limit}
+      `
+      ).map(rowToFile);
+    }
+    if (visibleProjectIds && visibleProjectIds.length === 0) {
+      // User hat Zugriff auf kein Projekt → keine Dateien
+      return [];
     }
     return (
       await db`
