@@ -41,13 +41,26 @@ let transporter: Transporter | null = null;
 function getTransporter(): Transporter | null {
   if (!SMTP_ENABLED) return null;
   if (transporter) return transporter;
-  // secure=auto: TLS bei 465, STARTTLS bei 587/25.
+  // secure=auto: direktes TLS bei 465, STARTTLS bei 587/25.
+  // Bei Port 587 muss requireTLS=true gesetzt sein — sonst kann nodemailer
+  // bei einem Server der STARTTLS anbietet aber nicht erzwingt (z.B. GMX)
+  // unverschluesselt senden, was GMX ablehnt und die Verbindung schliesst.
+  // requireTLS:true erzwingt STARTTLS und schlaegt mit klarem Fehler fehl
+  // wenn der Server es nicht unterstuetzt.
   const secure = SMTP_SECURE === "auto" ? SMTP_PORT === 465 : SMTP_SECURE === "true";
+  const requireTLS = !secure; // STARTTLS erforderlich wenn kein direktes SSL
   transporter = nodemailer.createTransport({
     host: SMTP_HOST,
     port: SMTP_PORT,
     secure,
+    requireTLS,
     auth: SMTP_USER ? { user: SMTP_USER, pass: SMTP_PASS } : undefined,
+    // Timeouts: GMX und andere Provider trennen haengende Verbindungen frueh.
+    // Ohne diese Werte wuerde sendMail() bei Netzwerkproblemen unbegrenzt
+    // blockieren — der Fehler wuerde nie geloggt und der API-Request hangt.
+    connectionTimeout: 10_000, // 10s fuer TCP-Verbindungsaufbau
+    greetingTimeout: 10_000, // 10s fuer SMTP-EHLO Handshake
+    socketTimeout: 30_000, // 30s fuer einzelne Socket-Operationen
   });
   return transporter;
 }
