@@ -35,6 +35,7 @@ import { dbBautagebuch } from "./db-bautagebuch.js";
 import { dbMeetings } from "./db-meetings.js";
 import { dbTimeEntries } from "./db-time-entries.js";
 import { fsChat } from "./fs-chat.js";
+import { dbChat } from "./db-chat.js";
 import { fsAgentLogs } from "./fs-agent-logs.js";
 
 // ── Repos basierend auf Config wählen ────────────────────────
@@ -54,7 +55,7 @@ export const fileRepo: FileRepository | null = DB_ENABLED ? dbFiles : null;
 export const bautagebuchRepo: BautagebuchRepository | null = DB_ENABLED ? dbBautagebuch : null;
 export const meetingRepo: MeetingRepository | null = DB_ENABLED ? dbMeetings : null;
 export const timeEntryRepo: TimeEntryRepository | null = DB_ENABLED ? dbTimeEntries : null;
-export const chatRepo: ChatRepository = fsChat;
+export const chatRepo: ChatRepository = DB_ENABLED ? dbChat : fsChat;
 export const agentLogRepo: AgentLogRepository = fsAgentLogs;
 
 /** Gibt den aktuellen Modus zurueck */

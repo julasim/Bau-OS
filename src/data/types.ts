@@ -759,6 +759,15 @@ export interface ChatRepository {
    *  nach Relevanz (Neuheit). Nuetzlich fuer Cross-Session-Referenzen wie
    *  "der Termin aus gestern" oder "das Projekt ueber das wir geredet haben". */
   searchMessages(query: string, limit?: number): Promise<ChatMessage[]>;
+  // ── Session-Sharing (optional — nur DB-Mode) ────────────────
+  /** Gibt einem User Leserecht auf eine Session. Idempotent. */
+  shareSession?(sessionId: string, userId: string): Promise<boolean>;
+  /** Entzieht den Zugriff. false wenn kein Eintrag vorhanden war. */
+  unshareSession?(sessionId: string, userId: string): Promise<boolean>;
+  /** Liste aller Personen, mit denen eine Session geteilt wurde. */
+  listSessionShares?(
+    sessionId: string,
+  ): Promise<{ userId: string; username: string; displayName: string | null; addedAt: string }[]>;
 }
 
 export interface AgentLogRepository {

@@ -5,6 +5,7 @@ import path from "path";
 import { WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../../config.js";
 import { readFile, listFolder } from "../../workspace/index.js";
 import { fileRepo, projectRepo } from "../../data/index.js";
+import { getDb } from "../../db/client.js";
 import { emit } from "../events.js";
 import type { AppEnv } from "../server.js";
 
@@ -192,6 +193,73 @@ filesRoutes.get("/files/recent", async (c) => {
   );
 });
 
+// ── Markierte Dateien (Starred) ─────────────────────────────────────────────
+// Gibt alle Dateien zurueck, die der aktuelle User markiert (starred) hat.
+// Nur DB-Modus; im FS-Modus gibt es keine user_id-Semantik.
+filesRoutes.get("/files/starred", async (c) => {
+  if (!DB_ENABLED) return c.json([]);
+  const userId = c.get("userId");
+  if (!userId) return c.json([]);
+  const db = getDb();
+  const rows = await db`
+    SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize,
+           f.mime_type, f.analyzed, f.created_at, f.updated_at,
+           p.name as project_name
+    FROM files f
+    JOIN file_stars fs ON f.id = fs.file_id
+    LEFT JOIN projects p ON f.project_id = p.id
+    WHERE fs.user_id = ${userId}
+    ORDER BY fs.starred_at DESC
+    LIMIT 50
+  `;
+  return c.json(
+    rows.map((f) => ({
+      name: String(f.filename),
+      type: "file" as const,
+      size: Number(f.filesize || 0),
+      modified: f.updated_at ? String(f.updated_at) : null,
+      extension: f.filetype ? String(f.filetype) : "",
+      id: String(f.id),
+      project: f.project_name ? String(f.project_name) : null,
+      analyzed: !!f.analyzed,
+      starred: true,
+    })),
+  );
+});
+
+// ── Geteilte Dateien (Shared with me) ───────────────────────────────────────
+// Gibt Dateien zurueck, die andere User mit dem aktuellen User geteilt haben.
+filesRoutes.get("/files/shared", async (c) => {
+  if (!DB_ENABLED) return c.json([]);
+  const userId = c.get("userId");
+  if (!userId) return c.json([]);
+  const db = getDb();
+  const rows = await db`
+    SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize,
+           f.mime_type, f.analyzed, f.created_at, f.updated_at,
+           p.name as project_name, fs2.can_edit
+    FROM files f
+    JOIN file_shares fs2 ON f.id = fs2.file_id
+    LEFT JOIN projects p ON f.project_id = p.id
+    WHERE fs2.user_id = ${userId}
+    ORDER BY fs2.added_at DESC
+    LIMIT 50
+  `;
+  return c.json(
+    rows.map((f) => ({
+      name: String(f.filename),
+      type: "file" as const,
+      size: Number(f.filesize || 0),
+      modified: f.updated_at ? String(f.updated_at) : null,
+      extension: f.filetype ? String(f.filetype) : "",
+      id: String(f.id),
+      project: f.project_name ? String(f.project_name) : null,
+      analyzed: !!f.analyzed,
+      canEdit: f.can_edit === true,
+    })),
+  );
+});
+
 // ── Datei-Suche (DB) ────────────────────────────────────────────────────────
 filesRoutes.get("/files/search", async (c) => {
   const q = c.req.query("q");
@@ -320,4 +388,89 @@ filesRoutes.get("/files/download", async (c) => {
   c.header("Content-Type", result.mimeType || "application/octet-stream");
   c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(result.filename)}"`);
   return c.body(new Uint8Array(result.blob));
+});
+
+// ── Datei markieren (Star) ──────────────────────────────────────────────────
+// POST /files/:id/star — Datei als Favorit markieren (idempotent).
+filesRoutes.post("/files/:id/star", async (c) => {
+  if (!DB_ENABLED) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
+  const userId = c.get("userId");
+  if (!userId) return c.json({ error: "Nicht authentifiziert" }, 401);
+  const fileId = c.req.param("id");
+  const db = getDb();
+  await db`
+    INSERT INTO file_stars (file_id, user_id)
+    VALUES (${fileId}, ${userId})
+    ON CONFLICT DO NOTHING
+  `;
+  return c.json({ ok: true, starred: true });
+});
+
+// DELETE /files/:id/star — Markierung entfernen.
+filesRoutes.delete("/files/:id/star", async (c) => {
+  if (!DB_ENABLED) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
+  const userId = c.get("userId");
+  if (!userId) return c.json({ error: "Nicht authentifiziert" }, 401);
+  const fileId = c.req.param("id");
+  const db = getDb();
+  await db`
+    DELETE FROM file_stars WHERE file_id = ${fileId} AND user_id = ${userId}
+  `;
+  return c.json({ ok: true, starred: false });
+});
+
+// ── Datei-Shares verwalten ──────────────────────────────────────────────────
+// GET /files/:id/shares — Liste der User, mit denen diese Datei geteilt ist.
+filesRoutes.get("/files/:id/shares", async (c) => {
+  if (!DB_ENABLED || !fileRepo) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
+  const fileId = c.req.param("id");
+  const db = getDb();
+  const rows = await db`
+    SELECT fs.user_id, u.username, u.display_name, fs.can_edit, fs.added_at
+    FROM file_shares fs
+    JOIN users u ON u.id = fs.user_id
+    WHERE fs.file_id = ${fileId}
+    ORDER BY fs.added_at ASC
+  `;
+  return c.json(
+    rows.map((r) => ({
+      userId: String(r.user_id),
+      username: String(r.username),
+      displayName: r.display_name ? String(r.display_name) : null,
+      canEdit: r.can_edit === true,
+      addedAt: String(r.added_at),
+    })),
+  );
+});
+
+// POST /files/:id/shares — Datei mit einem User teilen.
+// Body: { userId: string, canEdit: boolean }
+filesRoutes.post("/files/:id/shares", async (c) => {
+  if (!DB_ENABLED || !fileRepo) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
+  const fileId = c.req.param("id");
+  const body = await c.req.json<{ userId?: string; canEdit?: boolean }>();
+  if (!body.userId) return c.json({ error: "userId erforderlich" }, 400);
+  // Pruefen ob die Datei existiert
+  const file = await fileRepo.get(fileId);
+  if (!file) return c.json({ error: "Datei nicht gefunden" }, 404);
+  const canEdit = body.canEdit === true;
+  const db = getDb();
+  await db`
+    INSERT INTO file_shares (file_id, user_id, can_edit)
+    VALUES (${fileId}, ${body.userId}, ${canEdit})
+    ON CONFLICT (file_id, user_id) DO UPDATE SET can_edit = EXCLUDED.can_edit
+  `;
+  return c.json({ ok: true });
+});
+
+// DELETE /files/:id/shares/:userId — Freigabe entziehen.
+filesRoutes.delete("/files/:id/shares/:userId", async (c) => {
+  if (!DB_ENABLED) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
+  const fileId = c.req.param("id");
+  const targetUserId = c.req.param("userId");
+  const db = getDb();
+  await db`
+    DELETE FROM file_shares WHERE file_id = ${fileId} AND user_id = ${targetUserId}
+  `;
+  return c.json({ ok: true });
 });

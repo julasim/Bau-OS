@@ -262,6 +262,76 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
+// ── Session-Teilen ───────────────────────────────────────────────────────────
+interface ShareUser {
+  userId: string;
+  username: string;
+  displayName: string | null;
+  addedAt: string;
+}
+const shareSessionId = ref<string | null>(null);
+const shareSessionShares = ref<ShareUser[]>([]);
+const shareSearchTerm = ref("");
+const shareBusy = ref(false);
+const shareOpen = computed(() => shareSessionId.value !== null);
+
+// allUsers wird für den Picker gebraucht — lade einmalig
+const allUsers = ref<{ id: string; username: string; displayName: string | null }[]>([]);
+async function loadUsers() {
+  if (allUsers.value.length > 0) return;
+  try {
+    allUsers.value = await api.get<(typeof allUsers.value)[0][]>("/users/mini");
+  } catch {
+    /* ignore */
+  }
+}
+
+const shareCandidates = computed(() =>
+  allUsers.value.filter(
+    (u) =>
+      !shareSessionShares.value.some((s) => s.userId === u.id) &&
+      (u.username.includes(shareSearchTerm.value) ||
+        (u.displayName ?? "").toLowerCase().includes(shareSearchTerm.value.toLowerCase())),
+  ),
+);
+
+async function openShareSession(sessionId: string) {
+  shareSessionId.value = sessionId;
+  shareSessionShares.value = [];
+  shareSearchTerm.value = "";
+  await Promise.all([loadUsers(), loadSharesForSession(sessionId)]);
+}
+
+async function loadSharesForSession(sessionId: string) {
+  try {
+    shareSessionShares.value = await api.get<ShareUser[]>(`/chat/sessions/${sessionId}/shares`);
+  } catch {
+    shareSessionShares.value = [];
+  }
+}
+
+async function addSessionShare(userId: string) {
+  if (!shareSessionId.value) return;
+  shareBusy.value = true;
+  try {
+    await api.post(`/chat/sessions/${shareSessionId.value}/shares`, { userId });
+    await loadSharesForSession(shareSessionId.value);
+  } finally {
+    shareBusy.value = false;
+  }
+}
+
+async function removeSessionShare(userId: string) {
+  if (!shareSessionId.value) return;
+  shareBusy.value = true;
+  try {
+    await api.delete(`/chat/sessions/${shareSessionId.value}/shares/${encodeURIComponent(userId)}`);
+    await loadSharesForSession(shareSessionId.value);
+  } finally {
+    shareBusy.value = false;
+  }
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 onMounted(async () => {
   await Promise.all([loadSessions(), loadProjects()]);
@@ -327,6 +397,24 @@ onUnmounted(() => {
             <span class="flex-1 truncate" :title="session.lastMessage || session.title">
               {{ session.lastMessage || session.title }}
             </span>
+            <button class="chat-session-share-btn" @click.stop="openShareSession(session.id)" title="Freigeben">
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            </button>
             <button @click.stop="deleteSession(session.id)" class="session-del" aria-label="Löschen">
               <BIcon name="x" :size="12" />
             </button>
@@ -623,6 +711,52 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+
+  <!-- ─── Session-Teilen-Modal ─────────────────────────────── -->
+  <div v-if="shareOpen" class="chat-share-overlay" @click.self="shareSessionId = null">
+    <div class="chat-share-modal">
+      <div class="chat-share-header">
+        <span>Session freigeben</span>
+        <button
+          @click="shareSessionId = null"
+          style="background: none; border: none; cursor: pointer; font-size: 16px; color: var(--color-text-muted)"
+        >
+          ✕
+        </button>
+      </div>
+      <!-- Aktuelle Freigaben -->
+      <div v-if="shareSessionShares.length > 0" class="chat-share-current">
+        <div class="chat-share-label">Freigegeben für:</div>
+        <div v-for="s in shareSessionShares" :key="s.userId" class="chat-share-entry">
+          <span>{{ s.displayName ?? s.username }}</span>
+          <button @click="removeSessionShare(s.userId)" :disabled="shareBusy" class="chat-share-remove">
+            Entfernen
+          </button>
+        </div>
+      </div>
+      <!-- Benutzer hinzufügen -->
+      <div class="chat-share-add">
+        <input v-model="shareSearchTerm" type="text" placeholder="Benutzer suchen…" class="chat-share-input" />
+        <div class="chat-share-candidates">
+          <button
+            v-for="u in shareCandidates.slice(0, 20)"
+            :key="u.id"
+            @click="addSessionShare(u.id)"
+            :disabled="shareBusy"
+            class="chat-share-candidate"
+          >
+            {{ u.displayName ?? u.username }} <span style="opacity: 0.5; font-size: 11px">@{{ u.username }}</span>
+          </button>
+          <div
+            v-if="shareCandidates.length === 0"
+            style="font-size: 12px; color: var(--color-text-muted); padding: 8px"
+          >
+            {{ shareSearchTerm ? "Keine Treffer." : "Alle Nutzer wurden bereits hinzugefügt." }}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -866,5 +1000,104 @@ onUnmounted(() => {
     background: rgba(0, 0, 0, 0.4);
     z-index: 40;
   }
+}
+
+.chat-session-share-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  color: var(--color-text-muted);
+  border-radius: 3px;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
+}
+/* show on hover of parent session item */
+.session-item:hover .chat-session-share-btn,
+.session-item-active .chat-session-share-btn {
+  opacity: 1;
+}
+.chat-share-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.chat-share-modal {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  padding: 20px;
+  width: 380px;
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.chat-share-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 600;
+  font-size: 15px;
+}
+.chat-share-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 6px;
+}
+.chat-share-entry {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: 13px;
+}
+.chat-share-remove {
+  font-size: 11px;
+  background: none;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  color: var(--color-danger-text);
+}
+.chat-share-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-subtle);
+  font-size: 13px;
+  color: var(--color-text);
+}
+.chat-share-candidates {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+.chat-share-candidate {
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+  color: var(--color-text);
+}
+.chat-share-candidate:hover {
+  background: var(--color-bg-subtle);
 }
 </style>

@@ -62,13 +62,59 @@ chatRoutes.post("/chat/sessions", async (c) => {
 // ── Session loeschen ────────────────────────────────────────────────────────
 chatRoutes.delete("/chat/sessions/:id", async (c) => {
   const id = c.req.param("id");
+  const userId = c.get("userId") as string | null | undefined;
+  const userRole = c.get("userRole") as string | undefined;
+
+  if (userRole !== "admin" && userId) {
+    const sessions = await chatRepo.listSessions("Main", 200, userId);
+    const hasAccess = sessions.some((s) => s.id === id);
+    if (!hasAccess) return c.json({ error: "Kein Zugriff" }, 403);
+  }
+
   await chatRepo.deleteSession(id);
   return c.json({ success: true });
+});
+
+// ── Session-Zugriffe auflisten ───────────────────────────────────────────────
+chatRoutes.get("/chat/sessions/:id/shares", async (c) => {
+  const id = c.req.param("id");
+  if (!chatRepo.listSessionShares) return c.json([]);
+  const shares = await chatRepo.listSessionShares(id);
+  return c.json(shares);
+});
+
+// ── Session teilen ───────────────────────────────────────────────────────────
+chatRoutes.post("/chat/sessions/:id/shares", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json<{ userId: string }>();
+  if (!body.userId) return c.json({ error: "userId erforderlich" }, 400);
+  if (!chatRepo.shareSession) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
+  const ok = await chatRepo.shareSession(id, body.userId);
+  return c.json({ ok });
+});
+
+// ── Session-Zugriff entziehen ────────────────────────────────────────────────
+chatRoutes.delete("/chat/sessions/:id/shares/:userId", async (c) => {
+  const id = c.req.param("id");
+  const userId = c.req.param("userId");
+  if (!chatRepo.unshareSession) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
+  const ok = await chatRepo.unshareSession(id, userId);
+  return c.json({ ok });
 });
 
 // ── Nachrichten einer Session laden ─────────────────────────────────────────
 chatRoutes.get("/chat/sessions/:id/messages", async (c) => {
   const id = c.req.param("id");
+  const userId = c.get("userId") as string | null | undefined;
+  const userRole = c.get("userRole") as string | undefined;
+
+  // Ownership/share check: admin sees all, others check ownership or share
+  if (userRole !== "admin" && userId) {
+    const sessions = await chatRepo.listSessions("Main", 200, userId);
+    const hasAccess = sessions.some((s) => s.id === id);
+    if (!hasAccess) return c.json({ error: "Kein Zugriff" }, 403);
+  }
+
   const messages = await chatRepo.getMessages(id);
   return c.json(messages);
 });
