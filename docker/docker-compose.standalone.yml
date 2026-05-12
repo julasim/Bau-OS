@@ -1,0 +1,106 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Bau-OS — Standalone Docker Compose (Kunden-Installation)
+#
+# Enthält alle 4 Services inkl. Caddy für automatisches HTTPS.
+# Setzt voraus: CADDY_DOMAIN und CADDY_EMAIL in .env gesetzt.
+#
+# Start:   docker compose -f docker-compose.standalone.yml up -d
+# Logs:    docker compose -f docker-compose.standalone.yml logs -f
+# Update:  git pull && docker compose -f docker-compose.standalone.yml build app && \
+#          docker compose -f docker-compose.standalone.yml up -d
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: bau-os
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: bauos-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bauos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bauos}
+      POSTGRES_DB: ${POSTGRES_DB:-bauos}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bauos} -d ${POSTGRES_DB:-bauos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - internal
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: bauos-ollama
+    restart: always
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - internal
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: bau-os-app:latest
+    container_name: bauos-app
+    restart: always
+    env_file: ../.env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-bauos}:${POSTGRES_PASSWORD:-bauos}@postgres:5432/${POSTGRES_DB:-bauos}
+      OLLAMA_BASE_URL: http://ollama:11434/v1
+      WORKSPACE_PATH: /workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ${WORKSPACE_HOST_DIR:-../workspace}:/workspace
+      - ../logs:/opt/bau-os/logs
+      - ../data:/opt/bau-os/data
+      - ../tools:/opt/bau-os/tools
+      - ../.chat_id:/opt/bau-os/.chat_id
+    expose:
+      - "3000"
+    networks:
+      - internal
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: bauos-caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CADDY_DOMAIN: ${CADDY_DOMAIN}
+      CADDY_EMAIL: ${CADDY_EMAIL:-admin@bau-os.local}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    networks:
+      - internal
+
+volumes:
+  postgres_data:
+  ollama_models:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:
+    driver: bridge
