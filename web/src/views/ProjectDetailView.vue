@@ -1714,10 +1714,16 @@ async function loadMeetings() {
   }
 }
 
-function newMeeting() {
+async function newMeeting() {
   meetingError.value = null;
   meetingDraft.value = emptyMeetingDraft();
   selectedMeetingTemplateId.value = "";
+  // Standardvorlage automatisch anwenden, falls vorhanden
+  const defaultTemplate = meetingTemplates.value.find((t) => t.isDefault);
+  if (defaultTemplate) {
+    selectedMeetingTemplateId.value = defaultTemplate.id;
+    await applyMeetingTemplate();
+  }
 }
 
 // ── Word-Export (Phase 6d) ────────────────────────────────────────────────
@@ -1789,7 +1795,14 @@ async function applyMeetingTemplate() {
   try {
     const url = `/templates/${selectedMeetingTemplateId.value}/render?project=${encodeURIComponent(projectName.value)}`;
     const res = await api.get<{ rendered: string }>(url);
-    meetingDraft.value.minutes = res.rendered;
+    const parts = res.rendered.split(/\n---\n/);
+    if (parts.length >= 2) {
+      meetingDraft.value.agenda = parts[0].trim();
+      meetingDraft.value.minutes = parts.slice(1).join("\n---\n").trim();
+    } else {
+      meetingDraft.value.agenda = res.rendered.trim();
+      meetingDraft.value.minutes = "";
+    }
   } catch {
     /* fail silently */
   }

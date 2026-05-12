@@ -16,11 +16,15 @@ interface NoteSummary {
 const router = useRouter();
 const notes = ref<NoteSummary[]>([]);
 const newContent = ref("");
+const newNoteProject = ref<string>("");
 const searchQuery = ref("");
 const showCreate = ref(false);
 const viewMode = ref<"list" | "grid">("list");
 const sortBy = ref<"updatedAt" | "title" | "size">("updatedAt");
 const sortAsc = ref(false);
+
+// ── Projekte ───────────────────────────────────────────────────────────────
+const projects = ref<{ name: string }[]>([]);
 
 // ── Vorlagen (Phase 6c) ────────────────────────────────────────────────────
 // User waehlt eine Vorlage → Backend rendert sie mit Live-Daten
@@ -40,12 +44,26 @@ async function loadNoteTemplates() {
   } catch {
     noteTemplates.value = [];
   }
+  const defaultTemplate = noteTemplates.value.find((t) => t.isDefault);
+  if (defaultTemplate) {
+    selectedTemplateId.value = defaultTemplate.id;
+    await applyNoteTemplate();
+  }
+}
+
+async function loadProjects() {
+  try {
+    projects.value = await api.get<{ name: string }[]>("/projects");
+  } catch {
+    projects.value = [];
+  }
 }
 
 async function applyNoteTemplate() {
   if (!selectedTemplateId.value) return;
   try {
-    const res = await api.get<{ rendered: string }>(`/templates/${selectedTemplateId.value}/render`);
+    const projectParam = newNoteProject.value ? `?project=${encodeURIComponent(newNoteProject.value)}` : "";
+    const res = await api.get<{ rendered: string }>(`/templates/${selectedTemplateId.value}/render${projectParam}`);
     newContent.value = res.rendered;
   } catch {
     /* fail silently */
@@ -79,8 +97,12 @@ async function load() {
 
 async function create() {
   if (!newContent.value.trim()) return;
-  await api.post("/notes", { content: newContent.value });
+  const body: Record<string, string> = { content: newContent.value };
+  if (newNoteProject.value) body.project = newNoteProject.value;
+  await api.post("/notes", body);
   newContent.value = "";
+  newNoteProject.value = "";
+  selectedTemplateId.value = "";
   showCreate.value = false;
   await load();
 }
@@ -133,9 +155,19 @@ function sortIcon(col: string) {
   return sortAsc.value ? "\u25B2" : "\u25BC";
 }
 
+async function openCreateDialog() {
+  showCreate.value = !showCreate.value;
+  if (showCreate.value) {
+    newContent.value = "";
+    newNoteProject.value = "";
+    selectedTemplateId.value = "";
+    await loadNoteTemplates();
+  }
+}
+
 onMounted(() => {
   void load();
-  void loadNoteTemplates();
+  void loadProjects();
 });
 useEvents(["note"], () => load());
 </script>
@@ -156,7 +188,7 @@ useEvents(["note"], () => load());
           <BIcon :name="viewMode === 'list' ? 'grid' : 'list'" :size="14" />
           {{ viewMode === "list" ? "Kacheln" : "Liste" }}
         </button>
-        <button @click="showCreate = !showCreate" class="bauos-btn solid">
+        <button @click="openCreateDialog" class="bauos-btn solid">
           <BIcon name="plus" :size="14" :stroke-width="2" />
           {{ showCreate ? "Abbrechen" : "Neue Notiz" }}
         </button>
@@ -178,6 +210,19 @@ useEvents(["note"], () => load());
           <option v-for="t in noteTemplates" :key="t.id" :value="t.id">
             {{ t.name }}{{ t.isDefault ? " (Standard)" : "" }}
           </option>
+        </select>
+      </div>
+      <!-- Projekt waehlen (optional) -->
+      <div class="flex items-center" style="gap: 8px; margin-bottom: 10px">
+        <span class="text-xs" style="color: var(--color-text-muted); flex-shrink: 0"> Projekt: </span>
+        <select
+          v-model="newNoteProject"
+          @change="applyNoteTemplate"
+          class="form-input"
+          style="flex: 1; padding: 4px 8px; font-size: 12px"
+        >
+          <option value="">— Kein Projekt —</option>
+          <option v-for="p in projects" :key="p.name" :value="p.name">{{ p.name }}</option>
         </select>
       </div>
       <textarea
@@ -259,7 +304,7 @@ useEvents(["note"], () => load());
         <div class="empty-state-text">
           {{ searchQuery ? "Keine Treffer." : "Noch keine Notizen." }}
         </div>
-        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="showCreate = true">
+        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="openCreateDialog">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erste Notiz anlegen
         </button>
@@ -343,7 +388,7 @@ useEvents(["note"], () => load());
         <div class="empty-state-text">
           {{ searchQuery ? "Keine Treffer." : "Noch keine Notizen." }}
         </div>
-        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="showCreate = true">
+        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="openCreateDialog">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erste Notiz anlegen
         </button>
