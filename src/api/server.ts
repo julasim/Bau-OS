@@ -721,18 +721,11 @@ app.post("/api/auth/forgot-password", async (c) => {
   try {
     const { ticket: otpTicket, code } = await createEmailOtp(dbUser.id, "password-reset");
     const resetToken = createPasswordResetTicket(dbUser);
-    const mail = buildPasswordResetMail({
-      username: dbUser.displayName ?? dbUser.username,
-      // Reset-URL fuer Magic-Link-Style: nicht benutzt in OTP-Flow, aber
-      // buildPasswordResetMail benoetigt sie — wir geben eine leere Anweisung.
-      resetUrl: `${publicBaseUrl(c)}/login`,
-    });
-    // Subject und Text passen dennoch — wir ersetzen den Textinhalt nicht.
-    // Stattdessen: einfache OTP-Mail analog zu buildLoginOtpMail.
+    // OTP-Mail: gleiches "verification"-Template wie beim Login-Code,
+    // damit HTML und Plaintext beide den 6-stelligen Code zeigen.
     const otpMail = {
+      ...buildLoginOtpMail({ username: dbUser.displayName ?? dbUser.username, code }),
       subject: "Bau-OS · Passwort zurücksetzen",
-      text: `Hallo ${dbUser.displayName ?? dbUser.username},\n\ndein Bestätigungscode zum Zurücksetzen des Passworts lautet:\n\n  ${code}\n\nDer Code ist 10 Minuten gültig. Falls du diese Anfrage nicht gestellt hast, kannst du diese Mail ignorieren.\n\nBau-OS`,
-      html: mail.html,
     };
     const sent = await sendMail({ to: dbUser.email, subject: otpMail.subject, text: otpMail.text, html: otpMail.html });
     void audit({
