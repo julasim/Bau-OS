@@ -9,12 +9,14 @@ const password = ref("");
 const error = ref("");
 const loading = ref(false);
 
-// Vier moegliche Steps:
+// Sechs moegliche Steps:
 //   "login"        → Username + Passwort
 //   "code"         → 6-stelliger Code aus der Email-2FA
 //   "magic-link"   → Anmelde-Link wurde verschickt, User wartet auf Klick
 //   "setup-email"  → User hat noch keine Email; muss sie hier setzen + verifizieren
-type Step = "login" | "code" | "magic-link" | "setup-email";
+//   "forgot"       → Passwort vergessen: Username eingeben, Code anfordern
+//   "reset-code"   → Code + neues Passwort eingeben
+type Step = "login" | "code" | "magic-link" | "setup-email" | "forgot" | "reset-code";
 const step = ref<Step>("login");
 
 // Step "code"
@@ -32,14 +34,21 @@ const setupEmail = ref("");
 const setupCode = ref("");
 const setupEmailHint = ref<string | null>(null);
 
-// Hostname aus dem Browser uebernehmen — keine hardcoded Firma mehr.
-const hostname = computed(() =>
-  typeof window !== "undefined" ? window.location.host : "bau-os",
+// Step "forgot" / "reset-code"
+const forgotUsername = ref("");
+const resetToken = ref<string | null>(null);
+const resetEmailHint = ref<string | null>(null);
+const resetCode = ref("");
+const resetNewPassword = ref("");
+const resetNewPassword2 = ref("");
+const resetPasswordMismatch = computed(
+  () => resetNewPassword2.value.length > 0 && resetNewPassword.value !== resetNewPassword2.value,
 );
 
-const setupEmailValid = computed(() =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupEmail.value.trim()),
-);
+// Hostname aus dem Browser uebernehmen — keine hardcoded Firma mehr.
+const hostname = computed(() => (typeof window !== "undefined" ? window.location.host : "bau-os"));
+
+const setupEmailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupEmail.value.trim()));
 
 // Beim Mount: pruefen, ob noch gar kein Admin existiert. In dem Fall fuehrt
 // /setup den User durchs Erstanlegen — die Login-Form macht ohne Admin-Konto
@@ -65,9 +74,7 @@ onMounted(async () => {
   if (magic) {
     magicLinkConsuming.value = true;
     try {
-      const res = await api.get<{ token: string }>(
-        `/auth/login/magic-link/consume?token=${encodeURIComponent(magic)}`,
-      );
+      const res = await api.get<{ token: string }>(`/auth/login/magic-link/consume?token=${encodeURIComponent(magic)}`);
       // Magic-Param aus URL entfernen damit ein Reload nicht erneut versucht
       url.searchParams.delete("magic");
       window.history.replaceState({}, "", url.toString());
@@ -206,6 +213,56 @@ async function verifyEmailSetup() {
   }
 }
 
+async function requestPasswordReset() {
+  if (!forgotUsername.value.trim()) return;
+  error.value = "";
+  loading.value = true;
+  try {
+    const res = await api.post<{ ok: boolean; resetToken?: string; emailHint?: string }>("/auth/forgot-password", {
+      username: forgotUsername.value.trim(),
+    });
+    if (res.resetToken) {
+      resetToken.value = res.resetToken;
+      resetEmailHint.value = res.emailHint ?? null;
+      resetCode.value = "";
+      resetNewPassword.value = "";
+      resetNewPassword2.value = "";
+      step.value = "reset-code";
+    } else {
+      // Kein Token → kein passendes Konto mit Email. Trotzdem eine
+      // neutrale Meldung — kein Enumeration-Leak.
+      error.value = "Falls ein Konto mit dieser E-Mail existiert, wurde ein Code gesendet.";
+    }
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : "Anfrage fehlgeschlagen";
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function submitPasswordReset() {
+  if (!resetToken.value || !resetCode.value || !resetNewPassword.value) return;
+  if (resetPasswordMismatch.value) return;
+  error.value = "";
+  loading.value = true;
+  try {
+    await api.post("/auth/reset-password", {
+      resetToken: resetToken.value,
+      code: resetCode.value.replace(/\s/g, ""),
+      newPassword: resetNewPassword.value,
+    });
+    // Erfolg → zurueck zum Login mit Erfolgsmeldung.
+    abortFlow();
+    error.value = "";
+    // Kurze positive Bestaetigung im Login-Step.
+    username.value = forgotUsername.value;
+  } catch (e: unknown) {
+    error.value = e instanceof Error ? e.message : "Fehler beim Setzen des Passworts";
+  } finally {
+    loading.value = false;
+  }
+}
+
 function abortFlow() {
   step.value = "login";
   ticket.value = null;
@@ -215,6 +272,11 @@ function abortFlow() {
   setupEmail.value = "";
   setupCode.value = "";
   setupSubStep.value = "enter-email";
+  resetToken.value = null;
+  resetEmailHint.value = null;
+  resetCode.value = "";
+  resetNewPassword.value = "";
+  resetNewPassword2.value = "";
   error.value = "";
 }
 </script>
@@ -224,13 +286,7 @@ function abortFlow() {
     <!-- Linke Hälfte: dunkel, Brand-Panel — auf Mobile (<768px) hidden -->
     <div
       class="login-hero flex flex-col"
-      style="
-        flex: 1;
-        background: var(--color-login-bg);
-        color: #fff;
-        padding: 48px;
-        justify-content: space-between;
-      "
+      style="flex: 1; background: var(--color-login-bg); color: #fff; padding: 48px; justify-content: space-between"
     >
       <div class="flex items-center" style="gap: 12px">
         <div
@@ -267,27 +323,12 @@ function abortFlow() {
       </div>
 
       <div style="max-width: 480px">
-        <h1
-          style="
-            font-size: 36px;
-            font-weight: 600;
-            letter-spacing: -0.02em;
-            line-height: 1.2;
-            margin: 0 0 16px 0;
-          "
-        >
+        <h1 style="font-size: 36px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 16px 0">
           KI-Plattform für Architekturbüros und Büros in der Baubranche.
         </h1>
-        <p
-          style="
-            font-size: 14px;
-            color: var(--color-login-text-secondary);
-            line-height: 1.6;
-            margin: 0 0 24px 0;
-          "
-        >
-          Büro-Werkzeug für Planung, Bauleitung und Projektsteuerung —
-          nicht für die Baustelle. Self-hosted, DSGVO-konform, lokales LLM.
+        <p style="font-size: 14px; color: var(--color-login-text-secondary); line-height: 1.6; margin: 0 0 24px 0">
+          Büro-Werkzeug für Planung, Bauleitung und Projektsteuerung — nicht für die Baustelle. Self-hosted,
+          DSGVO-konform, lokales LLM.
         </p>
         <div class="flex flex-wrap" style="gap: 8px">
           <span
@@ -308,13 +349,7 @@ function abortFlow() {
         </div>
       </div>
 
-      <div
-        style="
-          font-size: 11px;
-          color: var(--color-login-faint);
-          font-family: 'JetBrains Mono', monospace;
-        "
-      >
+      <div style="font-size: 11px; color: var(--color-login-faint); font-family: &quot;JetBrains Mono&quot;, monospace">
         Bau-OS v1.0 · Self-hosted · Open Source
       </div>
     </div>
@@ -327,46 +362,18 @@ function abortFlow() {
       <div style="width: 100%; max-width: 320px">
         <!-- Auto-Consume Magic-Link: Spinner anzeigen -->
         <template v-if="magicLinkConsuming">
-          <h2
-            style="
-              font-size: 20px;
-              font-weight: 600;
-              color: var(--color-text);
-              margin: 0 0 4px 0;
-            "
-          >
+          <h2 style="font-size: 20px; font-weight: 600; color: var(--color-text); margin: 0 0 4px 0">
             Anmelde-Link wird geprüft…
           </h2>
-          <p
-            style="
-              font-size: 13px;
-              color: var(--color-text-muted);
-              margin: 0 0 24px 0;
-            "
-          >
+          <p style="font-size: 13px; color: var(--color-text-muted); margin: 0 0 24px 0">
             Einen Moment, du wirst gleich angemeldet.
           </p>
         </template>
 
         <!-- Step "code": 6-stelliger Email-Code -->
         <template v-else-if="step === 'code'">
-          <h2
-            style="
-              font-size: 20px;
-              font-weight: 600;
-              color: var(--color-text);
-              margin: 0 0 4px 0;
-            "
-          >
-            Code aus Email
-          </h2>
-          <p
-            style="
-              font-size: 13px;
-              color: var(--color-text-muted);
-              margin: 0 0 24px 0;
-            "
-          >
+          <h2 style="font-size: 20px; font-weight: 600; color: var(--color-text); margin: 0 0 4px 0">Code aus Email</h2>
+          <p style="font-size: 13px; color: var(--color-text-muted); margin: 0 0 24px 0">
             Wir haben dir einen 6-stelligen Code an
             <strong v-if="emailHint" class="font-mono">{{ emailHint }}</strong>
             <span v-else>deine Email-Adresse</span>
@@ -386,7 +393,12 @@ function abortFlow() {
                 autofocus
                 required
                 class="login-input"
-                style="font-family: 'JetBrains Mono', monospace; letter-spacing: 0.15em; text-align: center; font-size: 18px"
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  letter-spacing: 0.15em;
+                  text-align: center;
+                  font-size: 18px;
+                "
               />
             </div>
 
@@ -420,18 +432,13 @@ function abortFlow() {
                 cursor: pointer;
                 transition: opacity 180ms ease;
               "
-              :style="{ opacity: (loading || !otpCode) ? 0.5 : 1 }"
+              :style="{ opacity: loading || !otpCode ? 0.5 : 1 }"
             >
               {{ loading ? "…" : "Bestätigen" }}
             </button>
 
             <div class="flex justify-between" style="margin-top: 4px">
-              <span
-                style="
-                  font-size: 12px;
-                  color: var(--color-text-muted);
-                "
-              >
+              <span style="font-size: 12px; color: var(--color-text-muted)">
                 Keine Mail bekommen? Spam-Ordner prüfen.
               </span>
               <button
@@ -475,22 +482,14 @@ function abortFlow() {
 
         <!-- Step "magic-link": Mail wurde verschickt, User wartet auf Klick -->
         <template v-else-if="step === 'magic-link'">
-          <h2
-            style="
-              font-size: 20px;
-              font-weight: 600;
-              color: var(--color-text);
-              margin: 0 0 4px 0;
-            "
-          >
+          <h2 style="font-size: 20px; font-weight: 600; color: var(--color-text); margin: 0 0 4px 0">
             Anmelde-Link verschickt
           </h2>
           <p style="font-size: 13px; color: var(--color-text-muted); margin: 0 0 24px 0">
             Wir haben dir einen Anmelde-Link an
             <strong v-if="emailHint" class="font-mono">{{ emailHint }}</strong>
             <span v-else>deine Email-Adresse</span>
-            geschickt. Öffne die Mail und klicke den Link — dann bist du angemeldet.
-            Der Link ist 15 Minuten gültig.
+            geschickt. Öffne die Mail und klicke den Link — dann bist du angemeldet. Der Link ist 15 Minuten gültig.
           </p>
           <div
             style="
@@ -503,9 +502,8 @@ function abortFlow() {
               line-height: 1.5;
             "
           >
-            Tipp: der Klick öffnet diese Seite automatisch in einem neuen Tab.
-            Lass dieses Fenster offen — falls's hier nicht von alleine weiterspringt,
-            kommt der Login einfach im neuen Tab.
+            Tipp: der Klick öffnet diese Seite automatisch in einem neuen Tab. Lass dieses Fenster offen — falls's hier
+            nicht von alleine weiterspringt, kommt der Login einfach im neuen Tab.
           </div>
 
           <p
@@ -526,7 +524,10 @@ function abortFlow() {
           <div class="flex justify-between" style="margin-top: 16px">
             <button
               type="button"
-              @click="step = 'code'; error = ''"
+              @click="
+                step = 'code';
+                error = '';
+              "
               style="
                 background: none;
                 border: none;
@@ -568,9 +569,8 @@ function abortFlow() {
               margin-bottom: 20px;
             "
           >
-            Aus Sicherheitsgründen ist die Email-Verifikation jetzt Pflicht.
-            Bitte hinterlege deine Email-Adresse — wir bestätigen sie sofort
-            mit einem Code.
+            Aus Sicherheitsgründen ist die Email-Verifikation jetzt Pflicht. Bitte hinterlege deine Email-Adresse — wir
+            bestätigen sie sofort mit einem Code.
           </div>
 
           <!-- Sub-Step 1: Email eingeben -->
@@ -628,7 +628,7 @@ function abortFlow() {
                   border-radius: 6px;
                   cursor: pointer;
                 "
-                :style="{ opacity: (loading || !setupEmailValid) ? 0.5 : 1 }"
+                :style="{ opacity: loading || !setupEmailValid ? 0.5 : 1 }"
               >
                 {{ loading ? "…" : "Code senden" }}
               </button>
@@ -672,7 +672,12 @@ function abortFlow() {
                   autofocus
                   required
                   class="login-input"
-                  style="font-family: 'JetBrains Mono', monospace; letter-spacing: 0.15em; text-align: center; font-size: 18px"
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    letter-spacing: 0.15em;
+                    text-align: center;
+                    font-size: 18px;
+                  "
                 />
               </div>
               <p
@@ -703,14 +708,18 @@ function abortFlow() {
                   border-radius: 6px;
                   cursor: pointer;
                 "
-                :style="{ opacity: (loading || !setupCode) ? 0.5 : 1 }"
+                :style="{ opacity: loading || !setupCode ? 0.5 : 1 }"
               >
                 {{ loading ? "…" : "Email bestätigen" }}
               </button>
               <div class="flex justify-between" style="margin-top: 4px">
                 <button
                   type="button"
-                  @click="setupSubStep = 'enter-email'; setupCode = ''; error = ''"
+                  @click="
+                    setupSubStep = 'enter-email';
+                    setupCode = '';
+                    error = '';
+                  "
                   style="
                     background: none;
                     border: none;
@@ -741,97 +750,287 @@ function abortFlow() {
           </template>
         </template>
 
-        <!-- Step "login": Username + Passwort -->
-        <template v-else>
-        <h2
-          style="
-            font-size: 20px;
-            font-weight: 600;
-            color: var(--color-text);
-            margin: 0 0 4px 0;
-          "
-        >
-          Anmelden
-        </h2>
-        <p
-          style="
-            font-size: 13px;
-            color: var(--color-text-muted);
-            margin: 0 0 28px 0;
-          "
-        >
-          Willkommen zurück.
-        </p>
-
-        <form @submit.prevent="login" class="flex flex-col" style="gap: 16px">
-          <div>
-            <label class="eyebrow" style="display: block; margin-bottom: 6px">Benutzername</label>
-            <input
-              v-model="username"
-              type="text"
-              autocomplete="username"
-              required
-              class="login-input"
-            />
-          </div>
-          <div>
-            <label class="eyebrow" style="display: block; margin-bottom: 6px">Passwort</label>
-            <input
-              v-model="password"
-              type="password"
-              autocomplete="current-password"
-              required
-              class="login-input"
-            />
-          </div>
-
-          <p
-            v-if="error"
-            style="
-              font-size: 12px;
-              color: var(--color-danger-text);
-              background: var(--color-danger-bg);
-              border: 1px solid var(--color-danger-border);
-              padding: 8px 12px;
-              border-radius: 6px;
-              margin: 0;
-            "
-          >
-            {{ error }}
+        <!-- Step "forgot": Passwort vergessen — Username eingeben -->
+        <template v-else-if="step === 'forgot'">
+          <h2 style="font-size: 20px; font-weight: 600; color: var(--color-text); margin: 0 0 4px 0">
+            Passwort zurücksetzen
+          </h2>
+          <p style="font-size: 13px; color: var(--color-text-muted); margin: 0 0 24px 0">
+            Gib deinen Benutzernamen ein. Falls ein Konto mit einer hinterlegten E-Mail-Adresse existiert, senden wir
+            dir einen 6-stelligen Code.
           </p>
 
-          <button
-            type="submit"
-            :disabled="loading"
-            style="
-              width: 100%;
-              padding: 10px;
-              font-size: 13px;
-              font-weight: 500;
-              color: var(--color-bg);
-              background: var(--color-primary);
-              border: none;
-              border-radius: 6px;
-              cursor: pointer;
-              transition: opacity 180ms ease;
-            "
-            :style="{ opacity: loading ? 0.5 : 1 }"
-          >
-            {{ loading ? "…" : "Anmelden" }}
-          </button>
+          <form @submit.prevent="requestPasswordReset" class="flex flex-col" style="gap: 16px">
+            <div>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">Benutzername</label>
+              <input
+                v-model="forgotUsername"
+                type="text"
+                autocomplete="username"
+                autofocus
+                required
+                class="login-input"
+              />
+            </div>
 
-          <a
-            href="#"
-            style="
-              text-align: center;
-              font-size: 12px;
-              color: var(--color-text-muted);
-              text-decoration: none;
-              margin-top: 4px;
-            "
-            >Passwort vergessen?</a
-          >
-        </form>
+            <p
+              v-if="error"
+              style="
+                font-size: 12px;
+                color: var(--color-danger-text);
+                background: var(--color-danger-bg);
+                border: 1px solid var(--color-danger-border);
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin: 0;
+              "
+            >
+              {{ error }}
+            </p>
+
+            <button
+              type="submit"
+              :disabled="loading || !forgotUsername.trim()"
+              style="
+                width: 100%;
+                padding: 10px;
+                font-size: 13px;
+                font-weight: 500;
+                color: var(--color-bg);
+                background: var(--color-primary);
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: opacity 180ms ease;
+              "
+              :style="{ opacity: loading || !forgotUsername.trim() ? 0.5 : 1 }"
+            >
+              {{ loading ? "…" : "Code senden" }}
+            </button>
+
+            <button
+              type="button"
+              @click="abortFlow"
+              style="
+                background: none;
+                border: none;
+                font-size: 12px;
+                color: var(--color-text-muted);
+                cursor: pointer;
+                padding: 0;
+              "
+            >
+              Abbrechen
+            </button>
+          </form>
+        </template>
+
+        <!-- Step "reset-code": Code + neues Passwort eingeben -->
+        <template v-else-if="step === 'reset-code'">
+          <h2 style="font-size: 20px; font-weight: 600; color: var(--color-text); margin: 0 0 4px 0">
+            Neues Passwort setzen
+          </h2>
+          <p style="font-size: 13px; color: var(--color-text-muted); margin: 0 0 24px 0">
+            Wir haben einen 6-stelligen Code an
+            <strong v-if="resetEmailHint" class="font-mono">{{ resetEmailHint }}</strong>
+            <span v-else>deine E-Mail-Adresse</span>
+            geschickt. Gib den Code und dein neues Passwort ein. Der Code ist 10 Minuten gültig.
+          </p>
+
+          <form @submit.prevent="submitPasswordReset" class="flex flex-col" style="gap: 16px">
+            <div>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">Code</label>
+              <input
+                v-model="resetCode"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                maxlength="7"
+                autocomplete="one-time-code"
+                autofocus
+                required
+                class="login-input"
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  letter-spacing: 0.15em;
+                  text-align: center;
+                  font-size: 18px;
+                "
+              />
+            </div>
+
+            <div>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">Neues Passwort</label>
+              <input
+                v-model="resetNewPassword"
+                type="password"
+                autocomplete="new-password"
+                minlength="8"
+                required
+                class="login-input"
+              />
+            </div>
+
+            <div>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">Passwort wiederholen</label>
+              <input
+                v-model="resetNewPassword2"
+                type="password"
+                autocomplete="new-password"
+                minlength="8"
+                required
+                class="login-input"
+              />
+              <div
+                v-if="resetPasswordMismatch"
+                style="font-size: 11px; color: var(--color-danger-text); margin-top: 4px"
+              >
+                Passwörter stimmen nicht überein.
+              </div>
+            </div>
+
+            <p
+              v-if="error"
+              style="
+                font-size: 12px;
+                color: var(--color-danger-text);
+                background: var(--color-danger-bg);
+                border: 1px solid var(--color-danger-border);
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin: 0;
+              "
+            >
+              {{ error }}
+            </p>
+
+            <button
+              type="submit"
+              :disabled="loading || !resetCode || !resetNewPassword || resetPasswordMismatch"
+              style="
+                width: 100%;
+                padding: 10px;
+                font-size: 13px;
+                font-weight: 500;
+                color: var(--color-bg);
+                background: var(--color-primary);
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: opacity 180ms ease;
+              "
+              :style="{ opacity: loading || !resetCode || !resetNewPassword || resetPasswordMismatch ? 0.5 : 1 }"
+            >
+              {{ loading ? "…" : "Passwort setzen" }}
+            </button>
+
+            <div class="flex justify-between" style="margin-top: 4px">
+              <button
+                type="button"
+                @click="
+                  step = 'forgot';
+                  error = '';
+                "
+                style="
+                  background: none;
+                  border: none;
+                  font-size: 12px;
+                  color: var(--color-text-muted);
+                  cursor: pointer;
+                  padding: 0;
+                "
+              >
+                Neuer Code
+              </button>
+              <button
+                type="button"
+                @click="abortFlow"
+                style="
+                  background: none;
+                  border: none;
+                  font-size: 12px;
+                  color: var(--color-text-muted);
+                  cursor: pointer;
+                  padding: 0;
+                "
+              >
+                Abbrechen
+              </button>
+            </div>
+          </form>
+        </template>
+
+        <!-- Step "login": Username + Passwort -->
+        <template v-else>
+          <h2 style="font-size: 20px; font-weight: 600; color: var(--color-text); margin: 0 0 4px 0">Anmelden</h2>
+          <p style="font-size: 13px; color: var(--color-text-muted); margin: 0 0 28px 0">Willkommen zurück.</p>
+
+          <form @submit.prevent="login" class="flex flex-col" style="gap: 16px">
+            <div>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">Benutzername</label>
+              <input v-model="username" type="text" autocomplete="username" required class="login-input" />
+            </div>
+            <div>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">Passwort</label>
+              <input v-model="password" type="password" autocomplete="current-password" required class="login-input" />
+            </div>
+
+            <p
+              v-if="error"
+              style="
+                font-size: 12px;
+                color: var(--color-danger-text);
+                background: var(--color-danger-bg);
+                border: 1px solid var(--color-danger-border);
+                padding: 8px 12px;
+                border-radius: 6px;
+                margin: 0;
+              "
+            >
+              {{ error }}
+            </p>
+
+            <button
+              type="submit"
+              :disabled="loading"
+              style="
+                width: 100%;
+                padding: 10px;
+                font-size: 13px;
+                font-weight: 500;
+                color: var(--color-bg);
+                background: var(--color-primary);
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                transition: opacity 180ms ease;
+              "
+              :style="{ opacity: loading ? 0.5 : 1 }"
+            >
+              {{ loading ? "…" : "Anmelden" }}
+            </button>
+
+            <button
+              type="button"
+              @click="
+                step = 'forgot';
+                error = '';
+                forgotUsername = username;
+              "
+              style="
+                background: none;
+                border: none;
+                text-align: center;
+                font-size: 12px;
+                color: var(--color-text-muted);
+                cursor: pointer;
+                padding: 0;
+                margin-top: 4px;
+              "
+            >
+              Passwort vergessen?
+            </button>
+          </form>
         </template>
 
         <div

@@ -868,7 +868,7 @@ interface CreateOtpResult {
  *  Tokens des Users mit gleichem purpose werden vorher invalidiert. */
 export async function createEmailOtp(
   userId: string,
-  purpose: "login" | "email-setup",
+  purpose: "login" | "email-setup" | "password-reset",
   pendingEmail?: string,
 ): Promise<CreateOtpResult> {
   if (!DB_ENABLED) throw new Error("Email-OTP benoetigt DB-Modus");
@@ -909,7 +909,7 @@ export type VerifyOtpResult =
 export async function verifyAndConsumeEmailOtp(
   ticket: string,
   code: string,
-  expectedPurpose: "login" | "email-setup",
+  expectedPurpose: "login" | "email-setup" | "password-reset",
 ): Promise<VerifyOtpResult> {
   if (!DB_ENABLED) return { ok: false, reason: "not-found" };
   const cleanCode = code.replace(/\s+/g, "");
@@ -1069,6 +1069,47 @@ export async function createMagicLinkToken(userId: string): Promise<string> {
   `;
 
   return tokenPlain;
+}
+
+// ── Password-Reset-Ticket ────────────────────────────────────────────────────
+// Kurzlebiges JWT (aud="password-reset", 10 Min.) das den User identifiziert
+// nachdem sein OTP-Code erfolgreich verifiziert wurde und das neue Passwort
+// gesetzt werden soll.
+//
+// Ablauf:
+//   1. POST /api/auth/forgot-password (username)
+//      → OTP generieren + per Mail senden + Reset-Ticket erzeugen (aud="password-reset")
+//      → Ticket direkt im Response (kein separater Verify-Step noetig).
+//   2. POST /api/auth/reset-password (resetToken + code + newPassword)
+//      → Ticket verifizieren (aud-Check verhindert Missbrauch anderer Tickets)
+//      → OTP-Code pruefen + konsumieren
+//      → Passwort hashen + in DB schreiben
+
+interface PasswordResetTicketPayload {
+  sub: string;
+  username: string;
+  role: string;
+  aud: "password-reset";
+}
+
+export function createPasswordResetTicket(user: DbUser): string {
+  const payload: PasswordResetTicketPayload = {
+    sub: user.id,
+    username: user.username,
+    role: user.role,
+    aud: "password-reset",
+  };
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: "10m" });
+}
+
+export function verifyPasswordResetTicket(ticket: string): PasswordResetTicketPayload | null {
+  try {
+    const decoded = jwt.verify(ticket, JWT_SECRET, { audience: "password-reset" }) as PasswordResetTicketPayload;
+    if (decoded.aud !== "password-reset") return null;
+    return decoded;
+  } catch {
+    return null;
+  }
 }
 
 /** Loest den Magic-Link-Token ein und liefert den User zurueck.

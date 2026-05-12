@@ -1395,9 +1395,9 @@ onMounted(() => {
               <div class="flex justify-end pt-1">
                 <button
                   @click="changePassword"
-                  :disabled="savingPassword || !oldPassword || !newPassword"
+                  :disabled="savingPassword || !oldPassword || !newPassword || !confirmPassword"
                   class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-                  :style="{ opacity: savingPassword || !oldPassword || !newPassword ? 0.5 : 1 }"
+                  :style="{ opacity: savingPassword || !oldPassword || !newPassword || !confirmPassword ? 0.5 : 1 }"
                 >
                   {{ savingPassword ? "..." : "Passwort aendern" }}
                 </button>

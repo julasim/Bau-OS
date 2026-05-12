@@ -48,8 +48,18 @@ import {
   verifyEmailSetupTicket,
   createMagicLinkToken,
   consumeMagicLinkToken,
+  createPasswordResetTicket,
+  verifyPasswordResetTicket,
+  updateDbUserPassword,
+  hashPassword,
 } from "./auth.js";
-import { sendMail, buildLoginOtpMail, buildEmailVerifyMail, buildMagicLinkMail } from "./email.js";
+import {
+  sendMail,
+  buildLoginOtpMail,
+  buildEmailVerifyMail,
+  buildMagicLinkMail,
+  buildPasswordResetMail,
+} from "./email.js";
 import { logEvent as audit } from "../data/db-audit.js";
 import { APP_URL } from "../config.js";
 
@@ -646,6 +656,153 @@ app.get("/api/auth/login/magic-link/consume", async (c) => {
     userAgent: meta.userAgent,
   });
   return c.json({ token, username: user.username, role: user.role });
+});
+
+// ── Passwort-Reset (ohne Auth) ──────────────────────────────────────────────
+//
+// Schritt 1: POST /api/auth/forgot-password (username)
+//   - User anhand username suchen (DB zuerst, dann JSON-Fallback).
+//   - Wenn User eine Email hat: OTP generieren (6 Stellen, 10 Min.) + per
+//     Mail senden + Reset-Ticket zurueckgeben (JWT, aud="password-reset").
+//   - Immer 200 — kein User-Enumeration-Leak.
+//
+// Schritt 2: POST /api/auth/reset-password (resetToken + code + newPassword)
+//   - Reset-Ticket verifizieren (aud-Check).
+//   - OTP-Code pruefen + konsumieren.
+//   - Passwort bcrypt-hashen + in DB schreiben.
+//   - 200 bei Erfolg.
+
+app.post("/api/auth/forgot-password", async (c) => {
+  let body: { username: string };
+  try {
+    body = await c.req.json<{ username: string }>();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
+  if (!body.username) return c.json({ error: "Benutzername erforderlich" }, 400);
+
+  const usernameInput = body.username.trim();
+  const meta = reqMeta(c);
+
+  // Immer OK zurueck — kein Enumeration-Leak.
+  const genericOk = () => c.json({ ok: true, message: "Falls ein Konto existiert, wurde eine E-Mail gesendet." });
+
+  const dbUser = DB_ENABLED ? await findDbUserByUsername(usernameInput) : null;
+  if (!dbUser || !dbUser.email) {
+    // Kein DB-User oder keine Email → still OK.
+    void audit({
+      event: "password_reset.request",
+      actorUsername: usernameInput,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      details: { reason: dbUser ? "no-email" : "user-not-found" },
+      ok: false,
+    });
+    return genericOk();
+  }
+
+  try {
+    const { ticket: otpTicket, code } = await createEmailOtp(dbUser.id, "password-reset");
+    const resetToken = createPasswordResetTicket(dbUser);
+    const mail = buildPasswordResetMail({
+      username: dbUser.displayName ?? dbUser.username,
+      // Reset-URL fuer Magic-Link-Style: nicht benutzt in OTP-Flow, aber
+      // buildPasswordResetMail benoetigt sie — wir geben eine leere Anweisung.
+      resetUrl: `${publicBaseUrl(c)}/login`,
+    });
+    // Subject und Text passen dennoch — wir ersetzen den Textinhalt nicht.
+    // Stattdessen: einfache OTP-Mail analog zu buildLoginOtpMail.
+    const otpMail = {
+      subject: "Bau-OS · Passwort zurücksetzen",
+      text: `Hallo ${dbUser.displayName ?? dbUser.username},\n\ndein Bestätigungscode zum Zurücksetzen des Passworts lautet:\n\n  ${code}\n\nDer Code ist 10 Minuten gültig. Falls du diese Anfrage nicht gestellt hast, kannst du diese Mail ignorieren.\n\nBau-OS`,
+      html: mail.html,
+    };
+    const sent = await sendMail({ to: dbUser.email, subject: otpMail.subject, text: otpMail.text, html: otpMail.html });
+    void audit({
+      event: sent ? "password_reset.email.sent" : "password_reset.email.fail",
+      actorUserId: dbUser.id,
+      actorUsername: dbUser.username,
+      actorRole: dbUser.role,
+      ip: meta.ip,
+      userAgent: meta.userAgent,
+      details: { sent, otpTicket: otpTicket.slice(0, 8) + "…" },
+      ok: sent,
+    });
+    if (!sent) {
+      // Keinen Fehler nach aussen leaken — trotzdem OK.
+      return genericOk();
+    }
+    return c.json({ ok: true, resetToken, emailHint: maskEmail(dbUser.email) });
+  } catch (err) {
+    const { logError } = await import("../logger.js");
+    logError("[PasswordReset] OTP konnte nicht erstellt werden", err);
+    return genericOk();
+  }
+});
+
+app.post("/api/auth/reset-password", async (c) => {
+  let body: { resetToken: string; code: string; newPassword: string };
+  try {
+    body = await c.req.json<typeof body>();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
+  if (!body.resetToken || !body.code || !body.newPassword) {
+    return c.json({ error: "resetToken, code und newPassword erforderlich" }, 400);
+  }
+  if (body.newPassword.length < 8) {
+    return c.json({ error: "Passwort muss mindestens 8 Zeichen haben" }, 400);
+  }
+
+  const claim = verifyPasswordResetTicket(body.resetToken);
+  if (!claim) return c.json({ error: "Reset-Token abgelaufen oder ungueltig" }, 401);
+
+  const user = await findDbUserById(claim.sub);
+  if (!user) return c.json({ error: "Benutzer nicht gefunden" }, 404);
+
+  const meta = reqMeta(c);
+
+  // Juengsten unbenutzten Password-Reset-OTP des Users finden.
+  const { getDb } = await import("../db/client.js");
+  const db = getDb();
+  const [otpRow] = await db`
+    SELECT ticket FROM email_otp_tokens
+     WHERE user_id = ${user.id} AND purpose = 'password-reset' AND used = false
+       AND expires_at > now()
+     ORDER BY created_at DESC
+     LIMIT 1
+  `;
+  if (!otpRow) {
+    return c.json({ error: "Kein aktiver Code. Bitte Reset neu starten." }, 401);
+  }
+
+  const result = await verifyAndConsumeEmailOtp(String(otpRow.ticket), body.code, "password-reset");
+  if (!result.ok) {
+    const msg =
+      result.reason === "expired"
+        ? "Code abgelaufen. Bitte Reset neu starten."
+        : result.reason === "too-many-attempts"
+          ? "Zu viele Fehlversuche. Bitte Reset neu starten."
+          : result.reason === "used"
+            ? "Code wurde bereits verwendet."
+            : "Code ungueltig.";
+    return c.json({ error: msg }, 401);
+  }
+
+  const hash = await hashPassword(body.newPassword);
+  const ok = await updateDbUserPassword(user.id, hash);
+  if (!ok) return c.json({ error: "Passwort konnte nicht gespeichert werden." }, 500);
+
+  void audit({
+    event: "password_reset.success",
+    actorUserId: user.id,
+    actorUsername: user.username,
+    actorRole: user.role,
+    ip: meta.ip,
+    userAgent: meta.userAgent,
+  });
+
+  return c.json({ ok: true });
 });
 
 // ── Setup-Wizard (ohne Auth) ────────────────────────────────────────────────
