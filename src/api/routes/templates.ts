@@ -25,14 +25,69 @@ import {
   listAvailableVariables,
   type TemplateKind,
 } from "../../data/db-templates.js";
+import {
+  listCustomVariables,
+  createCustomVariable,
+  updateCustomVariable,
+  deleteCustomVariable,
+} from "../../data/db-custom-placeholders.js";
 
 export const templatesRoutes = new Hono<AppEnv>();
 
 const VALID_KINDS: TemplateKind[] = ["note", "meeting", "bautagebuch"];
 
-// ── Variablen-Liste (statisch) ─────────────────────────────────────────────
-templatesRoutes.get("/templates/_variables", (c) => {
-  return c.json(listAvailableVariables());
+// ── Variablen-Liste (built-in + custom) ───────────────────────────────────
+templatesRoutes.get("/templates/_variables", async (c) => {
+  const builtin = listAvailableVariables();
+  let custom: { name: string; description: string }[] = [];
+  try {
+    const cvs = await listCustomVariables();
+    custom = cvs.map((cv) => ({ name: cv.name, description: cv.description ?? cv.value ?? "Eigener Platzhalter" }));
+  } catch {
+    /* DB nicht verfügbar */
+  }
+  return c.json([...builtin, ...custom]);
+});
+
+// ── Custom Variables CRUD ─────────────────────────────────────────────────
+templatesRoutes.get("/templates/custom-variables", async (c) => {
+  const list = await listCustomVariables();
+  return c.json(list);
+});
+
+templatesRoutes.post("/templates/custom-variables", async (c) => {
+  let body: { name?: string; description?: string | null; value?: string };
+  try {
+    body = await c.req.json<typeof body>();
+  } catch {
+    return c.json({ error: "Ungueltiger JSON-Body" }, 400);
+  }
+  if (!body.name?.trim()) return c.json({ error: "name ist Pflicht" }, 400);
+  if (typeof body.value !== "string") return c.json({ error: "value ist Pflicht" }, 400);
+  const created = await createCustomVariable({
+    name: body.name.trim(),
+    description: body.description ?? null,
+    value: body.value,
+  });
+  return c.json(created, 201);
+});
+
+templatesRoutes.patch("/templates/custom-variables/:cvId", async (c) => {
+  const cvId = c.req.param("cvId");
+  let body: { name?: string; description?: string | null; value?: string };
+  try {
+    body = await c.req.json<typeof body>();
+  } catch {
+    return c.json({ error: "Ungueltiger JSON-Body" }, 400);
+  }
+  const updated = await updateCustomVariable(cvId, body);
+  if (!updated) return c.json({ error: "Variable nicht gefunden" }, 404);
+  return c.json(updated);
+});
+
+templatesRoutes.delete("/templates/custom-variables/:cvId", async (c) => {
+  const ok = await deleteCustomVariable(c.req.param("cvId"));
+  return c.json({ ok });
 });
 
 // ── List ───────────────────────────────────────────────────────────────────

@@ -1087,6 +1087,142 @@ async function removeLogo() {
   }
 }
 
+// ── Custom Template Variables ──────────────────────────────────────────────
+interface CustomVariable {
+  id: string;
+  name: string;
+  description: string | null;
+  value: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const customVars = ref<CustomVariable[]>([]);
+const customVarsBusy = ref(false);
+const customVarDraft = ref({ name: "", description: "", value: "" });
+const customVarEditing = ref<CustomVariable | null>(null);
+
+async function loadCustomVars() {
+  try {
+    customVars.value = await api.get<CustomVariable[]>("/templates/custom-variables");
+  } catch {
+    customVars.value = [];
+  }
+}
+
+function startEditCustomVar(cv: CustomVariable) {
+  customVarEditing.value = cv;
+  customVarDraft.value = { name: cv.name, description: cv.description ?? "", value: cv.value };
+}
+
+function cancelCustomVar() {
+  customVarEditing.value = null;
+  customVarDraft.value = { name: "", description: "", value: "" };
+}
+
+async function saveCustomVar() {
+  if (!customVarDraft.value.name.trim()) return;
+  customVarsBusy.value = true;
+  try {
+    if (customVarEditing.value) {
+      const updated = await api.patch<CustomVariable>(`/templates/custom-variables/${customVarEditing.value.id}`, {
+        name: customVarDraft.value.name.trim(),
+        description: customVarDraft.value.description.trim() || null,
+        value: customVarDraft.value.value,
+      });
+      customVars.value = customVars.value.map((v) => (v.id === updated.id ? updated : v));
+      customVarEditing.value = null;
+    } else {
+      const created = await api.post<CustomVariable>("/templates/custom-variables", {
+        name: customVarDraft.value.name.trim(),
+        description: customVarDraft.value.description.trim() || null,
+        value: customVarDraft.value.value,
+      });
+      customVars.value = [...customVars.value, created];
+    }
+    customVarDraft.value = { name: "", description: "", value: "" };
+    customVarEditing.value = null;
+    flash("success", "Platzhalter gespeichert");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  } finally {
+    customVarsBusy.value = false;
+  }
+}
+
+async function deleteCustomVar(cv: CustomVariable) {
+  if (!confirm(`Platzhalter "${cv.name}" löschen?`)) return;
+  customVarsBusy.value = true;
+  try {
+    await api.delete(`/templates/custom-variables/${cv.id}`);
+    customVars.value = customVars.value.filter((v) => v.id !== cv.id);
+    if (customVarEditing.value?.id === cv.id) cancelCustomVar();
+    flash("success", "Platzhalter gelöscht");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Löschen fehlgeschlagen");
+  } finally {
+    customVarsBusy.value = false;
+  }
+}
+
+// ── Custom Project Modules ─────────────────────────────────────────────────
+interface CustomProjectModule {
+  id: string;
+  key: string;
+  label: string;
+  description: string | null;
+  icon: string;
+  enabledByDefault: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+const customModules = ref<CustomProjectModule[]>([]);
+const customModulesBusy = ref(false);
+const customModuleDraft = ref({ key: "", label: "", description: "", enabledByDefault: true });
+
+async function loadCustomModules() {
+  try {
+    customModules.value = await api.get<CustomProjectModule[]>("/project-modules/custom");
+  } catch {
+    customModules.value = [];
+  }
+}
+
+async function saveCustomModule() {
+  if (!customModuleDraft.value.key.trim() || !customModuleDraft.value.label.trim()) return;
+  customModulesBusy.value = true;
+  try {
+    const created = await api.post<CustomProjectModule>("/project-modules/custom", {
+      key: customModuleDraft.value.key.trim().toLowerCase().replace(/\s+/g, "_"),
+      label: customModuleDraft.value.label.trim(),
+      description: customModuleDraft.value.description.trim() || null,
+      enabledByDefault: customModuleDraft.value.enabledByDefault,
+    });
+    customModules.value = [...customModules.value, created];
+    customModuleDraft.value = { key: "", label: "", description: "", enabledByDefault: true };
+    flash("success", "Modul angelegt");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Anlegen fehlgeschlagen");
+  } finally {
+    customModulesBusy.value = false;
+  }
+}
+
+async function deleteCustomModule(m: CustomProjectModule) {
+  if (!confirm(`Modul "${m.label}" löschen?`)) return;
+  customModulesBusy.value = true;
+  try {
+    await api.delete(`/project-modules/custom/${m.id}`);
+    customModules.value = customModules.value.filter((c) => c.id !== m.id);
+    flash("success", "Modul gelöscht");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Löschen fehlgeschlagen");
+  } finally {
+    customModulesBusy.value = false;
+  }
+}
+
 // ── Sidebar-Navigation (Phase 6a) ───────────────────────────────────────────
 // Settings ist als Apple-Settings-style Sidebar aufgebaut: links Sektionen-
 // Liste, rechts der Inhalt der aktiven Sektion. Der gewaehlte Tab bleibt
@@ -1150,6 +1286,8 @@ onMounted(() => {
   void loadExportVariables();
   void loadProjectModules();
   void loadPreferences();
+  void loadCustomVars();
+  void loadCustomModules();
 });
 </script>
 
@@ -2306,6 +2444,90 @@ onMounted(() => {
                 </div>
               </div>
             </div>
+
+            <!-- ── Eigene Platzhalter ─────────────────────────── -->
+            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--color-border)">
+              <h4 class="settings-h3" style="font-size: 13px; margin-bottom: 4px">Eigene Platzhalter</h4>
+              <p class="text-xs" style="color: var(--color-text-muted); margin: 0 0 12px">
+                Definiere eigene <code class="font-mono">&#123;&#123;Platzhalter&#125;&#125;</code> mit einem festen
+                Wert — z.B. <code class="font-mono">&#123;&#123;Bauleiter&#125;&#125;</code> → "Max Muster". Diese Werte
+                werden beim Rendern einer Vorlage eingesetzt.
+              </p>
+
+              <!-- Bestehende custom vars -->
+              <div v-if="customVars.length > 0" class="settings-card settings-divide" style="margin-bottom: 12px">
+                <div v-for="cv in customVars" :key="cv.id" class="settings-row flex items-center gap-2 px-4 py-2.5">
+                  <code class="font-mono text-xs" style="min-width: 120px; color: var(--color-text)">
+                    {{ placeholderRef(cv.name) }}
+                  </code>
+                  <span class="flex-1 text-sm" style="color: var(--color-text-secondary)">{{ cv.value || "—" }}</span>
+                  <span v-if="cv.description" class="text-xs" style="color: var(--color-text-tertiary)">{{
+                    cv.description
+                  }}</span>
+                  <button
+                    @click="startEditCustomVar(cv)"
+                    class="text-xs px-2 py-1 rounded settings-ghost-btn"
+                    :disabled="customVarsBusy"
+                  >
+                    Bearbeiten
+                  </button>
+                  <button
+                    @click="deleteCustomVar(cv)"
+                    class="text-xs px-2 py-1 rounded"
+                    style="background: transparent; border: 1px solid #dc2626; color: #dc2626; cursor: pointer"
+                    :disabled="customVarsBusy"
+                  >
+                    ×
+                  </button>
+                </div>
+              </div>
+
+              <!-- Form zum Anlegen / Bearbeiten -->
+              <div class="settings-card" style="padding: 14px 16px">
+                <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px; color: var(--color-text-secondary)">
+                  {{ customVarEditing ? "Platzhalter bearbeiten" : "Neuer Platzhalter" }}
+                </div>
+                <div class="flex" style="gap: 8px; flex-wrap: wrap">
+                  <input
+                    v-model="customVarDraft.name"
+                    placeholder="Name (z.B. Bauleiter)"
+                    class="settings-input px-3 py-1.5 rounded text-sm outline-none"
+                    style="flex: 1; min-width: 120px"
+                    :title="'Wird zu ' + placeholderRef(customVarDraft.name || '...')"
+                  />
+                  <input
+                    v-model="customVarDraft.value"
+                    placeholder="Wert (z.B. Max Muster)"
+                    class="settings-input px-3 py-1.5 rounded text-sm outline-none"
+                    style="flex: 1; min-width: 140px"
+                  />
+                  <input
+                    v-model="customVarDraft.description"
+                    placeholder="Beschreibung (optional)"
+                    class="settings-input px-3 py-1.5 rounded text-sm outline-none"
+                    style="flex: 1.5; min-width: 160px"
+                  />
+                </div>
+                <div class="flex" style="gap: 8px; margin-top: 10px; justify-content: flex-end">
+                  <button
+                    v-if="customVarEditing"
+                    @click="cancelCustomVar"
+                    class="text-sm px-3 py-1.5 rounded settings-ghost-btn"
+                    :disabled="customVarsBusy"
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    @click="saveCustomVar"
+                    :disabled="customVarsBusy || !customVarDraft.name.trim()"
+                    class="primary-btn text-sm px-4 py-1.5 rounded font-medium"
+                    :style="{ opacity: customVarsBusy || !customVarDraft.name.trim() ? 0.5 : 1 }"
+                  >
+                    {{ customVarsBusy ? "..." : customVarEditing ? "Speichern" : "Anlegen" }}
+                  </button>
+                </div>
+              </div>
+            </div>
           </section>
         </template>
 
@@ -2453,6 +2675,96 @@ onMounted(() => {
               <strong style="color: var(--color-text-secondary)">Tipp:</strong>
               Im Projekt-Detail oben rechts kannst du diese Defaults pro Projekt überschreiben — z.B. bei reinen
               Planungs-Projekten ohne Baustelle das Bautagebuch ausblenden.
+            </div>
+
+            <!-- ── Eigene Module anlegen ─────────────────────────── -->
+            <div style="margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--color-border)">
+              <h4 class="settings-h3" style="font-size: 13px; margin-bottom: 4px">Eigene Module</h4>
+              <p class="text-xs" style="color: var(--color-text-muted); margin: 0 0 12px">
+                Definiere eigene Projektkategorien — z.B. "Gewährleistung", "Mängelverfolgung". Eigene Module erscheinen
+                zusätzlich zu den Standard-Modulen und können pro Projekt aktiviert/deaktiviert werden.
+              </p>
+
+              <!-- Liste bestehender custom modules -->
+              <div v-if="customModules.length > 0" class="settings-card settings-divide" style="margin-bottom: 12px">
+                <div v-for="m in customModules" :key="m.id" class="settings-row flex items-center gap-3 px-4 py-2.5">
+                  <div style="flex: 1; min-width: 0">
+                    <div style="font-size: 13px; font-weight: 500; color: var(--color-text)">{{ m.label }}</div>
+                    <div class="text-xs font-mono" style="color: var(--color-text-tertiary)">Key: {{ m.key }}</div>
+                    <div v-if="m.description" class="text-xs" style="color: var(--color-text-tertiary)">
+                      {{ m.description }}
+                    </div>
+                  </div>
+                  <span
+                    class="text-xs px-2 py-0.5 rounded"
+                    :style="{
+                      background: m.enabledByDefault ? 'var(--color-bg-subtle)' : 'transparent',
+                      border: '1px solid var(--color-border)',
+                      color: 'var(--color-text-tertiary)',
+                    }"
+                    >{{ m.enabledByDefault ? "Standard: An" : "Standard: Aus" }}</span
+                  >
+                  <button
+                    @click="deleteCustomModule(m)"
+                    class="text-xs px-2 py-1 rounded"
+                    style="
+                      background: transparent;
+                      border: 1px solid #dc2626;
+                      color: #dc2626;
+                      cursor: pointer;
+                      flex-shrink: 0;
+                    "
+                    :disabled="customModulesBusy"
+                    title="Modul löschen"
+                  >
+                    Löschen
+                  </button>
+                </div>
+              </div>
+              <div v-else class="text-xs" style="color: var(--color-text-tertiary); margin-bottom: 12px">
+                Noch keine eigenen Module angelegt.
+              </div>
+
+              <!-- Formular neues Modul -->
+              <div class="settings-card" style="padding: 14px 16px">
+                <div style="font-size: 12px; font-weight: 600; margin-bottom: 10px; color: var(--color-text-secondary)">
+                  Neues Modul anlegen
+                </div>
+                <div class="flex" style="gap: 8px; flex-wrap: wrap">
+                  <input
+                    v-model="customModuleDraft.label"
+                    placeholder="Bezeichnung (z.B. Gewährleistung)"
+                    class="settings-input px-3 py-1.5 rounded text-sm outline-none"
+                    style="flex: 1.5; min-width: 160px"
+                  />
+                  <input
+                    v-model="customModuleDraft.key"
+                    placeholder="Schlüssel (z.B. gewaehrleistung)"
+                    class="settings-input px-3 py-1.5 rounded text-sm outline-none font-mono"
+                    style="flex: 1; min-width: 140px"
+                  />
+                  <input
+                    v-model="customModuleDraft.description"
+                    placeholder="Beschreibung (optional)"
+                    class="settings-input px-3 py-1.5 rounded text-sm outline-none"
+                    style="flex: 1.5; min-width: 160px"
+                  />
+                </div>
+                <div class="flex items-center justify-between" style="margin-top: 10px">
+                  <label class="flex items-center" style="gap: 6px; cursor: pointer; font-size: 12px">
+                    <input type="checkbox" v-model="customModuleDraft.enabledByDefault" />
+                    <span>Standardmäßig aktiv</span>
+                  </label>
+                  <button
+                    @click="saveCustomModule"
+                    :disabled="customModulesBusy || !customModuleDraft.label.trim() || !customModuleDraft.key.trim()"
+                    class="primary-btn text-sm px-4 py-1.5 rounded font-medium"
+                    :style="{ opacity: customModulesBusy || !customModuleDraft.label.trim() ? 0.5 : 1 }"
+                  >
+                    {{ customModulesBusy ? "..." : "Modul anlegen" }}
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
         </template>

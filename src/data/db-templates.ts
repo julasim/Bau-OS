@@ -197,6 +197,19 @@ async function buildVariables(ctx: RenderContext): Promise<Record<string, string
     }
   }
 
+  // Custom Variables aus DB laden
+  if (DB_ENABLED) {
+    try {
+      const { listCustomVariables } = await import("./db-custom-placeholders.js");
+      const customVars = await listCustomVariables();
+      for (const cv of customVars) {
+        if (cv.value) vars[cv.name] = cv.value;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   // Caller-Overrides haben Vorrang
   if (ctx.overrides) {
     for (const [k, v] of Object.entries(ctx.overrides)) {
