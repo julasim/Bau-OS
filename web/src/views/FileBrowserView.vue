@@ -985,45 +985,9 @@ onBeforeUnmount(() => {
               </svg>
               <span>Zuletzt bearbeitet</span>
             </div>
-            <div
-              class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': mode === 'starred' }"
-              @click="setMode('starred')"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-              </svg>
-              <span>Markiert</span>
-            </div>
-            <div
-              class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': mode === 'shared' }"
-              @click="setMode('shared')"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
-                <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
-              </svg>
-              <span>Geteilt</span>
-            </div>
+            <!-- Markiert + Geteilt: Backend noch nicht implementiert — kommt in späterer Version -->
+            <!-- <div class="files-sidebar-item" @click="setMode('starred')"><span>Markiert</span></div> -->
+            <!-- <div class="files-sidebar-item" @click="setMode('shared')"><span>Geteilt</span></div> -->
           </div>
 
           <!-- Section: Hierarchie -->
@@ -1161,25 +1125,7 @@ onBeforeUnmount(() => {
               Zurück
             </button>
             <span class="files-detail-breadcrumb">{{ selected.node.name }}</span>
-            <button
-              class="files-preview-star"
-              :class="{ 'files-preview-star-on': selected.node.starred }"
-              @click="toggleStar(selected.node)"
-              :title="selected.node.starred ? 'Markierung entfernen' : 'Markieren'"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                :fill="selected.node.starred ? 'currentColor' : 'none'"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-              </svg>
-            </button>
+            <!-- Star-Button: Backend noch nicht implementiert -->
           </div>
 
           <!-- Body: Info-Spalte links + Inhalt rechts -->
@@ -1221,7 +1167,7 @@ onBeforeUnmount(() => {
               </div>
               <div class="files-preview-actions">
                 <a class="files-preview-btn-primary" :href="downloadUrl(selected.node)" target="_blank">Öffnen</a>
-                <button class="files-preview-btn-secondary" @click="openShareModal(selected.node)">Teilen</button>
+                <!-- Teilen-Button: Backend noch nicht implementiert -->
                 <div class="files-preview-actions-menu-wrap">
                   <button
                     class="files-preview-btn-secondary"
@@ -1232,27 +1178,7 @@ onBeforeUnmount(() => {
                     ···
                   </button>
                   <div v-if="actionMenuOpen" class="files-action-menu" @click.stop>
-                    <button
-                      class="files-action-item"
-                      @click="
-                        actionMenuOpen = false;
-                        toggleStar(selected.node);
-                      "
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-                      </svg>
-                      {{ selected.node.starred ? "Markierung entfernen" : "Markieren" }}
-                    </button>
+                    <!-- Markieren: Backend noch nicht implementiert -->
                     <a
                       class="files-action-item"
                       :href="downloadUrl(selected.node)"
@@ -1275,31 +1201,7 @@ onBeforeUnmount(() => {
                       </svg>
                       Herunterladen
                     </a>
-                    <button
-                      class="files-action-item"
-                      @click="
-                        actionMenuOpen = false;
-                        openShareModal(selected.node);
-                      "
-                    >
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <circle cx="18" cy="5" r="3" />
-                        <circle cx="6" cy="12" r="3" />
-                        <circle cx="18" cy="19" r="3" />
-                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-                      </svg>
-                      Teilen…
-                    </button>
+                    <!-- Teilen: Backend noch nicht implementiert -->
                     <div class="files-action-divider"></div>
                     <button
                       class="files-action-item files-action-danger"
@@ -1394,29 +1296,7 @@ onBeforeUnmount(() => {
                 >
                   {{ it.name }}
                 </span>
-                <button
-                  v-if="it.kind !== 'folder' && it.id"
-                  class="files-row-star"
-                  :class="{
-                    'files-row-star-on': it.starred,
-                    'files-row-star-active-row': selected?.columnIndex === idx && selected?.node?.name === it.name,
-                  }"
-                  @click="toggleStar(it, $event)"
-                  :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
-                >
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    :fill="it.starred ? 'currentColor' : 'none'"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-                  </svg>
-                </button>
+                <!-- Star-Button: Backend noch nicht implementiert -->
                 <svg
                   v-if="it.kind === 'folder'"
                   width="10"
@@ -1454,29 +1334,7 @@ onBeforeUnmount(() => {
                 :style="{ fontSize: isMonoKind(it.kind) ? '12px' : '13px' }"
                 >{{ it.name }}</span
               >
-              <button
-                v-if="it.kind !== 'folder' && it.id"
-                class="files-row-star files-row-star-inline"
-                :class="{
-                  'files-row-star-on': it.starred,
-                  'files-row-star-active-row': selected?.node?.name === it.name,
-                }"
-                @click="toggleStar(it, $event)"
-                :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  :fill="it.starred ? 'currentColor' : 'none'"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-                </svg>
-              </button>
+              <!-- Star-Button: Backend noch nicht implementiert -->
             </span>
             <span class="mono files-list-meta">{{ it.updated ?? "—" }}</span>
             <span class="mono files-list-meta">{{ it.size ?? "—" }}</span>

@@ -149,6 +149,30 @@ filesRoutes.delete("/files", async (c) => {
   return c.json({ success: true });
 });
 
+// ── Zuletzt bearbeitet ──────────────────────────────────────────────────────
+// Gibt die 50 zuletzt geaenderten Dateien zurueck, sortiert nach updatedAt desc.
+// Nur DB-Modus — im FS-Modus gibt es kein updatedAt aus der DB.
+filesRoutes.get("/files/recent", async (c) => {
+  if (!DB_ENABLED || !fileRepo) return c.json([]);
+  const files = await fileRepo.list();
+  const sorted = [...files]
+    .filter((f) => !!f.updatedAt)
+    .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""))
+    .slice(0, 50);
+  return c.json(
+    sorted.map((f) => ({
+      name: f.filename,
+      type: "file" as const,
+      size: f.filesize,
+      modified: f.updatedAt,
+      extension: f.filetype || "",
+      id: f.id,
+      project: f.project,
+      analyzed: f.analyzed,
+    })),
+  );
+});
+
 // ── Datei-Suche (DB) ────────────────────────────────────────────────────────
 filesRoutes.get("/files/search", async (c) => {
   const q = c.req.query("q");
