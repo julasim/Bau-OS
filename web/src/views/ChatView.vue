@@ -117,9 +117,7 @@ async function selectSession(id: string) {
     sidebarOpen.value = false;
   }
   try {
-    const msgs = await api.get<{ role: string; content: string; tools: string[] }[]>(
-      `/chat/sessions/${id}/messages`,
-    );
+    const msgs = await api.get<{ role: string; content: string; tools: string[] }[]>(`/chat/sessions/${id}/messages`);
     for (const m of msgs) {
       if (m.role === "user" || m.role === "assistant") {
         messages.value.push({
@@ -281,23 +279,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full" style="background: var(--color-bg)">
+  <div class="flex" style="height: 100vh; overflow: hidden; background: var(--color-bg)">
     <!-- Mobile-Backdrop fuer Sidebar-Drawer (nur auf <768px sichtbar via CSS) -->
-    <div
-      v-if="sidebarOpen"
-      class="chat-sidebar-backdrop"
-      @click="sidebarOpen = false"
-    ></div>
+    <div v-if="sidebarOpen" class="chat-sidebar-backdrop" @click="sidebarOpen = false"></div>
 
     <!-- Session-Sidebar -->
     <aside
       v-if="sidebarOpen"
       class="chat-sidebar flex flex-col flex-shrink-0"
-      style="
-        width: 260px;
-        border-right: 1px solid var(--color-border);
-        background: var(--color-bg-subtle);
-      "
+      style="width: 260px; border-right: 1px solid var(--color-border); background: var(--color-bg-subtle)"
     >
       <!-- Neuer Chat -->
       <div style="padding: 12px">
@@ -337,23 +327,14 @@ onUnmounted(() => {
             <span class="flex-1 truncate" :title="session.lastMessage || session.title">
               {{ session.lastMessage || session.title }}
             </span>
-            <button
-              @click.stop="deleteSession(session.id)"
-              class="session-del"
-              aria-label="Löschen"
-            >
+            <button @click.stop="deleteSession(session.id)" class="session-del" aria-label="Löschen">
               <BIcon name="x" :size="12" />
             </button>
           </div>
         </div>
         <div
           v-if="sessions.length === 0"
-          style="
-            padding: 16px 12px;
-            font-size: 11px;
-            color: var(--color-text-tertiary);
-            text-align: center;
-          "
+          style="padding: 16px 12px; font-size: 11px; color: var(--color-text-tertiary); text-align: center"
         >
           Noch keine Chats
         </div>
@@ -371,29 +352,17 @@ onUnmounted(() => {
           gap: 6px;
         "
       >
-        <span
-          style="
-            width: 6px;
-            height: 6px;
-            border-radius: 9999px;
-            background: var(--color-success);
-          "
-        />
+        <span style="width: 6px; height: 6px; border-radius: 9999px; background: var(--color-success)" />
         <span class="font-mono">Main</span>
       </div>
     </aside>
 
     <!-- Conversation -->
-    <div class="flex-1 flex flex-col min-w-0" style="background: var(--color-bg)">
+    <div class="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden" style="background: var(--color-bg)">
       <!-- Conversation-Header -->
       <div
         class="flex items-center gap-3"
-        style="
-          height: 48px;
-          padding: 0 20px;
-          border-bottom: 1px solid var(--color-border-subtle);
-          flex-shrink: 0;
-        "
+        style="height: 48px; padding: 0 20px; border-bottom: 1px solid var(--color-border-subtle); flex-shrink: 0"
       >
         <button
           @click="sidebarOpen = !sidebarOpen"
@@ -419,26 +388,16 @@ onUnmounted(() => {
         </div>
         <div class="flex-1 min-w-0">
           <div style="font-size: 13px; font-weight: 600; color: var(--color-text)">Main</div>
-          <div style="font-size: 11px; color: var(--color-text-muted)">
-            professionell und freundlich
-          </div>
+          <div style="font-size: 11px; color: var(--color-text-muted)">professionell und freundlich</div>
         </div>
       </div>
 
       <!-- Messages -->
       <div ref="chatContainer" class="flex-1 overflow-y-auto">
-        <div
-          style="max-width: 760px; margin: 0 auto; padding: 32px 20px"
-          class="flex flex-col gap-6"
-        >
+        <div style="max-width: 760px; margin: 0 auto; padding: 32px 20px" class="flex flex-col gap-6">
           <div
             v-if="messages.length === 0 && !loading"
-            style="
-              text-align: center;
-              padding: 60px 0;
-              font-size: 13px;
-              color: var(--color-text-tertiary);
-            "
+            style="text-align: center; padding: 60px 0; font-size: 13px; color: var(--color-text-tertiary)"
           >
             Starte ein Gespräch mit dem KI-Agenten.
           </div>
@@ -473,19 +432,11 @@ onUnmounted(() => {
             </div>
             <div style="flex: 1; min-width: 0; max-width: calc(100% - 40px)">
               <!-- Tool-Call-Chips -->
-              <div
-                v-if="msg.tools && msg.tools.length > 0"
-                class="flex flex-wrap"
-                style="gap: 4px; margin-bottom: 6px"
-              >
-                <span v-for="tool in msg.tools" :key="tool" class="tool-chip">
-                  ↳ {{ tool }}
-                </span>
+              <div v-if="msg.tools && msg.tools.length > 0" class="flex flex-wrap" style="gap: 4px; margin-bottom: 6px">
+                <span v-for="tool in msg.tools" :key="tool" class="tool-chip"> ↳ {{ tool }} </span>
               </div>
               <!-- Bubble -->
-              <div
-                :class="['msg-bubble', msg.role === 'user' ? 'msg-user' : 'msg-assistant']"
-              >
+              <div :class="['msg-bubble', msg.role === 'user' ? 'msg-user' : 'msg-assistant']">
                 <MarkdownRenderer v-if="msg.role === 'assistant'" :content="msg.text" />
                 <span v-else>{{ msg.text }}</span>
               </div>
@@ -513,13 +464,9 @@ onUnmounted(() => {
             <div class="msg-bubble msg-assistant" style="flex: 1; max-width: none">
               <div class="flex items-center" style="gap: 8px">
                 <span class="chat-spinner" />
-                <span v-if="toolCalls.length === 0" style="color: var(--color-text-muted)">
-                  ● Denkt nach…
-                </span>
+                <span v-if="toolCalls.length === 0" style="color: var(--color-text-muted)"> ● Denkt nach… </span>
                 <div v-else class="flex flex-wrap" style="gap: 4px">
-                  <span v-for="tool in toolCalls" :key="tool" class="tool-chip">
-                    ↳ {{ tool }}
-                  </span>
+                  <span v-for="tool in toolCalls" :key="tool" class="tool-chip"> ↳ {{ tool }} </span>
                 </div>
               </div>
             </div>
@@ -528,13 +475,7 @@ onUnmounted(() => {
       </div>
 
       <!-- Composer -->
-      <div
-        style="
-          border-top: 1px solid var(--color-border-subtle);
-          background: var(--color-bg);
-          flex-shrink: 0;
-        "
-      >
+      <div style="border-top: 1px solid var(--color-border-subtle); background: var(--color-bg); flex-shrink: 0">
         <div style="max-width: 760px; margin: 0 auto; padding: 16px 20px">
           <!-- Status-Pille bei Dateisuche -->
           <div
@@ -558,7 +499,10 @@ onUnmounted(() => {
                 >· {{ projectFilter }}</span
               >
               <button
-                @click="searchMode = false; projectFilter = null"
+                @click="
+                  searchMode = false;
+                  projectFilter = null;
+                "
                 style="
                   background: transparent;
                   border: none;
@@ -610,12 +554,7 @@ onUnmounted(() => {
                 <BIcon name="plus" :size="14" />
               </button>
               <div class="flex-1" />
-              <button
-                @click="send"
-                :disabled="loading || !input.trim()"
-                class="send-btn"
-                aria-label="Senden"
-              >
+              <button @click="send" :disabled="loading || !input.trim()" class="send-btn" aria-label="Senden">
                 <BIcon name="arrowRight" :size="14" :stroke-width="2" />
               </button>
             </div>
@@ -641,13 +580,7 @@ onUnmounted(() => {
                 <input type="checkbox" v-model="searchMode" />
                 <span style="font-size: 13px; color: var(--color-text)">Dateisuche aktivieren</span>
               </label>
-              <p
-                style="
-                  margin: 4px 0 0 24px;
-                  font-size: 11px;
-                  color: var(--color-text-tertiary);
-                "
-              >
+              <p style="margin: 4px 0 0 24px; font-size: 11px; color: var(--color-text-tertiary)">
                 Der Assistent durchsucht deinen Workspace vor jeder Antwort.
               </p>
               <div

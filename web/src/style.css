@@ -605,7 +605,9 @@ html.dark .text-red-700 {
 .app-v2 {
   display: grid;
   grid-template-columns: var(--rail-w) var(--list-w) 1fr;
+  grid-template-rows: 100vh; /* einzige Zeile = exakt Viewport-Höhe */
   height: 100vh;
+  overflow: hidden; /* Seite scrollt nie — nur innere Container */
   background: var(--bg-app);
   color: var(--fg-primary);
 }
