@@ -2501,47 +2501,6 @@ async function deleteMeeting() {
       </div>
     </div>
 
-    <!-- ═══ Stats-Bar ════════════════════════════════════════════ -->
-    <div v-if="info" class="stats-bar">
-      <!-- Fortschritt -->
-      <div class="stat-card">
-        <div class="stat-label">Fortschritt</div>
-        <div v-if="projectProgress !== null" class="stat-progress-bar">
-          <div class="stat-progress-fill" :style="{ width: projectProgress + '%' }"></div>
-        </div>
-        <div class="stat-value stat-value-sm">
-          <span v-if="info.startDate">{{ fmtDate(info.startDate) }}</span>
-          <span v-if="info.startDate && info.endDate" style="color: var(--color-text-faint)"> – </span>
-          <span v-if="info.endDate">{{ fmtDate(info.endDate) }}</span>
-          <span v-if="!info.startDate && !info.endDate" style="color: var(--color-text-tertiary)">Kein Zeitrahmen</span>
-        </div>
-      </div>
-
-      <!-- Offene Aufgaben -->
-      <div class="stat-card" @click="openTab('tasks')" style="cursor: pointer">
-        <div class="stat-label">Offene Aufgaben</div>
-        <div class="stat-value">{{ tasks.filter((t) => t.status !== "done").length }}</div>
-        <div class="stat-sub" v-if="(info.highPriorityCount ?? 0) > 0">{{ info.highPriorityCount }} hohe Priorität</div>
-        <div class="stat-sub" v-else>Keine hohe Priorität</div>
-      </div>
-
-      <!-- Nächster Termin -->
-      <div class="stat-card" @click="openTab('termine')" style="cursor: pointer">
-        <div class="stat-label">Nächster Termin</div>
-        <div class="stat-value stat-value-sm" v-if="nextTermin">{{ fmtDate(nextTermin.datum) }}</div>
-        <div class="stat-sub" v-if="nextTermin">{{ nextTermin.text }}</div>
-        <div class="stat-value stat-value-sm" v-else style="color: var(--color-text-tertiary)">—</div>
-      </div>
-
-      <!-- Budget -->
-      <div class="stat-card">
-        <div class="stat-label">Budget</div>
-        <div class="stat-value stat-value-sm" v-if="info.budget">{{ fmtEur(info.budgetUsed) }}</div>
-        <div class="stat-sub" v-if="info.budget">von {{ fmtEur(info.budget) }}</div>
-        <div class="stat-value stat-value-sm" v-else style="color: var(--color-text-tertiary)">—</div>
-      </div>
-    </div>
-
     <!-- ═══ Tab-Nav ════════════════════════════════════════════ -->
     <div
       class="flex items-center tab-nav"
@@ -5684,67 +5643,6 @@ async function deleteMeeting() {
   background: var(--color-bg-subtle);
   border: 1px solid var(--color-border);
   color: var(--color-text-secondary);
-}
-
-/* ── Stats Bar ─────────────────────────────────────── */
-.stats-bar {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
-  margin-top: 16px;
-}
-@media (max-width: 767px) {
-  .stats-bar {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-.stat-card {
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg);
-  padding: 12px 14px;
-  min-width: 0;
-  transition: background 0.15s;
-}
-.stat-card:hover {
-  background: var(--color-bg-subtle);
-}
-.stat-label {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--color-text-faint);
-  margin-bottom: 6px;
-}
-.stat-value {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--color-text);
-  line-height: 1.1;
-}
-.stat-value-sm {
-  font-size: 14px;
-  font-weight: 500;
-}
-.stat-sub {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  margin-top: 3px;
-}
-.stat-progress-bar {
-  height: 4px;
-  background: var(--color-border);
-  border-radius: 2px;
-  margin-bottom: 6px;
-  overflow: hidden;
-}
-.stat-progress-fill {
-  height: 100%;
-  background: var(--color-primary);
-  border-radius: 2px;
-  transition: width 0.3s;
 }
 
 /* ── Übersicht 2-Spalten ───────────────────────────── */
