@@ -24,6 +24,7 @@ interface DbStatus {
 }
 
 const status = ref<DbStatus | null>(null);
+const backendDown = ref(false);
 const dismissed = ref<string | null>(null); // key des dismissed Banners in dieser Session
 const reindexing = ref(false);
 let timer: number | null = null;
@@ -31,7 +32,14 @@ let timer: number | null = null;
 async function load() {
   try {
     status.value = await api.get<DbStatus>("/dashboard/db-status");
-  } catch {
+    backendDown.value = false;
+  } catch (err) {
+    // Netzwerkfehler (TypeError: Failed to fetch) → Backend nicht erreichbar.
+    // HTTP-Fehler (4xx/5xx) werden von api.get() bereits als Error geworfen,
+    // aber der /dashboard/db-status-Endpunkt sollte bei 401 eh auf /login umleiten.
+    if (err instanceof TypeError || (err instanceof Error && err.message.includes("fetch"))) {
+      backendDown.value = true;
+    }
     status.value = null;
   }
 }
@@ -50,6 +58,14 @@ async function runReindex() {
 }
 
 const banner = computed<{ key: string; level: "warn" | "error"; text: string } | null>(() => {
+  if (backendDown.value) {
+    return {
+      key: "backend-down",
+      level: "error",
+      text: "Server nicht erreichbar — bitte Internetverbindung und Server-Status prüfen. Die Seite wird automatisch aktualisiert.",
+    };
+  }
+
   const s = status.value;
   if (!s) return null;
 

@@ -2292,6 +2292,10 @@ async function deleteMeeting() {
                 <BIcon name="arrowUpRight" :size="12" />
                 <span>Als Markdown exportieren</span>
               </button>
+              <button class="action-menu-item" @click="exportProjectSummaryDocx">
+                <BIcon name="file" :size="12" />
+                <span>Zusammenfassung als Word…</span>
+              </button>
               <button class="action-menu-item" @click="printProject">
                 <BIcon name="file" :size="12" />
                 <span>Drucken / Als PDF…</span>
