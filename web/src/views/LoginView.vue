@@ -231,10 +231,17 @@ async function requestPasswordReset() {
     } else {
       // Kein Token → kein passendes Konto mit Email. Trotzdem eine
       // neutrale Meldung — kein Enumeration-Leak.
-      error.value = "Falls ein Konto mit dieser E-Mail existiert, wurde ein Code gesendet.";
+      error.value = "Falls ein Konto mit dieser Angabe und hinterlegter E-Mail existiert, wurde ein Code gesendet.";
     }
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : "Anfrage fehlgeschlagen";
+    const msg = e instanceof Error ? e.message : "";
+    if (msg.includes("nicht konfiguriert") || msg.includes("Administrator")) {
+      error.value = "E-Mail-Versand ist nicht konfiguriert. Bitte wende dich an deinen Administrator.";
+    } else if (msg) {
+      error.value = msg;
+    } else {
+      error.value = "Anfrage fehlgeschlagen. Bitte versuche es erneut oder kontaktiere deinen Administrator.";
+    }
   } finally {
     loading.value = false;
   }
@@ -756,19 +763,20 @@ function abortFlow() {
             Passwort zurücksetzen
           </h2>
           <p style="font-size: 13px; color: var(--color-text-muted); margin: 0 0 24px 0">
-            Gib deinen Benutzernamen ein. Falls ein Konto mit einer hinterlegten E-Mail-Adresse existiert, senden wir
-            dir einen 6-stelligen Code.
+            Gib deinen Benutzernamen oder deine E-Mail-Adresse ein. Falls ein Konto mit einer hinterlegten E-Mail
+            existiert, senden wir dir einen 6-stelligen Code.
           </p>
 
           <form @submit.prevent="requestPasswordReset" class="flex flex-col" style="gap: 16px">
             <div>
-              <label class="eyebrow" style="display: block; margin-bottom: 6px">Benutzername</label>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">Benutzername oder E-Mail-Adresse</label>
               <input
                 v-model="forgotUsername"
                 type="text"
                 autocomplete="username"
                 autofocus
                 required
+                placeholder="Benutzername oder E-Mail eingeben"
                 class="login-input"
               />
             </div>

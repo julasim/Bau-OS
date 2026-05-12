@@ -26,6 +26,7 @@ import {
   API_RATE_LIMIT_REQUESTS,
   API_RATE_LIMIT_WINDOW_MS,
   DB_ENABLED,
+  SMTP_ENABLED,
 } from "../config.js";
 import { logInfo } from "../logger.js";
 import {
@@ -35,6 +36,7 @@ import {
   verifyPassword,
   createToken,
   findDbUserByUsername,
+  findDbUserByEmail,
   findDbUserById,
   countDbUsers,
   createInitialAdmin,
@@ -679,7 +681,16 @@ app.post("/api/auth/forgot-password", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  if (!body.username) return c.json({ error: "Benutzername erforderlich" }, 400);
+  if (!body.username) return c.json({ error: "Benutzername oder E-Mail-Adresse erforderlich" }, 400);
+
+  // SMTP-Check zuerst — kein User-Enumeration-Leak und klarer Fehler fuer
+  // den User, statt einen silent-fail mit { ok: true } zurueckzugeben.
+  if (!SMTP_ENABLED) {
+    return c.json(
+      { error: "E-Mail-Versand ist auf diesem Server nicht konfiguriert. Bitte wende dich an deinen Administrator." },
+      503,
+    );
+  }
 
   const usernameInput = body.username.trim();
   const meta = reqMeta(c);
@@ -687,7 +698,13 @@ app.post("/api/auth/forgot-password", async (c) => {
   // Immer OK zurueck — kein Enumeration-Leak.
   const genericOk = () => c.json({ ok: true, message: "Falls ein Konto existiert, wurde eine E-Mail gesendet." });
 
-  const dbUser = DB_ENABLED ? await findDbUserByUsername(usernameInput) : null;
+  // Suche nach Username ODER E-Mail-Adresse.
+  const isEmail = usernameInput.includes("@");
+  const dbUser = DB_ENABLED
+    ? isEmail
+      ? await findDbUserByEmail(usernameInput)
+      : await findDbUserByUsername(usernameInput)
+    : null;
   if (!dbUser || !dbUser.email) {
     // Kein DB-User oder keine Email → still OK.
     void audit({

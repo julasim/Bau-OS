@@ -90,6 +90,13 @@ export async function findDbUserByUsername(username: string): Promise<DbUser | n
   return row ? rowToDbUser(row) : null;
 }
 
+export async function findDbUserByEmail(email: string): Promise<DbUser | null> {
+  if (!DB_ENABLED) return null;
+  const db = getDb();
+  const [row] = await db`SELECT * FROM users WHERE LOWER(email) = LOWER(${email}) LIMIT 1`;
+  return row ? rowToDbUser(row) : null;
+}
+
 export async function findDbUserById(id: string): Promise<DbUser | null> {
   if (!DB_ENABLED) return null;
   const db = getDb();
