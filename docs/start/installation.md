@@ -20,7 +20,7 @@ Ollama braucht RAM für das LLM-Modell. Ein 7B-Modell benötigt ca. 4–5 GB RAM
 
 ## Empfohlener Weg: Automatischer Installer (Produktion)
 
-Für Ubuntu-Server gibt es einen vollautomatischen Installer:
+Für Ubuntu-Server gibt es einen vollautomatischen Installer, der alles von Grund auf einrichtet:
 
 ```bash
 sudo bash scripts/install.sh
@@ -29,21 +29,24 @@ sudo bash scripts/install.sh
 Der Installer fragt interaktiv nach:
 
 1. **Telegram Bot Token** — von @BotFather
-2. **LLM-Modus** — Cloud (kimi-k2.5, gemma4, qwen3 via Ollama Cloud) oder Lokal (qwen2.5:7b, llama3.1:8b)
+2. **LLM-Modus** — Cloud (Ollama Cloud: kimi-k2.5, gemma4, qwen3 etc.) oder Lokal (qwen2.5:7b, llama3.1:8b etc.)
 3. **Installationsverzeichnis** — Standard: `/opt/bau-os`
 4. **Workspace-Verzeichnis** — Standard: `/opt/bau-os-workspace`
-5. **Web-Admin Benutzername** — für die Web-Oberfläche
+5. **Web-Admin Benutzername** — für die Web-Oberfläche (Standard: `admin`)
 6. **Web-Admin Passwort**
 7. **API-Port** — Standard: `3000`
 
 Was der Installer automatisch einrichtet:
 
+- Systempakete aktualisieren (apt-get update/upgrade)
 - Node.js 20 LTS (via nodesource)
-- Ollama + gewähltes Modell
-- systemd-Service `bau-os` (autostart bei Reboot)
-- CLI-Tool `/usr/local/bin/bau-os`
-- Web-Admin-User in `data/users.json`
-- `.env` mit allen gesetzten Werten
+- Ollama + gewähltes Modell (lokal oder Cloud-Login)
+- Service-Benutzer `bauos` anlegen
+- Verzeichnisse + Berechtigungen setzen
+- Web-Admin-User in `data/users.json` (Passwort bcrypt-gehasht)
+- JWT-Secret generieren + `.env` mit allen Werten befüllen
+- CLI-Tool `/usr/local/bin/bau-os` installieren
+- systemd-Service `bau-os` (autostart bei Reboot) aktivieren und starten
 
 ### CLI nach Installation
 
@@ -69,12 +72,19 @@ cp .env.example .env
 docker compose up -d
 ```
 
-Stack-Komponenten:
+Stack-Komponenten (laut `docker-compose.yml`):
 
-- **PostgreSQL 16 + pgvector** — Datenbankbackend mit Vektor-Suche
-- **Ollama** — lokales LLM (optional; weglassen wenn OpenAI genutzt wird)
-- **Bau-OS App** — der Bot + API
-- **Caddy** — Reverse Proxy mit automatischem HTTPS
+| Service | Image | Funktion |
+|---|---|---|
+| **postgres** | `pgvector/pgvector:pg16` | PostgreSQL mit pgvector-Extension |
+| **ollama** | `ollama/ollama:latest` | Lokales LLM (optional; weglassen wenn OpenAI genutzt wird) |
+| **app** | Build aus `Dockerfile` | Bau-OS Bot + API + Web-UI |
+
+::: tip Reverse Proxy / TLS
+Der Docker-Stack bringt keinen eigenen Reverse Proxy mit. TLS und Routing übernimmt ein externer Edge-Proxy (Caddy), der über das Docker-Netzwerk `proxy` angebunden wird. Für lokale Tests ohne Edge-Proxy ist Port 3000 direkt im Container verfügbar.
+:::
+
+Port 3000 ist im Docker-Container nur intern exponiert (`expose`, nicht `ports`). Der Edge-Proxy leitet HTTPS-Requests an den Container weiter.
 
 ---
 
@@ -147,8 +157,8 @@ Deaktiviere "Group Privacy" mit `/setprivacy` → Disabled, falls der Bot in Gru
 ## Manuell: Bau-OS installieren
 
 ```bash
-git clone <repository-url>
-cd bau-os
+git clone https://github.com/julasim/Bau-OS.git
+cd Bau-OS/bau-os
 npm install
 ```
 
@@ -160,14 +170,14 @@ npm run setup
 
 Der interaktive Installer erstellt:
 - `.env` Datei mit allen Konfigurationswerten
-- Agent-Workspace unter `VAULT_PATH/Agents/Main/` (10 Markdown-Dateien)
+- Agent-Workspace unter `WORKSPACE_PATH/Agents/Main/` (10 Markdown-Dateien)
 
 ## Vault-Struktur
 
-Nach dem Setup sieht der Vault so aus:
+Nach dem Setup sieht der Workspace so aus:
 
 ```
-VAULT_PATH/
+WORKSPACE_PATH/
 ├── Agents/
 │   └── Main/
 │       ├── IDENTITY.md

@@ -175,7 +175,7 @@ docker compose logs -f
 docker compose pull && docker compose build app && docker compose up -d
 ```
 
-Enthaltene Services: PostgreSQL 16 (pgvector), Ollama, Bau-OS App, Caddy (Auto-HTTPS).
+Enthaltene Services: PostgreSQL 16 (pgvector), Ollama, Bau-OS App. TLS wird über einen externen Edge-Proxy (Caddy) bereitgestellt — siehe Kommentar im `docker-compose.yml`.
 
 ## Nächster Schritt
 

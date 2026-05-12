@@ -15,7 +15,7 @@ Agents/Main/
 ├── TOOLS.md         ← Tool-Konventionen
 ├── MEMORY.md        ← Langzeitgedächtnis
 ├── HEARTBEAT.md     ← Cron-basierte Erinnerungen
-└── Logs/            ← Tages-Gesprächsprotokolle
+└── MEMORY_LOGS/     ← Tages-Gesprächsprotokolle
     ├── 2026-04-07.md
     └── 2026-04-06.md
 ```
@@ -33,7 +33,7 @@ Agents/Main/
 | MEMORY.md | Ja | — |
 | HEARTBEAT.md | Ja | — |
 | BOOTSTRAP.md | Nur beim allerersten Start | — |
-| Logs/\<heute\>.md | Ja | — |
+| MEMORY_LOGS/\<heute\>.md | Ja | — |
 
 **full-Modus:** Der Main Agent — bekommt den kompletten Kontext.
 **minimal-Modus:** Sub-Agents — nur das Nötigste für fokussierte Aufgaben.
@@ -59,7 +59,7 @@ Die Dateien werden in dieser Reihenfolge als System-Prompt zusammengesetzt:
 8. MEMORY.md
 9. HEARTBEAT.md
 10. BOOTSTRAP.md (nur beim allerersten Start — wenn noch kein Tageslog vorhanden)
-11. Tageslog aus `Logs/<datum>.md`
+11. Tageslog aus `MEMORY_LOGS/<datum>.md`
 
 ## Limits
 

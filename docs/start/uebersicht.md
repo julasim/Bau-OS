@@ -1,6 +1,6 @@
 # Was ist Bau-OS?
 
-Bau-OS ist eine KI-Plattform für **Architekturbüros und Büros in der Baubranche** (Planung, Bauleitung, Statik, Projektsteuerung). Der Kern: Ein intelligenter Assistent der über **Web-UI und Telegram** erreichbar ist und sein Wissen in einer **PostgreSQL-Datenbank** plus einem **Obsidian Vault** als Markdown-Backup speichert.
+Bau-OS ist eine KI-Plattform für **Architekturbüros und Büros in der Baubranche** (Planung, Bauleitung, Statik, Projektsteuerung). Der Kern: Ein intelligenter Assistent, der über **Telegram und Web-UI (Browser)** erreichbar ist und sein Wissen in einem **Obsidian-kompatiblen Workspace (Markdown)** oder optional in einer **PostgreSQL-Datenbank** speichert.
 
 ::: warning Wichtige Abgrenzung
 Bau-OS ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe sind Architekten, Bauleiter, Projektsteuerer, Statiker und Sachbearbeiter im Büro — nicht der Polier oder Maurer auf dem Gerüst. Stundenerfassung, Bautagebuch und Meeting-Protokolle dienen der **Doku im Büro** (in der Regel abends/retrospektiv erfasst), nicht der Echtzeit-Eingabe von der Baustelle.
@@ -9,18 +9,20 @@ Bau-OS ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe 
 ## Wie funktioniert es?
 
 ```
-Du schreibst in Telegram  ODER  Web-UI (Browser)
-            |                         |
+Telegram  ODER  Web-UI (Browser)
+        |               |
 [Zugriffskontrolle: Auto-Owner / ALLOWED_CHAT_IDS]
-            |
+        |
 [Session-Queue — serialisiert pro Chat-ID]
-            |
+        |
 [Agent Runtime — Agentic Loop, bis zu 56 Tools]
-            |
-[LLM: Ollama lokal ODER OpenAI cloud]
-            |
+        |
+[LLM: Ollama (lokal) ODER OpenAI (cloud)]
+        |
 [Datenschicht: Workspace (Markdown) ODER PostgreSQL]
 ```
+
+**Self-hosted by default.** Cloud-LLM (OpenAI) ist optional konfigurierbar — wird aktiviert, wenn `OPENAI_API_KEY` in der `.env` gesetzt ist.
 
 ## Für wen?
 
@@ -28,14 +30,10 @@ Du schreibst in Telegram  ODER  Web-UI (Browser)
 - **Planungs- und Statikbüros** für Aufgabenverteilung im Team
 - **Projektsteuerer und Bauleiter** (im Büro, nicht auf der Baustelle) für
   Bautagebuch, Meeting-Protokolle, Stundenerfassung
-- **Datenschutz-bewusste Firmen** die keine Cloud-KI nutzen wollen (Ollama lokal)
+- **Datenschutz-bewusste Firmen**, die keine Cloud-KI nutzen wollen (Ollama lokal),
   oder maximale Qualität bevorzugen (OpenAI cloud)
 
-**NICHT für:** Echtzeit-Bedienung von der Baustelle, Polier-Schnellein-
-gabe vom Gerüst, gewerbliches Personal als primäre Bediener. Diese
-Personen werden als `team_members` im System abgebildet und können per
-Telegram zugewiesen / benachrichtigt werden, sind aber nicht die
-Hauptzielgruppe.
+**NICHT für:** Echtzeit-Bedienung von der Baustelle, Polier-Schnelleingabe vom Gerüst, gewerbliches Personal als primäre Bediener. Diese Personen werden als `team_members` im System abgebildet und können per Telegram zugewiesen/benachrichtigt werden, sind aber nicht die Hauptzielgruppe.
 
 ## Was macht es besonders?
 
@@ -43,12 +41,21 @@ Hauptzielgruppe.
 |---|---|
 | **Self-hosted** | Läuft auf eigenem Server — keine Daten an Dritte (by default) |
 | **Dual-Backend** | Ollama lokal (Datensouveränität) oder OpenAI cloud (höchste Qualität) |
-| **56 LLM-Tools** | Notizen, Aufgaben, Termine, Projekte, Suche, PDF/DOCX, Team, Web, und mehr |
+| **56 LLM-Tools** | Notizen, Aufgaben, Termine, Projekte, Suche, PDF/DOCX, Team, Web, Bautagebuch, Zeiterfassung und mehr |
 | **Multi-Agent** | Mehrere spezialisierte KI-Agenten mit eigenem Workspace |
-| **Web-UI** | Browser-Interface (Vue 3) zusätzlich zu Telegram |
+| **Web-UI** | Browser-Interface (Vue 3 + Hono API) zusätzlich zu Telegram |
 | **Anpassbar ohne Code** | Charakter, Regeln, Erinnerungen über Markdown-Dateien steuerbar |
 | **Proaktiv** | Heartbeat-System: Agent meldet sich selbst bei Terminen |
 | **PostgreSQL optional** | Semantische Suche mit pgvector, Supabase Realtime |
+
+## Datenspeicher: Zwei Modi
+
+| Modus | Speicherort | Wann sinnvoll |
+|---|---|---|
+| **Markdown (Standard)** | Obsidian-kompatibler Workspace | Einstieg, kleine Teams, maximale Transparenz |
+| **PostgreSQL (optional)** | Postgres + pgvector | Semantische Suche, größere Teams, Supabase Realtime |
+
+Chat-Verläufe und Agent-Logs verwenden immer Markdown (JSONL), auch im PostgreSQL-Modus — sie sind so einfacher zu lesen und bleiben auch ohne Datenbank verfügbar.
 
 ## Geschäftsmodell
 

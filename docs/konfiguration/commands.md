@@ -56,7 +56,7 @@ Zeigt den aktuellen Systemstatus: Workspace erreichbar, Pfad, Anzahl Notizen in 
 /status
 ```
 
-**Intern:** Prüft, ob der Workspace-Pfad existiert und liest Basis-Statistiken daraus. Im OpenAI-Modus erscheint die konfigurierte API-URL, im Ollama-Modus die Ollama-URL.
+**Intern:** Prüft, ob der Workspace-Pfad existiert und liest Basis-Statistiken daraus — Anzahl Notizen in der Inbox, offene Aufgaben, Whisper-Sprache und Python-Pfad.
 
 ### /kontext
 

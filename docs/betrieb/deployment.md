@@ -175,6 +175,29 @@ Nach dem erfolgreichen Start sieht die Struktur so aus:
 Die `.env` Datei enthaelt den Bot Token. Sie darf **niemals** in ein Git-Repository gelangen. Sie steht bereits in `.gitignore`.
 :::
 
+## Docker Compose (Alternative)
+
+Statt des systemd-Installers kann der vollständige Stack auch via Docker Compose gestartet werden. Das umfasst PostgreSQL 16 (pgvector), Ollama und die Bau-OS App.
+
+```bash
+# .env anpassen (BOT_TOKEN, WORKSPACE_PATH, etc.)
+cp .env.example .env
+nano .env
+
+# Stack starten
+docker compose up -d
+
+# Logs verfolgen
+docker compose logs -f
+
+# Update einspielen
+git pull && docker compose pull && docker compose build app && docker compose up -d
+```
+
+::: tip TLS / HTTPS
+Docker Compose stellt keinen eigenen HTTPS-Proxy bereit. Für Produktivbetrieb mit TLS einen externen Edge-Caddy (`/opt/proxy`) oder einen eigenen Reverse-Proxy vorschalten — siehe Kommentar im `docker-compose.yml`.
+:::
+
 ## Nächster Schritt
 
 → [systemd-Service einrichten](/betrieb/systemd)

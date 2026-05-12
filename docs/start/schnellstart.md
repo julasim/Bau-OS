@@ -22,61 +22,76 @@ Keine Daten verlassen deinen Rechner. Erfordert mindestens 8 GB RAM für ein 7B-
 ollama pull qwen2.5:7b
 
 # 2. Projekt klonen
-git clone <repository-url>
-cd bau-os
+git clone https://github.com/julasim/Bau-OS.git
+cd Bau-OS/bau-os
 npm install
 
 # 3. .env erstellen
-cat > .env << 'EOF'
-BOT_TOKEN=7123...:AAH...
-WORKSPACE_PATH=/pfad/zum/vault
-OLLAMA_BASE_URL=http://localhost:11434/v1
-EOF
+cp .env.example .env
+# .env anpassen: BOT_TOKEN, WORKSPACE_PATH, OLLAMA_BASE_URL
 
 # 4. Starten
 npm run dev
+```
+
+Minimale `.env` für Ollama:
+
+```env
+BOT_TOKEN=7123...:AAH...
+WORKSPACE_PATH=/pfad/zum/vault
+OLLAMA_BASE_URL=http://localhost:11434/v1
+OLLAMA_MODEL=qwen2.5:7b
 ```
 
 ---
 
 ## Option B — Cloud mit OpenAI (einfacher, höhere Qualität)
 
-Kein Ollama nötig. Anfragen gehen an die OpenAI API.
+Kein Ollama nötig. Anfragen gehen an die OpenAI API. Wenn `OPENAI_API_KEY` gesetzt ist, verwendet Bau-OS automatisch `gpt-4o-mini` (Haupt) und `gpt-4o` (Vision).
 
 ```bash
 # 1. Projekt klonen
-git clone <repository-url>
-cd bau-os
+git clone https://github.com/julasim/Bau-OS.git
+cd Bau-OS/bau-os
 npm install
 
 # 2. .env erstellen
-cat > .env << 'EOF'
-BOT_TOKEN=7123...:AAH...
-WORKSPACE_PATH=/pfad/zum/vault
-OPENAI_API_KEY=sk-...
-EOF
+cp .env.example .env
+# .env anpassen: BOT_TOKEN, WORKSPACE_PATH, OPENAI_API_KEY
 
 # 3. Starten
 npm run dev
+```
+
+Minimale `.env` für OpenAI:
+
+```env
+BOT_TOKEN=7123...:AAH...
+WORKSPACE_PATH=/pfad/zum/vault
+OPENAI_API_KEY=sk-...
 ```
 
 ---
 
 ## Web-UI aktivieren (optional)
 
-Zusätzlich zur Telegram-Schnittstelle gibt es eine Browser-Oberfläche (Vue 3).
+Zusätzlich zur Telegram-Schnittstelle gibt es eine Browser-Oberfläche (Vue 3 + Hono API).
 
 ```bash
 # In .env ergänzen:
-JWT_SECRET=$(openssl rand -hex 32)
+JWT_SECRET=$(openssl rand -hex 32)   # mind. 32 Zeichen
 API_PORT=3000
 
-# API + Frontend starten:
+# API + Frontend starten (zwei Terminals):
 npm run dev        # Backend (Bot + API)
-npm run dev:web    # Frontend (separates Terminal)
+npm run dev:web    # Frontend-Dev-Server (separates Terminal)
 
-# Dann: http://localhost:3000
+# Dann: http://localhost:5173 (Dev-Server) oder http://localhost:3000 (API direkt)
 ```
+
+::: tip JWT_SECRET
+Das Web-Interface ist **nur aktiv, wenn `JWT_SECRET` gesetzt ist**. Ohne diesen Wert startet die Hono-API nicht.
+:::
 
 ---
 

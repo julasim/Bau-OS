@@ -199,6 +199,15 @@ WORKSPACE_PATH/
 | `LOG_MAX_DISPLAY_LINES` | `50` | `/logs` Maximum |
 | `LOG_DISPLAY_MAX_CHARS` | `3.800` | `/logs` Output-Limit (Zeichen) |
 
+### JSONL-Log-Rotation
+
+Die maschinenlesbare JSONL-Logdatei (`bot.jsonl`) wird größenbasiert rotiert — bei Überschreitung wird `bot.jsonl → bot.jsonl.1 → bot.jsonl.2` usw. Das verhindert volles Filesystem auf Langzeit-Installationen.
+
+| Konstante | Standardwert | `.env`-Variable | Beschreibung |
+|---|---|---|---|
+| `LOG_JSONL_MAX_BYTES` | `5.242.880` (5 MB) | `LOG_JSONL_MAX_BYTES` | Max. Dateigröße vor Rotation |
+| `LOG_JSONL_KEEP_FILES` | `5` | `LOG_JSONL_KEEP_FILES` | Anzahl rotierter Dateien die behalten werden |
+
 ## Embeddings
 
 | Konstante | Standardwert | `.env`-Variable | Beschreibung |
@@ -225,6 +234,7 @@ Das Embedding-Modell ist in das Datenbankschema eingebrannt — ein Wechsel erfo
 | `SUPABASE_ANON_KEY` | — | `SUPABASE_ANON_KEY` | Supabase Anon-Key (optional) |
 | `SUPABASE_SERVICE_KEY` | — | `SUPABASE_SERVICE_KEY` | Supabase Service-Key (optional) |
 | `SUPABASE_ENABLED` | `false` | — | Automatisch `true` wenn URL + Anon-Key gesetzt |
+| `AUDIT_RETENTION_DAYS` | `365` | `AUDIT_RETENTION_DAYS` | Aufbewahrungsdauer für Audit-Einträge in Tagen. `0` = nie löschen |
 
 ::: warning Auto-Migrate in Produktion
 `DB_AUTO_MIGRATE=true` ist praktisch für Entwicklung. In Produktionssystemen mit CI/CD-Pipeline empfiehlt sich `DB_AUTO_MIGRATE=false` und explizites Ausführen von `npm run db:migrate`.
@@ -237,13 +247,17 @@ Das Embedding-Modell ist in das Datenbankschema eingebrannt — ein Wechsel erfo
 | `JWT_SECRET` | — | `JWT_SECRET` | Secret für JWT-Signierung. Aktiviert die Web-API |
 | `API_PORT` | `3000` | `API_PORT` | Port der Hono Web-API |
 | `API_ENABLED` | `false` | — | Automatisch `true` wenn `JWT_SECRET` gesetzt |
+| `APP_URL` | leer | `APP_URL` | Öffentliche Base-URL (z.B. `https://app.bau-os.at`). Leer = Host aus Request-Header |
+| `JWT_SECRET_OK` | `false` | — | Automatisch `true` wenn `JWT_SECRET` mindestens 32 Zeichen lang ist |
 
 ### Rate-Limiting
 
-| Konstante | Wert | Beschreibung |
-|---|---|---|
-| `RATE_LIMIT_ATTEMPTS` | `5` | Maximale Login-Versuche pro IP-Adresse |
-| `RATE_LIMIT_WINDOW_MS` | `900.000` (15 min) | Zeitfenster für Rate-Limiting |
+| Konstante | Standardwert | `.env`-Variable | Beschreibung |
+|---|---|---|---|
+| `RATE_LIMIT_ATTEMPTS` | `5` | — | Maximale Login-Versuche pro IP (Login-Throttle) |
+| `RATE_LIMIT_WINDOW_MS` | `900.000` (15 min) | — | Zeitfenster für Login-Rate-Limiting |
+| `API_RATE_LIMIT_REQUESTS` | `600` | `API_RATE_LIMIT_REQUESTS` | Anfragen pro Minute pro IP (globaler API-Throttle) |
+| `API_RATE_LIMIT_WINDOW_MS` | `60.000` (1 min) | `API_RATE_LIMIT_WINDOW_MS` | Zeitfenster für globales Rate-Limiting |
 
 ### Upload-Limits
 
@@ -260,6 +274,44 @@ Das Embedding-Modell ist in das Datenbankschema eingebrannt — ein Wechsel erfo
 | Env-Var-Filter | Shell-Scripts bekommen nur: PATH, HOME, USER, LANG, SHELL, TERM, WORKSPACE_PATH |
 | Dynamic Tool Sandbox | Kein `fetch`, kein `require`, kein `process` — nur Math, Date, JSON, etc. |
 | Path-Traversal-Schutz | `safePath()` validiert alle Pfade gegen Workspace-Grenze |
+
+## Microsoft Graph (Outlook-Kalender-Sync)
+
+Optionale Integration mit Microsoft/Outlook-Kalender. Erfordert eine Azure App-Registrierung.
+
+| Konstante | Standardwert | `.env`-Variable | Beschreibung |
+|---|---|---|---|
+| `MS_CLIENT_ID` | leer | `MS_CLIENT_ID` | Azure App Client-ID |
+| `MS_CLIENT_SECRET` | leer | `MS_CLIENT_SECRET` | Azure App Client-Secret |
+| `MS_TENANT_ID` | `"common"` | `MS_TENANT_ID` | Azure Tenant-ID. `"common"` für Multi-Tenant |
+| `MS_REDIRECT_URI` | leer | `MS_REDIRECT_URI` | Redirect-URI (muss exakt mit Azure-Eintrag übereinstimmen) |
+| `MS_GRAPH_ENABLED` | `false` | — | Automatisch `true` wenn Client-ID und Secret gesetzt |
+
+::: tip Azure-Setup
+Redirect-URI muss in Azure registriert sein: `<APP_URL>/api/auth/microsoft/callback`. Benötigte API-Berechtigungen: `Calendars.ReadWrite`, `User.Read`, `offline_access`.
+:::
+
+## SMTP / E-Mail
+
+Wird für den Versand von Login-Codes (2FA) per E-Mail benötigt. Ohne `SMTP_HOST` werden Codes im Server-Log ausgegeben (nur Entwicklung).
+
+| Konstante | Standardwert | `.env`-Variable | Beschreibung |
+|---|---|---|---|
+| `SMTP_HOST` | leer | `SMTP_HOST` | SMTP-Server-Hostname |
+| `SMTP_PORT` | `587` | `SMTP_PORT` | SMTP-Port (587 mit STARTTLS, 465 mit SSL) |
+| `SMTP_USER` | leer | `SMTP_USER` | SMTP-Benutzername |
+| `SMTP_PASS` | leer | `SMTP_PASS` | SMTP-Passwort |
+| `SMTP_FROM` | `Bau-OS <noreply@bau-os.local>` | `SMTP_FROM` | Absenderadresse |
+| `SMTP_SECURE` | `"auto"` | `SMTP_SECURE` | TLS-Modus: `"auto"`, `"true"` (SSL), `"false"` (STARTTLS) |
+| `SMTP_ENABLED` | `false` | — | Automatisch `true` wenn `SMTP_HOST` gesetzt |
+
+## Dokument-Verzeichnisse
+
+| Konstante | Standardwert | `.env`-Variable | Beschreibung |
+|---|---|---|---|
+| `DAILY_NOTES_DIR` | `"Daily"` | `DAILY_NOTES_DIR` | Ordnername für Daily Notes im Workspace |
+| `TEMPLATES_DIR` | `"Templates"` | `TEMPLATES_DIR` | Ordnername für Vorlagen im Workspace |
+| `ATTACHMENTS_DIR` | `"Attachments"` | `ATTACHMENTS_DIR` | Ordnername für Anhänge im Workspace |
 
 ## Telegram-Zugriffskontrolle
 

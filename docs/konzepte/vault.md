@@ -10,7 +10,7 @@ Kein extra Dienst nötig. Alle Daten landen als Markdown-Dateien in dem Ordner, 
 
 ### Datenbank-Modus
 
-Wenn `DATABASE_URL` in `.env` gesetzt ist, schaltet Bau-OS auf PostgreSQL um. Das ermöglicht strukturierte Abfragen und — wenn `pgvector` installiert ist — semantische KI-Suche.
+Wenn `DATABASE_URL` in `.env` gesetzt ist, schaltet Bau-OS auf PostgreSQL um. Das ermöglicht strukturierte Abfragen und — wenn `pgvector` installiert ist — semantische KI-Suche. Außerdem werden dann zusätzliche Features wie Bautagebuch, Meetings und Zeiterfassung aktiviert, die im Filesystem-Modus nicht verfügbar sind.
 
 ```env
 # Filesystem-Modus (Standard — keine Zeile nötig)
@@ -71,6 +71,7 @@ Sobald `DATABASE_URL` gesetzt ist:
 - Migrationen laufen automatisch (`DB_AUTO_MIGRATE=true` ist Standard)
 - Alle Entitäten (Aufgaben, Termine, Notizen, Projekte, Team) werden in Postgres gespeichert
 - `pgvector` ist optional — wenn vorhanden, ist semantische Suche aktiv; wenn nicht, fällt Bau-OS auf Volltext-Suche zurück
+- Zusätzliche Features werden freigeschaltet: Bautagebuch, Meeting-Protokolle, Zeiterfassung
 
 **Supabase** kann zusätzlich aktiviert werden, um Realtime-Events in den Bot zu bridgen:
 
@@ -80,7 +81,9 @@ SUPABASE_ANON_KEY=...
 ```
 
 ::: warning Chat-History und Agent-Logs
-Chat-Verläufe (`chatRepo`) und Agent-Tageslog (`agentLogRepo`) liegen **immer** im Filesystem — unabhängig vom gewählten Modus. Das ist eine bewusste Design-Entscheidung: JSONL-Dateien lassen sich einfach per `tail`/`grep` überwachen und sind nicht von der Datenbankverbindung abhängig.
+Agent-Tageslog (`agentLogRepo`) liegt **immer** im Filesystem — unabhängig vom gewählten Modus. Das ist eine bewusste Design-Entscheidung: JSONL-Dateien lassen sich einfach per `tail`/`grep` überwachen und sind nicht von der Datenbankverbindung abhängig.
+
+Chat-Verläufe (`chatRepo`) hingegen folgen dem gewählten Modus: Filesystem im FS-Modus, PostgreSQL im DB-Modus.
 :::
 
 ## Automatische Wahl — Repository-Factory
@@ -88,19 +91,38 @@ Chat-Verläufe (`chatRepo`) und Agent-Tageslog (`agentLogRepo`) liegen **immer**
 `src/data/index.ts` ist die einzige Import-Schnittstelle für Persistenz. Sie wählt automatisch die richtige Implementierung:
 
 ```typescript
-export const taskRepo: TaskRepository     = DB_ENABLED ? dbTasks    : fsTasks;
-export const terminRepo: TerminRepository = DB_ENABLED ? dbTermine  : fsTermine;
-export const noteRepo: NoteRepository     = DB_ENABLED ? dbNotes    : fsNotes;
-export const projectRepo: ProjectRepository = DB_ENABLED ? dbProjects : fsProjects;
-export const teamRepo: TeamRepository     = DB_ENABLED ? dbTeam     : fsTeam;
-export const fileRepo: FileRepository | null = DB_ENABLED ? dbFiles  : null;
+export const taskRepo: TaskRepository        = DB_ENABLED ? dbTasks      : fsTasks;
+export const terminRepo: TerminRepository    = DB_ENABLED ? dbTermine    : fsTermine;
+export const noteRepo: NoteRepository        = DB_ENABLED ? dbNotes      : fsNotes;
+export const projectRepo: ProjectRepository  = DB_ENABLED ? dbProjects   : fsProjects;
+export const teamRepo: TeamRepository        = DB_ENABLED ? dbTeam       : fsTeam;
+export const fileRepo: FileRepository | null = DB_ENABLED ? dbFiles      : null;
+export const chatRepo: ChatRepository        = DB_ENABLED ? dbChat       : fsChat;
 
-// Immer Filesystem:
-export const chatRepo: ChatRepository     = fsChat;
+// Nur im DB-Modus verfügbar — kein FS-Fallback:
+export const bautagebuchRepo: BautagebuchRepository | null = DB_ENABLED ? dbBautagebuch : null;
+export const meetingRepo: MeetingRepository | null         = DB_ENABLED ? dbMeetings    : null;
+export const timeEntryRepo: TimeEntryRepository | null     = DB_ENABLED ? dbTimeEntries : null;
+
+// Immer Filesystem — unabhängig vom Modus:
 export const agentLogRepo: AgentLogRepository = fsAgentLogs;
 ```
 
 Jedes Repository hat zwei Implementierungen (`db-*.ts` und `fs-*.ts`) die dieselbe TypeScript-Schnittstelle aus `src/data/types.ts` erfüllen. Direktimporte aus `db-*` oder `fs-*` außerhalb der Data-Layer sind nicht erlaubt.
+
+## Features nach Modus
+
+| Feature | Filesystem | PostgreSQL |
+|---|---|---|
+| Notizen, Aufgaben, Termine | Ja | Ja |
+| Projekte, Team | Ja | Ja |
+| Chat-Verlauf | Ja (JSONL) | Ja (DB) |
+| Agent-Tageslog | Ja (immer FS) | Ja (immer FS) |
+| Datei-Index (`fileRepo`) | Nein | Ja |
+| Bautagebuch | Nein | Ja |
+| Meeting-Protokolle | Nein | Ja |
+| Zeiterfassung | Nein | Ja |
+| Semantische Suche | Nein | Ja (mit pgvector) |
 
 ## Volltextsuche vs. Semantische Suche
 
@@ -111,6 +133,20 @@ Jedes Repository hat zwei Implementierungen (`db-*.ts` und `fs-*.ts`) die diesel
 | PostgreSQL + pgvector | `semantisch_suchen` | KI-basiert — versteht Bedeutung, nicht nur Wörter |
 
 Die semantische Suche verwendet Embeddings (Standard: `text-embedding-3-small` bei OpenAI, `nomic-embed-text` bei Ollama). Wenn pgvector fehlt oder kein Embedding-Modell verfügbar ist, fällt das System automatisch auf Volltext-Suche zurück.
+
+## Wann welchen Modus?
+
+**Filesystem-Modus** — sinnvoll wenn:
+- Einzelnutzer ohne Multi-User-Anforderungen
+- Kein extra Dienst (Postgres) betrieben werden soll
+- Obsidian-Integration und direkter Dateizugriff gewünscht ist
+- Kein Bedarf an semantischer Suche, Bautagebuch oder Zeiterfassung
+
+**Datenbank-Modus** — sinnvoll wenn:
+- Mehrere Nutzer gleichzeitig arbeiten (Multi-User)
+- Semantische KI-Suche genutzt werden soll
+- Die Web-UI (`JWT_SECRET` gesetzt) produktiv eingesetzt wird
+- Bautagebuch, Meeting-Protokolle oder Zeiterfassung benötigt werden
 
 ## Zugriff durch den Agent
 
