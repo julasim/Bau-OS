@@ -3521,7 +3521,9 @@ async function deleteMeeting() {
 
             <!-- Vorlage anwenden (Phase 6c) — nur fuer NEUE Meetings.
                  Beim Edit waere das Risiko zu hoch dass User existing-Inhalt
-                 versehentlich ueberschreibt. -->
+                 versehentlich ueberschreibt.
+                 Logik: Vorlage ausgewählt → Protokoll-Feld ausgeblendet
+                        Keine Vorlage → Vorlage-Block ausgeblendet, Protokoll sichtbar -->
             <div
               v-if="!meetingDraft.id && meetingTemplates.length > 0"
               class="mt-field"
@@ -3532,12 +3534,7 @@ async function deleteMeeting() {
                 padding: 10px 12px;
               "
             >
-              <label class="mt-label" style="font-size: 11px">
-                Vorlage anwenden
-                <span style="color: var(--color-text-tertiary); font-weight: normal">
-                  (ersetzt das Protokoll-Feld)
-                </span>
-              </label>
+              <label class="mt-label" style="font-size: 11px">Vorlage anwenden</label>
               <select
                 v-model="selectedMeetingTemplateId"
                 @change="applyMeetingTemplate"
@@ -3551,20 +3548,20 @@ async function deleteMeeting() {
               </select>
             </div>
 
-            <!-- Agenda -->
+            <!-- Agenda — immer sichtbar -->
             <div class="mt-field">
               <label class="mt-label">Agenda</label>
               <textarea
                 v-model="meetingDraft.agenda"
                 class="stamm-input"
-                rows="3"
+                rows="6"
                 placeholder="Tagesordnung (Markdown erlaubt)"
                 style="resize: vertical; font-family: inherit; line-height: 1.5"
               ></textarea>
             </div>
 
-            <!-- Protokoll -->
-            <div class="mt-field">
+            <!-- Protokoll — nur wenn KEINE Vorlage gewählt (Vorlage liefert Struktur via Agenda) -->
+            <div v-if="!selectedMeetingTemplateId" class="mt-field">
               <label class="mt-label">Protokoll</label>
               <textarea
                 v-model="meetingDraft.minutes"
