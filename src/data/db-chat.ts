@@ -70,14 +70,16 @@ export const dbChat: ChatRepository = {
       WHERE s.source = 'web'
         ${agent ? db`AND s.agent = ${agent}` : db``}
         ${
-          userId !== undefined && userId !== null
-            ? db`AND (
-                s.user_id = ${userId}
-                OR s.id IN (
-                  SELECT session_id FROM chat_session_shares WHERE user_id = ${userId}
-                )
-              )`
-            : db``
+          userId === undefined
+            ? db`` // Admin: kein Filter, alle Sessions sehen
+            : userId === null
+              ? db`AND s.user_id IS NULL` // FS-Fallback: nur anonyme Sessions
+              : db`AND (
+                  s.user_id = ${userId}
+                  OR s.id IN (
+                    SELECT session_id FROM chat_session_shares WHERE user_id = ${userId}
+                  )
+                )`
         }
       GROUP BY s.id
       ORDER BY s.updated_at DESC

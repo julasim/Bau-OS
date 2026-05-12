@@ -47,7 +47,8 @@ chatRoutes.get("/chat/sessions", async (c) => {
   const userId = c.get("userId") as string | null | undefined;
   // Admins sehen alle Sessions (inkl. Legacy-Sessions ohne userId).
   // Non-Admins sehen nur ihre eigenen Sessions.
-  const filterUserId = jwtUser.role === "admin" ? undefined : (userId ?? undefined);
+  // undefined → Admin-Ansicht (alles), string → eigene + geteilte, null → anonym
+  const filterUserId: string | null | undefined = jwtUser.role === "admin" ? undefined : (userId ?? null);
   const sessions = await chatRepo.listSessions("Main", 50, filterUserId);
   return c.json(sessions);
 });
@@ -65,8 +66,9 @@ chatRoutes.delete("/chat/sessions/:id", async (c) => {
   const userId = c.get("userId") as string | null | undefined;
   const userRole = c.get("userRole") as string | undefined;
 
-  if (userRole !== "admin" && userId) {
-    const sessions = await chatRepo.listSessions("Main", 200, userId);
+  if (userRole !== "admin") {
+    // Auch ohne userId (null) keinen Zugriff auf fremde Sessions gewähren
+    const sessions = await chatRepo.listSessions("Main", 200, userId ?? null);
     const hasAccess = sessions.some((s) => s.id === id);
     if (!hasAccess) return c.json({ error: "Kein Zugriff" }, 403);
   }
@@ -109,8 +111,9 @@ chatRoutes.get("/chat/sessions/:id/messages", async (c) => {
   const userRole = c.get("userRole") as string | undefined;
 
   // Ownership/share check: admin sees all, others check ownership or share
-  if (userRole !== "admin" && userId) {
-    const sessions = await chatRepo.listSessions("Main", 200, userId);
+  if (userRole !== "admin") {
+    // Auch ohne userId (null) keinen Zugriff auf fremde Sessions gewähren
+    const sessions = await chatRepo.listSessions("Main", 200, userId ?? null);
     const hasAccess = sessions.some((s) => s.id === id);
     if (!hasAccess) return c.json({ error: "Kein Zugriff" }, 403);
   }

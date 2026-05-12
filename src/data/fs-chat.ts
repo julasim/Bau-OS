@@ -173,10 +173,16 @@ export const fsChat: ChatRepository = {
       // sollen nicht in der Session-Liste erscheinen.
       for (const s of sessions.values()) {
         if (s.source !== "web") continue;
-        if (userId !== undefined && userId !== null) {
-          // User-Scoping: nur eigene Sessions zeigen.
-          // Sessions ohne userId (Legacy) werden nicht gezeigt —
-          // der Admin sieht sie ueber den "kein Filter"-Pfad (userId=undefined).
+        if (userId === undefined) {
+          // Admin-Pfad: alle Sessions sehen (kein Filter).
+        } else if (userId === null) {
+          // FS-Modus ohne DB-User-Identity: nur anonyme Sessions (userId=null).
+          // Verhindert, dass User A die Sessions von User B sieht wenn beide
+          // null-userId haben — zeigt nur Sessions ohne gesetzten User-Besitzer.
+          if (s.userId !== null) continue;
+        } else {
+          // Normaler User: nur eigene Sessions — Sessions ohne userId werden
+          // nicht angezeigt (Legacy-Admin-Sessions bleiben unter Admin).
           if (s.userId !== userId) continue;
         }
         all.push(s);
