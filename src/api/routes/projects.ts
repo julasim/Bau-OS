@@ -18,6 +18,7 @@ export const projectsRoutes = new Hono<AppEnv>();
 // Whitelist der Felder, die per PATCH /projects/:name gesetzt werden duerfen.
 // Andere Keys im Body werden stillschweigend verworfen (keine Error), damit
 // Clients robust erweitert werden koennen ohne API-Breaking-Change.
+// Numerische Felder (budget, budgetUsed) werden separat behandelt.
 const PATCHABLE_FIELDS: readonly (keyof ProjectUpdate)[] = [
   "description",
   "status",
@@ -148,6 +149,15 @@ projectsRoutes.patch("/projects/:name", async (c) => {
         (patch as Record<string, string | null>)[key] = normalized;
       }
     }
+  }
+  // Numerische Budget-Felder: null = explizit leeren, number = setzen,
+  // undefined/fehlend = unveraendert lassen.
+  if ("budget" in body) {
+    patch.budget = body.budget === null ? null : typeof body.budget === "number" ? body.budget : undefined;
+  }
+  if ("budgetUsed" in body) {
+    patch.budgetUsed =
+      body.budgetUsed === null ? null : typeof body.budgetUsed === "number" ? body.budgetUsed : undefined;
   }
   if (Object.keys(patch).length === 0) {
     return c.json({ error: "Kein patchbares Feld im Body" }, 400);

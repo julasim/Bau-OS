@@ -24,6 +24,8 @@ const UPDATE_COLUMNS: Record<keyof ProjectUpdate, string> = {
   endDate: "end_date",
   bauherrId: "bauherr_id",
   parentId: "parent_id",
+  budget: "budget",
+  budgetUsed: "budget_used",
 };
 
 function isValidName(name: string): boolean {
@@ -64,9 +66,12 @@ export const dbProjects: ProjectRepository = {
         (SELECT count(*) FROM notes n WHERE n.project_id = p.id) as notes,
         (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done') as open_tasks,
         (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'done') as done_tasks,
+        (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done' AND t.priority = 'hoch') as high_priority_count,
         (SELECT count(*) FROM termine te WHERE te.project_id = p.id) as termine,
         (SELECT count(*) FROM files f WHERE f.project_id = p.id) as files,
-        (SELECT count(*) FROM projects child WHERE child.parent_id = p.id) as children_count
+        (SELECT count(*) FROM projects child WHERE child.parent_id = p.id) as children_count,
+        p.budget,
+        p.budget_used
       FROM projects p
       LEFT JOIN team_members bm ON bm.id = p.bauherr_id
       LEFT JOIN projects parent ON parent.id = p.parent_id
@@ -98,9 +103,12 @@ export const dbProjects: ProjectRepository = {
       notes: Number(row.notes),
       openTasks: Number(row.open_tasks),
       doneTasks: Number(row.done_tasks),
+      highPriorityCount: Number(row.high_priority_count ?? 0),
       termine: Number(row.termine),
       files: Number(row.files),
       childrenCount: Number(row.children_count),
+      budget: row.budget ? Number(row.budget) : null,
+      budgetUsed: row.budget_used ? Number(row.budget_used) : null,
       createdAt: row.created_at ? String(row.created_at) : undefined,
       updatedAt: row.updated_at ? String(row.updated_at) : undefined,
     };

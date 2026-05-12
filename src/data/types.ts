@@ -109,6 +109,12 @@ export interface Project {
   files?: number;
   /** Anzahl direkter Sub-Projekte (keine rekursive Summe). */
   childrenCount?: number;
+  /** Geplantes Projektbudget in EUR (NULL = nicht gesetzt). */
+  budget?: number | null;
+  /** Bereits verwendetes / fakturiertes Budget in EUR. */
+  budgetUsed?: number | null;
+  /** Anzahl offener Aufgaben mit Priorität "hoch". */
+  highPriorityCount?: number;
   // ── Phase-3-ACL ────────────────────────────────────────
   /** UUID des Users, der das Projekt angelegt hat. NULL bei Legacy-
    *  Daten oder wenn der Ersteller geloescht wurde (ON DELETE SET NULL). */
@@ -157,6 +163,8 @@ export interface ProjectUpdate {
   endDate?: string | null;
   bauherrId?: string | null;
   parentId?: string | null;
+  budget?: number | null;
+  budgetUsed?: number | null;
 }
 
 /** Stammdaten, die optional bei der Projekt-Erstellung mit uebergeben werden

@@ -35,6 +35,10 @@ interface ProjectInfo {
   termine: number;
   files?: number;
   childrenCount?: number;
+  // V1 Stage Stats
+  budget?: number | null;
+  budgetUsed?: number | null;
+  highPriorityCount?: number;
   // Phase 3 ACL
   createdById?: string | null;
   createdByUsername?: string | null;
@@ -73,6 +77,7 @@ interface Task {
   assigneeId?: string | null;
   assigneeName?: string | null;
   date: string | null;
+  priority?: string | null;
 }
 interface Termin {
   id: string;
@@ -997,6 +1002,7 @@ async function openTab(t: Tab) {
   if (t === "uebersicht") {
     if (!recentActivityLoaded.value) await loadRecentActivity();
     if (!childrenLoaded.value) await loadChildren();
+    if (!teamLoaded.value) await loadTeam();
   }
   if (t === "verlauf" && !fullActivityLoaded.value) await loadFullActivity(true);
   if (t === "zugriff") {
@@ -1422,6 +1428,47 @@ async function quickAddTermin() {
 // ── Uebersicht: Top-Daten aus bestehenden Listen ──────────
 // Kein neuer Fetch noetig — tasks/termine sind schon geladen.
 const openTasksTop = computed(() => tasks.value.filter((t) => t.status !== "done").slice(0, 5));
+
+// Fortschritt-Berechnung (0-100%)
+const projectProgress = computed(() => {
+  if (!info.value?.startDate || !info.value?.endDate) return null;
+  const start = new Date(info.value.startDate).getTime();
+  const end = new Date(info.value.endDate).getTime();
+  const now = Date.now();
+  if (end <= start) return null;
+  const pct = Math.round(((now - start) / (end - start)) * 100);
+  return Math.max(0, Math.min(100, pct));
+});
+
+// Nächster Termin (erster upcoming)
+const nextTermin = computed(() => {
+  const todayIso = new Date().toISOString().slice(0, 10);
+  return (
+    [...termine.value].filter((t) => t.datum >= todayIso).sort((a, b) => a.datum.localeCompare(b.datum))[0] ?? null
+  );
+});
+
+// Formatierung: "12.02.2026"
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const [y, m, d] = iso.split("-");
+  return `${d}.${m}.${y}`;
+}
+
+// Formatierung: "€ 1 142 800"
+function fmtEur(amount: number | null | undefined): string {
+  if (amount == null) return "—";
+  return "€ " + Math.round(amount).toLocaleString("de-AT");
+}
+
+// Offene Aufgaben sortiert nach Priorität (hoch zuerst)
+const openTasksSorted = computed(() => {
+  const prio: Record<string, number> = { hoch: 0, mittel: 1, niedrig: 2 };
+  return tasks.value
+    .filter((t) => t.status !== "done")
+    .sort((a, b) => (prio[a.priority ?? "mittel"] ?? 1) - (prio[b.priority ?? "mittel"] ?? 1))
+    .slice(0, 5);
+});
 
 const upcomingTermine = computed(() => {
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -2158,57 +2205,19 @@ async function deleteMeeting() {
       :class="{ 'hero-with-accent': !!info.color }"
       :style="info.color ? { '--accent-color': info.color } : {}"
     >
-      <div class="flex items-start justify-between" style="gap: 16px; margin-bottom: 16px">
-        <div class="min-w-0" style="flex: 1">
-          <!-- Parent-Breadcrumb (Migration 005) — klickbar zum Parent -->
-          <div v-if="info.parentName" class="parent-crumb">
-            <BIcon name="layers" :size="10" />
+      <!-- Zeile 1: Eyebrow + Status + Aktionen -->
+      <div class="hero-top">
+        <div class="hero-eyebrow">
+          <span v-if="info.parentName">
             <router-link :to="`/projects/${encodeURIComponent(info.parentName)}`" class="parent-link">
               {{ info.parentName }}
             </router-link>
-            <span style="color: var(--color-text-faint)">/</span>
-          </div>
-          <div v-else class="eyebrow" style="margin-bottom: 6px">Projekt</div>
-          <h1 style="font-size: 28px; font-weight: 600; margin: 0; letter-spacing: -0.01em; color: var(--color-text)">
-            {{ info.name }}
-          </h1>
-          <!-- Phase 3: "Angelegt von ..." als kleiner Hinweis unter dem Titel. -->
-          <p
-            v-if="info.createdByUsername"
-            style="
-              font-size: 11px;
-              color: var(--color-text-faint);
-              margin: 4px 0 0 0;
-              letter-spacing: 0.04em;
-              text-transform: uppercase;
-            "
-          >
-            Angelegt von {{ info.createdByUsername }}
-          </p>
-          <!-- Kontextzeile: Projektart/Nutzung/Standort inline, falls gesetzt.
-               Standort ist klickbar und oeffnet Google Maps in neuem Tab. -->
-          <p
-            v-if="info.projektart || info.nutzung || info.standort"
-            style="font-size: 13px; color: var(--color-text-muted); margin: 6px 0 0 0; line-height: 1.5"
-          >
-            <span v-if="info.projektart">{{ info.projektart }}</span>
-            <span v-if="info.projektart && info.nutzung"> · </span>
-            <span v-if="info.nutzung">{{ info.nutzung }}</span>
-            <span v-if="(info.projektart || info.nutzung) && info.standort"> · </span>
-            <a
-              v-if="info.standort"
-              :href="mapsLink(info.standort)"
-              target="_blank"
-              rel="noopener"
-              class="maps-link"
-              :title="'In Google Maps öffnen'"
-            >
-              {{ info.standort }}
-            </a>
-          </p>
+            <span style="color: var(--color-text-faint)"> / </span>
+          </span>
+          <span v-else>PROJEKT</span>
+          <span v-if="info.projektnummer" style="color: var(--color-text-faint)"> — {{ info.projektnummer }}</span>
         </div>
-        <!-- Pills: Status + Phase + More-Menue -->
-        <div class="flex items-center" style="gap: 8px; flex-shrink: 0">
+        <div class="hero-top-actions">
           <button
             class="pill pill-clickable"
             :class="'pill-status-' + (info.status ?? 'aktiv')"
@@ -2217,18 +2226,14 @@ async function deleteMeeting() {
             <span class="pill-dot" :style="{ background: 'var(--pill-dot-color, currentColor)' }" />
             {{ statusLabel }}
           </button>
-          <button class="pill pill-clickable" @click="startEdit('phase')">
-            <BIcon name="layers" :size="11" />
-            {{ info.phase || "Phase setzen" }}
-          </button>
-          <!-- Farbe — runder Swatch, oeffnet Picker -->
+          <!-- Farbe -->
           <div class="color-picker-wrapper">
             <button
               class="color-swatch"
               :style="{ background: info.color || 'transparent' }"
               :class="{ 'color-swatch-empty': !info.color }"
               @click="showColorPicker = !showColorPicker"
-              :title="'Projektfarbe wählen'"
+              title="Projektfarbe wählen"
             ></button>
             <div v-if="showColorPicker" class="color-picker">
               <button
@@ -2247,9 +2252,9 @@ async function deleteMeeting() {
               </button>
             </div>
           </div>
-
+          <!-- Mehr-Menü -->
           <div class="action-menu-wrapper">
-            <button class="action-btn" @click="toggleActionMenu" :title="'Weitere Aktionen'">
+            <button class="action-btn" @click="toggleActionMenu" title="Weitere Aktionen">
               <BIcon name="more" :size="14" />
             </button>
             <div v-if="showActionMenu" class="action-menu">
@@ -2288,7 +2293,38 @@ async function deleteMeeting() {
         </div>
       </div>
 
-      <!-- Status-Inline-Editor (getrennt von Stammdaten-Grid) -->
+      <!-- Zeile 2: Titel -->
+      <h1 class="hero-title">{{ info.name }}</h1>
+
+      <!-- Zeile 3: Kontextzeile (Bauherr · Standort) -->
+      <div class="hero-meta">
+        <span v-if="info.bauherrName || info.bauherr">
+          {{ info.bauherrName || info.bauherr }}
+        </span>
+        <span v-if="(info.bauherrName || info.bauherr) && info.standort" class="hero-meta-dot"> · </span>
+        <a v-if="info.standort" :href="mapsLink(info.standort)" target="_blank" rel="noopener" class="maps-link">
+          {{ info.standort }}
+        </a>
+      </div>
+
+      <!-- Zeile 4: Tags (Projektart · Nutzung · Phase) + Bearbeiten-Button -->
+      <div class="hero-tags-row">
+        <div class="hero-tags">
+          <span v-if="info.projektart" class="hero-tag">{{ info.projektart }}</span>
+          <span v-if="info.nutzung" class="hero-tag">{{ info.nutzung }}</span>
+          <button v-if="info.phase" class="pill pill-clickable" @click="startEdit('phase')">
+            <BIcon name="layers" :size="11" />{{ info.phase }}
+          </button>
+          <button v-else class="pill pill-clickable" @click="startEdit('phase')">
+            <BIcon name="layers" :size="11" />Phase setzen
+          </button>
+        </div>
+        <button class="bauos-btn ghost sm" @click="startEdit('description')" style="font-size: 12px">
+          <BIcon name="pencil" :size="11" /> Bearbeiten
+        </button>
+      </div>
+
+      <!-- Status-Editor -->
       <div v-if="editingField === 'status'" class="status-editor">
         <div class="eyebrow" style="margin-bottom: 6px">Status aendern</div>
         <select
@@ -2465,27 +2501,44 @@ async function deleteMeeting() {
       </div>
     </div>
 
-    <!-- ═══ Quick-Stats (4 Kacheln) ════════════════════════════ -->
-    <div
-      v-if="info"
-      class="grid proj-quick-stats"
-      style="grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 28px; margin-top: 24px"
-    >
-      <div class="stat-tile">
-        <div class="eyebrow">Notizen</div>
-        <div class="stat-number">{{ info.notes }}</div>
+    <!-- ═══ Stats-Bar ════════════════════════════════════════════ -->
+    <div v-if="info" class="stats-bar">
+      <!-- Fortschritt -->
+      <div class="stat-card">
+        <div class="stat-label">Fortschritt</div>
+        <div v-if="projectProgress !== null" class="stat-progress-bar">
+          <div class="stat-progress-fill" :style="{ width: projectProgress + '%' }"></div>
+        </div>
+        <div class="stat-value stat-value-sm">
+          <span v-if="info.startDate">{{ fmtDate(info.startDate) }}</span>
+          <span v-if="info.startDate && info.endDate" style="color: var(--color-text-faint)"> – </span>
+          <span v-if="info.endDate">{{ fmtDate(info.endDate) }}</span>
+          <span v-if="!info.startDate && !info.endDate" style="color: var(--color-text-tertiary)">Kein Zeitrahmen</span>
+        </div>
       </div>
-      <div class="stat-tile">
-        <div class="eyebrow">Offene Aufgaben</div>
-        <div class="stat-number">{{ info.openTasks }}</div>
+
+      <!-- Offene Aufgaben -->
+      <div class="stat-card" @click="openTab('tasks')" style="cursor: pointer">
+        <div class="stat-label">Offene Aufgaben</div>
+        <div class="stat-value">{{ tasks.filter((t) => t.status !== "done").length }}</div>
+        <div class="stat-sub" v-if="(info.highPriorityCount ?? 0) > 0">{{ info.highPriorityCount }} hohe Priorität</div>
+        <div class="stat-sub" v-else>Keine hohe Priorität</div>
       </div>
-      <div class="stat-tile">
-        <div class="eyebrow">Termine</div>
-        <div class="stat-number">{{ info.termine }}</div>
+
+      <!-- Nächster Termin -->
+      <div class="stat-card" @click="openTab('termine')" style="cursor: pointer">
+        <div class="stat-label">Nächster Termin</div>
+        <div class="stat-value stat-value-sm" v-if="nextTermin">{{ fmtDate(nextTermin.datum) }}</div>
+        <div class="stat-sub" v-if="nextTermin">{{ nextTermin.text }}</div>
+        <div class="stat-value stat-value-sm" v-else style="color: var(--color-text-tertiary)">—</div>
       </div>
-      <div class="stat-tile">
-        <div class="eyebrow">Dateien</div>
-        <div class="stat-number">{{ info.files ?? 0 }}</div>
+
+      <!-- Budget -->
+      <div class="stat-card">
+        <div class="stat-label">Budget</div>
+        <div class="stat-value stat-value-sm" v-if="info.budget">{{ fmtEur(info.budgetUsed) }}</div>
+        <div class="stat-sub" v-if="info.budget">von {{ fmtEur(info.budget) }}</div>
+        <div class="stat-value stat-value-sm" v-else style="color: var(--color-text-tertiary)">—</div>
       </div>
     </div>
 
@@ -2615,40 +2668,9 @@ async function deleteMeeting() {
       </div>
     </div>
 
-    <!-- Uebersicht (Stufe 3d) -->
+    <!-- Uebersicht (V1 Stage — 2-Spalten) -->
     <div v-if="tab === 'uebersicht' && info">
-      <!-- Beschreibung (inline-editable, mehrzeilig) -->
-      <div class="ueb-card" style="margin-bottom: 16px">
-        <div class="flex items-center justify-between" style="margin-bottom: 8px">
-          <div class="eyebrow">Beschreibung</div>
-          <button v-if="editingField !== 'description'" class="desc-edit-btn" @click="startEditDescription">
-            <BIcon name="pencil" :size="11" />
-            <span style="margin-left: 4px">{{ info.description ? "Bearbeiten" : "Hinzufügen" }}</span>
-          </button>
-        </div>
-        <div v-if="editingField === 'description'">
-          <textarea
-            v-model="draftValue"
-            class="stamm-input"
-            rows="4"
-            placeholder="Kurz beschreiben, worum es bei diesem Projekt geht…"
-            style="resize: vertical; font-family: inherit; line-height: 1.5"
-          ></textarea>
-          <div class="flex items-center" style="gap: 6px; margin-top: 8px">
-            <button class="bauos-btn solid sm" :disabled="saving" @click="saveField('description')">
-              {{ saving ? "…" : "Speichern" }}
-            </button>
-            <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
-            <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">
-              {{ saveError }}
-            </span>
-          </div>
-        </div>
-        <p v-else-if="info.description" class="desc-text">{{ info.description }}</p>
-        <p v-else class="desc-empty">Noch keine Beschreibung. Klicke auf „Hinzufügen", um Kontext zu ergänzen.</p>
-      </div>
-
-      <!-- Unterprojekte — nur wenn welche existieren (Migration 005) -->
+      <!-- Unterprojekte (nur wenn vorhanden) -->
       <div v-if="children.length > 0" class="ueb-card" style="margin-bottom: 16px">
         <div class="flex items-center justify-between" style="margin-bottom: 8px">
           <div class="eyebrow">Unterprojekte ({{ children.length }})</div>
@@ -2673,95 +2695,182 @@ async function deleteMeeting() {
         </div>
       </div>
 
-      <!-- 3-Spalten-Grid: Termine / Aufgaben / Aktivitaet -->
-      <div class="ueb-grid">
-        <!-- Anstehende Termine -->
-        <div class="ueb-card">
-          <div class="flex items-center justify-between" style="margin-bottom: 8px">
-            <div class="eyebrow">Als nächstes</div>
-            <button class="link-btn" @click="openTab('termine')">Alle →</button>
+      <!-- Beschreibung (falls vorhanden oder im Edit-Mode) -->
+      <div v-if="info.description || editingField === 'description'" class="ueb-card" style="margin-bottom: 16px">
+        <div class="flex items-center justify-between" style="margin-bottom: 8px">
+          <div class="eyebrow">Beschreibung</div>
+          <button v-if="editingField !== 'description'" class="desc-edit-btn" @click="startEditDescription">
+            <BIcon name="pencil" :size="11" /><span style="margin-left: 4px">Bearbeiten</span>
+          </button>
+        </div>
+        <div v-if="editingField === 'description'">
+          <textarea
+            v-model="draftValue"
+            class="stamm-input"
+            rows="4"
+            placeholder="Kurz beschreiben, worum es bei diesem Projekt geht…"
+            style="resize: vertical; font-family: inherit; line-height: 1.5"
+          ></textarea>
+          <div class="flex items-center" style="gap: 6px; margin-top: 8px">
+            <button class="bauos-btn solid sm" :disabled="saving" @click="saveField('description')">
+              {{ saving ? "…" : "Speichern" }}
+            </button>
+            <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
+            <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">{{
+              saveError
+            }}</span>
           </div>
-          <div v-if="upcomingTermine.length === 0" class="ueb-empty">Keine anstehenden Termine.</div>
-          <div v-for="t in upcomingTermine" :key="t.id" class="ueb-row">
-            <div style="flex: 1; min-width: 0">
-              <div class="ueb-row-title">{{ t.text }}</div>
-              <div class="ueb-row-meta">
-                {{ t.datum }}<span v-if="t.uhrzeit"> · {{ t.uhrzeit }}</span>
+        </div>
+        <p v-else class="desc-text">{{ info.description }}</p>
+      </div>
+
+      <!-- 2-Spalten-Hauptgrid -->
+      <div class="ueb-main-grid">
+        <!-- LINKE SPALTE: Aufgaben + Stammdaten -->
+        <div class="ueb-left-col">
+          <!-- Offene Aufgaben -->
+          <div class="ueb-card" style="margin-bottom: 16px">
+            <div class="flex items-center justify-between" style="margin-bottom: 8px">
+              <div class="eyebrow">Offene Aufgaben</div>
+              <button class="link-btn" @click="openTab('tasks')">Alle ansehen →</button>
+            </div>
+            <div v-if="openTasksSorted.length === 0" class="ueb-empty">Keine offenen Aufgaben.</div>
+            <div v-for="t in openTasksSorted" :key="t.id" class="ueb-task-row">
+              <div
+                class="task-prio-badge"
+                :class="{
+                  'prio-hoch': t.priority === 'hoch',
+                  'prio-mittel': t.priority === 'mittel',
+                  'prio-niedrig': t.priority === 'niedrig' || !t.priority,
+                }"
+              >
+                {{ t.priority === "hoch" ? "H" : t.priority === "mittel" ? "M" : "N" }}
+              </div>
+              <div style="flex: 1; min-width: 0">
+                <div class="ueb-row-title">{{ t.text }}</div>
+                <div v-if="t.assignee || t.date" class="ueb-row-meta">
+                  <span v-if="t.assignee">{{ t.assignee }}</span>
+                  <span v-if="t.assignee && t.date"> · </span>
+                  <span v-if="t.date">{{ fmtDate(t.date) }}</span>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                @change="completeTask(t)"
+                style="accent-color: var(--color-primary); flex-shrink: 0"
+              />
+            </div>
+            <!-- Quick-Add -->
+            <div class="quick-add" style="margin-top: 8px">
+              <input
+                v-model="quickTaskText"
+                placeholder="Neue Aufgabe…"
+                class="quick-input"
+                style="flex: 1"
+                @keyup.enter="quickAddTask"
+              />
+              <button class="quick-btn" :disabled="!quickTaskText.trim()" @click="quickAddTask" title="Aufgabe anlegen">
+                <BIcon name="plus" :size="12" />
+              </button>
+            </div>
+          </div>
+
+          <!-- Stammdaten (kompakte Liste) -->
+          <div class="ueb-card">
+            <div class="eyebrow" style="margin-bottom: 10px">Stammdaten</div>
+            <div class="ueb-stamm-list">
+              <div
+                v-for="f in STAMMDATEN_FIELDS.filter((f) => f.key !== 'startDate' && f.key !== 'endDate')"
+                :key="f.key"
+                class="ueb-stamm-row"
+              >
+                <span class="ueb-stamm-label">{{ f.label }}</span>
+                <button class="ueb-stamm-value" @click="startEdit(f.key)" title="Bearbeiten">
+                  {{ (info[f.key as keyof ProjectInfo] as string) || "—" }}
+                </button>
+              </div>
+              <div v-if="info.budget != null" class="ueb-stamm-row">
+                <span class="ueb-stamm-label">Budget</span>
+                <span class="ueb-stamm-value-plain">{{ fmtEur(info.budget) }}</span>
               </div>
             </div>
           </div>
-          <!-- Quick-Add Termin: Datum + Text nebeneinander -->
-          <div class="quick-add">
-            <input v-model="quickTerminDate" type="date" class="quick-input" style="width: 120px" />
-            <input
-              v-model="quickTerminText"
-              placeholder="Termin…"
-              class="quick-input"
-              style="flex: 1"
-              @keyup.enter="quickAddTermin"
-            />
-            <button
-              class="quick-btn"
-              :disabled="!quickTerminDate || !quickTerminText.trim()"
-              @click="quickAddTermin"
-              :title="'Termin anlegen'"
-            >
-              <BIcon name="plus" :size="12" />
-            </button>
-          </div>
         </div>
 
-        <!-- Offene Aufgaben -->
-        <div class="ueb-card">
-          <div class="flex items-center justify-between" style="margin-bottom: 8px">
-            <div class="eyebrow">Offene Aufgaben</div>
-            <button class="link-btn" @click="openTab('tasks')">Alle →</button>
+        <!-- RECHTE SPALTE: Termine + Team + Aktivität -->
+        <div class="ueb-right-col">
+          <!-- Als nächstes / Termine -->
+          <div class="ueb-card" style="margin-bottom: 16px">
+            <div class="flex items-center justify-between" style="margin-bottom: 8px">
+              <div class="eyebrow">Als nächstes</div>
+              <button class="link-btn" @click="openTab('termine')">Kalender →</button>
+            </div>
+            <div v-if="upcomingTermine.length === 0" class="ueb-empty">Keine anstehenden Termine.</div>
+            <div v-for="t in upcomingTermine" :key="t.id" class="ueb-termin-row">
+              <div class="ueb-termin-date">
+                <span class="ueb-termin-day">{{ fmtDate(t.datum).slice(0, 2) }}</span>
+                <span class="ueb-termin-monthday">{{ t.datum.slice(5, 7) }}/{{ t.datum.slice(8, 10) }}</span>
+              </div>
+              <div style="flex: 1; min-width: 0">
+                <div class="ueb-row-title">{{ t.text }}</div>
+                <div class="ueb-row-meta">
+                  <span v-if="t.uhrzeit">{{ t.uhrzeit }}</span>
+                  <span v-if="t.uhrzeit && t.location"> · </span>
+                  <span v-if="t.location">{{ t.location }}</span>
+                </div>
+              </div>
+            </div>
+            <!-- Quick-Add Termin -->
+            <div class="quick-add" style="margin-top: 8px">
+              <input v-model="quickTerminDate" type="date" class="quick-input" style="width: 120px" />
+              <input
+                v-model="quickTerminText"
+                placeholder="Termin…"
+                class="quick-input"
+                style="flex: 1"
+                @keyup.enter="quickAddTermin"
+              />
+              <button
+                class="quick-btn"
+                :disabled="!quickTerminDate || !quickTerminText.trim()"
+                @click="quickAddTermin"
+                title="Termin anlegen"
+              >
+                <BIcon name="plus" :size="12" />
+              </button>
+            </div>
           </div>
-          <div v-if="openTasksTop.length === 0" class="ueb-empty">Keine offenen Aufgaben.</div>
-          <div v-for="t in openTasksTop" :key="t.id" class="ueb-row">
-            <input type="checkbox" @change="completeTask(t)" style="accent-color: var(--color-primary)" />
-            <div style="flex: 1; min-width: 0">
-              <div class="ueb-row-title">{{ t.text }}</div>
-              <div v-if="t.assignee || t.date" class="ueb-row-meta">
-                <span v-if="t.assignee">{{ t.assignee }}</span>
-                <span v-if="t.assignee && t.date"> · </span>
-                <span v-if="t.date">{{ t.date }}</span>
+
+          <!-- Team -->
+          <div class="ueb-card" style="margin-bottom: 16px">
+            <div class="flex items-center justify-between" style="margin-bottom: 8px">
+              <div class="eyebrow">Team</div>
+              <button class="link-btn" @click="openTab('team')">Alle →</button>
+            </div>
+            <div v-if="projectTeam.length === 0" class="ueb-empty">Noch keine Teammitglieder zugeordnet.</div>
+            <div v-for="m in projectTeam.slice(0, 4)" :key="m.id" class="ueb-team-row">
+              <div class="ueb-avatar">{{ (m.name[0] ?? "?").toUpperCase() }}</div>
+              <div style="flex: 1; min-width: 0">
+                <div class="ueb-row-title">{{ m.name }}</div>
+                <div class="ueb-row-meta">{{ m.role || "Keine Rolle" }}</div>
               </div>
             </div>
           </div>
-          <!-- Quick-Add Aufgabe -->
-          <div class="quick-add">
-            <input
-              v-model="quickTaskText"
-              placeholder="Neue Aufgabe…"
-              class="quick-input"
-              style="flex: 1"
-              @keyup.enter="quickAddTask"
-            />
-            <button
-              class="quick-btn"
-              :disabled="!quickTaskText.trim()"
-              @click="quickAddTask"
-              :title="'Aufgabe anlegen'"
-            >
-              <BIcon name="plus" :size="12" />
-            </button>
-          </div>
-        </div>
 
-        <!-- Letzte Aktivitaet -->
-        <div class="ueb-card">
-          <div class="flex items-center justify-between" style="margin-bottom: 8px">
-            <div class="eyebrow">Letzte Aktivität</div>
-            <button class="link-btn" @click="openTab('verlauf')">Alle →</button>
-          </div>
-          <div v-if="!recentActivityLoaded" class="ueb-empty">Lade…</div>
-          <div v-else-if="recentActivity.length === 0" class="ueb-empty">Noch keine Aktivität für dieses Projekt.</div>
-          <div v-for="log in recentActivity" :key="log.id ?? `${log.sessionId}-${log.createdAt}`" class="ueb-row">
-            <div style="flex: 1; min-width: 0">
-              <div class="ueb-row-title">{{ activityLabel(log) }}</div>
-              <div class="ueb-row-meta">
-                {{ activityTime(log.createdAt) }}<span v-if="log.agentName"> · {{ log.agentName }}</span>
+          <!-- Letzte Aktivität -->
+          <div class="ueb-card">
+            <div class="flex items-center justify-between" style="margin-bottom: 8px">
+              <div class="eyebrow">Letzte Aktivität</div>
+              <button class="link-btn" @click="openTab('verlauf')">Alle →</button>
+            </div>
+            <div v-if="!recentActivityLoaded" class="ueb-empty">Lade…</div>
+            <div v-else-if="recentActivity.length === 0" class="ueb-empty">Noch keine Aktivität.</div>
+            <div v-for="log in recentActivity" :key="log.id ?? `${log.sessionId}-${log.createdAt}`" class="ueb-row">
+              <div style="flex: 1; min-width: 0">
+                <div class="ueb-row-title">{{ activityLabel(log) }}</div>
+                <div class="ueb-row-meta">
+                  {{ activityTime(log.createdAt) }}<span v-if="log.agentName"> · {{ log.agentName }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -5515,6 +5624,281 @@ async function deleteMeeting() {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* ── Hero Redesign ─────────────────────────────────── */
+.hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.hero-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+.hero-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.hero-title {
+  font-size: 26px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+  line-height: 1.2;
+}
+.hero-meta {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+.hero-meta-dot {
+  margin: 0 4px;
+  color: var(--color-text-faint);
+}
+.hero-tags-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.hero-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.hero-tag {
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+/* ── Stats Bar ─────────────────────────────────────── */
+.stats-bar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+  margin-top: 16px;
+}
+@media (max-width: 767px) {
+  .stats-bar {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.stat-card {
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  padding: 12px 14px;
+  min-width: 0;
+  transition: background 0.15s;
+}
+.stat-card:hover {
+  background: var(--color-bg-subtle);
+}
+.stat-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+  margin-bottom: 6px;
+}
+.stat-value {
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--color-text);
+  line-height: 1.1;
+}
+.stat-value-sm {
+  font-size: 14px;
+  font-weight: 500;
+}
+.stat-sub {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  margin-top: 3px;
+}
+.stat-progress-bar {
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 2px;
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+.stat-progress-fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 2px;
+  transition: width 0.3s;
+}
+
+/* ── Übersicht 2-Spalten ───────────────────────────── */
+.ueb-main-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.4fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .ueb-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.ueb-left-col,
+.ueb-right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ── Task-Priority-Badge ───────────────────────────── */
+.ueb-task-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.ueb-task-row:last-child {
+  border-bottom: none;
+}
+.task-prio-badge {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0;
+  margin-top: 2px;
+}
+.prio-hoch {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fca5a5;
+}
+.prio-mittel {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+}
+.prio-niedrig {
+  background: var(--color-bg-subtle);
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border);
+}
+
+/* ── Stammdaten-Liste (Übersicht) ──────────────────── */
+.ueb-stamm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.ueb-stamm-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: 13px;
+}
+.ueb-stamm-row:last-child {
+  border-bottom: none;
+}
+.ueb-stamm-label {
+  color: var(--color-text-muted);
+  min-width: 90px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.ueb-stamm-value {
+  color: var(--color-text);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  font-size: 13px;
+  font-family: inherit;
+}
+.ueb-stamm-value:hover {
+  color: var(--color-primary);
+}
+.ueb-stamm-value-plain {
+  color: var(--color-text);
+  font-size: 13px;
+}
+
+/* ── Termin-Rows ───────────────────────────────────── */
+.ueb-termin-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.ueb-termin-row:last-child {
+  border-bottom: none;
+}
+.ueb-termin-date {
+  flex-shrink: 0;
+  width: 36px;
+  text-align: center;
+}
+.ueb-termin-day {
+  display: block;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1;
+}
+.ueb-termin-monthday {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+
+/* ── Team-Rows ─────────────────────────────────────── */
+.ueb-team-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.ueb-team-row:last-child {
+  border-bottom: none;
+}
+.ueb-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
 }
 </style>
 
