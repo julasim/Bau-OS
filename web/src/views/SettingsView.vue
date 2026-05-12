@@ -907,10 +907,15 @@ async function renderTemplatePreview() {
   }
 }
 
+let _tplPreviewTimer: ReturnType<typeof setTimeout> | null = null;
+
 watch(
   () => templateDraft.value.body,
   () => {
-    void renderTemplatePreview();
+    if (_tplPreviewTimer) clearTimeout(_tplPreviewTimer);
+    _tplPreviewTimer = setTimeout(() => {
+      void renderTemplatePreview();
+    }, 400);
   },
 );
 
@@ -1123,6 +1128,9 @@ const activeSection = ref<SettingsSection>(
 
 watch(activeSection, (v) => localStorage.setItem(SECTION_KEY, v));
 
+const WIDE_SECTIONS = new Set(["vorlagen", "word-export", "branding", "projekt-module"]);
+const isWideSection = computed(() => WIDE_SECTIONS.has(activeSection.value));
+
 const settingsNavGroups = computed(() => {
   const map = new Map<string, typeof SETTINGS_NAV>();
   for (const item of SETTINGS_NAV) {
@@ -1171,7 +1179,7 @@ onMounted(() => {
     </aside>
 
     <!-- Content-Pane: aktive Sektion -->
-    <div class="settings-content">
+    <div :class="['settings-content', isWideSection ? 'settings-content-wide' : '']">
       <!-- Flash-Meldung — global, sektion-uebergreifend -->
       <div
         v-if="message"
@@ -2171,9 +2179,17 @@ onMounted(() => {
                 >
                   <div class="flex items-center" style="gap: 6px">
                     <span style="font-weight: 500; flex: 1">{{ t.name }}</span>
-                    <span v-if="t.isDefault" class="tpl-default-pill" title="Standard-Vorlage fuer diese Kategorie">
-                      Standard
-                    </span>
+                    <span v-if="t.isDefault" class="tpl-default-pill" title="Standard-Vorlage fuer diese Kategorie"
+                      >Standard</span
+                    >
+                    <button
+                      @click.stop="removeTemplate(t)"
+                      :disabled="templateBusy"
+                      class="tpl-delete-btn"
+                      title="Vorlage löschen"
+                    >
+                      ×
+                    </button>
                   </div>
                   <div v-if="t.description" class="text-xs" style="color: var(--color-text-tertiary); margin-top: 2px">
                     {{ t.description }}
@@ -2219,7 +2235,7 @@ onMounted(() => {
                     <div class="eyebrow" style="margin-bottom: 6px">Markdown-Body</div>
                     <textarea
                       v-model="templateDraft.body"
-                      rows="18"
+                      rows="22"
                       placeholder="Body mit &#123;&#123;Platzhaltern&#125;&#125;…"
                       class="settings-input w-full px-3 py-2 rounded text-sm outline-none font-mono"
                       style="resize: vertical; font-family: ui-monospace, SFMono-Regular, monospace"
@@ -2653,6 +2669,10 @@ onMounted(() => {
   padding: 28px 32px 48px;
   max-width: 720px;
 }
+.settings-content-wide {
+  max-width: none;
+  padding: 28px 40px 48px;
+}
 .settings-section-wrap > * + * {
   margin-top: 32px;
 }
@@ -2850,7 +2870,7 @@ onMounted(() => {
 
 .tpl-grid {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 260px 1fr;
   gap: 16px;
   align-items: start;
 }
@@ -2887,6 +2907,28 @@ onMounted(() => {
   border-radius: 0;
   padding-bottom: 8px;
   margin-bottom: 4px;
+}
+.tpl-delete-btn {
+  display: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--color-text-tertiary);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.tpl-list-item:hover .tpl-delete-btn {
+  display: inline-flex;
+}
+.tpl-delete-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 .tpl-default-pill {
   font-size: 9px;
@@ -2927,8 +2969,8 @@ onMounted(() => {
   background: var(--color-bg-subtle);
   font-size: 13px;
   color: var(--color-text);
-  min-height: 380px;
-  max-height: 440px;
+  min-height: 440px;
+  max-height: 560px;
   overflow-y: auto;
   margin: 0;
   font-family: inherit;
