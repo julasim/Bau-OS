@@ -231,8 +231,7 @@ const tree = computed<FileNode>(() => {
   // Recent/Starred/Shared sind keine Hierarchie — wir zeigen die Files
   // direkt im Root, ohne Projekt-Gruppierung.
   if (mode.value !== "all") {
-    const label =
-      mode.value === "recent" ? "Zuletzt bearbeitet" : mode.value === "starred" ? "Markiert" : "Geteilt";
+    const label = mode.value === "recent" ? "Zuletzt bearbeitet" : mode.value === "starred" ? "Markiert" : "Geteilt";
     return {
       name: "Vault",
       kind: "root",
@@ -406,9 +405,7 @@ async function loadPreview(node: FileNode) {
   }
   previewLoading.value = true;
   try {
-    const resp = await api.get<{ content: string; filename: string }>(
-      `/files/read?id=${encodeURIComponent(node.id)}`,
-    );
+    const resp = await api.get<{ content: string; filename: string }>(`/files/read?id=${encodeURIComponent(node.id)}`);
     previewContent.value = resp.content ?? "";
   } catch {
     previewContent.value = null;
@@ -572,9 +569,7 @@ async function removeShare(userId: string) {
   if (!shareModalFile.value?.id) return;
   shareModalBusy.value = true;
   try {
-    await api.delete(
-      `/files/${encodeURIComponent(shareModalFile.value.id)}/shares/${encodeURIComponent(userId)}`,
-    );
+    await api.delete(`/files/${encodeURIComponent(shareModalFile.value.id)}/shares/${encodeURIComponent(userId)}`);
     await loadShares(shareModalFile.value.id);
   } finally {
     shareModalBusy.value = false;
@@ -589,10 +584,7 @@ const shareModalCandidates = computed<AdminUserMini[]>(() => {
   return allUsers.value.filter((u) => {
     if (sharedIds.has(u.id)) return false;
     if (!term) return true;
-    return (
-      u.username.toLowerCase().includes(term) ||
-      (u.displayName ?? "").toLowerCase().includes(term)
-    );
+    return u.username.toLowerCase().includes(term) || (u.displayName ?? "").toLowerCase().includes(term);
   });
 });
 
@@ -722,11 +714,19 @@ function humanDate(iso: string): string {
 
 function extLabel(kind: FileKind): string {
   return (
-    { pdf: "pdf", dwg: "dwg", image: "img", doc: "doc", csv: "csv", archive: "gz", code: "md", other: "file" } as Record<
-      FileKind,
-      string
-    >
-  )[kind] ?? "file";
+    (
+      {
+        pdf: "pdf",
+        dwg: "dwg",
+        image: "img",
+        doc: "doc",
+        csv: "csv",
+        archive: "gz",
+        code: "md",
+        other: "file",
+      } as Record<FileKind, string>
+    )[kind] ?? "file"
+  );
 }
 
 const previewIsMarkdown = computed(() => previewFileName.value.toLowerCase().endsWith(".md"));
@@ -758,12 +758,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div
-    class="files-root"
-    @dragover="onDragOver"
-    @dragleave="onDragLeave"
-    @drop="onDrop"
-  >
+  <div class="files-root" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
     <!-- ─── Toolbar ─────────────────────────────────────────────── -->
     <header class="files-toolbar">
       <!-- Sidebar-Toggle -->
@@ -773,7 +768,16 @@ onBeforeUnmount(() => {
         @click="sidebarOpen = !sidebarOpen"
         title="Seitenleiste"
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <rect x="3" y="4" width="18" height="16" rx="1.5" />
           <line x1="9" y1="4" x2="9" y2="20" />
         </svg>
@@ -782,17 +786,30 @@ onBeforeUnmount(() => {
       <!-- Back / Forward -->
       <div class="files-nav-btns">
         <button class="files-icon-btn" :disabled="path.length === 0" @click="onBack" title="Zurück">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <button
-          class="files-icon-btn"
-          :disabled="historyForward.length === 0"
-          @click="onForward"
-          title="Weiter"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <button class="files-icon-btn" :disabled="historyForward.length === 0" @click="onForward" title="Weiter">
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
             <polyline points="9 18 15 12 9 6" />
           </svg>
         </button>
@@ -881,7 +898,15 @@ onBeforeUnmount(() => {
 
       <!-- Search -->
       <div class="files-search">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+        >
           <circle cx="11" cy="11" r="7" />
           <line x1="21" y1="21" x2="16.5" y2="16.5" />
         </svg>
@@ -890,7 +915,16 @@ onBeforeUnmount(() => {
 
       <!-- Upload -->
       <button class="files-upload-btn" :disabled="uploading" @click="triggerUpload">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
           <polyline points="17 8 12 3 7 8" />
           <line x1="12" y1="3" x2="12" y2="15" />
@@ -917,7 +951,16 @@ onBeforeUnmount(() => {
               :class="{ 'files-sidebar-item-active': mode === 'all' && path.length === 0 && !searchTerm }"
               @click="setMode('all')"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2v-9z" />
               </svg>
               <span>Alle Dateien</span>
@@ -927,7 +970,16 @@ onBeforeUnmount(() => {
               :class="{ 'files-sidebar-item-active': mode === 'recent' }"
               @click="setMode('recent')"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <circle cx="12" cy="12" r="9" />
                 <polyline points="12 7 12 12 15 14" />
               </svg>
@@ -938,7 +990,16 @@ onBeforeUnmount(() => {
               :class="{ 'files-sidebar-item-active': mode === 'starred' }"
               @click="setMode('starred')"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
               </svg>
               <span>Markiert</span>
@@ -948,7 +1009,16 @@ onBeforeUnmount(() => {
               :class="{ 'files-sidebar-item-active': mode === 'shared' }"
               @click="setMode('shared')"
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
                 <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
               </svg>
@@ -962,9 +1032,21 @@ onBeforeUnmount(() => {
             <div
               class="files-sidebar-item"
               :class="{ 'files-sidebar-item-active': mode === 'all' && path[0] === 'Projekte' }"
-              @click="mode = 'all'; setSidebarTarget(['Projekte'])"
+              @click="
+                mode = 'all';
+                setSidebarTarget(['Projekte']);
+              "
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
               </svg>
               <span>Projekte</span>
@@ -972,9 +1054,21 @@ onBeforeUnmount(() => {
             <div
               class="files-sidebar-item"
               :class="{ 'files-sidebar-item-active': mode === 'all' && path[0] === 'Privat' }"
-              @click="mode = 'all'; setSidebarTarget(['Privat'])"
+              @click="
+                mode = 'all';
+                setSidebarTarget(['Privat']);
+              "
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
               </svg>
               <span>Privat</span>
@@ -985,7 +1079,16 @@ onBeforeUnmount(() => {
           <div class="files-sidebar-section">
             <div class="files-sidebar-label">Speicher</div>
             <div class="files-sidebar-item files-sidebar-item-disabled">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <rect x="2" y="4" width="20" height="7" rx="1" />
                 <rect x="2" y="13" width="20" height="7" rx="1" />
                 <line x1="6" y1="7.5" x2="6.01" y2="7.5" />
@@ -995,7 +1098,16 @@ onBeforeUnmount(() => {
               <span class="files-sidebar-badge">self-hosted</span>
             </div>
             <div class="files-sidebar-item files-sidebar-item-disabled">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
                 <ellipse cx="12" cy="5" rx="9" ry="3" />
                 <path d="M3 5v14a9 3 0 0 0 18 0V5" />
                 <path d="M3 12a9 3 0 0 0 18 0" />
@@ -1029,6 +1141,224 @@ onBeforeUnmount(() => {
         <!-- Loading-Empty-State -->
         <div v-if="loading && allFiles.length === 0" class="files-empty">Laedt…</div>
 
+        <!-- ══ Vollbild-Vorschau (ersetzt Browser wenn Datei geöffnet) ══ -->
+        <div v-else-if="selected?.node && selected.node.kind !== 'folder'" class="files-detail-full">
+          <!-- Topbar -->
+          <div class="files-detail-topbar">
+            <button class="files-detail-back" @click="selected = null">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+              Zurück
+            </button>
+            <span class="files-detail-breadcrumb">{{ selected.node.name }}</span>
+            <button
+              class="files-preview-star"
+              :class="{ 'files-preview-star-on': selected.node.starred }"
+              @click="toggleStar(selected.node)"
+              :title="selected.node.starred ? 'Markierung entfernen' : 'Markieren'"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                :fill="selected.node.starred ? 'currentColor' : 'none'"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
+              </svg>
+            </button>
+          </div>
+
+          <!-- Body: Info-Spalte links + Inhalt rechts -->
+          <div class="files-detail-body">
+            <!-- Info-Panel -->
+            <div class="files-detail-info">
+              <div class="files-preview-hero">
+                <img
+                  v-if="selected.node.kind === 'image' && selected.node.id"
+                  :src="downloadUrl(selected.node)"
+                  :alt="selected.node.name"
+                  class="files-preview-image"
+                />
+                <FileGlyph v-else :kind="selected.node.kind" size="hero" />
+              </div>
+              <div>
+                <div class="files-preview-name" :class="{ mono: isMonoKind(selected.node.kind) }">
+                  {{ selected.node.name }}
+                </div>
+                <div class="files-preview-sub">{{ kindLabel(selected.node.kind) }}</div>
+              </div>
+              <div class="files-preview-meta">
+                <div class="files-preview-row">
+                  <span class="files-preview-key">Größe</span>
+                  <span class="files-preview-val mono">{{ selected.node.size ?? "—" }}</span>
+                </div>
+                <div class="files-preview-row">
+                  <span class="files-preview-key">Geändert</span>
+                  <span class="files-preview-val mono">{{ selected.node.updated ?? "—" }}</span>
+                </div>
+                <div class="files-preview-row">
+                  <span class="files-preview-key">Projekt</span>
+                  <span class="files-preview-val">{{ selected.node.project ?? "—" }}</span>
+                </div>
+                <div class="files-preview-row">
+                  <span class="files-preview-key">Speicher</span>
+                  <span class="files-preview-val mono">bau-os.local</span>
+                </div>
+              </div>
+              <div class="files-preview-actions">
+                <a class="files-preview-btn-primary" :href="downloadUrl(selected.node)" target="_blank">Öffnen</a>
+                <button class="files-preview-btn-secondary" @click="openShareModal(selected.node)">Teilen</button>
+                <div class="files-preview-actions-menu-wrap">
+                  <button
+                    class="files-preview-btn-secondary"
+                    @click="actionMenuOpen = !actionMenuOpen"
+                    :class="{ 'files-preview-btn-active': actionMenuOpen }"
+                    title="Mehr"
+                  >
+                    ···
+                  </button>
+                  <div v-if="actionMenuOpen" class="files-action-menu" @click.stop>
+                    <button
+                      class="files-action-item"
+                      @click="
+                        actionMenuOpen = false;
+                        toggleStar(selected.node);
+                      "
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
+                      </svg>
+                      {{ selected.node.starred ? "Markierung entfernen" : "Markieren" }}
+                    </button>
+                    <a
+                      class="files-action-item"
+                      :href="downloadUrl(selected.node)"
+                      download
+                      @click="actionMenuOpen = false"
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      Herunterladen
+                    </a>
+                    <button
+                      class="files-action-item"
+                      @click="
+                        actionMenuOpen = false;
+                        openShareModal(selected.node);
+                      "
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="18" cy="5" r="3" />
+                        <circle cx="6" cy="12" r="3" />
+                        <circle cx="18" cy="19" r="3" />
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                      </svg>
+                      Teilen…
+                    </button>
+                    <div class="files-action-divider"></div>
+                    <button
+                      class="files-action-item files-action-danger"
+                      @click="
+                        actionMenuOpen = false;
+                        deleteSelected();
+                      "
+                    >
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polyline points="3 6 5 6 21 6" />
+                        <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+                        <path d="M10 11v6" />
+                        <path d="M14 11v6" />
+                        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                      </svg>
+                      Löschen
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Inhalts-Panel -->
+            <div class="files-detail-content">
+              <iframe
+                v-if="selected.node.kind === 'pdf' && selected.node.id"
+                :src="downloadUrl(selected.node)"
+                class="files-detail-pdf"
+                :title="selected.node.name"
+              />
+              <img
+                v-else-if="selected.node.kind === 'image' && selected.node.id"
+                :src="downloadUrl(selected.node)"
+                :alt="selected.node.name"
+                class="files-detail-img"
+              />
+              <div v-else-if="previewIsMarkdown && previewContent" class="files-detail-md">
+                <MarkdownRenderer :content="previewContent" />
+              </div>
+              <pre v-else-if="previewContent" class="files-detail-code">{{ previewContent }}</pre>
+              <div v-else-if="previewLoading" class="files-preview-loading">Lädt…</div>
+              <div v-else class="files-detail-empty">
+                <FileGlyph :kind="selected.node.kind" size="hero" />
+                <p>Keine Vorschau verfügbar.</p>
+                <a class="files-preview-btn-primary" :href="downloadUrl(selected.node)" target="_blank">Datei öffnen</a>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Spalten-View -->
         <div v-else-if="view === 'column'" class="files-columns">
           <div v-for="(col, idx) in columns" :key="idx" class="files-column">
@@ -1051,7 +1381,11 @@ onBeforeUnmount(() => {
               >
                 <FileGlyph
                   :kind="it.kind"
-                  :active="(path.length > 0 && path[idx + 1] === it.name) || (path.length === 0 && path[idx] === it.name) || (selected?.columnIndex === idx && selected?.node?.name === it.name && it.kind !== 'folder')"
+                  :active="
+                    (path.length > 0 && path[idx + 1] === it.name) ||
+                    (path.length === 0 && path[idx] === it.name) ||
+                    (selected?.columnIndex === idx && selected?.node?.name === it.name && it.kind !== 'folder')
+                  "
                 />
                 <span
                   class="files-row-name"
@@ -1065,13 +1399,21 @@ onBeforeUnmount(() => {
                   class="files-row-star"
                   :class="{
                     'files-row-star-on': it.starred,
-                    'files-row-star-active-row':
-                      selected?.columnIndex === idx && selected?.node?.name === it.name,
+                    'files-row-star-active-row': selected?.columnIndex === idx && selected?.node?.name === it.name,
                   }"
                   @click="toggleStar(it, $event)"
                   :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
                 >
-                  <svg width="13" height="13" viewBox="0 0 24 24" :fill="it.starred ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    :fill="it.starred ? 'currentColor' : 'none'"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
                     <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
                   </svg>
                 </button>
@@ -1093,122 +1435,11 @@ onBeforeUnmount(() => {
               <div v-if="col.items.length === 0" class="files-empty-col">Leer</div>
             </div>
           </div>
-
-          <!-- Preview-Pane (nur wenn Datei selektiert) -->
-          <div v-if="selected?.node && selected.node.kind !== 'folder'" class="files-preview">
-            <div class="files-preview-header">
-              <span class="files-preview-eyebrow">Vorschau</span>
-              <button
-                class="files-preview-star"
-                :class="{ 'files-preview-star-on': selected.node.starred }"
-                @click="toggleStar(selected.node)"
-                :title="selected.node.starred ? 'Markierung entfernen' : 'Markieren'"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" :fill="selected.node.starred ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-                </svg>
-              </button>
-            </div>
-
-            <!-- Hero: bei Bild → echtes Bild, bei PDF → iframe, sonst Glyph -->
-            <div class="files-preview-hero">
-              <img
-                v-if="selected.node.kind === 'image' && selected.node.id"
-                :src="downloadUrl(selected.node)"
-                :alt="selected.node.name"
-                class="files-preview-image"
-              />
-              <FileGlyph v-else :kind="selected.node.kind" size="hero" />
-            </div>
-
-            <div>
-              <div
-                class="files-preview-name"
-                :class="{ mono: isMonoKind(selected.node.kind) }"
-              >
-                {{ selected.node.name }}
-              </div>
-              <div class="files-preview-sub">{{ kindLabel(selected.node.kind) }}</div>
-            </div>
-            <div class="files-preview-meta">
-              <div class="files-preview-row">
-                <span class="files-preview-key">Größe</span>
-                <span class="files-preview-val mono">{{ selected.node.size ?? "—" }}</span>
-              </div>
-              <div class="files-preview-row">
-                <span class="files-preview-key">Geändert</span>
-                <span class="files-preview-val mono">{{ selected.node.updated ?? "—" }}</span>
-              </div>
-              <div class="files-preview-row">
-                <span class="files-preview-key">Projekt</span>
-                <span class="files-preview-val">{{ selected.node.project ?? "—" }}</span>
-              </div>
-              <div class="files-preview-row">
-                <span class="files-preview-key">Speicher</span>
-                <span class="files-preview-val mono">bau-os.local</span>
-              </div>
-            </div>
-            <div class="files-preview-actions">
-              <a class="files-preview-btn-primary" :href="downloadUrl(selected.node)" target="_blank">Öffnen</a>
-              <button class="files-preview-btn-secondary" @click="openShareModal(selected.node)">Teilen</button>
-              <div class="files-preview-actions-menu-wrap">
-                <button
-                  class="files-preview-btn-secondary"
-                  @click="actionMenuOpen = !actionMenuOpen"
-                  :class="{ 'files-preview-btn-active': actionMenuOpen }"
-                  title="Mehr"
-                >
-                  ···
-                </button>
-                <div v-if="actionMenuOpen" class="files-action-menu" @click.stop>
-                  <button class="files-action-item" @click="actionMenuOpen = false; toggleStar(selected.node)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" /></svg>
-                    {{ selected.node.starred ? "Markierung entfernen" : "Markieren" }}
-                  </button>
-                  <a
-                    class="files-action-item"
-                    :href="downloadUrl(selected.node)"
-                    download
-                    @click="actionMenuOpen = false"
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Herunterladen
-                  </a>
-                  <button class="files-action-item" @click="actionMenuOpen = false; openShareModal(selected.node)">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                    Teilen…
-                  </button>
-                  <div class="files-action-divider"></div>
-                  <button class="files-action-item files-action-danger" @click="actionMenuOpen = false; deleteSelected()">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
-                    Löschen
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <!-- PDF inline -->
-            <iframe
-              v-if="selected.node.kind === 'pdf' && selected.node.id"
-              :src="downloadUrl(selected.node)"
-              class="files-preview-pdf"
-              :title="selected.node.name"
-            />
-            <!-- Markdown inline -->
-            <div v-else-if="previewIsMarkdown && previewContent" class="files-preview-md">
-              <MarkdownRenderer :content="previewContent" />
-            </div>
-            <!-- Code/Text inline -->
-            <pre v-else-if="previewContent" class="files-preview-code">{{ previewContent }}</pre>
-            <div v-else-if="previewLoading" class="files-preview-loading">Laedt…</div>
-          </div>
         </div>
 
         <!-- Liste-View -->
         <div v-else-if="view === 'list'" class="files-list">
-          <div class="files-list-header">
-            <span>Name</span><span>Geändert</span><span>Größe</span><span>Art</span>
-          </div>
+          <div class="files-list-header"><span>Name</span><span>Geändert</span><span>Größe</span><span>Art</span></div>
           <div
             v-for="(it, i) in currentFolder.children ?? []"
             :key="i"
@@ -1218,15 +1449,31 @@ onBeforeUnmount(() => {
           >
             <span class="files-list-name">
               <FileGlyph :kind="it.kind" :active="selected?.node?.name === it.name" />
-              <span :class="{ mono: isMonoKind(it.kind) }" :style="{ fontSize: isMonoKind(it.kind) ? '12px' : '13px' }">{{ it.name }}</span>
+              <span
+                :class="{ mono: isMonoKind(it.kind) }"
+                :style="{ fontSize: isMonoKind(it.kind) ? '12px' : '13px' }"
+                >{{ it.name }}</span
+              >
               <button
                 v-if="it.kind !== 'folder' && it.id"
                 class="files-row-star files-row-star-inline"
-                :class="{ 'files-row-star-on': it.starred, 'files-row-star-active-row': selected?.node?.name === it.name }"
+                :class="{
+                  'files-row-star-on': it.starred,
+                  'files-row-star-active-row': selected?.node?.name === it.name,
+                }"
                 @click="toggleStar(it, $event)"
                 :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" :fill="it.starred ? 'currentColor' : 'none'" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 24 24"
+                  :fill="it.starred ? 'currentColor' : 'none'"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
                   <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
                 </svg>
               </button>
@@ -1280,7 +1527,16 @@ onBeforeUnmount(() => {
             <h3 class="files-modal-title">{{ shareModalFile?.name ?? "Datei" }}</h3>
           </div>
           <button class="files-modal-close" @click="closeShareModal" title="Schließen">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
@@ -1290,9 +1546,7 @@ onBeforeUnmount(() => {
         <!-- Aktuelle Shares -->
         <div class="files-modal-section">
           <div class="files-modal-section-label">Aktuell geteilt mit</div>
-          <div v-if="shareModalShares.length === 0" class="files-modal-empty">
-            Noch mit niemandem geteilt.
-          </div>
+          <div v-if="shareModalShares.length === 0" class="files-modal-empty">Noch mit niemandem geteilt.</div>
           <div v-for="s in shareModalShares" :key="s.userId" class="files-modal-share-row">
             <div class="files-modal-share-info">
               <span class="files-modal-share-name">{{ s.displayName ?? s.username }}</span>
@@ -1712,7 +1966,122 @@ onBeforeUnmount(() => {
   color: var(--color-text-tertiary);
 }
 
-/* Preview-Pane */
+/* ── Vollbild-Detail-Ansicht ──────────────────────────────────────────────── */
+.files-detail-full {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.files-detail-topbar {
+  height: 48px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 20px;
+  flex-shrink: 0;
+  background: var(--color-bg);
+}
+.files-detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--color-text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  transition: background 80ms ease;
+}
+.files-detail-back:hover {
+  background: var(--color-bg-subtle);
+  color: var(--color-text);
+}
+.files-detail-breadcrumb {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.files-detail-body {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+.files-detail-info {
+  width: 280px;
+  min-width: 280px;
+  border-right: 1px solid var(--color-border-subtle);
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+  background: var(--color-bg-subtle);
+}
+.files-detail-content {
+  flex: 1;
+  overflow: auto;
+  padding: 32px;
+  background: var(--color-bg);
+  display: flex;
+  flex-direction: column;
+}
+.files-detail-pdf {
+  flex: 1;
+  width: 100%;
+  min-height: 600px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+}
+.files-detail-img {
+  max-width: 100%;
+  max-height: 80vh;
+  object-fit: contain;
+  display: block;
+  margin: 0 auto;
+  border-radius: 6px;
+  border: 1px solid var(--color-border-subtle);
+}
+.files-detail-md {
+  max-width: 800px;
+  width: 100%;
+}
+.files-detail-code {
+  font-family: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--color-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--color-bg-subtle);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 6px;
+  padding: 20px 24px;
+  margin: 0;
+}
+.files-detail-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  height: 100%;
+  color: var(--color-text-tertiary);
+  font-size: 13px;
+}
+
+/* Preview-Pane (legacy, für responsive-Fallback) */
 .files-preview {
   width: 300px;
   min-width: 300px;
@@ -2010,10 +2379,12 @@ onBeforeUnmount(() => {
   .files-sidebar {
     width: 200px;
   }
-  .files-preview {
-    width: 100%;
-    min-width: unset;
-    border-top: 1px solid var(--color-border-subtle);
+  .files-detail-info {
+    width: 220px;
+    min-width: 220px;
+  }
+  .files-detail-content {
+    padding: 16px;
   }
   .files-columns {
     flex-direction: column;
