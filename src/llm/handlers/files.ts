@@ -510,7 +510,7 @@ export const fileHandlers: HandlerMap = {
 
     if (!pfad) return `Datei mit id/name "${id}" nicht gefunden.`;
     const absPath = path.resolve(WORKSPACE_PATH, pfad);
-    if (!absPath.startsWith(WORKSPACE_PATH)) {
+    if (!absPath.startsWith(WORKSPACE_PATH + path.sep) && absPath !== WORKSPACE_PATH) {
       return "Zugriff verweigert: Pfad liegt ausserhalb des Workspace.";
     }
     try {

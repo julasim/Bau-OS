@@ -32,6 +32,11 @@ RUN npm run build:all \
     && cp -r src/emails dist/emails \
     && npm prune --omit=dev
 
+RUN mkdir -p /opt/bau-os/logs /opt/bau-os/data /opt/bau-os/tools \
+    && chown -R node:node /opt/bau-os
+
+USER node
+
 EXPOSE 3000
 
 # Healthcheck — App sollte auf /api/status antworten.

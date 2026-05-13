@@ -22,6 +22,51 @@ async function getVisibleProjectIds(c: Context<AppEnv>): Promise<string[] | unde
   return projectRepo.listVisibleProjectIds(userId);
 }
 
+/** ACL-Check: darf der aktuelle User diese Datei sehen/lesen/loeschen?
+ *  Admin → immer ja. Non-Admin → ja wenn:
+ *    - file.project_id in sichtbaren Projekten ODER
+ *    - file.uploaded_by === userId ODER
+ *    - explizit via file_shares geshared.
+ *  Liest project_id/uploaded_by direkt aus der DB, weil FileEntry beide
+ *  Felder nicht exponiert. */
+async function canAccessFile(c: Context<AppEnv>, fileId: string): Promise<boolean> {
+  const userRole = c.get("userRole");
+  if (userRole === "admin") return true;
+  const userId = c.get("userId");
+  if (!userId) return false;
+  const db = getDb();
+  const rows = await db`
+    SELECT project_id, uploaded_by FROM files WHERE id = ${fileId}
+  `;
+  if (rows.length === 0) return false;
+  const projectId = rows[0].project_id ? String(rows[0].project_id) : null;
+  const uploadedBy = rows[0].uploaded_by ? String(rows[0].uploaded_by) : null;
+  if (uploadedBy && uploadedBy === userId) return true;
+  if (projectId && projectRepo.listVisibleProjectIds) {
+    const visible = await projectRepo.listVisibleProjectIds(userId);
+    if (visible.includes(projectId)) return true;
+  }
+  const shareRows = await db`
+    SELECT 1 FROM file_shares WHERE file_id = ${fileId} AND user_id = ${userId} LIMIT 1
+  `;
+  return shareRows.length > 0;
+}
+
+/** Ownership-Check: nur Admin oder Uploader darf Shares verwalten / loeschen. */
+async function isFileOwnerOrAdmin(c: Context<AppEnv>, fileId: string): Promise<boolean> {
+  const userRole = c.get("userRole");
+  if (userRole === "admin") return true;
+  const userId = c.get("userId");
+  if (!userId) return false;
+  const db = getDb();
+  const rows = await db`
+    SELECT uploaded_by FROM files WHERE id = ${fileId}
+  `;
+  if (rows.length === 0) return false;
+  const uploadedBy = rows[0].uploaded_by ? String(rows[0].uploaded_by) : null;
+  return uploadedBy === userId;
+}
+
 const ALLOWED_EXTENSIONS = new Set([
   "pdf",
   "docx",
@@ -100,6 +145,7 @@ filesRoutes.get("/files/read", async (c) => {
   if (id && DB_ENABLED && fileRepo) {
     const file = await fileRepo.get(id);
     if (!file) return c.json({ error: "Datei nicht gefunden" }, 404);
+    if (!(await canAccessFile(c, id))) return c.json({ error: "Zugriff verweigert" }, 403);
     // Text-Inhalt aus DB zurueckgeben wenn vorhanden
     if (file.contentText) {
       return c.json({ path: file.filepath, content: file.contentText, filename: file.filename });
@@ -138,6 +184,7 @@ filesRoutes.delete("/files", async (c) => {
   if (body.id && DB_ENABLED && fileRepo) {
     const file = await fileRepo.get(body.id);
     if (!file) return c.json({ error: "Nicht gefunden" }, 404);
+    if (!(await isFileOwnerOrAdmin(c, body.id))) return c.json({ error: "Zugriff verweigert" }, 403);
     // Legacy-Eintraege hatten evtl. eine physische Datei im Vault — die wird
     // best-effort mitgeloescht, damit keine Waisen liegen bleiben.
     const legacyPath = path.resolve(WORKSPACE_PATH, file.filepath);
@@ -369,6 +416,7 @@ filesRoutes.get("/files/download", async (c) => {
   const id = c.req.query("id");
   if (!id) return c.json({ error: "id erforderlich (?id=...)" }, 400);
   if (!DB_ENABLED || !fileRepo) return c.json({ error: "DB nicht aktiv" }, 500);
+  if (!(await canAccessFile(c, id))) return c.json({ error: "Zugriff verweigert" }, 403);
 
   const result = await fileRepo.readBlob(id);
   if (!result) {
@@ -428,6 +476,7 @@ filesRoutes.delete("/files/:id/star", async (c) => {
 filesRoutes.get("/files/:id/shares", async (c) => {
   if (!DB_ENABLED || !fileRepo) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
   const fileId = c.req.param("id");
+  if (!(await isFileOwnerOrAdmin(c, fileId))) return c.json({ error: "Zugriff verweigert" }, 403);
   const db = getDb();
   const rows = await db`
     SELECT fs.user_id, u.username, u.display_name, fs.can_edit, fs.added_at
@@ -462,6 +511,7 @@ filesRoutes.post("/files/:id/shares", async (c) => {
   // Pruefen ob die Datei existiert
   const file = await fileRepo.get(fileId);
   if (!file) return c.json({ error: "Datei nicht gefunden" }, 404);
+  if (!(await isFileOwnerOrAdmin(c, fileId))) return c.json({ error: "Zugriff verweigert" }, 403);
   const canEdit = body.canEdit === true;
   const db = getDb();
   await db`
@@ -477,6 +527,7 @@ filesRoutes.delete("/files/:id/shares/:userId", async (c) => {
   if (!DB_ENABLED) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
   const fileId = c.req.param("id");
   const targetUserId = c.req.param("userId");
+  if (!(await isFileOwnerOrAdmin(c, fileId))) return c.json({ error: "Zugriff verweigert" }, 403);
   const db = getDb();
   await db`
     DELETE FROM file_shares WHERE file_id = ${fileId} AND user_id = ${targetUserId}

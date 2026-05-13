@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { listAgents, inspectAgentWorkspace, readAgentFile, writeAgentFile } from "../../workspace/index.js";
+import { adminMiddleware } from "../auth.js";
 import type { AppEnv } from "../server.js";
 
 const EDITABLE_FILES = [
@@ -35,17 +36,18 @@ agentsRoutes.get("/agents/:name/files/:filename", (c) => {
   return c.json({ name: filename, content });
 });
 
-agentsRoutes.put("/agents/:name/files/:filename", async (c) => {
+agentsRoutes.put("/agents/:name/files/:filename", adminMiddleware, async (c) => {
   const name = c.req.param("name");
   const filename = c.req.param("filename");
 
-  if (!EDITABLE_FILES.includes(filename)) {
+  if (!filename || !EDITABLE_FILES.includes(filename)) {
     return c.json({ error: "Diese Datei kann nicht bearbeitet werden" }, 403);
   }
 
   const { content } = await c.req.json<{ content: string }>();
   if (content === undefined) return c.json({ error: "Inhalt erforderlich" }, 400);
 
+  if (!name) return c.json({ error: "Agent nicht gefunden" }, 404);
   writeAgentFile(name, filename, content);
   return c.json({ success: true });
 });

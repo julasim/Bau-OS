@@ -187,7 +187,11 @@ fi
 # Fallback: Python3 bcrypt
 if [ -z "$PASS_HASH" ]; then
   pip3 install bcrypt -q 2>/dev/null || true
-  PASS_HASH=$(python3 -c "import bcrypt,sys; print(bcrypt.hashpw(sys.argv[1].encode(),bcrypt.gensalt()).decode())" "$WEB_PASS" 2>/dev/null || echo "PLAIN:$WEB_PASS")
+  PASS_HASH=$(python3 -c "import bcrypt,sys; print(bcrypt.hashpw(sys.argv[1].encode(),bcrypt.gensalt()).decode())" "$WEB_PASS" 2>/dev/null || echo "")
+fi
+
+if [ -z "$PASS_HASH" ] || [[ "$PASS_HASH" == PLAIN:* ]]; then
+  err "Fehler: bcrypt konnte nicht installiert werden. Bitte Node.js oder Python3 mit bcrypt-Paket installieren und erneut versuchen."
 fi
 
 cat > "$INSTALL_DIR/data/users.json" << USERSEOF
@@ -244,7 +248,7 @@ step "Bau-OS starten (Docker)..."
 cd "$INSTALL_DIR"
 
 # Standalone Compose (mit eingebautem Caddy)
-COMPOSE_FILE="bau-os/docker/docker-compose.standalone.yml"
+COMPOSE_FILE="$INSTALL_DIR/docker/docker-compose.standalone.yml"
 
 docker compose -f "$COMPOSE_FILE" pull --quiet 2>/dev/null || true
 docker compose -f "$COMPOSE_FILE" build --quiet
@@ -266,7 +270,7 @@ step "Update-Befehl einrichten..."
 cat > /usr/local/bin/bauos-update << 'UPDATEEOF'
 #!/bin/bash
 INSTALL_DIR="/opt/bau-os"
-COMPOSE_FILE="$INSTALL_DIR/bau-os/docker/docker-compose.standalone.yml"
+COMPOSE_FILE="$INSTALL_DIR/docker/docker-compose.standalone.yml"
 echo "▶ Bau-OS Update..."
 git -C "$INSTALL_DIR" pull
 docker compose -f "$COMPOSE_FILE" build app

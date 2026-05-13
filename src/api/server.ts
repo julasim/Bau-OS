@@ -27,6 +27,8 @@ import {
   API_RATE_LIMIT_WINDOW_MS,
   DB_ENABLED,
   SMTP_ENABLED,
+  IS_PRODUCTION,
+  JWT_SECRET_OK,
 } from "../config.js";
 import { logInfo } from "../logger.js";
 import {
@@ -175,7 +177,7 @@ app.use("/api/*", async (c, next) => {
 
   // Bucket-GC: alle 5 Minuten Map durchlaufen und abgelaufene Eintraege
   // loeschen, sonst waechst die Map unbegrenzt bei jedem neuen Client.
-  if (now % 100 === 0 && apiBuckets.size > 1000) {
+  if (Math.random() < 0.01) {
     for (const [k, v] of apiBuckets) {
       if (now >= v.resetAt) apiBuckets.delete(k);
     }
@@ -960,6 +962,12 @@ app.get("/*", serveStatic({ root: "./dist/web", path: "index.html" }));
 
 // ── Server starten ───────────────────────────────────────────────────────────
 export function startApi(): void {
+  if (IS_PRODUCTION && !JWT_SECRET_OK) {
+    throw new Error(
+      "JWT_SECRET ist zu kurz oder nicht gesetzt. Mindestens 32 Zeichen erforderlich. " +
+        "Setze JWT_SECRET in der .env-Datei.",
+    );
+  }
   serve({ fetch: app.fetch, port: API_PORT }, () => {
     logInfo(`[API] Web-Server gestartet auf http://0.0.0.0:${API_PORT}`);
   });

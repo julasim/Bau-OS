@@ -77,9 +77,32 @@ chatRoutes.delete("/chat/sessions/:id", async (c) => {
   return c.json({ success: true });
 });
 
+// Owner-Check fuer Sharing-Endpoints: nur der Ersteller der Session (oder Admin)
+// darf shares verwalten — sonst koennte jeder beliebige Session-ID mit sich
+// selbst sharen und so fremde Konversationen lesen.
+async function requireSessionOwner(
+  sessionId: string,
+  userId: string | null | undefined,
+  userRole: string | undefined,
+): Promise<{ ok: true } | { ok: false; status: 403 | 404; error: string }> {
+  if (userRole === "admin") return { ok: true };
+  // Admin-View: alle Sessions, damit wir den echten Owner ermitteln koennen.
+  const all = await chatRepo.listSessions("Main", 500, undefined);
+  const session = all.find((s) => s.id === sessionId);
+  if (!session) return { ok: false, status: 404, error: "Session nicht gefunden" };
+  if (!userId || session.userId !== userId) {
+    return { ok: false, status: 403, error: "Kein Zugriff" };
+  }
+  return { ok: true };
+}
+
 // ── Session-Zugriffe auflisten ───────────────────────────────────────────────
 chatRoutes.get("/chat/sessions/:id/shares", async (c) => {
   const id = c.req.param("id");
+  const userId = c.get("userId") as string | null | undefined;
+  const userRole = c.get("userRole") as string | undefined;
+  const guard = await requireSessionOwner(id, userId, userRole);
+  if (!guard.ok) return c.json({ error: guard.error }, guard.status);
   if (!chatRepo.listSessionShares) return c.json([]);
   const shares = await chatRepo.listSessionShares(id);
   return c.json(shares);
@@ -88,6 +111,8 @@ chatRoutes.get("/chat/sessions/:id/shares", async (c) => {
 // ── Session teilen ───────────────────────────────────────────────────────────
 chatRoutes.post("/chat/sessions/:id/shares", async (c) => {
   const id = c.req.param("id");
+  const userId = c.get("userId") as string | null | undefined;
+  const userRole = c.get("userRole") as string | undefined;
   let body: { userId?: string };
   try {
     body = await c.req.json<{ userId?: string }>();
@@ -96,6 +121,8 @@ chatRoutes.post("/chat/sessions/:id/shares", async (c) => {
   }
   if (!body.userId) return c.json({ error: "userId erforderlich" }, 400);
   if (!chatRepo.shareSession) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
+  const guard = await requireSessionOwner(id, userId, userRole);
+  if (!guard.ok) return c.json({ error: guard.error }, guard.status);
   const ok = await chatRepo.shareSession(id, body.userId);
   return c.json({ ok });
 });
@@ -103,9 +130,13 @@ chatRoutes.post("/chat/sessions/:id/shares", async (c) => {
 // ── Session-Zugriff entziehen ────────────────────────────────────────────────
 chatRoutes.delete("/chat/sessions/:id/shares/:userId", async (c) => {
   const id = c.req.param("id");
-  const userId = c.req.param("userId");
+  const targetUserId = c.req.param("userId");
+  const userId = c.get("userId") as string | null | undefined;
+  const userRole = c.get("userRole") as string | undefined;
   if (!chatRepo.unshareSession) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
-  const ok = await chatRepo.unshareSession(id, userId);
+  const guard = await requireSessionOwner(id, userId, userRole);
+  if (!guard.ok) return c.json({ error: guard.error }, guard.status);
+  const ok = await chatRepo.unshareSession(id, targetUserId);
   return c.json({ ok });
 });
 
