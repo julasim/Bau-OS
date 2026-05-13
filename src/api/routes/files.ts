@@ -61,7 +61,11 @@ filesRoutes.get("/files", async (c) => {
   // DB-Modus: Dateien aus Datenbank laden (nur Root-Ebene, kein Pfad)
   if (DB_ENABLED && fileRepo && !p && source !== "fs") {
     const project = c.req.query("project");
-    const visibleProjectIds = project ? undefined : await getVisibleProjectIds(c);
+    // Sicherheit: getVisibleProjectIds IMMER aufrufen. Fuer Admins liefert
+    // sie undefined (kein Filter). Fuer Non-Admins wird geprueft, ob das
+    // angefragte Projekt in der sichtbaren Menge liegt — sonst koennte ein
+    // Non-Admin per ?project=irgendwas alle Dateien fremder Projekte sehen.
+    const visibleProjectIds = await getVisibleProjectIds(c);
     const files = await fileRepo.list(project ?? undefined, 50, visibleProjectIds);
     return c.json(
       files.map((f) => ({
@@ -448,7 +452,12 @@ filesRoutes.get("/files/:id/shares", async (c) => {
 filesRoutes.post("/files/:id/shares", async (c) => {
   if (!DB_ENABLED || !fileRepo) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
   const fileId = c.req.param("id");
-  const body = await c.req.json<{ userId?: string; canEdit?: boolean }>();
+  let body: { userId?: string; canEdit?: boolean };
+  try {
+    body = await c.req.json<{ userId?: string; canEdit?: boolean }>();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
   if (!body.userId) return c.json({ error: "userId erforderlich" }, 400);
   // Pruefen ob die Datei existiert
   const file = await fileRepo.get(fileId);

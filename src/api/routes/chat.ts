@@ -88,7 +88,12 @@ chatRoutes.get("/chat/sessions/:id/shares", async (c) => {
 // ── Session teilen ───────────────────────────────────────────────────────────
 chatRoutes.post("/chat/sessions/:id/shares", async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json<{ userId: string }>();
+  let body: { userId?: string };
+  try {
+    body = await c.req.json<{ userId?: string }>();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
   if (!body.userId) return c.json({ error: "userId erforderlich" }, 400);
   if (!chatRepo.shareSession) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
   const ok = await chatRepo.shareSession(id, body.userId);

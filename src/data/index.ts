@@ -97,6 +97,7 @@ export type {
   NoteRepository,
   ProjectRepository,
   TeamRepository,
+  FileRepository,
   ChatRepository,
   AgentLogRepository,
   BautagebuchRepository,

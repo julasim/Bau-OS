@@ -79,7 +79,6 @@ interface AdminUserMini {
 }
 
 interface FileShare {
-  fileId: string;
   userId: string;
   username: string;
   displayName: string | null;

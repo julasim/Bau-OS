@@ -84,6 +84,15 @@ export const dbFiles: FileRepository = {
   async list(project, limit = 50, visibleProjectIds) {
     const db = getDb();
     if (project) {
+      // ACL-Scoping: wenn visibleProjectIds gesetzt ist (Non-Admin), pruefen ob
+      // das angefragte Projekt in der Sichtbarkeitsliste liegt. Ein leeres Array
+      // bedeutet "kein Zugriff auf irgendein Projekt" — sofort leer zurueck.
+      if (visibleProjectIds !== undefined) {
+        if (visibleProjectIds.length === 0) return [];
+        // Projekt-ID fuer diesen Namen nachschlagen und ACL pruefen.
+        const [proj] = await db`SELECT id FROM projects WHERE name = ${project} LIMIT 1`;
+        if (!proj || !visibleProjectIds.includes(String(proj.id))) return [];
+      }
       return (
         await db`
         SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
@@ -97,7 +106,7 @@ export const dbFiles: FileRepository = {
     // Non-Admin-Scoping: nur Dateien aus sichtbaren Projekten.
     // Dateien ohne Projekt-Zuordnung (project_id IS NULL) werden nicht
     // gezeigt — ohne Projekt-Kontext gibt es keinen ACL-Anhaltspunkt.
-    if (visibleProjectIds && visibleProjectIds.length > 0) {
+    if (visibleProjectIds !== undefined && visibleProjectIds.length > 0) {
       return (
         await db`
         SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
@@ -108,7 +117,7 @@ export const dbFiles: FileRepository = {
       `
       ).map(rowToFile);
     }
-    if (visibleProjectIds && visibleProjectIds.length === 0) {
+    if (visibleProjectIds !== undefined && visibleProjectIds.length === 0) {
       // User hat Zugriff auf kein Projekt → keine Dateien
       return [];
     }
