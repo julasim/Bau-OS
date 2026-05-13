@@ -78,13 +78,24 @@ function publicBaseUrl(c: { req: { header(name: string): string | undefined } })
   return `${proto}://${host}`;
 }
 
+/** Liefert die Client-IP fuer Rate-Limiting und Audit-Eintraege.
+ *  Wichtig: nur die ERSTE IP aus x-forwarded-for verwenden — sonst kann
+ *  ein Angreifer durch wechselnde XFF-Header pro Request einen anderen
+ *  Bucket-Key erzeugen und das Rate-Limit umgehen. */
+function getClientIp(c: { req: { header(name: string): string | undefined } }): string {
+  const xff = c.req.header("x-forwarded-for");
+  if (xff) {
+    return xff.split(",")[0]!.trim();
+  }
+  return c.req.header("x-real-ip") ?? "unknown";
+}
+
 /** Liefert IP + User-Agent fuer Audit-Eintraege aus Request-Headern.
  *  Trim auf 256 Zeichen, damit ein 8 KB User-Agent die Tabelle nicht
  *  unnoetig aufblaeht. */
 function reqMeta(c: { req: { header(name: string): string | undefined } }): { ip: string; userAgent: string } {
-  const ipRaw = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown";
   const ua = (c.req.header("user-agent") ?? "").slice(0, 256);
-  return { ip: ipRaw, userAgent: ua };
+  return { ip: getClientIp(c), userAgent: ua };
 }
 
 // Routes
@@ -161,7 +172,7 @@ const apiBuckets = new Map<string, { count: number; resetAt: number }>();
 
 app.use("/api/*", async (c, next) => {
   // Health-Endpunkt ist oben schon abgehandelt — kommt hier nicht mehr an.
-  const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown";
+  const ip = getClientIp(c);
   const now = Date.now();
   const bucket = apiBuckets.get(ip);
   if (bucket && now < bucket.resetAt) {
@@ -191,7 +202,7 @@ const loginAttempts = new Map<string, { count: number; resetAt: number }>();
 
 // ── Login (ohne Auth) ────────────────────────────────────────────────────────
 app.post("/api/auth/login", async (c) => {
-  const ip = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "unknown";
+  const ip = getClientIp(c);
   const now = Date.now();
   const entry = loginAttempts.get(ip);
   if (entry && now < entry.resetAt && entry.count >= RATE_LIMIT_ATTEMPTS) {
@@ -348,7 +359,7 @@ function maskEmail(email: string): string {
 
 // ── Login Step 2: Email-OTP verifizieren und JWT ausstellen ─────────────────
 app.post("/api/auth/login/2fa", async (c) => {
-  const ip = c.req.header("x-forwarded-for") ?? c.req.header("x-real-ip") ?? "unknown";
+  const ip = getClientIp(c);
   const now = Date.now();
   const entry = loginAttempts.get(ip);
   if (entry && now < entry.resetAt && entry.count >= RATE_LIMIT_ATTEMPTS) {

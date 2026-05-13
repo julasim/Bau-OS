@@ -601,12 +601,12 @@ export function createToken(username: string, role: string, id?: string): string
 }
 
 export function verifyToken(token: string): JwtPayload {
-  const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload & { aud?: string };
-  // 2FA-Login-Tickets und 2FA-Setup-Tickets duerfen NICHT als regulaere
-  // Auth-Tokens akzeptiert werden — sonst koennte jemand mit dem Ticket
-  // aus Step 1 alle API-Calls machen ohne 2FA zu absolvieren.
-  if (decoded.aud === "2fa" || decoded.aud === "2fa-setup") {
-    throw new Error("Login-Ticket ist kein gueltiges Auth-Token");
+  const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ["HS256"] }) as JwtPayload & { aud?: string };
+  // Whitelist: reguläre Auth-Tokens dürfen KEIN audience-Feld haben.
+  // Deckt alle Ticket-Typen ab (2fa, 2fa-setup, password-reset, magic-link, …)
+  // ohne dass jede neue Audience einzeln blacklisted werden muss.
+  if (decoded.aud !== undefined) {
+    throw new Error("Kein reguläres Auth-Token — Ticket-Token ist nicht für API-Zugriff gültig");
   }
   return decoded;
 }
@@ -831,7 +831,10 @@ export function create2faTicket(user: DbUser): string {
 
 export function verify2faTicket(ticket: string): TwoFactorTicketPayload | null {
   try {
-    const decoded = jwt.verify(ticket, JWT_SECRET, { audience: "2fa" }) as TwoFactorTicketPayload;
+    const decoded = jwt.verify(ticket, JWT_SECRET, {
+      audience: "2fa",
+      algorithms: ["HS256"],
+    }) as TwoFactorTicketPayload;
     if (decoded.aud !== "2fa") return null;
     return decoded;
   } catch {
@@ -1030,7 +1033,10 @@ export function createEmailSetupTicket(user: DbUser): string {
 
 export function verifyEmailSetupTicket(ticket: string): EmailSetupTicketPayload | null {
   try {
-    const decoded = jwt.verify(ticket, JWT_SECRET, { audience: "2fa-setup" }) as EmailSetupTicketPayload;
+    const decoded = jwt.verify(ticket, JWT_SECRET, {
+      audience: "2fa-setup",
+      algorithms: ["HS256"],
+    }) as EmailSetupTicketPayload;
     if (decoded.aud !== "2fa-setup") return null;
     return decoded;
   } catch {
@@ -1111,7 +1117,10 @@ export function createPasswordResetTicket(user: DbUser): string {
 
 export function verifyPasswordResetTicket(ticket: string): PasswordResetTicketPayload | null {
   try {
-    const decoded = jwt.verify(ticket, JWT_SECRET, { audience: "password-reset" }) as PasswordResetTicketPayload;
+    const decoded = jwt.verify(ticket, JWT_SECRET, {
+      audience: "password-reset",
+      algorithms: ["HS256"],
+    }) as PasswordResetTicketPayload;
     if (decoded.aud !== "password-reset") return null;
     return decoded;
   } catch {

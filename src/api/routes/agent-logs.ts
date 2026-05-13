@@ -6,9 +6,16 @@
 
 import { Hono } from "hono";
 import { agentLogRepo } from "../../data/index.js";
+import { adminMiddleware } from "../auth.js";
 import type { AppEnv } from "../server.js";
 
 export const agentLogsRoutes = new Hono<AppEnv>();
+
+// Agent-Logs enthalten Tool-Calls, Thought-Prozesse und User-Inhalte aller User.
+// AgentLog hat kein userId-Feld → kein per-User-Filter moeglich, daher
+// auf Admin beschraenkt.
+agentLogsRoutes.use("/agent-logs/*", adminMiddleware);
+agentLogsRoutes.use("/agent-logs", adminMiddleware);
 
 // ── Liste (zuletzt / gefiltert) ─────────────────────────────────────────────
 agentLogsRoutes.get("/agent-logs", async (c) => {

@@ -18,6 +18,7 @@ import {
   KEPT_TOOL_MESSAGES,
   HISTORY_LOAD_LIMIT,
   getAgentModel,
+  DB_ENABLED,
 } from "../../config.js";
 import { logInfo, logError } from "../../logger.js";
 import type { AppEnv } from "../server.js";
@@ -45,9 +46,14 @@ function chatRateLimit(username: string): boolean {
 chatRoutes.get("/chat/sessions", async (c) => {
   const jwtUser = c.get("user") as { username: string; role: string };
   const userId = c.get("userId") as string | null | undefined;
+  // In DB-Mode: userId=null bedeutet kein gueltiger User-Kontext → ablehnen,
+  // sonst wuerden Non-Admins den gemeinsamen Legacy-Pool (user_id IS NULL) sehen.
+  if (DB_ENABLED && jwtUser.role !== "admin" && userId == null) {
+    return c.json({ error: "Nicht authentifiziert" }, 401);
+  }
   // Admins sehen alle Sessions (inkl. Legacy-Sessions ohne userId).
   // Non-Admins sehen nur ihre eigenen Sessions.
-  // undefined → Admin-Ansicht (alles), string → eigene + geteilte, null → anonym
+  // undefined → Admin-Ansicht (alles), string → eigene + geteilte, null → anonym (nur FS-Mode)
   const filterUserId: string | null | undefined = jwtUser.role === "admin" ? undefined : (userId ?? null);
   const sessions = await chatRepo.listSessions("Main", 50, filterUserId);
   return c.json(sessions);
@@ -55,7 +61,12 @@ chatRoutes.get("/chat/sessions", async (c) => {
 
 // ── Neue Session erstellen ──────────────────────────────────────────────────
 chatRoutes.post("/chat/sessions", async (c) => {
+  const jwtUser = c.get("user") as { username: string; role: string };
   const userId = c.get("userId") as string | null | undefined;
+  // In DB-Mode: ohne gueltige userId keine Session anlegen (sonst Legacy-Pool)
+  if (DB_ENABLED && jwtUser.role !== "admin" && userId == null) {
+    return c.json({ error: "Nicht authentifiziert" }, 401);
+  }
   const session = await chatRepo.createSession("Main", "Neuer Chat", "web", userId ?? null);
   return c.json(session);
 });
@@ -67,6 +78,10 @@ chatRoutes.delete("/chat/sessions/:id", async (c) => {
   const userRole = c.get("userRole") as string | undefined;
 
   if (userRole !== "admin") {
+    // In DB-Mode: ohne gueltige userId keinen Zugriff (sonst Legacy-Pool-Leak)
+    if (DB_ENABLED && userId == null) {
+      return c.json({ error: "Nicht authentifiziert" }, 401);
+    }
     // Auch ohne userId (null) keinen Zugriff auf fremde Sessions gewähren
     const sessions = await chatRepo.listSessions("Main", 200, userId ?? null);
     const hasAccess = sessions.some((s) => s.id === id);
@@ -148,6 +163,10 @@ chatRoutes.get("/chat/sessions/:id/messages", async (c) => {
 
   // Ownership/share check: admin sees all, others check ownership or share
   if (userRole !== "admin") {
+    // In DB-Mode: ohne gueltige userId keinen Zugriff (sonst Legacy-Pool-Leak)
+    if (DB_ENABLED && userId == null) {
+      return c.json({ error: "Nicht authentifiziert" }, 401);
+    }
     // Auch ohne userId (null) keinen Zugriff auf fremde Sessions gewähren
     const sessions = await chatRepo.listSessions("Main", 200, userId ?? null);
     const hasAccess = sessions.some((s) => s.id === id);
@@ -181,6 +200,12 @@ chatRoutes.post("/chat", (c) => {
 
     const jwtUser = c.get("user") as { username: string; role: string };
     const userId = c.get("userId") as string | null | undefined;
+    // In DB-Mode: ohne gueltige userId duerfen Non-Admins keine Session anlegen,
+    // sonst landet alles im gemeinsamen Legacy-Pool.
+    if (DB_ENABLED && jwtUser.role !== "admin" && userId == null) {
+      await stream.writeSSE({ event: "error", data: JSON.stringify({ error: "Nicht authentifiziert" }) });
+      return;
+    }
     if (!chatRateLimit(jwtUser.username)) {
       await stream.writeSSE({
         event: "error",
