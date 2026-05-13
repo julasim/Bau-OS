@@ -335,12 +335,19 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       } catch (err: unknown) {
         stopTyping();
         logError("LLM", err);
-        try {
-          const filepath = saveNote(text);
-          const filename = filepath.split(/[\\/]/).pop();
-          await ctx.reply(`LLM nicht erreichbar – als Notiz gespeichert: ${filename}`);
-        } catch {
-          await ctx.reply("Fehler – ist Ollama gestartet? (ollama serve)");
+        // Im Multi-User-Modus (DB) keine globale Notiz speichern — saveNote()
+        // kennt keinen User-Kontext und wuerde fremde Inhalte in den
+        // Haupt-Workspace schreiben. Nur im Single-User-/FS-Mode fallback.
+        if (!DB_ENABLED) {
+          try {
+            const filepath = saveNote(text);
+            const filename = filepath.split(/[\\/]/).pop();
+            await ctx.reply(`LLM nicht erreichbar – als Notiz gespeichert: ${filename}`);
+          } catch {
+            await ctx.reply("Fehler – ist Ollama gestartet? (ollama serve)");
+          }
+        } else {
+          await ctx.reply("Fehler – LLM nicht erreichbar. Bitte erneut versuchen.");
         }
       }
     });

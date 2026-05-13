@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import { HTTP_REQUEST_TIMEOUT_MS, HTTP_RESPONSE_MAX_CHARS } from "../../config.js";
+import { isBlockedHostname } from "../../web.js";
 import type { HandlerMap } from "./types.js";
 
 export const webSchemas: OpenAI.Chat.ChatCompletionTool[] = [
@@ -77,18 +78,15 @@ export const webSchemas: OpenAI.Chat.ChatCompletionTool[] = [
 ];
 
 function isPrivateUrl(urlStr: string): boolean {
+  let parsed: URL;
   try {
-    const host = new URL(urlStr).hostname;
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1" || host === "0.0.0.0") return true;
-    const parts = host.split(".").map(Number);
-    if (parts[0] === 10) return true;
-    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
-    if (parts[0] === 192 && parts[1] === 168) return true;
-    if (parts[0] === 169 && parts[1] === 254) return true;
-    return false;
+    parsed = new URL(urlStr);
   } catch {
-    return true;
+    return true; // ungueltige URL → blocken
   }
+  // Nur http(s) erlauben — file://, gopher://, ftp:// etc. sind SSRF-Vektoren
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return true;
+  return isBlockedHostname(parsed.hostname);
 }
 
 export const webHandlers: HandlerMap = {

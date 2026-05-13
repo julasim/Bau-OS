@@ -635,7 +635,14 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     token = header.slice(7);
   }
   if (!token) {
-    token = c.req.query("token") ?? undefined;
+    // Query-Parameter nur für Streaming/Download-Endpoints erlauben
+    // (EventSource und Browser-Downloads können keine Custom-Header setzen).
+    // Sonst landen JWTs in Server-Logs, Browser-History und Referer-Headern.
+    const path = c.req.path;
+    const allowQueryToken = path.startsWith("/api/events") || path.startsWith("/api/files/download");
+    if (allowQueryToken) {
+      token = c.req.query("token") ?? undefined;
+    }
   }
   if (!token) {
     return c.json({ error: "Nicht autorisiert" }, 401);
@@ -649,10 +656,9 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   }
 
   c.set("user", payload);
-  c.set("userRole", payload.role === "admin" ? "admin" : "user");
 
+  let dbUser: DbUser | null = null;
   if (DB_ENABLED) {
-    let dbUser: DbUser | null = null;
     // sub ist erst seit Phase 1 gesetzt — alte JWTs ohne sub fallen sauber
     // auf username-Lookup zurueck. Ohne diesen Guard wuerde postgres.js
     // WHERE id = NULL ausfuehren, was zwar nicht crashed aber unnoetig ist.
@@ -664,7 +670,6 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     }
     if (dbUser) {
       c.set("userId", dbUser.id);
-      c.set("userRole", dbUser.role);
       c.set("dbUser", dbUser);
     } else {
       c.set("userId", null);
@@ -674,6 +679,12 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     c.set("userId", null);
     c.set("dbUser", null);
   }
+
+  // In DB-Mode: immer die aktuelle Rolle aus DB nehmen (nicht aus JWT).
+  // Sonst behaelt ein altes Admin-Token bis zu 7 Tage lang Admin-Zugriff
+  // nach einem Downgrade.
+  const userRole = DB_ENABLED && dbUser ? dbUser.role : payload.role === "admin" ? "admin" : "user";
+  c.set("userRole", userRole);
 
   await next();
 }

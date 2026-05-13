@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { searchWorkspace } from "../../workspace/index.js";
 import { DB_ENABLED } from "../../config.js";
+import { adminMiddleware } from "../auth.js";
 import type { AppEnv } from "../server.js";
 
 export const searchRoutes = new Hono<AppEnv>();
@@ -63,7 +64,7 @@ searchRoutes.get("/search/stats", async (c) => {
 // Laeuft synchron — kann bei vielen Items laenger dauern. Bei einer mittleren
 // Vault-Groesse (100 Notizen) sind das ~30 s; fuer Horror-Szenarien spaeter
 // in einen Background-Job auslagern.
-searchRoutes.post("/search/reindex", async (c) => {
+searchRoutes.post("/search/reindex", adminMiddleware, async (c) => {
   if (!DB_ENABLED) {
     return c.json({ error: "Datenbank nicht aktiv" }, 503);
   }

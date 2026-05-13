@@ -72,6 +72,11 @@ async function fetchWithRetry(url: string, options: RequestInit = {}, retries = 
       ...(options.headers as Record<string, string>),
     },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    // Bewusst "follow": Manual-Redirect-Handling wuerde zu viele legitime Seiten brechen.
+    // Bekanntes Restrisiko: Redirects auf private IPs werden NICHT erneut gegen den
+    // SSRF-Guard geprueft, ebenso bleibt DNS-Rebinding ohne echte DNS-Aufloesung vor
+    // dem Fetch ein offenes Risiko. Akzeptiert, weil isBlockedHostname syntaktisch
+    // arbeitet (kein DNS-Lookup).
     redirect: "follow",
   };
 
@@ -431,36 +436,61 @@ function decimalToIpv4(hostname: string): string {
   return [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join(".");
 }
 
-function isPrivateIpv4(hostname: string): boolean {
-  const ip = /^\d+$/.test(hostname) ? decimalToIpv4(hostname) : hostname;
-  return (
-    ip === "0.0.0.0" ||
-    ip === "127.0.0.1" ||
-    ip.startsWith("10.") ||
-    ip.startsWith("192.168.") ||
-    ip.startsWith("169.254.") ||
-    ip.startsWith("172.16.") ||
-    ip.startsWith("172.17.") ||
-    ip.startsWith("172.18.") ||
-    ip.startsWith("172.19.") ||
-    ip.startsWith("172.2") ||
-    ip.startsWith("172.30.") ||
-    ip.startsWith("172.31.")
-  );
+function isPrivateIpv4(ip: string): boolean {
+  if (ip === "0.0.0.0" || ip.startsWith("0.")) return true; // 0.0.0.0/8
+  if (ip.startsWith("127.")) return true; // 127.0.0.0/8 (Loopback gesamt)
+  if (ip.startsWith("10.")) return true; // 10.0.0.0/8
+  if (ip.startsWith("192.168.")) return true; // 192.168.0.0/16
+  if (ip.startsWith("169.254.")) return true; // 169.254.0.0/16 (Link-Local / AWS IMDS)
+  const parts = ip.split(".");
+  if (parts.length === 4 && parts[0] === "172") {
+    const second = parseInt(parts[1], 10);
+    if (second >= 16 && second <= 31) return true; // 172.16.0.0/12
+  }
+  return false;
 }
 
-function isBlockedHostname(hostname: string): boolean {
+/**
+ * Zentraler SSRF-Guard: prueft Hostnamen auf private/interne Ziele.
+ * Deckt ab: IPv4 (Loopback/private Ranges, dezimal/hex/oktal encoded),
+ * IPv6 (::1, mapped, ULA, Link-Local), lokale Hostnamen (.local/.internal/localhost),
+ * Cloud-Metadata-Endpoints.
+ *
+ * Hinweis: Diese Pruefung ist rein syntaktisch. Sie loest DNS NICHT auf.
+ * DNS-Rebinding (Hostname zeigt erst auf eine oeffentliche, beim Folge-Request
+ * auf eine private IP) bleibt ein bekanntes Restrisiko.
+ */
+export function isBlockedHostname(rawHostname: string): boolean {
+  // Klammern und Case normalisieren
+  const hostname = rawHostname.replace(/^\[|\]$/g, "").toLowerCase();
+
+  if (!hostname) return true;
   if (hostname === "localhost") return true;
-  if (isPrivateIpv4(hostname)) return true;
-  if (hostname === "::1") return true;
-  if (
-    hostname.startsWith("fd") ||
-    hostname.startsWith("fc") ||
-    hostname.startsWith("fe80") ||
-    hostname.startsWith("::ffff:")
-  )
-    return true;
   if (hostname.endsWith(".local") || hostname.endsWith(".internal")) return true;
+  if (hostname === "metadata.google.internal") return true;
+
+  // IPv6 Spezialfaelle
+  if (hostname === "::" || hostname === "::1") return true;
+  if (hostname.startsWith("::ffff:")) return true; // IPv6-mapped IPv4 (z.B. ::ffff:127.0.0.1)
+  if (hostname.startsWith("fc") || hostname.startsWith("fd")) return true; // ULA fc00::/7
+  if (hostname.startsWith("fe80")) return true; // Link-Local
+
+  // Numerisches Encoding einer einzigen Zahl: dezimal (2130706433 = 127.0.0.1)
+  if (/^\d+$/.test(hostname)) {
+    const decoded = decimalToIpv4(hostname);
+    if (!decoded) return true; // ungueltige Zahl → blocken
+    return isPrivateIpv4(decoded) || true; // jegliches Dezimal-IP-Encoding blocken (zu obskur fuer legit Use)
+  }
+
+  // Hex-Encoding (0x7f000001)
+  if (/^0x[\da-f]+$/i.test(hostname)) return true;
+
+  // Oktal-Oktett (z.B. 0177.0.0.1)
+  if (/^0\d+\./.test(hostname)) return true;
+
+  // Standard-IPv4
+  if (isPrivateIpv4(hostname)) return true;
+
   return false;
 }
 
