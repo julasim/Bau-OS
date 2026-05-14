@@ -11,6 +11,10 @@ import { logInfo, logError } from "../logger.js";
 
 const MIGRATIONS_DIR = path.join(import.meta.dirname ?? process.cwd(), "migrations");
 
+// Advisory-Lock ID — konstant, eindeutig fuer dieses Projekt.
+// Verhindert Race Conditions bei parallelen Pod-Starts (Docker Scale, K8s Rolling-Deploy).
+const MIGRATION_LOCK_ID = 7_319_423;
+
 /**
  * Erstellt die _migrations Tracking-Tabelle falls nicht vorhanden.
  */
@@ -56,42 +60,49 @@ function getMigrationFiles(): string[] {
 export async function runMigrations(): Promise<number> {
   const db = getDb();
 
-  await ensureMigrationsTable();
-  const applied = await getAppliedMigrations();
-  const files = getMigrationFiles();
+  // Exklusiver Advisory-Lock — blockiert bis ein parallel laufender Prozess fertig ist.
+  // Session-scoped: bei Prozess-Crash wird der Lock automatisch freigegeben.
+  await db`SELECT pg_advisory_lock(${MIGRATION_LOCK_ID})`;
+  try {
+    await ensureMigrationsTable();
+    const applied = await getAppliedMigrations();
+    const files = getMigrationFiles();
 
-  let count = 0;
+    let count = 0;
 
-  for (const file of files) {
-    if (applied.has(file)) continue;
+    for (const file of files) {
+      if (applied.has(file)) continue;
 
-    const filePath = path.join(MIGRATIONS_DIR, file);
-    const sqlContent = fs.readFileSync(filePath, "utf-8");
+      const filePath = path.join(MIGRATIONS_DIR, file);
+      const sqlContent = fs.readFileSync(filePath, "utf-8");
 
-    logInfo(`[DB] Migration: ${file} ...`);
+      logInfo(`[DB] Migration: ${file} ...`);
 
-    try {
-      // Jede Migration in einer Transaktion
-      await db.begin(async (tx) => {
-        await tx.unsafe(sqlContent);
-        await tx`INSERT INTO _migrations (name) VALUES (${file})`;
-      });
+      try {
+        // Jede Migration in einer Transaktion
+        await db.begin(async (tx) => {
+          await tx.unsafe(sqlContent);
+          await tx`INSERT INTO _migrations (name) VALUES (${file})`;
+        });
 
-      logInfo(`[DB] Migration erfolgreich: ${file}`);
-      count++;
-    } catch (err) {
-      logError(`[DB] Migration fehlgeschlagen: ${file}`, err);
-      throw err; // Abbrechen bei Fehler
+        logInfo(`[DB] Migration erfolgreich: ${file}`);
+        count++;
+      } catch (err) {
+        logError(`[DB] Migration fehlgeschlagen: ${file}`, err);
+        throw err; // Abbrechen bei Fehler
+      }
     }
-  }
 
-  if (count === 0) {
-    logInfo("[DB] Keine ausstehenden Migrations");
-  } else {
-    logInfo(`[DB] ${count} Migration(s) angewandt`);
-  }
+    if (count === 0) {
+      logInfo("[DB] Keine ausstehenden Migrations");
+    } else {
+      logInfo(`[DB] ${count} Migration(s) angewandt`);
+    }
 
-  return count;
+    return count;
+  } finally {
+    await db`SELECT pg_advisory_unlock(${MIGRATION_LOCK_ID})`;
+  }
 }
 
 /**

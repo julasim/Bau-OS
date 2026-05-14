@@ -14,6 +14,7 @@ Bau-OS bietet eine Reihe von Slash-Befehlen, die du direkt im Telegram-Chat verw
 | `/kompakt` | Tageslog jetzt komprimieren |
 | `/neu` | Gesprächskontext zurücksetzen |
 | `/whoami` | Chat-ID und Benutzerinfo |
+| `/pair <token>` | Telegram-Chat mit Bau-OS-Konto verknüpfen |
 | `/agents` | Sub-Agenten auflisten |
 | `/export` | Session-Log als Markdown exportieren |
 | `/model [name]` | Modell anzeigen oder wechseln |
@@ -101,6 +102,16 @@ Zeigt Informationen zum aktuellen Telegram-Nutzer — Chat-ID, Username und Name
 ```
 
 **Intern:** Liest die Telegram-Benutzerinformationen direkt aus dem grammY-Kontext.
+
+### /pair
+
+Verknüpft den aktuellen Telegram-Chat mit deinem Bau-OS-Konto.
+
+**Verwendung:** `/pair <TOKEN>`
+
+Der Token wird im Web-Dashboard unter *Einstellungen → Konto → Telegram verknüpfen* generiert. Nach erfolgreichem Pairing empfängt dein Bau-OS-Konto alle Nachrichten aus diesem Chat.
+
+**Intern:** `redeemPairToken()` in `src/bot.ts`
 
 ### /agents
 

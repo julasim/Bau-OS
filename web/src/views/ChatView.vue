@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
-import { api } from "../api";
+import { api, getToken, clearToken } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import BIcon from "../components/BIcon.vue";
 
@@ -168,7 +168,7 @@ async function send() {
   toolCalls.value = [];
   scrollToBottom();
 
-  const token = localStorage.getItem("bau-os-token");
+  const token = getToken();
 
   // Alten Stream canceln, falls noch aktiv
   if (abortCtrl.value) {
@@ -191,6 +191,13 @@ async function send() {
       }),
       signal: abortCtrl.value.signal,
     });
+
+    // 401: Token ungueltig — konsistent mit api.ts behandeln
+    if (res.status === 401) {
+      clearToken();
+      window.location.href = "/login";
+      return;
+    }
 
     if (!res.ok || !res.body) {
       messages.value.push({ role: "assistant", text: "Fehler bei der Verbindung." });

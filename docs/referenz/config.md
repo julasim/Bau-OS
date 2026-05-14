@@ -9,10 +9,10 @@ Alle Konstanten aus `src/config.ts`. Werte mit `.env`-Spalte können über Umgeb
 | `OPENAI_API_KEY` | — | `OPENAI_API_KEY` | OpenAI API-Key. Wenn gesetzt, wird OpenAI statt Ollama verwendet |
 | `OPENAI_ENABLED` | `false` | — | Automatisch `true` wenn `OPENAI_API_KEY` gesetzt |
 | `OLLAMA_BASE_URL` | `http://localhost:11434/v1` | `OLLAMA_BASE_URL` | URL der Ollama-API (OpenAI-kompatibel) |
-| `DEFAULT_MODEL` | `gpt-4o-mini` / `qwen2.5:7b` | `OLLAMA_MODEL` | Standard-LLM-Modell für den Main-Agent |
-| `FAST_MODEL` | = `DEFAULT_MODEL` | `OLLAMA_FAST_MODEL` | Modell im Fast-Modus (`/fast`) |
-| `SUBAGENT_MODEL` | = `DEFAULT_MODEL` | `OLLAMA_SUBAGENT_MODEL` | Modell für Sub-Agenten |
-| `VISION_MODEL` | `gpt-4o` / = `DEFAULT_MODEL` | `VISION_MODEL` | Modell für Bildanalyse |
+| `MAIN_MODEL` | `gpt-4o-mini` / `qwen2.5:7b` | `OLLAMA_MODEL` | Standard-LLM-Modell für den Main-Agent |
+| `FAST_MODEL` | = `MAIN_MODEL` | `OLLAMA_FAST_MODEL` | Modell im Fast-Modus (`/fast`) |
+| `SUBAGENT_MODEL` | = `MAIN_MODEL` | `OLLAMA_SUBAGENT_MODEL` | Modell für Sub-Agenten |
+| `VISION_MODEL` | `gpt-4o` / = `MAIN_MODEL` | `VISION_MODEL` | Modell für Bildanalyse |
 | `MAX_TOOL_ROUNDS` | `100` | `MAX_TOOL_ROUNDS` | Maximale Iterationen im Agentic Loop |
 
 ::: tip Modell zur Laufzeit wechseln
@@ -20,7 +20,7 @@ Mit `/model <name>` kann das Modell im laufenden Betrieb gewechselt werden, ohne
 :::
 
 ::: tip OpenAI vs. Ollama
-Der Standardwert für `DEFAULT_MODEL` hängt vom Backend ab: `gpt-4o-mini` wenn `OPENAI_API_KEY` gesetzt ist, sonst `qwen2.5:7b`.
+Der Standardwert für `MAIN_MODEL` hängt vom Backend ab: `gpt-4o-mini` wenn `OPENAI_API_KEY` gesetzt ist, sonst `qwen2.5:7b`.
 :::
 
 ### Beispiel `.env`
@@ -54,7 +54,7 @@ Sub-Agenten können weitere Sub-Agenten spawnen — aber nur bis zur Tiefe 2. Ei
 export const AGENTS = [
   {
     name: "Main",           // Anzeigename
-    model: DEFAULT_MODEL,   // LLM-Modell
+    model: MAIN_MODEL,      // LLM-Modell
     protected: true,        // Löschgeschützt
     description: "Haupt-Agent"
   },
