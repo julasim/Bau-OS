@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import { JWT_SECRET, USERS_FILE, DB_ENABLED } from "../config.js";
 import { getDb } from "../db/client.js";
 import { encryptString, decryptString } from "./crypto.js";
+import { peekTicket } from "./sse-tickets.js";
 import type { Context, Next } from "hono";
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -653,7 +654,6 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     if (c.req.path === "/api/events") {
       const ticket = c.req.query("ticket");
       if (ticket) {
-        const { peekTicket } = await import("./routes/events.js");
         if (peekTicket(ticket)) {
           return next();
         }
