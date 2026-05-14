@@ -4,6 +4,7 @@ import cron from "node-cron";
 import { getAgentPath, listAgents } from "./workspace/index.js";
 import { TIMEZONE, CHAT_ID_FILE } from "./config.js";
 import { logInfo, logError } from "./logger.js";
+import { getHeartbeatChatIds, ensureRegistered } from "./heartbeat-prefs.js";
 
 // ---- Chat-ID Persistenz (Multi-User) ----
 
@@ -44,6 +45,8 @@ export function saveChatId(id: number): void {
   if (_chatIds.has(id)) return; // keine Änderung → kein Disk-Write
   _chatIds.add(id);
   saveChatIdsToDisk(_chatIds);
+  // Backward-compat: neue chatIds kriegen Heartbeat standardmaessig ON.
+  ensureRegistered(id);
 }
 
 /** Alle bekannten Chat-IDs laden */
@@ -105,9 +108,9 @@ function parseHeartbeat(agentName: string): HeartbeatConfig | null {
 type ReplyFn = (chatId: number, text: string) => Promise<void>;
 
 async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> {
-  const chatIds = loadChatIds();
+  const chatIds = getHeartbeatChatIds();
   if (chatIds.length === 0) {
-    console.log(`[Heartbeat] ${agentName}: keine Chat-IDs gespeichert, ueberspringe.`);
+    console.log(`[Heartbeat] ${agentName}: keine aktivierten Chat-IDs, ueberspringe.`);
     return;
   }
 

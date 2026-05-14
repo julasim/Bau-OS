@@ -18,6 +18,7 @@ import {
 } from "../config.js";
 import fs from "fs";
 import path from "path";
+import { setHeartbeatEnabled, isHeartbeatEnabled } from "../heartbeat-prefs.js";
 
 const HILFE = `
 Bau-OS
@@ -147,6 +148,7 @@ Bau-OS – System-Commands
 /model        Modell anzeigen oder wechseln
 /fast         Fast-Modus umschalten
 /sprache      Whisper-Sprache (de|en|auto)
+/heartbeat    Heartbeat an/aus (/heartbeat on|off)
   `.trim();
   await ctx.reply(out);
 }
@@ -267,6 +269,27 @@ export async function handleLogs(ctx: Context, args: string): Promise<void> {
   const logs = readRecentLogs(n);
   const out = logs.length > LOG_DISPLAY_MAX_CHARS ? "...(gekuerzt)\n" + logs.slice(-LOG_DISPLAY_MAX_CHARS) : logs;
   await ctx.reply(`Letzte ${n} Log-Eintraege:\n\n${out}`);
+}
+
+// /heartbeat on|off
+export async function handleHeartbeat(ctx: Context, args: string): Promise<void> {
+  const arg = args.trim().toLowerCase();
+  const chatId = ctx.chat?.id;
+  if (!chatId) return;
+
+  if (arg === "on") {
+    setHeartbeatEnabled(chatId, true);
+    await ctx.reply("✅ Heartbeat aktiviert. Du erhältst regelmäßige Zusammenfassungen.");
+  } else if (arg === "off") {
+    setHeartbeatEnabled(chatId, false);
+    await ctx.reply("\u{1F515} Heartbeat deaktiviert. Du erhältst keine automatischen Nachrichten mehr.");
+  } else {
+    const enabled = isHeartbeatEnabled(chatId);
+    await ctx.reply(
+      `Heartbeat ist aktuell *${enabled ? "aktiv ✅" : "deaktiviert \u{1F515}"}*.\n\nBenutze \`/heartbeat on\` oder \`/heartbeat off\` um es zu ändern.`,
+      { parse_mode: "Markdown" },
+    );
+  }
 }
 
 export async function handleConfig(ctx: Context): Promise<void> {

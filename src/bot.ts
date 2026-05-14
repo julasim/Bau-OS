@@ -77,6 +77,7 @@ import {
   handleConfig,
   handleRestart,
   handleLogs,
+  handleHeartbeat,
 } from "./commands/system.js";
 
 // Sendet mit HTML-Formatting, faellt bei Telegram-Fehler auf Plaintext zurueck
@@ -154,6 +155,7 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
   bot.command("config", (ctx) => handleConfig(ctx));
   bot.command("restart", (ctx) => handleRestart(ctx));
   bot.command("logs", (ctx) => handleLogs(ctx, ctx.match));
+  bot.command("heartbeat", (ctx) => handleHeartbeat(ctx, ctx.match));
 
   // --- Telegram-Pairing (Phase 5) ---
   // /pair <token> verknuepft die Telegram-Chat-ID mit einem User-Konto.
