@@ -12,6 +12,9 @@ import { api } from "../../api";
 import DetailPane from "../../components/shell/DetailPane.vue";
 import StatusDot from "../../components/shell/StatusDot.vue";
 import BIcon from "../../components/BIcon.vue";
+import { useConfirm } from "../../composables/useConfirm";
+
+const { confirm } = useConfirm();
 
 interface Task {
   id: string;
@@ -117,7 +120,13 @@ async function cycleStatus() {
 
 async function removeTask() {
   if (!task.value) return;
-  if (!confirm(`Aufgabe „${task.value.text}" wirklich löschen?`)) return;
+  if (
+    !(await confirm({
+      message: `Aufgabe „${task.value.text}" wirklich löschen?`,
+      confirmDanger: true,
+    }))
+  )
+    return;
   try {
     await api.delete(`/tasks/${task.value.id}`);
     router.push("/tasks");

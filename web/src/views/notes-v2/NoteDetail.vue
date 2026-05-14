@@ -12,7 +12,9 @@ import { api } from "../../api";
 import DetailPane from "../../components/shell/DetailPane.vue";
 import MarkdownRenderer from "../../components/MarkdownRenderer.vue";
 import BIcon from "../../components/BIcon.vue";
+import { useConfirm } from "../../composables/useConfirm";
 
+const { confirm } = useConfirm();
 const route = useRoute();
 const router = useRouter();
 const content = ref("");
@@ -61,7 +63,7 @@ async function save() {
 
 async function deleteNote() {
   if (!noteName.value) return;
-  if (!confirm(`Notiz „${noteName.value}" wirklich löschen?`)) return;
+  if (!(await confirm({ message: `Notiz „${noteName.value}" wirklich löschen?`, confirmDanger: true }))) return;
   try {
     await api.delete(`/notes/${encodeURIComponent(noteName.value)}`);
     router.push("/notes");

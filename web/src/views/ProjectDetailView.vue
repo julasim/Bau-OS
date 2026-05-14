@@ -6,8 +6,10 @@ import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import BIcon from "../components/BIcon.vue";
 import TeamPicker from "../components/TeamPicker.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
+import { useConfirm } from "../composables/useConfirm";
 
 const { isAdmin } = useCurrentUser();
+const { confirm } = useConfirm();
 
 interface ProjectInfo {
   id: string;
@@ -299,14 +301,23 @@ async function setProjectModule(key: keyof ProjectModuleFlags, value: boolean) {
     // Wenn aktueller Tab ausgeblendet wurde → auf Uebersicht zurueck.
     if (!tabVisible(tab.value)) tab.value = "uebersicht";
   } catch (e) {
-    alert(e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+    await confirm({
+      message: e instanceof Error ? e.message : "Speichern fehlgeschlagen",
+      confirmLabel: "OK",
+      cancelLabel: "",
+    });
   } finally {
     moduleBusy.value = false;
   }
 }
 
 async function resetProjectModulesToGlobal() {
-  if (!confirm("Per-Projekt-Override zurücksetzen? Globale Defaults gelten dann.")) return;
+  if (
+    !(await confirm({
+      message: "Per-Projekt-Override zurücksetzen? Globale Defaults gelten dann.",
+    }))
+  )
+    return;
   moduleBusy.value = true;
   try {
     const n = encodeURIComponent(projectName.value);
@@ -320,7 +331,11 @@ async function resetProjectModulesToGlobal() {
     moduleGlobal.value = res.global;
     if (!tabVisible(tab.value)) tab.value = "uebersicht";
   } catch (e) {
-    alert(e instanceof Error ? e.message : "Reset fehlgeschlagen");
+    await confirm({
+      message: e instanceof Error ? e.message : "Reset fehlgeschlagen",
+      confirmLabel: "OK",
+      cancelLabel: "",
+    });
   } finally {
     moduleBusy.value = false;
   }
@@ -1058,7 +1073,7 @@ async function grantAccess() {
 }
 
 async function revokeAccess(userId: string) {
-  if (!confirm("Freigabe wirklich entfernen?")) return;
+  if (!(await confirm({ message: "Freigabe wirklich entfernen?", confirmDanger: true }))) return;
   try {
     const n = encodeURIComponent(projectName.value);
     await api.delete(`/projects/${n}/access/${encodeURIComponent(userId)}`);
@@ -1088,7 +1103,7 @@ async function openFile(entry: FileEntry) {
 }
 
 async function deleteFile(entry: FileEntry) {
-  if (!confirm(`Datei "${entry.name}" wirklich loeschen?`)) return;
+  if (!(await confirm({ message: `Datei "${entry.name}" wirklich loeschen?`, confirmDanger: true }))) return;
   try {
     await api.delete("/files", { id: entry.id });
     await Promise.all([loadFiles(), loadAll()]);
@@ -1289,7 +1304,13 @@ async function createAndAssign() {
 
 async function unassignMember(m: TeamMember) {
   if (teamAssigning.value || !info.value) return;
-  if (!confirm(`"${m.name}" aus diesem Projekt entfernen? (Mitglied bleibt im Team-Verzeichnis.)`)) return;
+  if (
+    !(await confirm({
+      message: `"${m.name}" aus diesem Projekt entfernen? (Mitglied bleibt im Team-Verzeichnis.)`,
+      confirmDanger: true,
+    }))
+  )
+    return;
   teamAssigning.value = true;
   teamError.value = null;
   try {
@@ -1651,7 +1672,8 @@ function navigateBautagebuch(direction: -1 | 1) {
 }
 
 async function deleteBautagebuch() {
-  if (!bautagebuchSelectedDate.value || !confirm("Eintrag wirklich löschen?")) return;
+  if (!bautagebuchSelectedDate.value || !(await confirm({ message: "Eintrag wirklich löschen?", confirmDanger: true })))
+    return;
   try {
     const n = encodeURIComponent(projectName.value);
     const date = bautagebuchSelectedDate.value;
@@ -1737,7 +1759,11 @@ async function downloadDocx(url: string, fallbackFilename: string) {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: "Export fehlgeschlagen" }));
-      alert(err.error || `HTTP ${res.status}`);
+      await confirm({
+        message: err.error || `HTTP ${res.status}`,
+        confirmLabel: "OK",
+        cancelLabel: "",
+      });
       return;
     }
     const blob = await res.blob();
@@ -1751,7 +1777,11 @@ async function downloadDocx(url: string, fallbackFilename: string) {
     a.click();
     URL.revokeObjectURL(objUrl);
   } catch (e) {
-    alert(e instanceof Error ? e.message : "Export fehlgeschlagen");
+    await confirm({
+      message: e instanceof Error ? e.message : "Export fehlgeschlagen",
+      confirmLabel: "OK",
+      cancelLabel: "",
+    });
   }
 }
 
@@ -2175,7 +2205,8 @@ async function saveTimeEntry() {
 }
 
 async function deleteTimeEntry() {
-  if (!timeDraft.value?.id || !confirm("Stunden-Eintrag wirklich löschen?")) return;
+  if (!timeDraft.value?.id || !(await confirm({ message: "Stunden-Eintrag wirklich löschen?", confirmDanger: true })))
+    return;
   try {
     const id = timeDraft.value.id;
     await api.delete(`/time-entries/${id}`);
@@ -2191,7 +2222,8 @@ async function deleteTimeEntry() {
 }
 
 async function deleteMeeting() {
-  if (!meetingDraft.value?.id || !confirm("Meeting wirklich löschen?")) return;
+  if (!meetingDraft.value?.id || !(await confirm({ message: "Meeting wirklich löschen?", confirmDanger: true })))
+    return;
   try {
     const id = meetingDraft.value.id;
     await api.delete(`/meetings/${id}`);

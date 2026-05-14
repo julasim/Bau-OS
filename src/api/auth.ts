@@ -645,6 +645,20 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     }
   }
   if (!token) {
+    // SSE-Verbindungsaufbau via One-Time-Ticket: Der Client holt sich per
+    // authentifiziertem POST /api/events/ticket ein kurzlebiges Ticket und
+    // haengt es an die EventSource-URL. Ein gueltiges Ticket ersetzt hier
+    // den fehlenden JWT-Query-Param — eingeloest (und damit entwertet) wird
+    // es erst in der GET /events-Route selbst.
+    if (c.req.path === "/api/events") {
+      const ticket = c.req.query("ticket");
+      if (ticket) {
+        const { peekTicket } = await import("./routes/events.js");
+        if (peekTicket(ticket)) {
+          return next();
+        }
+      }
+    }
     return c.json({ error: "Nicht autorisiert" }, 401);
   }
 

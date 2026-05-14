@@ -3,6 +3,9 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from "vue";
 import { api, getToken, clearToken } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import BIcon from "../components/BIcon.vue";
+import { useConfirm } from "../composables/useConfirm";
+
+const { confirm } = useConfirm();
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -144,7 +147,7 @@ async function newChat() {
 }
 
 async function deleteSession(id: string) {
-  if (!confirm("Chat wirklich loeschen?")) return;
+  if (!(await confirm({ message: "Chat wirklich loeschen?", confirmDanger: true }))) return;
   try {
     await api.delete(`/chat/sessions/${id}`);
     if (activeSessionId.value === id) {

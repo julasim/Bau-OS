@@ -5,27 +5,60 @@ import { getAgentPath, listAgents } from "./workspace/index.js";
 import { TIMEZONE, CHAT_ID_FILE } from "./config.js";
 import { logInfo, logError } from "./logger.js";
 
-// ---- Chat-ID Persistenz ----
+// ---- Chat-ID Persistenz (Multi-User) ----
 
-let _chatId: number | null = null;
+let _chatIds: Set<number> = new Set();
+let _chatIdsLoaded = false;
 
-export function saveChatId(id: number): void {
-  if (_chatId === id) return;
-  _chatId = id;
-  fs.writeFileSync(CHAT_ID_FILE, String(id), "utf-8");
+/** Liest Chat-IDs aus der Datei. Versteht beide Formate:
+ *  - altes Format: plain integer "12345"
+ *  - neues Format: JSON-Array "[12345, 67890]"
+ */
+function loadChatIdsFromDisk(): Set<number> {
+  if (!fs.existsSync(CHAT_ID_FILE)) return new Set();
+  try {
+    const raw = fs.readFileSync(CHAT_ID_FILE, "utf-8").trim();
+    // Neues Format: JSON-Array
+    if (raw.startsWith("[")) {
+      const arr = JSON.parse(raw) as number[];
+      return new Set(arr.filter((id) => typeof id === "number" && !isNaN(id)));
+    }
+    // Altes Format: plain integer
+    const id = parseInt(raw);
+    return isNaN(id) ? new Set() : new Set([id]);
+  } catch {
+    return new Set();
+  }
 }
 
-export function loadChatId(): number | null {
-  if (_chatId) return _chatId;
-  if (fs.existsSync(CHAT_ID_FILE)) {
-    const raw = fs.readFileSync(CHAT_ID_FILE, "utf-8").trim();
-    const id = parseInt(raw);
-    if (!isNaN(id)) {
-      _chatId = id;
-      return id;
-    }
+function saveChatIdsToDisk(ids: Set<number>): void {
+  fs.writeFileSync(CHAT_ID_FILE, JSON.stringify([...ids]), "utf-8");
+}
+
+/** Neue Chat-ID registrieren (idempotent) */
+export function saveChatId(id: number): void {
+  if (!_chatIdsLoaded) {
+    _chatIds = loadChatIdsFromDisk();
+    _chatIdsLoaded = true;
   }
-  return null;
+  if (_chatIds.has(id)) return; // keine Änderung → kein Disk-Write
+  _chatIds.add(id);
+  saveChatIdsToDisk(_chatIds);
+}
+
+/** Alle bekannten Chat-IDs laden */
+export function loadChatIds(): number[] {
+  if (!_chatIdsLoaded) {
+    _chatIds = loadChatIdsFromDisk();
+    _chatIdsLoaded = true;
+  }
+  return [..._chatIds];
+}
+
+/** Backward-Compat: gibt die erste (älteste) Chat-ID zurück */
+export function loadChatId(): number | null {
+  const ids = loadChatIds();
+  return ids.length > 0 ? ids[0] : null;
 }
 
 // ---- HEARTBEAT.md Parser ----
@@ -72,9 +105,9 @@ function parseHeartbeat(agentName: string): HeartbeatConfig | null {
 type ReplyFn = (chatId: number, text: string) => Promise<void>;
 
 async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> {
-  const chatId = loadChatId();
-  if (!chatId) {
-    console.log(`[Heartbeat] ${agentName}: kein Chat-ID gespeichert, ueberspringe.`);
+  const chatIds = loadChatIds();
+  if (chatIds.length === 0) {
+    console.log(`[Heartbeat] ${agentName}: keine Chat-IDs gespeichert, ueberspringe.`);
     return;
   }
 
@@ -95,7 +128,14 @@ async function runHeartbeat(agentName: string, replyFn: ReplyFn): Promise<void> 
       return;
     }
 
-    await replyFn(chatId, `\u{1FAC0} ${agentName}:\n\n${antwort}`);
+    // An alle bekannten Chat-IDs senden (sequenziell, Fehler isoliert)
+    for (const chatId of chatIds) {
+      try {
+        await replyFn(chatId, `\u{1FAC0} ${agentName}:\n\n${antwort}`);
+      } catch (err) {
+        logError(`Heartbeat/${agentName}/chat_${chatId}`, err);
+      }
+    }
   } catch (err) {
     logError(`Heartbeat/${agentName}`, err);
   }

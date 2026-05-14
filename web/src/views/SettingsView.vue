@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from "vue";
 import { api } from "../api";
+import { useConfirm } from "../composables/useConfirm";
+
+const { confirm } = useConfirm();
 
 interface SettingsState {
   displayName?: string;
@@ -190,7 +193,13 @@ async function connectMicrosoft() {
 }
 
 async function disconnectMicrosoft() {
-  if (!confirm("Microsoft-Verbindung wirklich trennen? Synchronisierte Termine bleiben in Bau-OS erhalten.")) return;
+  if (
+    !(await confirm({
+      message: "Microsoft-Verbindung wirklich trennen? Synchronisierte Termine bleiben in Bau-OS erhalten.",
+      confirmDanger: true,
+    }))
+  )
+    return;
   msBusy.value = true;
   msMessage.value = null;
   try {
@@ -653,7 +662,7 @@ async function setExportTemplateDefault(t: ExportTemplate) {
 }
 
 async function removeExportTemplate(t: ExportTemplate) {
-  if (!confirm(`Vorlage "${t.name}" wirklich löschen?`)) return;
+  if (!(await confirm({ message: `Vorlage "${t.name}" wirklich löschen?`, confirmDanger: true }))) return;
   exportBusy.value = true;
   try {
     await api.delete(`/export-templates/${t.id}`);
@@ -846,7 +855,7 @@ async function saveTemplate() {
 }
 
 async function removeTemplate(t: Template) {
-  if (!confirm(`Vorlage "${t.name}" wirklich loeschen?`)) return;
+  if (!(await confirm({ message: `Vorlage "${t.name}" wirklich loeschen?`, confirmDanger: true }))) return;
   templateBusy.value = true;
   try {
     await api.delete(`/templates/${t.id}`);
@@ -1074,7 +1083,7 @@ async function onLogoDrop(e: DragEvent) {
 }
 
 async function removeLogo() {
-  if (!confirm("Logo wirklich entfernen?")) return;
+  if (!(await confirm({ message: "Logo wirklich entfernen?", confirmDanger: true }))) return;
   brandingBusy.value = true;
   try {
     branding.value = await api.delete<BrandingState>("/branding/logo");
@@ -1151,7 +1160,7 @@ async function saveCustomVar() {
 }
 
 async function deleteCustomVar(cv: CustomVariable) {
-  if (!confirm(`Platzhalter "${cv.name}" löschen?`)) return;
+  if (!(await confirm({ message: `Platzhalter "${cv.name}" löschen?`, confirmDanger: true }))) return;
   customVarsBusy.value = true;
   try {
     await api.delete(`/templates/custom-variables/${cv.id}`);
@@ -1210,7 +1219,7 @@ async function saveCustomModule() {
 }
 
 async function deleteCustomModule(m: CustomProjectModule) {
-  if (!confirm(`Modul "${m.label}" löschen?`)) return;
+  if (!(await confirm({ message: `Modul "${m.label}" löschen?`, confirmDanger: true }))) return;
   customModulesBusy.value = true;
   try {
     await api.delete(`/project-modules/custom/${m.id}`);

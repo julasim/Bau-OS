@@ -33,6 +33,9 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from "vue";
 import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import FileGlyph from "../components/FileGlyph.vue";
+import { useConfirm } from "../composables/useConfirm";
+
+const { confirm } = useConfirm();
 
 // ── Typen ────────────────────────────────────────────────────────────────────
 type FileKind = "root" | "folder" | "pdf" | "dwg" | "image" | "doc" | "csv" | "archive" | "code" | "other";
@@ -590,7 +593,7 @@ const shareModalCandidates = computed<AdminUserMini[]>(() => {
 async function deleteSelected() {
   const node = selected.value?.node;
   if (!node?.id) return;
-  if (!confirm(`Datei "${node.name}" wirklich löschen?`)) return;
+  if (!(await confirm({ message: `Datei "${node.name}" wirklich löschen?`, confirmDanger: true }))) return;
   try {
     await api.delete("/files", { id: node.id });
     selected.value = null;

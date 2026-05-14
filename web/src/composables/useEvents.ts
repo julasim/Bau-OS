@@ -33,13 +33,31 @@ export function useEvents(types: EventType[], onEvent: (event: DataEvent) => voi
   const MAX_RECONNECT_ATTEMPTS = 10;
   const MAX_RECONNECT_DELAY = 60_000;
 
-  function connect() {
+  async function connect() {
     const token = localStorage.getItem("bau-os-token");
     if (!token) return;
 
+    // One-Time-Ticket holen — so bleibt das langlebige JWT aus der URL
+    // raus (Server-Logs, Browser-History, Referer). Schlaegt der Fetch
+    // fehl, faellt es auf den token-Query-Param zurueck (Backward-Compat).
+    let authParam = "";
+    try {
+      const res = await fetch("/api/events/ticket", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      });
+      if (res.ok) {
+        const { ticket } = (await res.json()) as { ticket: string };
+        authParam = `ticket=${encodeURIComponent(ticket)}`;
+      } else {
+        authParam = `token=${encodeURIComponent(token)}`;
+      }
+    } catch {
+      authParam = `token=${encodeURIComponent(token)}`;
+    }
+
     const typesParam = types.length ? `types=${types.join(",")}` : "";
-    const tokenParam = `token=${encodeURIComponent(token)}`;
-    const params = [typesParam, tokenParam].filter(Boolean).join("&");
+    const params = [typesParam, authParam].filter(Boolean).join("&");
     source = new EventSource(`/api/events?${params}`);
 
     source.addEventListener("connected", () => {

@@ -5,6 +5,9 @@ import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
 import { copyToClipboard } from "../utils/clipboard";
 import { useCurrentUser } from "../composables/useCurrentUser";
+import { useConfirm } from "../composables/useConfirm";
+
+const { confirm } = useConfirm();
 
 const router = useRouter();
 
@@ -195,7 +198,7 @@ async function saveBotToken() {
 }
 
 async function removeBotToken() {
-  if (!botTarget.value || !confirm("Bot-Token wirklich entfernen?")) return;
+  if (!botTarget.value || !(await confirm({ message: "Bot-Token wirklich entfernen?", confirmDanger: true }))) return;
   botDialogSaving.value = true;
   botDialogError.value = null;
   try {
@@ -317,7 +320,7 @@ async function toggleRole(user: AdminUser) {
   if (user.isProtected) return;
   const newRole = user.role === "admin" ? "user" : "admin";
   const action = newRole === "admin" ? "zum Admin befoerdern" : "auf Nutzer herabstufen";
-  if (!confirm(`"${user.username}" ${action}?`)) return;
+  if (!(await confirm(`"${user.username}" ${action}?`))) return;
   try {
     await api.patch(`/admin/users/${encodeURIComponent(user.id)}`, { role: newRole });
     await loadUsers();
@@ -334,7 +337,7 @@ async function deleteUser(user: AdminUser) {
     setTimeout(() => (errorBanner.value = null), 4000);
     return;
   }
-  if (!confirm(`"${user.username}" wirklich loeschen?`)) return;
+  if (!(await confirm({ message: `"${user.username}" wirklich loeschen?`, confirmDanger: true }))) return;
   try {
     await api.delete(`/admin/users/${encodeURIComponent(user.id)}`);
     await loadUsers();

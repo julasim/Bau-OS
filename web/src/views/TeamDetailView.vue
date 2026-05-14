@@ -4,8 +4,10 @@ import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
+import { useConfirm } from "../composables/useConfirm";
 
 const { isAdmin } = useCurrentUser();
+const { confirm } = useConfirm();
 
 // ── Typen ────────────────────────────────────────────────
 type MemberType = "Intern" | "Planer" | "Ausführende" | "Behörde" | "Lieferant" | "Bauherr";
@@ -296,7 +298,13 @@ async function assignProject() {
 
 async function unassignProject(projectId: string) {
   if (!member.value) return;
-  if (!confirm("Zuordnung zu diesem Projekt entfernen?")) return;
+  if (
+    !(await confirm({
+      message: "Zuordnung zu diesem Projekt entfernen?",
+      confirmDanger: true,
+    }))
+  )
+    return;
   try {
     await api.delete(`/team/${encodeURIComponent(memberId.value)}/projects/${encodeURIComponent(projectId)}`);
     await loadMember();

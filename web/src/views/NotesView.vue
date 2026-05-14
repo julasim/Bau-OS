@@ -4,6 +4,9 @@ import { useRouter } from "vue-router";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
 import BIcon from "../components/BIcon.vue";
+import { useConfirm } from "../composables/useConfirm";
+
+const { confirm } = useConfirm();
 
 interface NoteSummary {
   title: string;
@@ -108,7 +111,7 @@ async function create() {
 }
 
 async function remove(name: string) {
-  if (!confirm(`Notiz "${name}" wirklich loeschen?`)) return;
+  if (!(await confirm({ message: `Notiz "${name}" wirklich loeschen?`, confirmDanger: true }))) return;
   await api.delete(`/notes/${encodeURIComponent(name)}`);
   await load();
 }

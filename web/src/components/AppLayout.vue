@@ -18,6 +18,7 @@ import { computed } from "vue";
 import { useRoute } from "vue-router";
 import NavRail from "./shell/NavRail.vue";
 import SystemStatusBanner from "./SystemStatusBanner.vue";
+import ConfirmDialog from "./ConfirmDialog.vue";
 import { useWorkspaceShell } from "../composables/useWorkspaceShell";
 import { connectionError } from "../composables/useEvents";
 
@@ -63,6 +64,7 @@ const isChatRoute = computed(() => route.name === "chat");
       <span>{{ connectionError }}</span>
       <button type="button" @click="connectionError = null" aria-label="Schliessen">×</button>
     </div>
+    <ConfirmDialog />
   </div>
 </template>
 
