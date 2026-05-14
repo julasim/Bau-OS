@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "agent-dashboard",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [".claude/dashboard/server.js"],
+      "port": 4242
+    },
+    {
       "name": "docs",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["vitepress", "dev", "docs", "--port", "5173"],
