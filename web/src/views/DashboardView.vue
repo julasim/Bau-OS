@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
@@ -62,16 +62,20 @@ const stats = computed(() => ({
   progressTasks: tasks.value.filter((t) => t.status === "in_progress").length,
 }));
 
-const today = new Date().toISOString().slice(0, 10);
-const todayDE = new Date().toLocaleDateString("de-AT", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  year: "numeric",
-});
-const hour = new Date().getHours();
+// Reaktive Zeit-Werte: werden bei visibilitychange aktualisiert, damit
+// Begrüßung und Datumsfilter nach langem Inaktiv-Tab korrekt bleiben.
+const today = ref(new Date().toISOString().slice(0, 10));
+const todayDE = ref(
+  new Date().toLocaleDateString("de-AT", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }),
+);
+const hour = ref(new Date().getHours());
 const greeting = computed(() =>
-  hour < 5 ? "Gute Nacht" : hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend",
+  hour.value < 5 ? "Gute Nacht" : hour.value < 11 ? "Guten Morgen" : hour.value < 18 ? "Guten Tag" : "Guten Abend",
 );
 
 const openTasks = computed(() => tasks.value.filter((t) => t.status !== "done").slice(0, 6));
@@ -79,7 +83,7 @@ const upcomingTermine = computed(() =>
   termine.value
     .filter((t) => {
       const d = t.datum.includes(".") ? t.datum.split(".").reverse().join("-") : t.datum;
-      return d >= today;
+      return d >= today.value;
     })
     .slice(0, 4),
 );
@@ -123,7 +127,30 @@ function openPalette() {
   router.push("/search");
 }
 
-onMounted(load);
+function refreshTime() {
+  const now = new Date();
+  today.value = now.toISOString().slice(0, 10);
+  todayDE.value = now.toLocaleDateString("de-AT", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  hour.value = now.getHours();
+}
+
+function onVisibilityChange() {
+  if (document.visibilityState === "visible") {
+    refreshTime();
+    load();
+  }
+}
+
+onMounted(() => {
+  load();
+  document.addEventListener("visibilitychange", onVisibilityChange);
+});
+onUnmounted(() => document.removeEventListener("visibilitychange", onVisibilityChange));
 useEvents(["task", "termin", "note", "project"], () => load());
 
 const statCards = computed(() => [
