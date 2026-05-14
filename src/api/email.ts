@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — SMTP/Email-Service (Migration 020 — Email-2FA)
+// PATIO — SMTP/Email-Service (Migration 020 — Email-2FA)
 // ============================================================
 // Schickt 6-stellige OTP-Codes via SMTP. Lazy-Initialisiert beim
 // ersten Aufruf — wenn SMTP_HOST nicht gesetzt ist, faellt die Funktion
@@ -135,7 +135,7 @@ export function buildLoginOtpMail(opts: {
   userAgent?: string | null;
 }): { subject: string; text: string; html: string } {
   return {
-    subject: "Bau-OS · Bestätigungscode",
+    subject: "PATIO · Bestätigungscode",
     html: renderEmail("verification", { user_name: opts.username, code: opts.code }),
     text: plaintextVerification({ user_name: opts.username, code: opts.code }),
   };
@@ -149,7 +149,7 @@ export function buildEmailVerifyMail(opts: { code: string; username: string }): 
   html: string;
 } {
   return {
-    subject: "Bau-OS · Email bestätigen",
+    subject: "PATIO · E-Mail bestätigen",
     html: renderEmail("verification", { user_name: opts.username, code: opts.code }),
     text: plaintextVerification({ user_name: opts.username, code: opts.code }),
   };
@@ -163,7 +163,7 @@ export function buildMagicLinkMail(opts: { username: string; magicLinkUrl: strin
   html: string;
 } {
   return {
-    subject: "Bau-OS · Anmelde-Link",
+    subject: "PATIO · Anmelde-Link",
     html: renderEmail("magic-link", {
       user_name: opts.username,
       magic_link_url: opts.magicLinkUrl,
@@ -179,7 +179,7 @@ export function buildPasswordResetMail(opts: { username: string; resetUrl: strin
   html: string;
 } {
   return {
-    subject: "Bau-OS · Passwort zurücksetzen",
+    subject: "PATIO · Passwort zurücksetzen",
     html: renderEmail("password-reset", {
       user_name: opts.username,
       reset_url: opts.resetUrl,
@@ -197,7 +197,7 @@ export function buildWelcomeMail(opts: { username: string; workspaceUrl: string 
   html: string;
 } {
   return {
-    subject: "Willkommen bei Bau-OS",
+    subject: "Willkommen bei PATIO",
     html: renderEmail("welcome", {
       user_name: opts.username,
       workspace_url: opts.workspaceUrl,

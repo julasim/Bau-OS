@@ -1,6 +1,6 @@
 # Workspace & Datenschicht
 
-Bau-OS speichert Daten entweder als Markdown-Dateien in einem lokalen Workspace oder in einer PostgreSQL-Datenbank. Welcher Modus aktiv ist, entscheidet eine einzige Umgebungsvariable — der restliche Code bleibt identisch.
+PATIO speichert Daten entweder als Markdown-Dateien in einem lokalen Workspace oder in einer PostgreSQL-Datenbank. Welcher Modus aktiv ist, entscheidet eine einzige Umgebungsvariable — der restliche Code bleibt identisch.
 
 ## Zwei Modi — eine Codebasis
 
@@ -10,7 +10,7 @@ Kein extra Dienst nötig. Alle Daten landen als Markdown-Dateien in dem Ordner, 
 
 ### Datenbank-Modus
 
-Wenn `DATABASE_URL` in `.env` gesetzt ist, schaltet Bau-OS auf PostgreSQL um. Das ermöglicht strukturierte Abfragen und — wenn `pgvector` installiert ist — semantische KI-Suche. Außerdem werden dann zusätzliche Features wie Bautagebuch, Meetings und Zeiterfassung aktiviert, die im Filesystem-Modus nicht verfügbar sind.
+Wenn `DATABASE_URL` in `.env` gesetzt ist, schaltet PATIO auf PostgreSQL um. Das ermöglicht strukturierte Abfragen und — wenn `pgvector` installiert ist — semantische KI-Suche. Außerdem werden dann zusätzliche Features wie Bautagebuch, Meetings und Zeiterfassung aktiviert, die im Filesystem-Modus nicht verfügbar sind.
 
 ```env
 # Filesystem-Modus (Standard — keine Zeile nötig)
@@ -70,7 +70,7 @@ Sobald `DATABASE_URL` gesetzt ist:
 - PostgreSQL wird beim Start verbunden und auf Erreichbarkeit geprüft
 - Migrationen laufen automatisch (`DB_AUTO_MIGRATE=true` ist Standard)
 - Alle Entitäten (Aufgaben, Termine, Notizen, Projekte, Team) werden in Postgres gespeichert
-- `pgvector` ist optional — wenn vorhanden, ist semantische Suche aktiv; wenn nicht, fällt Bau-OS auf Volltext-Suche zurück
+- `pgvector` ist optional — wenn vorhanden, ist semantische Suche aktiv; wenn nicht, fällt PATIO auf Volltext-Suche zurück
 - Zusätzliche Features werden freigeschaltet: Bautagebuch, Meeting-Protokolle, Zeiterfassung
 
 **Supabase** kann zusätzlich aktiviert werden, um Realtime-Events in den Bot zu bridgen:

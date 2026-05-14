@@ -78,7 +78,7 @@ Stack-Komponenten (laut `docker-compose.yml`):
 |---|---|---|
 | **postgres** | `pgvector/pgvector:pg16` | PostgreSQL mit pgvector-Extension |
 | **ollama** | `ollama/ollama:latest` | Lokales LLM (optional; weglassen wenn OpenAI genutzt wird) |
-| **app** | Build aus `Dockerfile` | Bau-OS Bot + API + Web-UI |
+| **app** | Build aus `Dockerfile` | PATIO Bot + API + Web-UI |
 
 ::: tip Reverse Proxy / TLS
 Der Docker-Stack bringt keinen eigenen Reverse Proxy mit. TLS und Routing übernimmt ein externer Edge-Proxy (Caddy), der über das Docker-Netzwerk `proxy` angebunden wird. Für lokale Tests ohne Edge-Proxy ist Port 3000 direkt im Container verfügbar.
@@ -146,7 +146,7 @@ curl http://localhost:11434/v1/models
 
 1. Öffne Telegram und suche **@BotFather**
 2. Schreibe `/newbot`
-3. Wähle einen Namen (z.B. "Bau-OS Assistent")
+3. Wähle einen Namen (z.B. "PATIO Assistent")
 4. Wähle einen Username (z.B. "bauos_assistent_bot")
 5. Kopiere den **Bot Token** — du brauchst ihn gleich
 
@@ -154,7 +154,7 @@ curl http://localhost:11434/v1/models
 Deaktiviere "Group Privacy" mit `/setprivacy` → Disabled, falls der Bot in Gruppen funktionieren soll.
 :::
 
-## Manuell: Bau-OS installieren
+## Manuell: PATIO installieren
 
 ```bash
 git clone https://github.com/julasim/Bau-OS.git

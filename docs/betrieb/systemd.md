@@ -1,6 +1,6 @@
 # systemd-Service
 
-Bau-OS als systemd-Service einrichten, damit der Bot automatisch startet und bei Abstuerzen neu gestartet wird.
+PATIO als systemd-Service einrichten, damit der Bot automatisch startet und bei Abstuerzen neu gestartet wird.
 
 ## Service-Datei erstellen
 
@@ -12,7 +12,7 @@ Folgenden Inhalt einfuegen:
 
 ```ini
 [Unit]
-Description=Bau-OS Telegram Bot
+Description=PATIO Telegram Bot
 Documentation=https://github.com/your-org/bau-os
 After=network.target ollama.service
 Wants=ollama.service
@@ -82,7 +82,7 @@ sudo systemctl status bau-os
 Erwartete Ausgabe:
 
 ```
-● bau-os.service - Bau-OS Telegram Bot
+● bau-os.service - PATIO Telegram Bot
      Loaded: loaded (/etc/systemd/system/bau-os.service; enabled)
      Active: active (running) since ...
    Main PID: 12345 (node)
@@ -122,7 +122,7 @@ sudo systemctl start bau-os
 
 ## Graceful Shutdown
 
-Bau-OS faehrt bei `SIGTERM` und `SIGINT` sauber herunter:
+PATIO faehrt bei `SIGTERM` und `SIGINT` sauber herunter:
 
 1. **Bot stoppen** — Telegram-Polling wird beendet
 2. **MCP-Server trennen** — Alle verbundenen MCP-Server-Prozesse werden sauber beendet

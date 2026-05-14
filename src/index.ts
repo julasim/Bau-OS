@@ -1,10 +1,9 @@
 // ============================================================
-// Bau-OS — Boot-Entrypoint
+// PATIO — Boot-Entrypoint
 // ============================================================
-// Bau-OS ist eine KI-Plattform fuer ARCHITEKTURBUEROS und Bueros in der
-// BAUBRANCHE (Planung, Bauleitung, Projektsteuerung). Es ist KEIN
-// Werkzeug fuer die Baustelle — Zielnutzer sind Architekten, Bauleiter,
-// Statiker und Sachbearbeiter im Buero, nicht der Polier auf dem Geruest.
+// PATIO ist ein Planungswerkzeug für Architektur- und Planungsbüros.
+// Zielnutzer sind Architekten, Projektleiter, Statiker und Sachbearbeiter
+// im Buero, nicht der Polier auf dem Geruest.
 //
 // Stundenerfassung, Bautagebuch und Meetings dienen der Doku IM BUERO,
 // retrospektiv (abends, nach der Begehung, am Schreibtisch). Echtzeit-
@@ -95,7 +94,7 @@ import { initMcp } from "./mcp.js";
 await initMcp();
 
 bot.start();
-logInfo("Bau-OS gestartet");
+logInfo("PATIO gestartet");
 
 // Heartbeat NACH bot.start() starten — bot.api.sendMessage() braucht eine aktive Verbindung
 startHeartbeat(async (chatId, text) => {

@@ -98,7 +98,7 @@ export const webHandlers: HandlerMap = {
     const options: RequestInit = {
       method,
       signal: AbortSignal.timeout(HTTP_REQUEST_TIMEOUT_MS),
-      headers: { "User-Agent": "Bau-OS/1.0" },
+      headers: { "User-Agent": "PATIO/1.0" },
     };
 
     if (args.headers) {

@@ -28,7 +28,7 @@ const titles: Record<string, string> = {
   login: "Anmelden",
 };
 
-const current = computed(() => titles[String(route.name ?? "")] ?? "Bau-OS");
+const current = computed(() => titles[String(route.name ?? "")] ?? "PATIO");
 
 function openPalette() {
   // Command-Palette ist noch nicht gebaut — Suche-Button navigiert zur Such-Seite.
@@ -48,12 +48,7 @@ function openPalette() {
     "
   >
     <!-- Hamburger (nur auf Mobile sichtbar) -->
-    <button
-      type="button"
-      class="topbar-hamburger"
-      @click="toggleSidebar"
-      aria-label="Menu oeffnen"
-    >
+    <button type="button" class="topbar-hamburger" @click="toggleSidebar" aria-label="Menu oeffnen">
       <svg
         width="18"
         height="18"
@@ -76,11 +71,7 @@ function openPalette() {
     </nav>
 
     <!-- Search button — auf Mobile nur Icon, ab 768px volles Suchfeld -->
-    <button
-      @click="openPalette"
-      class="topbar-search flex items-center gap-2"
-      aria-label="Suche oeffnen"
-    >
+    <button @click="openPalette" class="topbar-search flex items-center gap-2" aria-label="Suche oeffnen">
       <BIcon name="search" :size="14" style="color: var(--color-text-muted)" />
       <span class="topbar-search-label flex-1 text-left" style="color: var(--color-text-muted)">Suchen…</span>
     </button>

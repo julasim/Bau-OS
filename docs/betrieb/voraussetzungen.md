@@ -1,6 +1,6 @@
 # Voraussetzungen
 
-Was du brauchst, bevor du Bau-OS auf einem Server installierst.
+Was du brauchst, bevor du PATIO auf einem Server installierst.
 
 ## Accounts & Zugaenge
 

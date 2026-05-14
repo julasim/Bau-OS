@@ -4,7 +4,7 @@ Nach der Installation führt der Setup-Wizard dich durch die Ersteinrichtung —
 
 ## So funktioniert der Wizard
 
-Beim allerersten Start erkennt Bau-OS dass noch kein Agent konfiguriert ist. Statt normal zu antworten, startet der **Setup-Wizard** — ein LLM-gesteuerter Einrichtungsassistent.
+Beim allerersten Start erkennt PATIO dass noch kein Agent konfiguriert ist. Statt normal zu antworten, startet der **Setup-Wizard** — ein LLM-gesteuerter Einrichtungsassistent.
 
 Der Wizard wird durch die Datei `BOOTSTRAP.md` gesteuert. Er stellt 6 Fragen, immer eine pro Nachricht:
 
@@ -12,7 +12,7 @@ Der Wizard wird durch die Datei `BOOTSTRAP.md` gesteuert. Er stellt 6 Fragen, im
 
 | # | Frage | Beispiel-Antwort |
 |---|---|---|
-| 1 | Wie soll der Assistent heißen? | Bau-OS |
+| 1 | Wie soll der Assistent heißen? | PATIO |
 | 2 | Welches Emoji passt dazu? | :construction: |
 | 3 | Wie soll sein Charakter sein? | Präzise, verlässlich, direkt |
 | 4 | Für was für ein Unternehmen? | Architekturbüro in Wien |

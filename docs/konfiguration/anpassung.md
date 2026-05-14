@@ -1,6 +1,6 @@
 # Anpassung
 
-Bau-OS ist modular aufgebaut und lässt sich auf mehreren Ebenen anpassen — von einfachen Agent-Dateien bis hin zu eigenen Workflows.
+PATIO ist modular aufgebaut und lässt sich auf mehreren Ebenen anpassen — von einfachen Agent-Dateien bis hin zu eigenen Workflows.
 
 ## Agenten-Dateien bearbeiten
 

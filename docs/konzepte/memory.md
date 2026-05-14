@@ -1,6 +1,6 @@
 # Memory-System
 
-Bau-OS hat ein zweistufiges Gedächtnis: **MEMORY.md** für dauerhaftes Wissen und **MEMORY_LOGS/** für Tages-Protokolle.
+PATIO hat ein zweistufiges Gedächtnis: **MEMORY.md** für dauerhaftes Wissen und **MEMORY_LOGS/** für Tages-Protokolle.
 
 ## MEMORY.md — Langzeitgedächtnis
 

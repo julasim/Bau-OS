@@ -79,8 +79,8 @@ export function generateSecret(): string {
 // ── Provisioning-URI ────────────────────────────────────────────────────────
 
 /** Baut otpauth://totp/...-URI fuer QR-Code-Anzeige in Authenticator-Apps.
- *  Beispiel: otpauth://totp/Bau-OS:julius?secret=ABC...&issuer=Bau-OS */
-export function buildOtpAuthUri(secret: string, account: string, issuer = "Bau-OS"): string {
+ *  Beispiel: otpauth://totp/PATIO:julius?secret=ABC...&issuer=PATIO */
+export function buildOtpAuthUri(secret: string, account: string, issuer = "PATIO"): string {
   const label = `${encodeURIComponent(issuer)}:${encodeURIComponent(account)}`;
   const params = new URLSearchParams({
     secret,

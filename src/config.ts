@@ -198,7 +198,7 @@ export const SMTP_HOST = process.env.SMTP_HOST || "";
 export const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
 export const SMTP_USER = process.env.SMTP_USER || "";
 export const SMTP_PASS = process.env.SMTP_PASS || "";
-export const SMTP_FROM = process.env.SMTP_FROM || "Bau-OS <noreply@bau-os.local>";
+export const SMTP_FROM = process.env.SMTP_FROM || "PATIO <noreply@bau-os.local>";
 export const SMTP_SECURE = (process.env.SMTP_SECURE ?? "auto").toLowerCase();
 export const SMTP_ENABLED = !!SMTP_HOST;
 

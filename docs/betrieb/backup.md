@@ -1,6 +1,6 @@
 # Backup
 
-Sicherungsstrategie für Bau-OS. Das Wichtigste: **der Vault ist alles**.
+Sicherungsstrategie für PATIO. Das Wichtigste: **der Vault ist alles**.
 
 ## Was muss gesichert werden?
 
@@ -11,7 +11,7 @@ Sicherungsstrategie für Bau-OS. Das Wichtigste: **der Vault ist alles**.
 | **Code** | `/home/bauos/bau-os/` | Niedrig | Kann jederzeit neu geklont werden |
 
 ::: tip Der Vault ist die einzige Wahrheit
-Alle Daten liegen als Markdown-Dateien im Vault. Agent-Persönlichkeit, Erinnerungen, Aufgaben, Notizen — alles ist dort. Wenn du den Vault hast, kannst du Bau-OS jederzeit auf einem neuen Server wiederherstellen.
+Alle Daten liegen als Markdown-Dateien im Vault. Agent-Persönlichkeit, Erinnerungen, Aufgaben, Notizen — alles ist dort. Wenn du den Vault hast, kannst du PATIO jederzeit auf einem neuen Server wiederherstellen.
 :::
 
 ## Manuelles Backup
@@ -136,7 +136,7 @@ sudo systemctl restart bau-os
 
 1. Neuen Server erstellen ([Anleitung](/betrieb/server))
 2. Software installieren ([Anleitung](/betrieb/software))
-3. Bau-OS klonen und bauen ([Anleitung](/betrieb/deployment))
+3. PATIO klonen und bauen ([Anleitung](/betrieb/deployment))
 4. `.env` aus Backup kopieren
 5. Vault aus Backup entpacken
 6. Service starten

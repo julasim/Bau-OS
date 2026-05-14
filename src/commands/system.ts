@@ -21,7 +21,7 @@ import path from "path";
 import { setHeartbeatEnabled, isHeartbeatEnabled } from "../heartbeat-prefs.js";
 
 const HILFE = `
-Bau-OS
+PATIO
 
 Schreib einfach mit mir – ich erledige alles via KI.
 Notizen, Aufgaben, Termine, Projekte, Suche → einfach tippen.
@@ -70,7 +70,7 @@ export async function handleStatus(ctx: Context): Promise<void> {
   }
 
   const status = `
-Bau-OS Status
+PATIO Status
 
 Vault: ${vault ? "\u2713 erreichbar" : "\u2717 nicht gefunden"}
 Pfad: ${workspacePath}
@@ -132,7 +132,7 @@ export async function handleKompakt(ctx: Context): Promise<void> {
 
 export async function handleCommands(ctx: Context): Promise<void> {
   const out = `
-Bau-OS – System-Commands
+PATIO – System-Commands
 
 /heute        Tages-Briefing (Termine + Aufgaben)
 /config       Konfiguration anzeigen
@@ -297,7 +297,7 @@ export async function handleConfig(ctx: Context): Promise<void> {
   const masked = token.length > 10 ? token.slice(0, 8) + "..." + token.slice(-4) : "\u2013";
 
   const out = [
-    "Bau-OS Konfiguration",
+    "PATIO Konfiguration",
     "",
     `BOT_TOKEN:  ${masked}`,
     `WORKSPACE_PATH: ${process.env.WORKSPACE_PATH ?? "\u2013"}`,

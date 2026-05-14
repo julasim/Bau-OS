@@ -1,6 +1,6 @@
 # Monitoring
 
-Bau-OS überwachen: Logs, Health-Checks und Systemstatus.
+PATIO überwachen: Logs, Health-Checks und Systemstatus.
 
 ## Bot-Logs via journalctl
 
@@ -28,7 +28,7 @@ sudo journalctl -u bau-os --since "2026-04-07 08:00" --until "2026-04-07 12:00"
 
 ## /logs Befehl in Telegram
 
-Bau-OS hat einen eingebauten `/logs`-Befehl für Administratoren:
+PATIO hat einen eingebauten `/logs`-Befehl für Administratoren:
 
 ```
 /logs        → Zeigt die letzten Log-Einträge
@@ -40,7 +40,7 @@ Du brauchst keinen SSH-Zugang für einen schnellen Blick auf die Logs. Schreibe 
 
 ## bot.log Datei
 
-Bau-OS schreibt zusätzlich eine `bot.log` Datei:
+PATIO schreibt zusätzlich eine `bot.log` Datei:
 
 ```bash
 cat /home/bauos/bau-os/bot.log
@@ -99,7 +99,7 @@ du -sh /usr/share/ollama/.ollama/models
 ### CPU und Prozesse
 
 ```bash
-# Bau-OS Prozess finden
+# PATIO Prozess finden
 ps aux | grep "node dist/index.js"
 
 # Systemlast
@@ -122,7 +122,7 @@ Inhalt:
 ```bash
 #!/bin/bash
 
-echo "=== Bau-OS Health Check ==="
+echo "=== PATIO Health Check ==="
 echo "Datum: $(date)"
 echo ""
 
@@ -192,7 +192,7 @@ chmod +x /home/bauos/health-check.sh
 Erwartete Ausgabe:
 
 ```
-=== Bau-OS Health Check ===
+=== PATIO Health Check ===
 Datum: Mon Apr  7 10:30:00 CEST 2026
 
 Bot-Service:     OK (läuft)

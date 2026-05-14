@@ -1,6 +1,6 @@
 # Zugriffskontrolle
 
-Bau-OS implementiert mehrere Schichten der Zugriffskontrolle: von der Telegram-Absender-Prüfung bis zur Dateioperations-Whitelist.
+PATIO implementiert mehrere Schichten der Zugriffskontrolle: von der Telegram-Absender-Prüfung bis zur Dateioperations-Whitelist.
 
 ## Telegram-Zugriffskontrolle
 

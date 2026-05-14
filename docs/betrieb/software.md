@@ -125,7 +125,7 @@ ollama rm qwen2.5:3b
 
 ## Datenbank (optional)
 
-Ohne `DATABASE_URL` läuft Bau-OS im reinen Filesystem-Modus — keine extra Installation nötig.
+Ohne `DATABASE_URL` läuft PATIO im reinen Filesystem-Modus — keine extra Installation nötig.
 
 ### Option A — PostgreSQL + pgvector (self-hosted)
 
@@ -158,7 +158,7 @@ DATABASE_URL=postgresql://bauos:password@localhost:5432/bauos
 
 ## Docker Compose (vollständiger Stack)
 
-Startet PostgreSQL + Ollama + Bau-OS + Caddy (HTTPS) in einem Befehl:
+Startet PostgreSQL + Ollama + PATIO + Caddy (HTTPS) in einem Befehl:
 
 ```bash
 # .env anpassen (BOT_TOKEN, WORKSPACE_PATH, etc.)
@@ -175,8 +175,8 @@ docker compose logs -f
 docker compose pull && docker compose build app && docker compose up -d
 ```
 
-Enthaltene Services: PostgreSQL 16 (pgvector), Ollama, Bau-OS App. TLS wird über einen externen Edge-Proxy (Caddy) bereitgestellt — siehe Kommentar im `docker-compose.yml`.
+Enthaltene Services: PostgreSQL 16 (pgvector), Ollama, PATIO App. TLS wird über einen externen Edge-Proxy (Caddy) bereitgestellt — siehe Kommentar im `docker-compose.yml`.
 
 ## Nächster Schritt
 
-→ [Bau-OS deployen](/betrieb/deployment)
+→ [PATIO deployen](/betrieb/deployment)

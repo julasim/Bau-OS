@@ -191,7 +191,7 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       });
       if (result.reason === "chat-id-taken") {
         await ctx.reply(
-          `Dieser Telegram-Account ist bereits mit dem Bau-OS-User "${result.existingUsername}" verknuepft. Pro Bau-OS-Konto braucht es einen eigenen Telegram-Account. Falls das ein Versehen war: Admin kann das alte Pairing aufloesen.`,
+          `Dieser Telegram-Account ist bereits mit dem PATIO-User "${result.existingUsername}" verknuepft. Pro PATIO-Konto braucht es einen eigenen Telegram-Account. Falls das ein Versehen war: Admin kann das alte Pairing aufloesen.`,
         );
         return;
       }
@@ -245,7 +245,7 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
           `;
           if (conflict.length > 0) {
             await ctx.reply(
-              `Dieser Telegram-Account ist bereits mit "${conflict[0]!.username}" verknuepft. Bitte einen eigenen Telegram-Account fuer dein Bau-OS-Konto verwenden.`,
+              `Dieser Telegram-Account ist bereits mit "${conflict[0]!.username}" verknuepft. Bitte einen eigenen Telegram-Account fuer dein PATIO-Konto verwenden.`,
             );
             return null;
           }

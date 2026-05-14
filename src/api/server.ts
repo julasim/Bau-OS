@@ -738,7 +738,7 @@ app.post("/api/auth/forgot-password", async (c) => {
     // damit HTML und Plaintext beide den 6-stelligen Code zeigen.
     const otpMail = {
       ...buildLoginOtpMail({ username: dbUser.displayName ?? dbUser.username, code }),
-      subject: "Bau-OS · Passwort zurücksetzen",
+      subject: "PATIO · Passwort zurücksetzen",
     };
     const sent = await sendMail({ to: dbUser.email, subject: otpMail.subject, text: otpMail.text, html: otpMail.html });
     void audit({

@@ -195,7 +195,7 @@ async function connectMicrosoft() {
 async function disconnectMicrosoft() {
   if (
     !(await confirm({
-      message: "Microsoft-Verbindung wirklich trennen? Synchronisierte Termine bleiben in Bau-OS erhalten.",
+      message: "Microsoft-Verbindung wirklich trennen? Synchronisierte Termine bleiben in PATIO erhalten.",
       confirmDanger: true,
     }))
   )
@@ -1561,8 +1561,8 @@ onMounted(() => {
             <!-- Nicht verbunden — Connect-Button -->
             <div v-else-if="!msStatus.connected" class="settings-card p-4">
               <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
-                Verbinde dein Microsoft-Konto, um Outlook-Kalender mit Bau-OS zu synchronisieren. Termine landen in
-                deinem Outlook und Outlook-Termine erscheinen in Bau-OS.
+                Verbinde dein Microsoft-Konto, um Outlook-Kalender mit PATIO zu synchronisieren. Termine landen in
+                deinem Outlook und Outlook-Termine erscheinen in PATIO.
               </p>
               <div v-if="msMessage" class="ms-message" :class="msMessage.type === 'ok' ? 'ms-msg-ok' : 'ms-msg-err'">
                 {{ msMessage.text }}
@@ -1680,7 +1680,7 @@ onMounted(() => {
                   </label>
                 </div>
                 <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 4px">
-                  Aktivierte Kalender werden bidirektional mit Bau-OS synchronisiert. Neue Bau-OS-Termine landen im
+                  Aktivierte Kalender werden bidirektional mit PATIO synchronisiert. Neue PATIO-Termine landen im
                   Kalender „Bau-OS" (oder im ersten aktivierten falls keiner so heißt).
                 </div>
               </div>
@@ -1696,7 +1696,7 @@ onMounted(() => {
                 <div style="flex: 1">
                   <div class="text-sm">Sync aktiv</div>
                   <div class="text-xs" style="color: var(--color-text-muted); margin-top: 2px">
-                    Wenn aktiviert: Bau-OS-Termine werden in Outlook angelegt und Outlook-Termine in Bau-OS importiert.
+                    Wenn aktiviert: PATIO-Termine werden in Outlook angelegt und Outlook-Termine in PATIO importiert.
                   </div>
                 </div>
               </label>
@@ -1727,7 +1727,7 @@ onMounted(() => {
                 ></span>
                 <div class="text-xs" style="flex: 1">
                   <span v-if="msStatus.account.webhookActive">
-                    <strong>Instant-Sync aktiv</strong> — Aenderungen in Outlook erscheinen sofort in Bau-OS.
+                    <strong>Instant-Sync aktiv</strong> — Aenderungen in Outlook erscheinen sofort in PATIO.
                   </span>
                   <span v-else>
                     <strong>Polling-Modus</strong> — Sync alle 5 Minuten. Webhook-Subscription wird beim naechsten Lauf

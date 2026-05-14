@@ -1,6 +1,6 @@
 # Deployment
 
-Bau-OS auf den Server bringen, konfigurieren und erstmals starten.
+PATIO auf den Server bringen, konfigurieren und erstmals starten.
 
 ## Automatische Installation (empfohlen)
 
@@ -177,7 +177,7 @@ Die `.env` Datei enthaelt den Bot Token. Sie darf **niemals** in ein Git-Reposit
 
 ## Docker Compose (Alternative)
 
-Statt des systemd-Installers kann der vollständige Stack auch via Docker Compose gestartet werden. Das umfasst PostgreSQL 16 (pgvector), Ollama und die Bau-OS App.
+Statt des systemd-Installers kann der vollständige Stack auch via Docker Compose gestartet werden. Das umfasst PostgreSQL 16 (pgvector), Ollama und die PATIO App.
 
 ```bash
 # .env anpassen (BOT_TOKEN, WORKSPACE_PATH, etc.)

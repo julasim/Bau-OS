@@ -314,7 +314,7 @@ function abortFlow() {
           B
         </div>
         <div>
-          <div style="font-size: 14px; font-weight: 600">Bau-OS</div>
+          <div style="font-size: 14px; font-weight: 600">PATIO</div>
           <div
             style="
               font-size: 10px;
@@ -357,7 +357,7 @@ function abortFlow() {
       </div>
 
       <div style="font-size: 11px; color: var(--color-login-faint); font-family: &quot;JetBrains Mono&quot;, monospace">
-        Bau-OS v1.0 · Self-hosted · Open Source
+        PATIO · by Sima
       </div>
     </div>
 

@@ -1,6 +1,6 @@
 # Modelle & LLM-Konfiguration
 
-Bau-OS unterstützt Ollama (lokal) und OpenAI-kompatible Cloud-APIs. Die Wahl erfolgt automatisch anhand von `OPENAI_API_KEY`.
+PATIO unterstützt Ollama (lokal) und OpenAI-kompatible Cloud-APIs. Die Wahl erfolgt automatisch anhand von `OPENAI_API_KEY`.
 
 ## LLM-Backend wählen
 
@@ -16,7 +16,7 @@ Wenn `OPENAI_API_KEY` gesetzt ist, spricht der OpenAI SDK direkt mit `api.openai
 
 ## OpenAI Cloud-Modus
 
-Wenn `OPENAI_API_KEY` gesetzt ist, verwendet Bau-OS automatisch folgende Modelle:
+Wenn `OPENAI_API_KEY` gesetzt ist, verwendet PATIO automatisch folgende Modelle:
 
 | Rolle | Modell | Env-Variable |
 |---|---|---|
@@ -48,7 +48,7 @@ OLLAMA_MODEL=gemma-3-27b
 
 ### Modell-Architektur
 
-Bau-OS kennt drei Modell-Rollen:
+PATIO kennt drei Modell-Rollen:
 
 | Rolle | Env-Variable | Standard | Verwendung |
 |---|---|---|---|
@@ -143,7 +143,7 @@ ollama rm qwen2.5:7b
 ```
 
 ::: tip Kompatibilität
-Bau-OS funktioniert mit jedem Modell, das Ollama unterstützt und Tool-Calling beherrscht. Modelle der Qwen2.5-Familie sind empfohlen, da sie zuverlässig Function-Calling unterstützen.
+PATIO funktioniert mit jedem Modell, das Ollama unterstützt und Tool-Calling beherrscht. Modelle der Qwen2.5-Familie sind empfohlen, da sie zuverlässig Function-Calling unterstützen.
 :::
 
 ### Remote-Ollama

@@ -404,7 +404,7 @@ function renderResultPage(kind: "success" | "error", message: string, returnTo?:
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<title>Bau-OS · Microsoft-Verbindung</title>
+<title>PATIO · Microsoft-Verbindung</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
   * { box-sizing: border-box; }
@@ -432,7 +432,7 @@ function renderResultPage(kind: "success" | "error", message: string, returnTo?:
     <div class="icon">${ok ? "✓" : "!"}</div>
     <h1>${ok ? "Microsoft-Konto verbunden" : "Verbindung fehlgeschlagen"}</h1>
     <p>${safeMsg}</p>
-    <a href="${safeReturn}" class="btn">${ok ? "Zurück zu Bau-OS" : "Erneut versuchen"}</a>
+    <a href="${safeReturn}" class="btn">${ok ? "Zurück zu PATIO" : "Erneut versuchen"}</a>
     <button onclick="window.close()" class="btn btn-secondary">Tab schließen</button>
   </div>
   <script>

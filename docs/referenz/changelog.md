@@ -1,6 +1,6 @@
 # Changelog
 
-Versionshistorie von Bau-OS. Älteste Version zuerst.
+Versionshistorie von PATIO. Älteste Version zuerst.
 
 ## v0.1.0 — Initial MVP
 **04.04.2026**
@@ -189,7 +189,7 @@ Einführung eines abstrakten Daten-Layers mit PostgreSQL-Support und einer volls
 ## v0.10.0 — OpenAI Dual-Backend + Embeddings
 **April 2026**
 
-Bau-OS unterstützt jetzt sowohl Ollama (lokal) als auch OpenAI — automatische Erkennung via `OPENAI_API_KEY`.
+PATIO unterstützt jetzt sowohl Ollama (lokal) als auch OpenAI — automatische Erkennung via `OPENAI_API_KEY`.
 
 ### LLM-Backend
 - OpenAI SDK als einheitlicher Client — zeigt je nach Config auf Ollama oder OpenAI-API

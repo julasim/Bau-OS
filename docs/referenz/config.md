@@ -301,7 +301,7 @@ Wird für den Versand von Login-Codes (2FA) per E-Mail benötigt. Ohne `SMTP_HOS
 | `SMTP_PORT` | `587` | `SMTP_PORT` | SMTP-Port (587 mit STARTTLS, 465 mit SSL) |
 | `SMTP_USER` | leer | `SMTP_USER` | SMTP-Benutzername |
 | `SMTP_PASS` | leer | `SMTP_PASS` | SMTP-Passwort |
-| `SMTP_FROM` | `Bau-OS <noreply@bau-os.local>` | `SMTP_FROM` | Absenderadresse |
+| `SMTP_FROM` | `PATIO <noreply@bau-os.local>` | `SMTP_FROM` | Absenderadresse |
 | `SMTP_SECURE` | `"auto"` | `SMTP_SECURE` | TLS-Modus: `"auto"`, `"true"` (SSL), `"false"` (STARTTLS) |
 | `SMTP_ENABLED` | `false` | — | Automatisch `true` wenn `SMTP_HOST` gesetzt |
 
@@ -336,7 +336,7 @@ ALLOWED_CHAT_IDS=123456789,987654321
 
 ### Graceful Shutdown
 
-Bau-OS reagiert auf `SIGTERM` und `SIGINT` mit sauberem Herunterfahren:
+PATIO reagiert auf `SIGTERM` und `SIGINT` mit sauberem Herunterfahren:
 1. Telegram-Bot stoppen
 2. Alle MCP-Server trennen (`disconnectAll()`)
 3. Prozess beenden

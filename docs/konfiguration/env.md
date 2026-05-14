@@ -1,6 +1,6 @@
 # Umgebungsvariablen (.env)
 
-Alle Einstellungen werden über eine `.env`-Datei im Projekt-Root gesteuert. Bau-OS lädt diese automatisch beim Start via `dotenv`.
+Alle Einstellungen werden über eine `.env`-Datei im Projekt-Root gesteuert. PATIO lädt diese automatisch beim Start via `dotenv`.
 
 ## Übersicht
 
@@ -44,16 +44,16 @@ WORKSPACE_PATH=/home/max/MeinVault
 ```
 
 ::: tip
-Der Vault muss bereits existieren. Bau-OS erstellt `Agents/`, `Inbox/` und `Logs/` automatisch.
+Der Vault muss bereits existieren. PATIO erstellt `Agents/`, `Inbox/` und `Logs/` automatisch.
 :::
 
 ## LLM-Konfiguration
 
-Bau-OS unterstützt zwei LLM-Backends: **OpenAI** (Cloud) und **Ollama** (lokal). Die Wahl erfolgt automatisch anhand des `OPENAI_API_KEY`.
+PATIO unterstützt zwei LLM-Backends: **OpenAI** (Cloud) und **Ollama** (lokal). Die Wahl erfolgt automatisch anhand des `OPENAI_API_KEY`.
 
 ### OPENAI_API_KEY
 
-Wenn gesetzt, verwendet Bau-OS OpenAI statt Ollama. Empfohlen für höchste Antwortqualität.
+Wenn gesetzt, verwendet PATIO OpenAI statt Ollama. Empfohlen für höchste Antwortqualität.
 
 ```bash
 OPENAI_API_KEY=sk-...
@@ -85,7 +85,7 @@ OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
 
 ### DATABASE_URL
 
-Aktiviert den PostgreSQL-Modus. Ohne diese Variable läuft Bau-OS im reinen Filesystem-Modus.
+Aktiviert den PostgreSQL-Modus. Ohne diese Variable läuft PATIO im reinen Filesystem-Modus.
 
 ```bash
 DATABASE_URL=postgresql://user:password@localhost:5432/bauos
@@ -122,7 +122,7 @@ EMBEDDING_DIMENSIONS=1536                # Muss zum Modell passen
 ```
 
 ::: warning Modellwechsel
-Wenn du das Embedding-Modell änderst, muss das Schema per Migration angepasst werden (andere Dimension). Bau-OS warnt beim Start wenn Konfiguration und Schema nicht übereinstimmen.
+Wenn du das Embedding-Modell änderst, muss das Schema per Migration angepasst werden (andere Dimension). PATIO warnt beim Start wenn Konfiguration und Schema nicht übereinstimmen.
 :::
 
 ## Zugriffskontrolle

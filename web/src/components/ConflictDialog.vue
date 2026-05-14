@@ -147,7 +147,7 @@ onMounted(() => void load());
         <div>
           <h2 style="margin: 0; font-size: 16px; font-weight: 600">Termin-Konflikt mit Outlook</h2>
           <div class="text-xs" style="color: var(--color-text-muted); margin-top: 4px">
-            Dieser Termin wurde sowohl in Bau-OS als auch in Outlook geändert. Welche Version soll gewinnen?
+            Dieser Termin wurde sowohl in PATIO als auch in Outlook geändert. Welche Version soll gewinnen?
           </div>
         </div>
         <button @click="emit('close')" class="close-btn" aria-label="Schließen">×</button>
@@ -161,10 +161,11 @@ onMounted(() => void load());
 
       <div v-else-if="data?.deletedInOutlook" class="deleted-state">
         <div style="margin-bottom: 16px">
-          <strong>Der Termin wurde in Outlook gelöscht.</strong> Wenn du ihn in Bau-OS behältst, wird er beim nächsten Sync neu in Outlook angelegt.
+          <strong>Der Termin wurde in Outlook gelöscht.</strong> Wenn du ihn in PATIO behältst, wird er beim nächsten
+          Sync neu in Outlook angelegt.
         </div>
         <div class="local-summary">
-          <div class="eyebrow">Bau-OS-Version</div>
+          <div class="eyebrow">PATIO-Version</div>
           <div style="font-size: 14px; font-weight: 500">{{ data.local.text }}</div>
           <div class="text-xs" style="color: var(--color-text-muted); margin-top: 4px">
             {{ data.local.datum }}{{ data.local.uhrzeit ? ` · ${data.local.uhrzeit}` : "" }}
@@ -173,19 +174,19 @@ onMounted(() => void load());
         </div>
         <div class="action-row">
           <button @click="resolve('local')" :disabled="busy" class="btn-primary">
-            Bau-OS behalten + neu in Outlook anlegen
+            PATIO behalten + neu in Outlook anlegen
           </button>
           <button @click="resolve('delete-local')" :disabled="busy" class="btn-danger">
-            Bau-OS-Termin auch löschen
+            PATIO-Termin auch löschen
           </button>
         </div>
       </div>
 
       <div v-else-if="data?.remote" class="diff-grid">
-        <!-- Bau-OS-Spalte -->
+        <!-- PATIO-Spalte -->
         <div class="version-col">
           <div class="version-header">
-            <div class="version-label">Bau-OS</div>
+            <div class="version-label">PATIO</div>
           </div>
           <div class="field" :class="diffClass('text')">
             <div class="field-label">Titel</div>
@@ -211,19 +212,13 @@ onMounted(() => void load());
             <div class="field-label">Teilnehmer</div>
             <div class="field-value">{{ data.local.assignees.join(", ") || "—" }}</div>
           </div>
-          <button @click="resolve('local')" :disabled="busy" class="btn-primary">
-            Bau-OS-Version behalten
-          </button>
+          <button @click="resolve('local')" :disabled="busy" class="btn-primary">PATIO-Version behalten</button>
         </div>
 
         <!-- Outlook-Spalte -->
         <div class="version-col">
           <div class="version-header">
-            <div
-              class="ms-badge-inline"
-            >
-              O
-            </div>
+            <div class="ms-badge-inline">O</div>
             <div class="version-label">Outlook</div>
           </div>
           <div class="field" :class="diffClass('text')">
@@ -250,9 +245,7 @@ onMounted(() => void load());
             <div class="field-label">Teilnehmer</div>
             <div class="field-value">{{ remoteAttendees || "—" }}</div>
           </div>
-          <button @click="resolve('remote')" :disabled="busy" class="btn-secondary">
-            Outlook-Version übernehmen
-          </button>
+          <button @click="resolve('remote')" :disabled="busy" class="btn-secondary">Outlook-Version übernehmen</button>
         </div>
       </div>
 

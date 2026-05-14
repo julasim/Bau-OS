@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Haeufige Probleme und Lösungen für Bau-OS im Produktivbetrieb.
+Haeufige Probleme und Lösungen für PATIO im Produktivbetrieb.
 
 ## Bot antwortet nicht
 
@@ -313,7 +313,7 @@ sudo systemctl restart bau-os
 
 Symptom: Agent meldet `Befehl "xyz" nicht erlaubt`.
 
-**Ursache:** Bau-OS verwendet eine **Allowlist** fuer Shell-Befehle. Nur ~40 definierte Befehle sind erlaubt.
+**Ursache:** PATIO verwendet eine **Allowlist** fuer Shell-Befehle. Nur ~40 definierte Befehle sind erlaubt.
 
 **Loesung:** Pruefen ob der Befehl in der Allowlist steht (`src/llm/executor.ts`). Falls ein zusaetzlicher Befehl benoetigt wird, diesen zur `ALLOWED_COMMANDS`-Liste hinzufuegen und neu builden:
 
@@ -371,7 +371,7 @@ Symptom: Datei-Operationen geben `null` oder "Pfad ungueltig" zurueck.
 [DB] DATABASE_URL ist gesetzt aber die DB antwortet nicht.
 ```
 
-Bau-OS beendet sich mit Exit-Code 1 wenn `DATABASE_URL` gesetzt ist aber die DB nicht antwortet.
+PATIO beendet sich mit Exit-Code 1 wenn `DATABASE_URL` gesetzt ist aber die DB nicht antwortet.
 
 Prüfen:
 ```bash
@@ -408,7 +408,7 @@ Prüfen ob der Befehl in `mcp.json` stimmt:
 npx @modelcontextprotocol/server-filesystem /pfad/zum/vault
 ```
 
-Bau-OS versucht bei Absturz automatisch 3 Reconnects (5/10/15 Sekunden Backoff). Danach Log-Eintrag `[MCP] Reconnect failed`.
+PATIO versucht bei Absturz automatisch 3 Reconnects (5/10/15 Sekunden Backoff). Danach Log-Eintrag `[MCP] Reconnect failed`.
 
 ---
 

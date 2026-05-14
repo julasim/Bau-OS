@@ -1,6 +1,6 @@
 # DSGVO & Datenschutz
 
-Bau-OS wurde für maximalen Datenschutz konzipiert. Im Standard-Modus (Ollama) verlassen keine Nutzerdaten deinen Server. Cloud-LLM (OpenAI) ist opt-in.
+PATIO wurde für maximalen Datenschutz konzipiert. Im Standard-Modus (Ollama) verlassen keine Nutzerdaten deinen Server. Cloud-LLM (OpenAI) ist opt-in.
 
 ## Grundprinzip: Datensouveränität by default
 
@@ -28,7 +28,7 @@ Für maximalen Datenschutz: Ollama ohne `OPENAI_API_KEY` verwenden.
 
 ## Welche Daten werden gespeichert?
 
-Bau-OS speichert ausschließlich Daten, die der Nutzer **aktiv sendet**:
+PATIO speichert ausschließlich Daten, die der Nutzer **aktiv sendet**:
 
 | Datentyp | Speicherort | Beschreibung |
 |---|---|---|
@@ -48,7 +48,7 @@ Chat-History und Agent-Logs werden immer als JSONL-Dateien gespeichert — unabh
 :::
 
 ::: warning Keine automatische Datenerkennung
-Bau-OS erkennt **nicht** automatisch, ob eine Nachricht personenbezogene Daten enthält. Der Nutzer ist selbst verantwortlich dafür, welche Inhalte er dem Bot sendet.
+PATIO erkennt **nicht** automatisch, ob eine Nachricht personenbezogene Daten enthält. Der Nutzer ist selbst verantwortlich dafür, welche Inhalte er dem Bot sendet.
 :::
 
 ## Was wird NICHT gespeichert?
@@ -110,7 +110,7 @@ Für den Einsatz bei Kunden ist ein **Auftragsverarbeitungsvertrag** (AVV) nach 
 | Technische Maßnahmen | SSH-Zugang, Firewall, eigener VPS, lokales LLM (Standard) |
 
 ::: warning Telegram als Transportweg
-Telegram überträgt Nachrichten über seine Server. Die Telegram-API speichert Nachrichten für die Zustellung. Dies liegt außerhalb der Kontrolle von Bau-OS. Für besonders sensible Daten sollte ein alternativer Kanal in Betracht gezogen werden.
+Telegram überträgt Nachrichten über seine Server. Die Telegram-API speichert Nachrichten für die Zustellung. Dies liegt außerhalb der Kontrolle von PATIO. Für besonders sensible Daten sollte ein alternativer Kanal in Betracht gezogen werden.
 :::
 
 ## Technische und organisatorische Maßnahmen (TOMs)

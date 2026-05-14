@@ -47,7 +47,7 @@ OLLAMA_MODEL=qwen2.5:7b
 
 ## Option B — Cloud mit OpenAI (einfacher, höhere Qualität)
 
-Kein Ollama nötig. Anfragen gehen an die OpenAI API. Wenn `OPENAI_API_KEY` gesetzt ist, verwendet Bau-OS automatisch `gpt-4o-mini` (Haupt) und `gpt-4o` (Vision).
+Kein Ollama nötig. Anfragen gehen an die OpenAI API. Wenn `OPENAI_API_KEY` gesetzt ist, verwendet PATIO automatisch `gpt-4o-mini` (Haupt) und `gpt-4o` (Vision).
 
 ```bash
 # 1. Projekt klonen

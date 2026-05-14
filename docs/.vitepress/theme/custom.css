@@ -1,12 +1,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Bau-OS Docs — Design-System-Mapping auf VitePress CSS-Variablen
+   PATIO Docs — Design-System-Mapping auf VitePress CSS-Variablen
    Farbpalette, Fonts und Spacing identisch mit dem Web-UI (web/src/style.css)
    ────────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Brand — Bau-OS Primary (Near-Black) */
+  /* Brand — PATIO Primary (Near-Black) */
   --vp-c-brand-1: #111827;
   --vp-c-brand-2: #374151;
   --vp-c-brand-3: #6b7280;

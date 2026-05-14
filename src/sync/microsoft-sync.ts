@@ -79,7 +79,12 @@ interface MsCalendar {
   isDefaultCalendar?: boolean;
 }
 
-const BAU_OS_CAL_NAME = "Bau-OS";
+// Anzeigename des Kalenders, den PATIO in Outlook anlegt. Frueher "Bau-OS"
+// (Produkt-Rename) — bestehende Outlook-Kalender heissen evtl. noch so,
+// deshalb matcht CAL_NAME_ALIASES beide, damit ein bereits angelegter
+// Kalender nicht uebersehen und versehentlich dupliziert wird.
+const PATIO_CAL_NAME = "PATIO";
+const CAL_NAME_ALIASES = [PATIO_CAL_NAME, "Bau-OS"];
 
 // ── Helpers: Datum/Zeit-Mapping ──────────────────────────────────────────────
 //
@@ -231,38 +236,40 @@ export async function discoverCalendars(userId: string): Promise<UserCalendar[]>
     });
     result.push(upserted);
   }
-  // Lazy-Create: wenn der User noch keinen "Bau-OS"-Kalender hat, legen
+  // Lazy-Create: wenn der User noch keinen PATIO-Kalender hat, legen
   // wir einen an. Das macht den ersten Push reibungslos: User connectet,
-  // klickt "Bau-OS" als Default, und es funktioniert sofort.
-  if (!calendars.some((c) => c.name === BAU_OS_CAL_NAME)) {
+  // klickt "PATIO" als Default, und es funktioniert sofort. Alt-Name
+  // "Bau-OS" zaehlt mit — sonst wuerde fuer Bestands-User dupliziert.
+  if (!calendars.some((c) => CAL_NAME_ALIASES.includes(c.name))) {
     const { data } = await graphFetch<MsCalendar>(userId, "/me/calendars", {
       method: "POST",
-      body: { name: BAU_OS_CAL_NAME },
+      body: { name: PATIO_CAL_NAME },
     });
     if (data?.id) {
       const upserted = await upsertUserCalendar({
         userId,
         calendarId: data.id,
-        displayName: BAU_OS_CAL_NAME,
+        displayName: PATIO_CAL_NAME,
         enabled: true,
       });
       result.push(upserted);
-      logInfo(`[MS-Sync] Bau-OS-Kalender fuer User ${userId} angelegt (${data.id})`);
+      logInfo(`[MS-Sync] PATIO-Kalender fuer User ${userId} angelegt (${data.id})`);
     }
   }
   return result;
 }
 
-/** Default-Push-Ziel: fuer neue Bau-OS-Termine ohne ms_event_id, in welchen
- *  Outlook-Kalender pushen wir? Bevorzugt einen mit display_name='Bau-OS',
- *  fallback auf den ersten enabled mit direction in {'both','push-only'}. */
+/** Default-Push-Ziel: fuer neue PATIO-Termine ohne ms_event_id, in welchen
+ *  Outlook-Kalender pushen wir? Bevorzugt einen mit display_name='PATIO'
+ *  (oder dem Alt-Namen 'Bau-OS'), fallback auf den ersten enabled mit
+ *  direction in {'both','push-only'}. */
 async function pickPushCalendar(userId: string): Promise<UserCalendar | null> {
   const calendars = await listEnabledCalendars(userId);
   const writeable = calendars.filter((c) => c.direction === "both" || c.direction === "push-only");
   if (writeable.length === 0) return null;
-  // 1. exakter Bau-OS-Name
-  const bauos = writeable.find((c) => c.displayName === BAU_OS_CAL_NAME);
-  if (bauos) return bauos;
+  // 1. exakter PATIO-Name (inkl. Alt-Name "Bau-OS" fuer Bestands-User)
+  const patio = writeable.find((c) => c.displayName !== null && CAL_NAME_ALIASES.includes(c.displayName));
+  if (patio) return patio;
   // 2. erster enabled writeable
   return writeable[0]!;
 }

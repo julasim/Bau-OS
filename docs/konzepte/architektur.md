@@ -1,6 +1,6 @@
 # Architektur
 
-Bau-OS besteht aus fünf Schichten: **Telegram** (Interface), **Web-API + Frontend** (Browser-Interface), **Agent Runtime** (Logik), **LLM** (Intelligenz) und **Datenschicht** (Speicher — Filesystem oder PostgreSQL).
+PATIO besteht aus fünf Schichten: **Telegram** (Interface), **Web-API + Frontend** (Browser-Interface), **Agent Runtime** (Logik), **LLM** (Intelligenz) und **Datenschicht** (Speicher — Filesystem oder PostgreSQL).
 
 ## Datenfluss
 
@@ -143,7 +143,7 @@ tools/                    Dynamic Tools (je Ordner: tool.json + run.js/run.sh)
 
 ### Zwei Modi, eine Codebasis
 
-Bau-OS läuft in zwei Datenmodi — die Auswahl erfolgt automatisch beim Start:
+PATIO läuft in zwei Datenmodi — die Auswahl erfolgt automatisch beim Start:
 
 - **Filesystem-Modus** (Standard): Alle Daten als Markdown/JSONL im Workspace. Kein extra Dienst nötig, alles mit dem Texteditor bearbeitbar.
 - **Datenbank-Modus** (`DATABASE_URL` gesetzt): PostgreSQL für strukturierte Daten, mit optionalem `pgvector` für semantische Suche. Chat-History und Agent-Logs bleiben immer im Filesystem (leicht per `grep`).

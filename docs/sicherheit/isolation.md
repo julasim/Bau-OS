@@ -1,6 +1,6 @@
 # Kundenisolation
 
-Jeder Bau-OS-Kunde erhält eine **vollständig getrennte Infrastruktur**. Es gibt keine gemeinsam genutzten Ressourcen zwischen Kunden.
+Jeder PATIO-Kunde erhält eine **vollständig getrennte Infrastruktur**. Es gibt keine gemeinsam genutzten Ressourcen zwischen Kunden.
 
 ## Prinzip: Ein Kunde = Ein Server
 
@@ -46,14 +46,14 @@ Jeder Bau-OS-Kunde erhält eine **vollständig getrennte Infrastruktur**. Es gib
 | SSH-Zugang | Eigener SSH-Key |
 
 ::: tip Keine Shared Infrastructure
-Es gibt **keinen zentralen Server**, keine gemeinsame Datenbank und kein API-Gateway. Jede Bau-OS-Instanz ist völlig unabhängig. Wenn ein Server ausfaellt, sind andere Kunden nicht betroffen.
+Es gibt **keinen zentralen Server**, keine gemeinsame Datenbank und kein API-Gateway. Jede PATIO-Instanz ist völlig unabhängig. Wenn ein Server ausfaellt, sind andere Kunden nicht betroffen.
 :::
 
 ## Warum kein Multi-Tenant?
 
-Viele SaaS-Produkte nutzen Multi-Tenant-Architekturen (eine Instanz für alle Kunden). Bau-OS vermeidet dies bewusst:
+Viele SaaS-Produkte nutzen Multi-Tenant-Architekturen (eine Instanz für alle Kunden). PATIO vermeidet dies bewusst:
 
-| Multi-Tenant (üblich) | Bau-OS (Single-Tenant) |
+| Multi-Tenant (üblich) | PATIO (Single-Tenant) |
 |---|---|
 | Gemeinsame Datenbank | Eigener Vault pro Kunde |
 | Shared LLM-API | Eigene Ollama-Instanz |
@@ -72,7 +72,7 @@ Jede Kundeninstanz wird identisch aufgesetzt:
 
 ```bash
 # 1. VPS bei Hetzner erstellen
-# 2. Bau-OS installieren
+# 2. PATIO installieren
 curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash
 
 # 3. Kunden-spezifische .env konfigurieren
@@ -102,7 +102,7 @@ Internet
 └──────┬───────┘
        │
 ┌──────▼───────┐
-│  Bau-OS Bot  │
+│  PATIO Bot   │
 │  Node.js     │──► Ollama (localhost:11434, nicht extern erreichbar)
 │              │──► Vault  (Dateisystem, nicht extern erreichbar)
 └──────────────┘

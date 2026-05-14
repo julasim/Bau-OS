@@ -1,8 +1,8 @@
 # Updates
 
-Bau-OS und Ollama-Modelle aktualisieren.
+PATIO und Ollama-Modelle aktualisieren.
 
-## Bau-OS aktualisieren
+## PATIO aktualisieren
 
 ### Manuell
 
@@ -42,7 +42,7 @@ set -e
 APP_DIR="/home/bauos/bau-os"
 SERVICE="bau-os"
 
-echo "=== Bau-OS Update ==="
+echo "=== PATIO Update ==="
 echo ""
 
 cd "$APP_DIR"
@@ -124,7 +124,7 @@ sudo apt-get install -y nodejs
 # Version prüfen
 node --version
 
-# Bau-OS neu bauen
+# PATIO neu bauen
 cd /home/bauos/bau-os
 npm install
 npm run build
@@ -142,7 +142,7 @@ Nach einem Kernel-Update ist ein Neustart nötig:
 ```bash
 sudo reboot
 ```
-Bau-OS und Ollama starten dank systemd automatisch wieder.
+PATIO und Ollama starten dank systemd automatisch wieder.
 :::
 
 ## Nächster Schritt

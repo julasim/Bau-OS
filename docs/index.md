@@ -2,9 +2,9 @@
 layout: home
 
 hero:
-  name: Bau-OS
-  text: KI-Plattform für Architekturbüros und Büros in der Baubranche
-  tagline: Büro-Werkzeug für Planung, Bauleitung und Projektsteuerung — nicht für die Baustelle. Self-hosted, DSGVO-konform, lokales LLM.
+  name: PATIO
+  text: KI-Assistent für Architektur- und Planungsbüros
+  tagline: Büro-Werkzeug für Planung, Termine und Projektsteuerung — nicht für die Baustelle. Self-hosted, DSGVO-konform, lokales LLM. by Sima.
   actions:
     - theme: brand
       text: Schnellstart

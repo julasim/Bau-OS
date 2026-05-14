@@ -1,8 +1,8 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
-  title: "Bau-OS",
-  description: "KI-Plattform für Büros und Bauunternehmen",
+  title: "PATIO",
+  description: "KI-Assistent für Architektur- und Planungsbüros — by Sima",
   lang: "de-DE",
 
   themeConfig: {

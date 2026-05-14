@@ -27,7 +27,7 @@ Für erste Tests kannst du mit CPX11 (4 GB RAM) starten und später upgraden. He
 ## 2. Firewall konfigurieren
 
 ::: warning Nur SSH wird benoetigt
-Bau-OS verbindet sich aktiv zu Telegram (Long Polling) und Ollama läuft lokal. Es sind **keine eingehenden Ports ausser SSH** nötig.
+PATIO verbindet sich aktiv zu Telegram (Long Polling) und Ollama läuft lokal. Es sind **keine eingehenden Ports ausser SSH** nötig.
 :::
 
 Erstelle eine Firewall in Hetzner Cloud:

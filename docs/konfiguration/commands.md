@@ -1,6 +1,6 @@
 # Slash-Befehle
 
-Bau-OS bietet eine Reihe von Slash-Befehlen, die du direkt im Telegram-Chat verwenden kannst. Tippe `/` um die Befehlsliste zu sehen.
+PATIO bietet eine Reihe von Slash-Befehlen, die du direkt im Telegram-Chat verwenden kannst. Tippe `/` um die Befehlsliste zu sehen.
 
 ## Übersicht
 
@@ -14,7 +14,7 @@ Bau-OS bietet eine Reihe von Slash-Befehlen, die du direkt im Telegram-Chat verw
 | `/kompakt` | Tageslog jetzt komprimieren |
 | `/neu` | Gesprächskontext zurücksetzen |
 | `/whoami` | Chat-ID und Benutzerinfo |
-| `/pair <token>` | Telegram-Chat mit Bau-OS-Konto verknüpfen |
+| `/pair <token>` | Telegram-Chat mit PATIO-Konto verknüpfen |
 | `/agents` | Sub-Agenten auflisten |
 | `/export` | Session-Log als Markdown exportieren |
 | `/model [name]` | Modell anzeigen oder wechseln |
@@ -105,11 +105,11 @@ Zeigt Informationen zum aktuellen Telegram-Nutzer — Chat-ID, Username und Name
 
 ### /pair
 
-Verknüpft den aktuellen Telegram-Chat mit deinem Bau-OS-Konto.
+Verknüpft den aktuellen Telegram-Chat mit deinem PATIO-Konto.
 
 **Verwendung:** `/pair <TOKEN>`
 
-Der Token wird im Web-Dashboard unter *Einstellungen → Konto → Telegram verknüpfen* generiert. Nach erfolgreichem Pairing empfängt dein Bau-OS-Konto alle Nachrichten aus diesem Chat.
+Der Token wird im Web-Dashboard unter *Einstellungen → Konto → Telegram verknüpfen* generiert. Nach erfolgreichem Pairing empfängt dein PATIO-Konto alle Nachrichten aus diesem Chat.
 
 **Intern:** `redeemPairToken()` in `src/bot.ts`
 

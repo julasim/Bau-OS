@@ -71,7 +71,7 @@ auth2faRoutes.post("/auth/2fa/setup", async (c) => {
     userAgent: meta.userAgent,
   });
 
-  const uri = buildOtpAuthUri(secret, dbUser.username, "Bau-OS");
+  const uri = buildOtpAuthUri(secret, dbUser.username, "PATIO");
   return c.json({ secret, otpauthUri: uri });
 });
 

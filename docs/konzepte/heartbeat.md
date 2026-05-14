@@ -1,6 +1,6 @@
 # Heartbeat
 
-Der Heartbeat ist das proaktive System von Bau-OS. Statt nur auf Nachrichten zu reagieren, prüft der Agent regelmäßig ob es etwas Wichtiges zu melden gibt.
+Der Heartbeat ist das proaktive System von PATIO. Statt nur auf Nachrichten zu reagieren, prüft der Agent regelmäßig ob es etwas Wichtiges zu melden gibt.
 
 ## Wie funktioniert es?
 

@@ -151,7 +151,7 @@ function onNavClick() {
           style="color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.2"
           :title="branding.companyName ?? 'Bau-OS'"
         >
-          {{ branding.companyName ?? "Bau-OS" }}
+          {{ branding.companyName ?? "PATIO" }}
         </div>
         <div class="eyebrow" style="margin-top: 2px">Workspace</div>
       </div>

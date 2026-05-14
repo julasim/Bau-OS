@@ -1,6 +1,6 @@
 # Multi-Agent System
 
-Bau-OS arbeitet mit mehreren KI-Agenten. Jeder Agent hat eine eigene Persönlichkeit, eigene Regeln und ein eigenes Gedächtnis.
+PATIO arbeitet mit mehreren KI-Agenten. Jeder Agent hat eine eigene Persönlichkeit, eigene Regeln und ein eigenes Gedächtnis.
 
 ## Main Agent vs. Sub-Agents
 
@@ -71,7 +71,7 @@ Der hohe Wert ist bewusst gewählt: kleine Ollama-Modelle rufen Tools oft sequen
 
 ### Action-Detection
 
-Bau-OS erkennt automatisch ob eine Anfrage eine **Aktion** ist (Notiz speichern, Termin anlegen, etc.) — über ein Regex-Muster auf Verben wie "leg an", "speicher", "erstell", "lösch", etc.
+PATIO erkennt automatisch ob eine Anfrage eine **Aktion** ist (Notiz speichern, Termin anlegen, etc.) — über ein Regex-Muster auf Verben wie "leg an", "speicher", "erstell", "lösch", etc.
 
 Bei erkannter Aktion:
 1. Das `antworten`-Tool wird in Runde 1 herausgefiltert — das Modell KANN nicht direkt antworten ohne zuerst ein Tool aufzurufen
@@ -80,7 +80,7 @@ Bei erkannter Aktion:
 ### Tool-Skip-Correction
 
 Wenn das Modell `tool_choice: "required"` ignoriert (bekanntes Problem bei kleinen Modellen):
-- Bau-OS erkennt das (leeres `tool_calls`-Array in der Antwort)
+- PATIO erkennt das (leeres `tool_calls`-Array in der Antwort)
 - Injiziert einen Korrektur-Prompt ins Gespräch
 - Wiederholt bis zu 2 Mal (MAX_TOOL_SKIP_RETRIES)
 - Nach 3 erfolglosen Versuchen: User-sichtbare Warnung mit Empfehlung größeres Modell zu verwenden

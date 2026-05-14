@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Email-Template-Renderer
+// PATIO — Email-Template-Renderer
 // ============================================================
 // Liest die HTML-Templates aus src/emails/ und ersetzt {{var}}-
 // Platzhalter mit den uebergebenen Werten. Keine Logik-Engine, kein
@@ -109,7 +109,7 @@ export function plaintextVerification(opts: { user_name: string; code: string })
     "und ändere dein Passwort.",
     "",
     "—",
-    "Bau-OS · automatisch versendet, bitte nicht antworten.",
+    "PATIO · by Sima · automatisch versendet, bitte nicht antworten.",
   ].join("\n");
 }
 
@@ -117,14 +117,14 @@ export function plaintextMagicLink(opts: { user_name: string; magic_link_url: st
   return [
     `Hallo ${opts.user_name},`,
     "",
-    "klicke auf den folgenden Link, um dich bei Bau-OS anzumelden:",
+    "klicke auf den folgenden Link, um dich bei PATIO anzumelden:",
     "",
     opts.magic_link_url,
     "",
     "Der Link ist 15 Minuten gültig und kann nur einmal verwendet werden.",
     "",
     "—",
-    "Bau-OS",
+    "PATIO · by Sima",
   ].join("\n");
 }
 
@@ -140,7 +140,7 @@ export function plaintextPasswordReset(opts: { user_name: string; reset_url: str
     "Falls du das nicht warst, ignoriere diese Mail.",
     "",
     "—",
-    "Bau-OS",
+    "PATIO · by Sima",
   ].join("\n");
 }
 
@@ -148,10 +148,10 @@ export function plaintextWelcome(opts: { user_name: string; workspace_url: strin
   return [
     `Willkommen, ${opts.user_name}.`,
     "",
-    "Dein Bau-OS Workspace ist eingerichtet:",
+    "Dein PATIO Workspace ist eingerichtet:",
     opts.workspace_url,
     "",
     "—",
-    "Bau-OS",
+    "PATIO · by Sima",
   ].join("\n");
 }

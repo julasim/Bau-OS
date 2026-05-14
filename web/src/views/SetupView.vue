@@ -14,14 +14,10 @@ const error = ref("");
 const loading = ref(false);
 const checkingStatus = ref(true);
 
-const hostname = computed(() =>
-  typeof window !== "undefined" ? window.location.host : "bau-os",
-);
+const hostname = computed(() => (typeof window !== "undefined" ? window.location.host : "bau-os"));
 
 const passwordTooShort = computed(() => password.value.length > 0 && password.value.length < 8);
-const passwordsMismatch = computed(
-  () => passwordConfirm.value.length > 0 && password.value !== passwordConfirm.value,
-);
+const passwordsMismatch = computed(() => passwordConfirm.value.length > 0 && password.value !== passwordConfirm.value);
 const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim()));
 const canSubmit = computed(
   () =>
@@ -73,13 +69,7 @@ async function submit() {
     <!-- Linke Brand-Panel — wie LoginView -->
     <div
       class="flex flex-col"
-      style="
-        flex: 1;
-        background: var(--color-login-bg);
-        color: #fff;
-        padding: 48px;
-        justify-content: space-between;
-      "
+      style="flex: 1; background: var(--color-login-bg); color: #fff; padding: 48px; justify-content: space-between"
     >
       <div class="flex items-center" style="gap: 12px">
         <div
@@ -100,7 +90,7 @@ async function submit() {
           B
         </div>
         <div>
-          <div style="font-size: 14px; font-weight: 600">Bau-OS</div>
+          <div style="font-size: 14px; font-weight: 600">PATIO</div>
           <div
             style="
               font-size: 10px;
@@ -116,28 +106,12 @@ async function submit() {
       </div>
 
       <div style="max-width: 480px">
-        <h1
-          style="
-            font-size: 36px;
-            font-weight: 600;
-            letter-spacing: -0.02em;
-            line-height: 1.2;
-            margin: 0 0 16px 0;
-          "
-        >
+        <h1 style="font-size: 36px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 16px 0">
           Willkommen — leg dein Admin-Konto an.
         </h1>
-        <p
-          style="
-            font-size: 14px;
-            color: var(--color-login-text-secondary);
-            line-height: 1.6;
-            margin: 0 0 24px 0;
-          "
-        >
-          Dieses Konto ist <strong>permanent geschützt</strong> — niemand kann es
-          herabstufen oder löschen. Es bleibt deine Rückversicherung, falls
-          später ein anderer Admin etwas Falsches macht.
+        <p style="font-size: 14px; color: var(--color-login-text-secondary); line-height: 1.6; margin: 0 0 24px 0">
+          Dieses Konto ist <strong>permanent geschützt</strong> — niemand kann es herabstufen oder löschen. Es bleibt
+          deine Rückversicherung, falls später ein anderer Admin etwas Falsches macht.
         </p>
         <ul
           style="
@@ -155,35 +129,21 @@ async function submit() {
         </ul>
       </div>
 
-      <div
-        style="
-          font-size: 11px;
-          color: var(--color-login-faint);
-          font-family: 'JetBrains Mono', monospace;
-        "
-      >
-        Bau-OS v1.0 · Self-hosted · Open Source
+      <div style="font-size: 11px; color: var(--color-login-faint); font-family: &quot;JetBrains Mono&quot;, monospace">
+        PATIO · by Sima
       </div>
     </div>
 
     <!-- Rechte Setup-Form -->
-    <div
-      class="flex items-center justify-center"
-      style="flex: 1; padding: 48px; background: var(--color-bg)"
-    >
+    <div class="flex items-center justify-center" style="flex: 1; padding: 48px; background: var(--color-bg)">
       <div style="width: 100%; max-width: 360px">
-        <div
-          v-if="checkingStatus"
-          style="font-size: 13px; color: var(--color-text-muted)"
-        >
-          Lade…
-        </div>
+        <div v-if="checkingStatus" style="font-size: 13px; color: var(--color-text-muted)">Lade…</div>
         <template v-else>
           <h2 style="font-size: 20px; font-weight: 600; color: var(--color-text); margin: 0 0 4px 0">
             Admin-Konto anlegen
           </h2>
           <p style="font-size: 13px; color: var(--color-text-muted); margin: 0 0 24px 0">
-            Du legst gerade den ersten Nutzer dieser Bau-OS-Installation an.
+            Du legst gerade den ersten Nutzer dieser PATIO-Installation an.
           </p>
 
           <form @submit.prevent="submit" class="flex flex-col" style="gap: 16px">
@@ -232,10 +192,7 @@ async function submit() {
                 minlength="8"
                 class="login-input"
               />
-              <div
-                v-if="passwordTooShort"
-                style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px"
-              >
+              <div v-if="passwordTooShort" style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px">
                 Mindestens 8 Zeichen.
               </div>
             </div>
@@ -248,10 +205,7 @@ async function submit() {
                 required
                 class="login-input"
               />
-              <div
-                v-if="passwordsMismatch"
-                style="font-size: 11px; color: var(--color-danger-text); margin-top: 4px"
-              >
+              <div v-if="passwordsMismatch" style="font-size: 11px; color: var(--color-danger-text); margin-top: 4px">
                 Passwörter stimmen nicht überein.
               </div>
             </div>

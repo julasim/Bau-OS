@@ -1,9 +1,9 @@
-# Was ist Bau-OS?
+# Was ist PATIO?
 
-Bau-OS ist eine KI-Plattform für **Architekturbüros und Büros in der Baubranche** (Planung, Bauleitung, Statik, Projektsteuerung). Der Kern: Ein intelligenter Assistent, der über **Telegram und Web-UI (Browser)** erreichbar ist und sein Wissen in einem **Obsidian-kompatiblen Workspace (Markdown)** oder optional in einer **PostgreSQL-Datenbank** speichert.
+PATIO ist ein KI-Assistent für **Architektur- und Planungsbüros** (Planung, Bauleitung, Statik, Projektsteuerung). Der Kern: Ein intelligenter Assistent, der über **Telegram und Web-UI (Browser)** erreichbar ist und sein Wissen in einem **Obsidian-kompatiblen Workspace (Markdown)** oder optional in einer **PostgreSQL-Datenbank** speichert.
 
 ::: warning Wichtige Abgrenzung
-Bau-OS ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe sind Architekten, Bauleiter, Projektsteuerer, Statiker und Sachbearbeiter im Büro — nicht der Polier oder Maurer auf dem Gerüst. Stundenerfassung, Bautagebuch und Meeting-Protokolle dienen der **Doku im Büro** (in der Regel abends/retrospektiv erfasst), nicht der Echtzeit-Eingabe von der Baustelle.
+PATIO ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe sind Architekten, Bauleiter, Projektsteuerer, Statiker und Sachbearbeiter im Büro — nicht der Polier oder Maurer auf dem Gerüst. Stundenerfassung, Bautagebuch und Meeting-Protokolle dienen der **Doku im Büro** (in der Regel abends/retrospektiv erfasst), nicht der Echtzeit-Eingabe von der Baustelle.
 :::
 
 ## Wie funktioniert es?
