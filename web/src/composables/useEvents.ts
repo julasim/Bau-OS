@@ -1,5 +1,12 @@
 import { ref, onMounted, onUnmounted } from "vue";
 
+/**
+ * Globaler Verbindungs-Status fuer Live-Updates (SSE).
+ * Wird gesetzt, sobald `MAX_RECONNECT_ATTEMPTS` erschoepft ist, damit
+ * Views (z.B. AppLayout) eine sichtbare Warnung anzeigen koennen.
+ */
+export const connectionError = ref<string | null>(null);
+
 export type EventType = "task" | "termin" | "note" | "project" | "file" | "team";
 
 export interface DataEvent {
@@ -39,6 +46,7 @@ export function useEvents(types: EventType[], onEvent: (event: DataEvent) => voi
       connected.value = true;
       reconnectDelay = 3000;
       reconnectAttempts = 0;
+      connectionError.value = null;
     });
 
     for (const type of types) {
@@ -57,7 +65,10 @@ export function useEvents(types: EventType[], onEvent: (event: DataEvent) => voi
       source?.close();
       source = null;
       reconnectAttempts++;
-      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) return;
+      if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+        connectionError.value = "Live-Updates unterbrochen. Bitte Seite neu laden.";
+        return;
+      }
       reconnectTimer = setTimeout(connect, reconnectDelay);
       reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
     };

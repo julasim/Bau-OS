@@ -43,6 +43,21 @@ function isAllowedUpload(filename: string): boolean {
 }
 import { fileRepo } from "./data/index.js";
 import { findDbUserByChatId, redeemPairToken, countDbUsers, type DbUser } from "./api/auth.js";
+
+// Cache für countDbUsers — vermeidet DB-Hit bei jeder Nachricht
+let _userCountCache: { count: number; ts: number } | null = null;
+const USER_COUNT_CACHE_TTL = 60_000;
+
+async function getCachedUserCount(): Promise<number> {
+  const now = Date.now();
+  if (_userCountCache && now - _userCountCache.ts < USER_COUNT_CACHE_TTL) {
+    return _userCountCache.count;
+  }
+  const count = await countDbUsers();
+  _userCountCache = { count, ts: now };
+  return count;
+}
+
 import { runWithUserCtx } from "./llm/user-context.js";
 import type { UserCtx } from "./data/access.js";
 import {
@@ -246,7 +261,7 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
 
     // Shared-Bot Pfad.
     if (!DB_ENABLED) return null; // FS-Mode → kein scoping, processMessage laeuft ohne ctx
-    const userCount = await countDbUsers();
+    const userCount = await getCachedUserCount();
     if (userCount === 0) return null;
     const user = await findDbUserByChatId(ctx.chat.id);
     if (!user) {
@@ -277,7 +292,7 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       if (!raw.startsWith("/")) {
         scopeUser = await checkAuth(ctx);
         if (ownerUser && !scopeUser) return; // Per-User-Bot, falscher Chat
-        if (!ownerUser && DB_ENABLED && (await countDbUsers()) > 0 && !scopeUser) return;
+        if (!ownerUser && DB_ENABLED && (await getCachedUserCount()) > 0 && !scopeUser) return;
       } else if (ownerUser) {
         // Auch fuer Slash-Commands an einem Per-User-Bot: nur Owner-Chat erlaubt.
         scopeUser = await checkAuth(ctx);
@@ -365,7 +380,7 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       // Shared-Bot braucht gepairten Chat (siehe checkAuth).
       const scopeUser = await checkAuth(ctx);
       if (ownerUser && !scopeUser) return;
-      if (!ownerUser && DB_ENABLED && (await countDbUsers()) > 0 && !scopeUser) return;
+      if (!ownerUser && DB_ENABLED && (await getCachedUserCount()) > 0 && !scopeUser) return;
       const doc = ctx.message.document;
 
       // Size-Limit VOR dem Download pruefen — sonst laden wir GBs umsonst.

@@ -45,6 +45,7 @@ interface ConnectedServer {
 // ---- State ----
 
 const _servers = new Map<string, ConnectedServer>();
+const _reconnectAttempts = new Map<string, number>();
 const MCP_CONFIG_PATH = path.join(process.cwd(), "mcp.json");
 
 // ---- Config ----
@@ -99,15 +100,24 @@ function isNameTaken(name: string): boolean {
 
 // ---- Reconnect ----
 
-function scheduleReconnect(name: string, config: McpServerConfig, attempt = 0): void {
+function scheduleReconnect(name: string, config: McpServerConfig): void {
+  const attempt = _reconnectAttempts.get(name) ?? 0;
   if (attempt >= 3) {
     logError(`MCP/${name}`, new Error(`Maximale Reconnect-Versuche (3) erschoepft`));
     return;
   }
+  _reconnectAttempts.set(name, attempt + 1);
   const delay = (attempt + 1) * 5000;
   setTimeout(() => {
     logInfo(`[MCP] Reconnect ${name} (Versuch ${attempt + 1}/3)...`);
-    connectServer(name, config).catch((err) => logError(`MCP/${name}`, err));
+    connectServer(name, config)
+      .then((ok) => {
+        if (!ok) scheduleReconnect(name, config);
+      })
+      .catch((err) => {
+        logError(`MCP/${name}`, err);
+        scheduleReconnect(name, config);
+      });
   }, delay);
 }
 
@@ -144,6 +154,7 @@ export async function connectServer(name: string, config: McpServerConfig): Prom
     }
 
     _servers.set(name, { name, client, transport, tools: entries });
+    _reconnectAttempts.delete(name);
     logInfo(`[MCP] ${name} verbunden — ${entries.length} Tool(s): ${entries.map((t) => t.originalName).join(", ")}`);
 
     // Exit-Handler für automatischen Reconnect

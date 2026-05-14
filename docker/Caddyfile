@@ -16,6 +16,15 @@
 {$CADDY_DOMAIN} {
     encode gzip zstd
 
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        -Server
+    }
+
     # SSE-Streaming fuer /api/events und /api/chat darf nicht gepuffert werden
     @sse {
         path /api/events /api/events/* /api/chat /api/chat/*

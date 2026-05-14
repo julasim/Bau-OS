@@ -19,6 +19,7 @@ import { useRoute } from "vue-router";
 import NavRail from "./shell/NavRail.vue";
 import SystemStatusBanner from "./SystemStatusBanner.vue";
 import { useWorkspaceShell } from "../composables/useWorkspaceShell";
+import { connectionError } from "../composables/useEvents";
 
 const route = useRoute();
 const { state } = useWorkspaceShell();
@@ -57,6 +58,11 @@ const isChatRoute = computed(() => route.name === "chat");
     </main>
     <!-- System-Status (Backend-Down/JWT-Expired) als Top-Banner ueber allem -->
     <SystemStatusBanner />
+    <!-- SSE-Verbindungsabbruch nach MAX_RECONNECT_ATTEMPTS -->
+    <div v-if="connectionError" class="connection-error-banner" role="alert">
+      <span>{{ connectionError }}</span>
+      <button type="button" @click="connectionError = null" aria-label="Schliessen">×</button>
+    </div>
   </div>
 </template>
 
@@ -76,5 +82,29 @@ const isChatRoute = computed(() => route.name === "chat");
   left: 0;
   right: 0;
   z-index: 100;
+}
+.connection-error-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 101;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 24px;
+  font-size: 12px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning-text);
+  border-bottom: 1px solid var(--color-warning-border);
+}
+.connection-error-banner button {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
 }
 </style>
