@@ -1,10 +1,7 @@
 # PATIO — Project Instructions
 
-> **Namens-Hinweis:** Das Produkt heißt **PATIO**. Der Repo-Ordner heißt aus
-> historischen Gründen weiterhin `bau-os/` (interner Refactor folgt später) —
-> alle `npm`-Befehle laufen aus `bau-os/`. In allem, was nach außen sichtbar
-> ist (UI-Texte, Doku, Marketing), gilt **PATIO**. Maker-Tag: **„by Sima"** —
-> kein Bezug zu „SIMA Architecture" o.ä.
+> **Namens-Hinweis:** Das Produkt heißt **PATIO**. Alle `npm`-Befehle laufen
+> aus `patio/`. In allen UI-Texten und der Doku gilt **PATIO**.
 
 ## Zielgruppe (WICHTIG)
 

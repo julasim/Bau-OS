@@ -331,33 +331,15 @@ function abortFlow() {
 
       <div style="max-width: 480px">
         <h1 style="font-size: 36px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; margin: 0 0 16px 0">
-          KI-Plattform für Architekturbüros und Büros in der Baubranche.
+          PATIO
         </h1>
         <p style="font-size: 14px; color: var(--color-login-text-secondary); line-height: 1.6; margin: 0 0 24px 0">
-          Büro-Werkzeug für Planung, Bauleitung und Projektsteuerung — nicht für die Baustelle. Self-hosted,
-          DSGVO-konform, lokales LLM.
+          KI-Assistent für Planung, Termine und Projektsteuerung.
         </p>
-        <div class="flex flex-wrap" style="gap: 8px">
-          <span
-            v-for="tag in ['Self-hosted', 'EU-Server', 'Art. 28', 'Open Source']"
-            :key="tag"
-            style="
-              padding: 4px 10px;
-              border: 1px solid var(--color-login-border);
-              border-radius: 4px;
-              font-size: 10px;
-              text-transform: uppercase;
-              letter-spacing: 0.08em;
-              color: var(--color-login-text-secondary);
-            "
-          >
-            {{ tag }}
-          </span>
-        </div>
       </div>
 
       <div style="font-size: 11px; color: var(--color-login-faint); font-family: &quot;JetBrains Mono&quot;, monospace">
-        PATIO · by Sima
+        PATIO
       </div>
     </div>
 

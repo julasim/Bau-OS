@@ -130,7 +130,7 @@ async function submit() {
       </div>
 
       <div style="font-size: 11px; color: var(--color-login-faint); font-family: &quot;JetBrains Mono&quot;, monospace">
-        PATIO · by Sima
+        PATIO
       </div>
     </div>
 

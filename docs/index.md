@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: PATIO
-  text: KI-Assistent für Architektur- und Planungsbüros
-  tagline: Büro-Werkzeug für Planung, Termine und Projektsteuerung — nicht für die Baustelle. Self-hosted, DSGVO-konform, lokales LLM. by Sima.
+  text: KI-Assistent für Planung und Projektsteuerung
+  tagline: Notizen, Aufgaben, Termine, Projekte — alles an einem Ort.
   actions:
     - theme: brand
       text: Schnellstart
@@ -21,8 +21,8 @@ features:
     details: Mehrere KI-Agenten mit eigener Persönlichkeit, Aufgaben und Gedächtnis. Jeder Agent wird über einfache Markdown-Dateien konfiguriert — kein Code nötig.
   - title: Obsidian Vault als Brain
     details: Alle Daten liegen als plain Markdown im Dateisystem. Notizen, Aufgaben, Termine, Projekte — menschlich lesbar, versionierbar, kein Vendor-Lock-in.
-  - title: Self-hosted & DSGVO
-    details: Jeder Kunde bekommt einen eigenen EU-Server mit lokalem LLM (Ollama). Keine Daten verlassen den Server. Volle DSGVO-Konformität.
+  - title: Datensouveränität
+    details: Läuft auf eigenem Server. Alle Daten bleiben lokal — kein Cloud-Zwang, kein Vendor-Lock-in.
   - title: Telegram als Interface
     details: Kein separates Frontend nötig. Alles läuft über Telegram — Nachrichten schreiben, Befehle ausführen, proaktive Erinnerungen empfangen.
   - title: Proaktiver Heartbeat

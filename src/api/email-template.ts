@@ -109,7 +109,7 @@ export function plaintextVerification(opts: { user_name: string; code: string })
     "und ändere dein Passwort.",
     "",
     "—",
-    "PATIO · by Sima · automatisch versendet, bitte nicht antworten.",
+    "PATIO · automatisch versendet, bitte nicht antworten.",
   ].join("\n");
 }
 
@@ -124,7 +124,7 @@ export function plaintextMagicLink(opts: { user_name: string; magic_link_url: st
     "Der Link ist 15 Minuten gültig und kann nur einmal verwendet werden.",
     "",
     "—",
-    "PATIO · by Sima",
+    "PATIO",
   ].join("\n");
 }
 
@@ -140,7 +140,7 @@ export function plaintextPasswordReset(opts: { user_name: string; reset_url: str
     "Falls du das nicht warst, ignoriere diese Mail.",
     "",
     "—",
-    "PATIO · by Sima",
+    "PATIO",
   ].join("\n");
 }
 
@@ -152,6 +152,6 @@ export function plaintextWelcome(opts: { user_name: string; workspace_url: strin
     opts.workspace_url,
     "",
     "—",
-    "PATIO · by Sima",
+    "PATIO",
   ].join("\n");
 }

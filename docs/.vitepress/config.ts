@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 export default defineConfig({
   title: "PATIO",
-  description: "KI-Assistent für Architektur- und Planungsbüros — by Sima",
+  description: "KI-Assistent für Planung, Termine und Projektsteuerung",
   lang: "de-DE",
 
   themeConfig: {
