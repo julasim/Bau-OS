@@ -203,6 +203,19 @@ export const dbFiles: FileRepository = {
     return result.count > 0;
   },
 
+  async linkProject(fileIdOrName, projectName) {
+    const db = getDb();
+    const [p] = await db`SELECT id FROM projects WHERE name = ${projectName} LIMIT 1`;
+    if (!p) return false;
+    const now = new Date().toISOString();
+    // id::text verhindert UUID-Cast-Crash, wenn ein filename uebergeben wird.
+    const result = await db`
+      UPDATE files SET project_id = ${p.id}, updated_at = ${now}
+      WHERE id::text = ${fileIdOrName} OR filename = ${fileIdOrName} OR filepath = ${fileIdOrName}
+    `;
+    return result.count > 0;
+  },
+
   // ── File-Sharing (Phase 3) ──────────────────────────────────
 
   async listShares(fileId): Promise<FileShareEntry[]> {

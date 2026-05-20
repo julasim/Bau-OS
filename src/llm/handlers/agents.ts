@@ -1,16 +1,7 @@
 import type OpenAI from "openai";
 import fs from "fs";
 import path from "path";
-import {
-  loadAgentHistory,
-  appendAgentMemory,
-  createAgentWorkspace,
-  listAgents,
-  getAgentPath,
-  isProtectedAgent,
-  readAgentFile,
-  writeAgentFile,
-} from "../../workspace/index.js";
+import { loadAgentHistory, appendAgentMemory, listAgents, getAgentPath, readAgentFile } from "../../workspace/index.js";
 import { WORKSPACE_LOGS_DIR } from "../../config.js";
 import { getReplyFn, getCurrentDepth, getProcessAgentFn } from "../context.js";
 import type { HandlerMap } from "./types.js";
@@ -91,22 +82,6 @@ export const agentSchemas: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "agent_erstellen",
-      description:
-        "Erstellt einen neuen Sub-Agenten mit eigenem Workspace (SOUL.md, BOOT.md, TOOLS.md etc.). Die Beschreibung wird zu SOUL.md — definiere hier Rolle, Aufgabenbereich und Verhalten. Geschuetzte Agenten (z.B. Main) koennen nicht ueberschrieben werden.",
-      parameters: {
-        type: "object",
-        properties: {
-          name: { type: "string", description: "Name des neuen Agenten" },
-          beschreibung: { type: "string", description: "Was dieser Agent tun soll (wird zu SOUL.md)" },
-        },
-        required: ["name", "beschreibung"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "agenten_auflisten",
       description:
         "Listet alle verfuegbaren Agenten auf (Ordner unter Agents/). Zeigt sowohl geschuetzte Agenten (Main) als auch selbst erstellte Sub-Agenten.",
@@ -126,23 +101,6 @@ export const agentSchemas: OpenAI.Chat.ChatCompletionTool[] = [
           datei: { type: "string", description: "Dateiname (z.B. 'SOUL.md', 'HEARTBEAT.md')" },
         },
         required: ["agent", "datei"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "agent_datei_schreiben",
-      description:
-        "Ueberschreibt eine Konfigurationsdatei eines Agenten vollstaendig. Erlaubte Dateien: SOUL.md, BOOT.md, AGENTS.md, TOOLS.md, HEARTBEAT.md, BOOTSTRAP.md, USER.md, IDENTITY.md, MEMORY.md. Bei HEARTBEAT.md wird der Cron-Job sofort aktualisiert — kein Neustart noetig.",
-      parameters: {
-        type: "object",
-        properties: {
-          agent: { type: "string", description: "Name des Agenten" },
-          datei: { type: "string", description: "Dateiname (muss in der Whitelist sein)" },
-          inhalt: { type: "string", description: "Neuer vollstaendiger Inhalt der Datei" },
-        },
-        required: ["agent", "datei", "inhalt"],
       },
     },
   },
@@ -197,15 +155,6 @@ export const agentHandlers: HandlerMap = {
     return `[${args.agent}]: ${result}`;
   },
 
-  agent_erstellen: async (args) => {
-    if (isProtectedAgent(String(args.name))) {
-      return `"${args.name}" ist ein geschuetzter Agent und kann nicht ueberschrieben werden.`;
-    }
-    const soul = `# ${args.name}\n\n## Rolle\n${args.beschreibung}\n\n## Regeln\n- Antworte immer auf Deutsch\n- Sei praezise und fokussiert auf deine Aufgabe\n- Halte Antworten kurz\n`;
-    createAgentWorkspace(String(args.name), soul);
-    return `Agent "${args.name}" erstellt mit eigenem Workspace in Agents/${args.name}/`;
-  },
-
   agenten_auflisten: async () => {
     const agents = listAgents();
     return agents.length ? agents.join("\n") : "Keine Sub-Agenten vorhanden.";
@@ -214,33 +163,5 @@ export const agentHandlers: HandlerMap = {
   agent_datei_lesen: async (args) => {
     const content = readAgentFile(String(args.agent), String(args.datei));
     return content ?? `Datei "${args.datei}" fuer Agent "${args.agent}" nicht gefunden.`;
-  },
-
-  agent_datei_schreiben: async (args) => {
-    const WRITABLE_FILES = [
-      "SOUL.md",
-      "BOOT.md",
-      "AGENTS.md",
-      "TOOLS.md",
-      "HEARTBEAT.md",
-      "BOOTSTRAP.md",
-      "USER.md",
-      "IDENTITY.md",
-      "MEMORY.md",
-    ];
-    const datei = String(args.datei);
-    if (!WRITABLE_FILES.some((f) => f.toUpperCase() === datei.toUpperCase())) {
-      return `Datei "${datei}" nicht erlaubt. Erlaubt: ${WRITABLE_FILES.join(", ")}`;
-    }
-    const ok = writeAgentFile(String(args.agent), datei, String(args.inhalt));
-    if (!ok) return `Fehler: Agent-Ordner nicht vorhanden.`;
-
-    if (String(args.datei).toUpperCase() === "HEARTBEAT.MD") {
-      const { reloadHeartbeat } = await import("../../heartbeat.js");
-      const reload = reloadHeartbeat(String(args.agent));
-      return `\u2705 ${args.agent}/${args.datei} gespeichert. ${reload}`;
-    }
-
-    return `\u2705 ${args.agent}/${args.datei} gespeichert.`;
   },
 };

@@ -28,20 +28,32 @@ describe("executeTool — Dispatch", () => {
     expect(result).toContain("existiert nicht");
   });
 
-  it("fuehrt bekanntes Tool aus (echo via befehl_ausfuehren)", async () => {
-    const result = await executeTool("befehl_ausfuehren", { befehl: "echo executor-test" });
-    expect(result).toContain("executor-test");
+  it("fuehrt bekanntes Tool aus (notizen_auflisten)", async () => {
+    // Ein harmloses Read-Tool, das immer registriert ist.
+    const result = await executeTool("notizen_auflisten", {});
+    expect(result).not.toContain("existiert nicht");
   });
 
-  it("fuehrt code_ausfuehren aus", async () => {
-    const result = await executeTool("code_ausfuehren", { code: "1 + 1" });
-    expect(result).toBe("2");
-  });
+  // Gefaehrliche Tools wurden bewusst entfernt — der Bot darf Daten nur
+  // befuellen, nicht den Server steuern oder Daten zerstoeren. Diese
+  // Regressionstests stellen sicher, dass sie ueber den Executor
+  // unerreichbar bleiben.
+  const BLOCKED_TOOLS = [
+    "befehl_ausfuehren",
+    "code_ausfuehren",
+    "tool_erstellen",
+    "tool_loeschen",
+    "mcp_server_verbinden",
+    "mcp_server_trennen",
+    "projekt_loeschen",
+    "team_entfernen",
+    "agent_erstellen",
+    "agent_datei_schreiben",
+  ];
 
-  it("faengt Fehler in Handlern ab", async () => {
-    // code_ausfuehren mit ungueltigem Code — wird intern gefangen
-    const result = await executeTool("code_ausfuehren", { code: "throw new Error('test')" });
-    expect(result).toContain("Code-Fehler");
+  it.each(BLOCKED_TOOLS)("blockiertes Tool '%s' ist ueber den Executor nicht erreichbar", async (name) => {
+    const result = await executeTool(name, {});
+    expect(result).toContain("existiert nicht");
   });
 });
 

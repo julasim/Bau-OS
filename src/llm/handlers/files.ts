@@ -14,7 +14,7 @@ import { fileRepo, projectRepo } from "../../data/index.js";
 import { HTTP_RESPONSE_MAX_CHARS, DB_ENABLED, TOOL_OUTPUT_MAX_CHARS, WORKSPACE_PATH } from "../../config.js";
 import { sendFile, sendBuffer } from "../context.js";
 import { getCurrentUserCtx } from "../user-context.js";
-import { getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import { getVisibleProjectIds, canSeeProjectByName, type UserCtx } from "../../data/access.js";
 import { getDb } from "../../db/client.js";
 import type { FileEntry } from "../../data/types.js";
 import type { HandlerMap } from "./types.js";
@@ -236,6 +236,22 @@ export const fileSchemas: OpenAI.Chat.ChatCompletionTool[] = [
           dateiname: { type: "string", description: "Dateiname, z.B. 'Angebot_Muster.docx' (ohne Pfad)" },
         },
         required: ["titel", "inhalt", "dateiname"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "datei_projekt_zuordnen",
+      description:
+        "Ordnet eine bereits hochgeladene Datei einem Projekt zu. Nutze dies, nachdem ein Nutzer eine Datei geschickt hat, um sie im richtigen Projekt abzulegen. 'datei' ist die ID oder der Dateiname der hochgeladenen Datei, 'projekt' der exakte Projektname.",
+      parameters: {
+        type: "object",
+        properties: {
+          datei: { type: "string", description: "DB-ID oder Dateiname der hochgeladenen Datei" },
+          projekt: { type: "string", description: "Exakter Projektname" },
+        },
+        required: ["datei", "projekt"],
       },
     },
   },
@@ -548,5 +564,23 @@ export const fileHandlers: HandlerMap = {
     } catch (err) {
       return `Fehler beim DOCX-Erstellen: ${err instanceof Error ? err.message : String(err)}`;
     }
+  },
+
+  datei_projekt_zuordnen: async (args) => {
+    const datei = String(args.datei ?? "").trim();
+    const projekt = String(args.projekt ?? "").trim();
+    if (!datei || !projekt) return "Fehler: 'datei' und 'projekt' sind erforderlich.";
+    if (!DB_ENABLED || !fileRepo) return "Datei-Projekt-Zuordnung benoetigt den Datenbank-Modus.";
+    if (!fileRepo.linkProject) return "Datei-Projekt-Zuordnung wird nicht unterstuetzt.";
+
+    // ACL: Non-Admins duerfen nur in Projekte zuordnen, die sie sehen.
+    const ctx = getCurrentUserCtx();
+    if (ctx && ctx.role !== "admin" && !(await canSeeProjectByName(ctx, projekt))) {
+      return `Kein Zugriff auf Projekt "${projekt}".`;
+    }
+
+    const ok = await fileRepo.linkProject(datei, projekt);
+    if (!ok) return `Zuordnung fehlgeschlagen — Datei "${datei}" oder Projekt "${projekt}" nicht gefunden.`;
+    return `Datei "${datei}" wurde dem Projekt "${projekt}" zugeordnet.`;
   },
 };

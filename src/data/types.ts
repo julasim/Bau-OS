@@ -712,6 +712,9 @@ export interface FileRepository {
   search(query: string, limit?: number): Promise<FileEntry[]>;
   delete(id: string): Promise<boolean>;
   updateContent(id: string, contentText: string): Promise<boolean>;
+  /** Ordnet eine bereits gespeicherte Datei einem Projekt zu (per Projektname).
+   *  Gibt false zurueck, wenn Projekt oder Datei nicht gefunden wurden. */
+  linkProject?(fileIdOrName: string, projectName: string): Promise<boolean>;
 
   // ── File-Sharing (Phase 3) ──────────────────────────
   listShares?(fileId: string): Promise<FileShareEntry[]>;

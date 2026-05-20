@@ -148,13 +148,24 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
   bot.command("whoami", (ctx) => handleWhoami(ctx));
   bot.command("agents", (ctx) => handleAgents(ctx));
   bot.command("export", (ctx) => handleExportSession(ctx));
-  bot.command("model", (ctx) => handleModel(ctx, ctx.match));
-  bot.command("fast", (ctx) => handleFast(ctx));
+  // Systemrelevante Commands sind Admins vorbehalten (siehe requireAdmin).
+  bot.command("model", async (ctx) => {
+    if (await requireAdmin(ctx)) await handleModel(ctx, ctx.match);
+  });
+  bot.command("fast", async (ctx) => {
+    if (await requireAdmin(ctx)) await handleFast(ctx);
+  });
   bot.command("sprache", (ctx) => handleSprache(ctx, ctx.match));
   bot.command("heute", (ctx) => handleHeute(ctx));
-  bot.command("config", (ctx) => handleConfig(ctx));
-  bot.command("restart", (ctx) => handleRestart(ctx));
-  bot.command("logs", (ctx) => handleLogs(ctx, ctx.match));
+  bot.command("config", async (ctx) => {
+    if (await requireAdmin(ctx)) await handleConfig(ctx);
+  });
+  bot.command("restart", async (ctx) => {
+    if (await requireAdmin(ctx)) await handleRestart(ctx);
+  });
+  bot.command("logs", async (ctx) => {
+    if (await requireAdmin(ctx)) await handleLogs(ctx, ctx.match);
+  });
   bot.command("heartbeat", (ctx) => handleHeartbeat(ctx, ctx.match));
 
   // --- Telegram-Pairing (Phase 5) ---
@@ -273,6 +284,26 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       return null;
     }
     return user;
+  }
+
+  // Gate fuer systemrelevante Commands (/model, /fast, /restart, /config, /logs).
+  // Der Bot darf Daten befuellen, aber keine System-Einstellungen aendern —
+  // das bleibt Admins vorbehalten. Gibt true zurueck, wenn der Aufruf erlaubt ist.
+  //   - FS-/Legacy-Modus ohne DB: Single-User = de-facto Admin → erlaubt.
+  //   - DB-Modus: nur role === "admin". Bei fehlender Auth hat checkAuth schon
+  //     geantwortet; sonst kommt hier der Hinweis.
+  async function requireAdmin(ctx: {
+    chat: { id: number };
+    reply: (msg: string) => Promise<unknown>;
+  }): Promise<boolean> {
+    if (!DB_ENABLED) return true;
+    const user = await checkAuth(ctx);
+    if (!user) return false; // checkAuth hat bereits geantwortet
+    if (user.role !== "admin") {
+      await ctx.reply("Dieser Befehl ist Administratoren vorbehalten.");
+      return false;
+    }
+    return true;
   }
 
   // Hilfs-Wrapper: laedt processMessage mit User-Kontext, wenn vorhanden.
@@ -424,16 +455,19 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
         // DB-Modus: direkt als Blob in die DB, kein Vault-Write.
         // FS-Modus (Legacy, kein DATABASE_URL gesetzt): in Uploads/ speichern,
         // damit Telegram ohne DB nicht komplett den File-Support verliert.
+        let savedFileId: string | null = null;
         if (DB_ENABLED && fileRepo) {
           try {
-            await fileRepo.save({
+            const saved = await fileRepo.save({
               filename: safeName,
               filepath: safeName, // nur logischer Name, kein Pfad
               filesize: doc.file_size || buffer.length,
               mimeType: doc.mime_type || undefined,
               contentText: extraction.text || undefined,
               blob: buffer,
+              uploadedById: scopeUser?.id ?? null,
             });
+            savedFileId = saved.id;
           } catch (err) {
             logError("[Telegram Upload DB]", err);
           }
@@ -462,7 +496,20 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
             ? `[Format wird nicht unterstützt: ${path.extname(safeName)}]`
             : extraction.text || "[Kein Textinhalt extrahierbar]";
 
-        const prompt = `Der Nutzer hat die Datei "${safeName}" hochgeladen.\n\nInhalt:\n${extractedInfo}`;
+        const caption = ctx.message.caption?.trim();
+        const projektAuftrag =
+          DB_ENABLED && savedFileId
+            ? `\n\nAUFGABE: Diese Datei muss einem Projekt zugeordnet werden.` +
+              ` Wenn aus dem Begleittext oder dem Inhalt eindeutig ein Projektname hervorgeht,` +
+              ` rufe datei_projekt_zuordnen mit datei="${savedFileId}" und dem Projektnamen auf.` +
+              ` Ist es nicht eindeutig, frage den Nutzer per 'antworten', zu welchem Projekt die` +
+              ` Datei gehoert (zeige die verfuegbaren Projekte mit projekte_auflisten).`
+            : "";
+        const prompt =
+          `Der Nutzer hat die Datei "${safeName}" hochgeladen.` +
+          (caption ? `\nBegleittext des Nutzers: "${caption}"` : "") +
+          projektAuftrag +
+          `\n\nInhalt:\n${extractedInfo}`;
         const antwort = await runScoped(scopeUser, () => processMessage(prompt));
 
         stopTyping();

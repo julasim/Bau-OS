@@ -117,21 +117,6 @@ export const projectSchemas: OpenAI.Chat.ChatCompletionTool[] = [
       },
     },
   },
-  {
-    type: "function",
-    function: {
-      name: "projekt_loeschen",
-      description:
-        "Loescht ein Projekt aus der Datenbank. Damit werden auch alle Notizen des Projekts geloescht (FK-CASCADE). Aufgaben, Termine, Dateien und Team-Mitglieder bleiben erhalten, verlieren aber den Projekt-Bezug (FK SET NULL). UNWIDERRUFLICH. Nur aufrufen, wenn der Benutzer das explizit verlangt hat.",
-      parameters: {
-        type: "object",
-        properties: {
-          name: { type: "string", description: "Exakter Projektname" },
-        },
-        required: ["name"],
-      },
-    },
-  },
 ];
 
 // Hilfsfunktionen ------------------------------------------------------------
@@ -287,17 +272,5 @@ export const projectHandlers: HandlerMap = {
 
     const fields = listedFields(patch as Record<string, unknown>);
     return `Projekt "${name}" aktualisiert. Geaenderte Felder: ${fields.join(", ")}.`;
-  },
-
-  projekt_loeschen: async (args) => {
-    const name = String(args.name ?? "").trim();
-    if (!name) return "Fehler: Name ist erforderlich.";
-
-    const ok = await projectRepo.delete(name);
-    if (!ok) {
-      return `Projekt "${name}" konnte nicht geloescht werden (ungueltiger Name).`;
-    }
-    emit({ type: "project", action: "deleted", id: name });
-    return `Projekt "${name}" wurde aus der Datenbank geloescht. Notizen wurden per FK-CASCADE mitgeloescht; Aufgaben, Termine, Dateien und Team-Mitglieder bleiben erhalten (Projekt-Bezug auf NULL gesetzt).`;
   },
 };

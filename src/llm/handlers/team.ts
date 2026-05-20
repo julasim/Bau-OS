@@ -203,18 +203,6 @@ export const teamSchemas: OpenAI.Chat.ChatCompletionTool[] = [
   {
     type: "function",
     function: {
-      name: "team_entfernen",
-      description: "Loescht ein Team-Mitglied komplett (inkl. aller Projekt-Zuordnungen). Vorsicht — irreversibel.",
-      parameters: {
-        type: "object",
-        properties: { name: { type: "string", description: "Name oder UUID des Mitglieds" } },
-        required: ["name"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "firma_auflisten",
       description: "Listet alle Firmen mit Anzahl der zugeordneten Mitglieder.",
       parameters: { type: "object", properties: {}, required: [] },
@@ -415,15 +403,6 @@ export const teamHandlers: HandlerMap = {
     if (!ok) return "Eintrag konnte nicht hinzugefuegt werden.";
     emit({ type: "team", action: "updated", id: r.member.id });
     return `Log-Eintrag fuer "${r.member.name}" hinzugefuegt.`;
-  },
-
-  team_entfernen: async (args) => {
-    const name = String(args.name ?? "").trim();
-    if (!name) return "Fehler: Name ist erforderlich.";
-    const ok = await teamRepo.remove(name);
-    if (!ok) return `"${name}" nicht im Team gefunden.`;
-    emit({ type: "team", action: "deleted" });
-    return `"${name}" aus dem Team entfernt.`;
   },
 
   firma_auflisten: async () => {
