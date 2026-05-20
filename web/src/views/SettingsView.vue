@@ -293,6 +293,17 @@ async function toggleMsCalendar(cal: MsUserCalendar, enabled: boolean) {
 // /me/telegram-bot bleibt im Backend erhalten als Recovery-Pfad, wird
 // aber im UI nicht mehr exponiert.
 
+// ── Lokale Modelle (eigenes Ollama) ──────────────────────────────────────────
+// Schnellauswahl fuer lokal per `ollama pull` installierte Modelle. Laufen
+// vollstaendig auf der eigenen Maschine — keine Cloud, keine Kosten pro Token.
+const LOCAL_MODELS: { id: string; label: string; desc: string }[] = [
+  { id: "qwen2.5:7b", label: "qwen2.5 7B", desc: "Standard-Modell, guter Allrounder" },
+  { id: "qwen2.5:14b", label: "qwen2.5 14B", desc: "Staerker, braucht mehr RAM/VRAM" },
+  { id: "llama3.1:8b", label: "llama3.1 8B", desc: "Meta, solide bei Tools" },
+  { id: "mistral:7b", label: "mistral 7B", desc: "Schnell, sparsam" },
+  { id: "gemma2:9b", label: "gemma2 9B", desc: "Google, gut bei Sprache" },
+];
+
 // ── Cloud-Modelle (Ollama Cloud / Turbo) ─────────────────────────────────────
 // Schnellauswahl fuer Ollama-gehostete Cloud-Modelle. Klick setzt den Input
 // und laesst den User mit "Setzen" bestaetigen.
@@ -1785,6 +1796,27 @@ onMounted(() => {
                 >
                   Setzen
                 </button>
+              </div>
+              <div class="settings-row px-4 py-3">
+                <p class="text-xs settings-label mb-2">Lokale Modelle (eigenes Ollama):</p>
+                <div class="flex flex-wrap gap-2">
+                  <button
+                    v-for="m in LOCAL_MODELS"
+                    :key="m.id"
+                    @click="pickModel(m.id)"
+                    :title="m.desc"
+                    :class="[
+                      'settings-chip px-2.5 py-1 text-xs rounded transition text-left',
+                      modelInput === m.id ? 'settings-chip-active' : '',
+                    ]"
+                  >
+                    <span class="font-mono">{{ m.label }}</span>
+                  </button>
+                </div>
+                <p class="text-[11px] mt-2" style="color: var(--color-text-tertiary)">
+                  Laufen vollstaendig auf der eigenen Maschine — keine Kosten. Das Modell muss vorher per
+                  <code class="font-mono">ollama pull &lt;name&gt;</code> installiert sein.
+                </p>
               </div>
               <div class="settings-row px-4 py-3">
                 <p class="text-xs settings-label mb-2">Cloud-Modelle (Ollama Cloud):</p>

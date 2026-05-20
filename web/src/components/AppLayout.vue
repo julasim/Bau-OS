@@ -14,16 +14,24 @@
 // Scroll-Container.
 // ============================================================
 
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import NavRail from "./shell/NavRail.vue";
 import SystemStatusBanner from "./SystemStatusBanner.vue";
 import ConfirmDialog from "./ConfirmDialog.vue";
+import BIcon from "./BIcon.vue";
 import { useWorkspaceShell } from "../composables/useWorkspaceShell";
 import { connectionError } from "../composables/useEvents";
 
 const route = useRoute();
-const { state } = useWorkspaceShell();
+const { state, railMobileOpen, toggleRailMobile, closeRailMobile } = useWorkspaceShell();
+
+// Beim Navigieren das Mobile-Rail-Overlay schliessen, sonst bleibt es
+// nach Auswahl eines Nav-Punkts offen ueber dem Inhalt liegen.
+watch(
+  () => route.fullPath,
+  () => closeRailMobile(),
+);
 
 /** True wenn die aktuelle Route eine 'listpane'-Komponente definiert.
  *  Sonst → kein ListPane, full-width DetailPane. */
@@ -45,7 +53,15 @@ const isChatRoute = computed(() => route.name === "chat");
     :data-rail-collapsed="state.railCollapsed"
     :data-list-collapsed="state.listCollapsed"
     :data-no-list="!hasListPane"
+    :data-rail-mobile-open="railMobileOpen"
   >
+    <!-- Mobile-Hamburger: oeffnet die NavRail als Overlay (<=768px).
+         Auf Desktop via CSS ausgeblendet. -->
+    <button type="button" class="mobile-nav-toggle" aria-label="Navigation oeffnen" @click="toggleRailMobile">
+      <BIcon name="grid" :size="20" />
+    </button>
+    <!-- Backdrop hinter dem Rail-Overlay; Tap schliesst. -->
+    <div v-if="railMobileOpen" class="mobile-nav-backdrop" @click="closeRailMobile"></div>
     <NavRail />
     <router-view name="listpane" v-if="hasListPane" />
     <!-- Chat: rendert sich selbst auf volle Hoehe ohne Wrapper. -->

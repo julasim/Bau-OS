@@ -45,6 +45,11 @@ function loadState(): ShellState {
 
 const state = ref<ShellState>(loadState());
 
+// Ephemerer Mobile-Zustand: ob die NavRail als Overlay offen ist (<=768px).
+// BEWUSST nicht persistiert und nicht Teil von ShellState — reiner
+// Session-UI-Zustand, der beim Navigieren/Resize wieder zugeht.
+const railMobileOpen = ref(false);
+
 watch(
   state,
   (v) => {
@@ -71,6 +76,13 @@ window.addEventListener("storage", (e) => {
 export function useWorkspaceShell() {
   return {
     state,
+    railMobileOpen,
+    toggleRailMobile() {
+      railMobileOpen.value = !railMobileOpen.value;
+    },
+    closeRailMobile() {
+      railMobileOpen.value = false;
+    },
     setVariant(v: Variant) {
       state.value.variant = v;
     },

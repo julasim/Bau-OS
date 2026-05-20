@@ -1142,24 +1142,92 @@ html.dark .text-red-700 {
   margin: 0 0 8px;
 }
 
-/* ── Mobile: Rail/List koennen overlay-mode ─────────────────────── */
+/* ── Mobile: einspaltig + Rail/List als Slide-in-Overlays ───────────
+   Auf <=768px gibt es kein Multi-Spalten-Grid mehr. Das Grid kollabiert
+   in ALLEN Varianten auf EINE Spalte (volle Breite) — sonst gewinnen die
+   Desktop-Varianten-Regeln (data-no-list / data-rail-collapsed /
+   data-list-collapsed, Spezifitaet 0,2,0) gegen eine einfache
+   `.app-v2`-Regel (0,1,0) und zwingen den Content in eine 0–55px-Spalte
+   ("alles in 1 cm links"-Bug). Deshalb hier JEDE Variante explizit
+   auflisten: gleiche Spezifitaet + spaeter im File = gewinnt.
+   NavRail und ListPane liegen als fixed Overlays drueber (out of flow),
+   damit der Detail-Bereich immer 100% Breite bekommt. */
 @media (max-width: 768px) {
-  .app-v2 {
-    grid-template-columns: 0 0 1fr;
+  .app-v2,
+  .app-v2[data-no-list="true"],
+  .app-v2[data-rail-collapsed="true"],
+  .app-v2[data-list-collapsed="true"],
+  .app-v2[data-rail-collapsed="true"][data-list-collapsed="true"],
+  .app-v2[data-rail-collapsed="true"][data-no-list="true"] {
+    grid-template-columns: 1fr;
   }
-  .app-v2[data-list-mobile-open="true"] {
-    grid-template-columns: 0 100vw 1fr;
-  }
+
+  /* NavRail: fixed Overlay, von links einschiebbar */
   .app-v2 .nav-rail {
     position: fixed;
     left: 0;
     top: 0;
     bottom: 0;
-    z-index: 20;
+    z-index: 30;
     transform: translateX(-100%);
     transition: transform 200ms ease;
   }
   .app-v2[data-rail-mobile-open="true"] .nav-rail {
     transform: translateX(0);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.3);
+  }
+
+  /* ListPane: ebenfalls fixed Overlay (sonst belegt sie eine Grid-Spalte
+     und quetscht den Detail-Bereich). Standard versteckt, offen via
+     data-list-mobile-open. */
+  .app-v2 .pane-list {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: min(85vw, 320px);
+    z-index: 25;
+    transform: translateX(-100%);
+    transition: transform 200ms ease;
+  }
+  .app-v2[data-list-mobile-open="true"] .pane-list {
+    transform: translateX(0);
+    box-shadow: 0 0 24px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Hamburger: oeffnet die Rail. Schwebt oben links ueber dem Inhalt. */
+  .mobile-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    width: 40px;
+    height: 40px;
+    z-index: 15;
+    border: 1px solid var(--color-border, rgba(0, 0, 0, 0.12));
+    border-radius: 8px;
+    background: var(--color-bg, #fff);
+    color: var(--fg-primary, #111);
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  }
+
+  /* Backdrop hinter dem offenen Rail-Overlay (unter Rail z-30). */
+  .mobile-nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 29;
+    background: rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* Desktop (>768px): Hamburger ausblenden. Als eigene min-width-Query,
+   damit sie NICHT mit der Mobile-Regel (max-width:768px) um die
+   Reihenfolge konkurriert. */
+@media (min-width: 768.01px) {
+  .mobile-nav-toggle {
+    display: none;
   }
 }
