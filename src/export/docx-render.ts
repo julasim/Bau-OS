@@ -21,6 +21,14 @@
 
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
+// Expression-Parser fuer verschachtelte Tags wie {Meeting.Titel}, {Projekt.Bauherr}.
+// Ohne diesen Parser interpretiert docxtemplater "Meeting.Titel" als FLACHEN
+// Tag-Namen mit Punkt drin -- der Datenzugriff schlaegt fehl und der nullGetter
+// liefert "" -> ALLE verschachtelten Tags landen leer im Word. Verifiziert per
+// Debug-Log am 2026-06-01.
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore -- expressions.js hat keine d.ts-Typen
+import expressionParser from "docxtemplater/expressions.js";
 import { getDb } from "../db/client.js";
 import { DB_ENABLED } from "../config.js";
 import {
@@ -30,6 +38,29 @@ import {
   type ExportKind,
 } from "../data/db-export-templates.js";
 import { logError } from "../logger.js";
+
+/** Wandelt einen beliebigen DB-Datumswert in TT.MM.JJJJ.
+ *  postgres.js liefert DATE/TIMESTAMP als Date-Objekt; String(date) gibt
+ *  dann die haessliche "Tue Apr 28 2026 ..."-Form. Mit toISOString().slice(0,10)
+ *  bekommen wir zuverlaessig ein YYYY-MM-DD, das wir formatieren koennen. */
+function formatDate(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  let iso: string;
+  if (value instanceof Date) {
+    iso = value.toISOString().slice(0, 10);
+  } else {
+    const s = String(value).split("T")[0]!;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      iso = s;
+    } else {
+      // Fallback: irgendwas Unbekanntes — versuchen via Date zu parsen.
+      const d = new Date(String(value));
+      if (isNaN(d.getTime())) return String(value);
+      iso = d.toISOString().slice(0, 10);
+    }
+  }
+  return `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`;
+}
 
 export class DocxRenderError extends Error {
   constructor(
@@ -108,31 +139,18 @@ async function buildMeetingData(meetingId: string): Promise<Record<string, unkno
   // Action-Items
   const actionItems = Array.isArray(m.action_items) ? (m.action_items as Array<Record<string, unknown>>) : [];
 
-  // Datum-Format anpassen (ISO-DATE → TT.MM.JJJJ). Schema-Spalte heisst
-  // meeting_date, NICHT date — m.date waere undefined.
-  const datum = String(m.meeting_date).split("T")[0]!;
-  const ddmmyyyy = datum.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-    ? `${datum.slice(8, 10)}.${datum.slice(5, 7)}.${datum.slice(0, 4)}`
-    : datum;
-
   return {
     Meeting: {
       Titel: String(m.title ?? ""),
-      Datum: ddmmyyyy,
-      Startzeit: m.start_time ? String(m.start_time) : "",
-      Endzeit: m.end_time ? String(m.end_time) : "",
+      Datum: formatDate(m.meeting_date),
+      Startzeit: m.start_time ? String(m.start_time).slice(0, 5) : "",
+      Endzeit: m.end_time ? String(m.end_time).slice(0, 5) : "",
       Ort: m.location ? String(m.location) : "",
       Typ: m.meeting_type ? String(m.meeting_type) : "",
       Agenda: m.agenda ? String(m.agenda) : "",
       Protokoll: m.minutes ? String(m.minutes) : "",
       Beschluesse: m.decisions ? String(m.decisions) : "",
-      NaechstesMeeting: m.next_meeting_date
-        ? (() => {
-            const s = String(m.next_meeting_date).split("T")[0]!;
-            const mm = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-            return mm ? `${mm[3]}.${mm[2]}.${mm[1]}` : s;
-          })()
-        : "",
+      NaechstesMeeting: formatDate(m.next_meeting_date),
     },
     Projekt: m.project_name ? String(m.project_name) : "",
     Teilnehmer: [
@@ -163,15 +181,10 @@ async function buildBautagebuchData(entryId: string): Promise<Record<string, unk
   if (!e) throw new DocxRenderError("Bautagebuch-Eintrag nicht gefunden");
 
   const personnel = Array.isArray(e.personnel) ? (e.personnel as Array<Record<string, unknown>>) : [];
-  // Schema-Spalte heisst entry_date, NICHT date.
-  const datum = String(e.entry_date).split("T")[0]!;
-  const ddmmyyyy = datum.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-    ? `${datum.slice(8, 10)}.${datum.slice(5, 7)}.${datum.slice(0, 4)}`
-    : datum;
 
   return {
     Eintrag: {
-      Datum: ddmmyyyy,
+      Datum: formatDate(e.entry_date),
       Wetter: e.weather ? String(e.weather) : "",
       TemperaturMin: e.temperature_min !== null && e.temperature_min !== undefined ? Number(e.temperature_min) : "",
       TemperaturMax: e.temperature_max !== null && e.temperature_max !== undefined ? Number(e.temperature_max) : "",
@@ -259,15 +272,11 @@ async function buildTimeEntryData(opts: {
   const eintraege = rows.map((r) => {
     const h = Number(r.hours);
     totalHours += h;
-    const dStr = String(r.entry_date).split("T")[0]!;
-    const ddmmyyyy = dStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)
-      ? `${dStr.slice(8, 10)}.${dStr.slice(5, 7)}.${dStr.slice(0, 4)}`
-      : dStr;
     return {
-      Datum: ddmmyyyy,
+      Datum: formatDate(r.entry_date),
       Stunden: h,
-      Start: r.start_time ? String(r.start_time) : "",
-      Ende: r.end_time ? String(r.end_time) : "",
+      Start: r.start_time ? String(r.start_time).slice(0, 5) : "",
+      Ende: r.end_time ? String(r.end_time).slice(0, 5) : "",
       Pause: r.break_minutes ?? 0,
       Mitarbeiter: r.resolved_member_name ? String(r.resolved_member_name) : r.member_name ? String(r.member_name) : "",
       Taetigkeit: r.activity ? String(r.activity) : "",
@@ -299,16 +308,6 @@ async function buildProjectSummaryData(projectName: string): Promise<Record<stri
   `;
   if (!p) throw new DocxRenderError("Projekt nicht gefunden");
 
-  // ISO-DATE → TT.MM.JJJJ. Wenn Postgres ein Date-Objekt liefert, kommt
-  // ohne diese Normalisierung ein hässlicher "Wed Apr 28 2026 ..."-String
-  // im Word-Dokument an.
-  const fmt = (v: unknown): string => {
-    if (!v) return "";
-    const s = String(v).split("T")[0]!;
-    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    return m ? `${m[3]}.${m[2]}.${m[1]}` : s;
-  };
-
   return {
     Projekt: {
       Name: String(p.name),
@@ -320,8 +319,8 @@ async function buildProjectSummaryData(projectName: string): Promise<Record<stri
       Phase: p.phase ? String(p.phase) : "",
       Beschreibung: p.description ? String(p.description) : "",
       Status: p.status ? String(p.status) : "",
-      Start: fmt(p.start_date),
-      Ende: fmt(p.end_date),
+      Start: formatDate(p.start_date),
+      Ende: formatDate(p.end_date),
     },
   };
 }
@@ -397,11 +396,6 @@ export async function renderDocxExport(opts: RenderOptions): Promise<RenderResul
   }
   const data = { ...base, ...kindData };
 
-  // TEMP-DEBUG: was geht in docxtemplater rein? Wird nach erfolgreicher
-  // Diagnose wieder entfernt.
-   
-  console.log("[ExportDebug]", opts.kind, JSON.stringify(data).slice(0, 800));
-
   // 3. Render via docxtemplater
   let buffer: Buffer;
   try {
@@ -409,6 +403,12 @@ export async function renderDocxExport(opts: RenderOptions): Promise<RenderResul
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
+      // parser: verschachtelte Tags wie {Meeting.Titel} oder {Projekt.Bauherr}
+      // funktionieren NUR mit dem expression-parser. Ohne haengt der
+      // Default-Parser an "Meeting.Titel" als flachem Tag-Namen, findet keinen
+      // Match in den Daten und der nullGetter macht alles leer.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      parser: expressionParser as any,
       // Bei unbekannten Tags: leer lassen statt Error werfen — User soll
       // neue Tags ausprobieren koennen ohne dass der ganze Export crashed.
       nullGetter: () => "",
@@ -540,6 +540,8 @@ export async function renderDocxTest(templateId: string, currentUserName: string
     const doc = new Docxtemplater(zip, {
       paragraphLoop: true,
       linebreaks: true,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      parser: expressionParser as any,
       nullGetter: () => "",
     });
     doc.render(dummy);
