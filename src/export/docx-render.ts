@@ -397,6 +397,11 @@ export async function renderDocxExport(opts: RenderOptions): Promise<RenderResul
   }
   const data = { ...base, ...kindData };
 
+  // TEMP-DEBUG: was geht in docxtemplater rein? Wird nach erfolgreicher
+  // Diagnose wieder entfernt.
+   
+  console.log("[ExportDebug]", opts.kind, JSON.stringify(data).slice(0, 800));
+
   // 3. Render via docxtemplater
   let buffer: Buffer;
   try {
