@@ -23,7 +23,12 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { getDb } from "../db/client.js";
 import { DB_ENABLED } from "../config.js";
-import { loadExportTemplateBlob, getDefaultExportTemplate, type ExportKind } from "../data/db-export-templates.js";
+import {
+  loadExportTemplateBlob,
+  getDefaultExportTemplate,
+  getExportTemplate,
+  type ExportKind,
+} from "../data/db-export-templates.js";
 import { logError } from "../logger.js";
 
 export class DocxRenderError extends Error {
@@ -121,7 +126,13 @@ async function buildMeetingData(meetingId: string): Promise<Record<string, unkno
       Agenda: m.agenda ? String(m.agenda) : "",
       Protokoll: m.minutes ? String(m.minutes) : "",
       Beschluesse: m.decisions ? String(m.decisions) : "",
-      NaechstesMeeting: m.next_meeting_date ? String(m.next_meeting_date) : "",
+      NaechstesMeeting: m.next_meeting_date
+        ? (() => {
+            const s = String(m.next_meeting_date).split("T")[0]!;
+            const mm = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            return mm ? `${mm[3]}.${mm[2]}.${mm[1]}` : s;
+          })()
+        : "",
     },
     Projekt: m.project_name ? String(m.project_name) : "",
     Teilnehmer: [
@@ -288,6 +299,16 @@ async function buildProjectSummaryData(projectName: string): Promise<Record<stri
   `;
   if (!p) throw new DocxRenderError("Projekt nicht gefunden");
 
+  // ISO-DATE → TT.MM.JJJJ. Wenn Postgres ein Date-Objekt liefert, kommt
+  // ohne diese Normalisierung ein hässlicher "Wed Apr 28 2026 ..."-String
+  // im Word-Dokument an.
+  const fmt = (v: unknown): string => {
+    if (!v) return "";
+    const s = String(v).split("T")[0]!;
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[3]}.${m[2]}.${m[1]}` : s;
+  };
+
   return {
     Projekt: {
       Name: String(p.name),
@@ -299,8 +320,8 @@ async function buildProjectSummaryData(projectName: string): Promise<Record<stri
       Phase: p.phase ? String(p.phase) : "",
       Beschreibung: p.description ? String(p.description) : "",
       Status: p.status ? String(p.status) : "",
-      Start: p.start_date ? String(p.start_date) : "",
-      Ende: p.end_date ? String(p.end_date) : "",
+      Start: fmt(p.start_date),
+      Ende: fmt(p.end_date),
     },
   };
 }
@@ -421,44 +442,93 @@ export async function renderDocxExport(opts: RenderOptions): Promise<RenderResul
 export async function renderDocxTest(templateId: string, currentUserName: string | null): Promise<RenderResult> {
   const templateInfo = await loadExportTemplateBlob(templateId);
   if (!templateInfo) throw new DocxRenderError("Template nicht gefunden");
+  // Kind ermitteln, damit der Dummy zur jeweiligen Datenform passt
+  // (sonst kollidiert z.B. das Meeting-`Projekt: "..."` (String) mit dem
+  // Project-Summary-`Projekt: { Name, ... }` (Objekt) und Tags wie
+  // {Projekt.Name} bleiben im Test leer).
+  const tplMeta = await getExportTemplate(templateId);
+  const kind = tplMeta?.kind;
 
-  const dummy = {
-    ...(await buildBaseData(currentUserName)),
-    Projekt: "(Test-Projekt)",
-    Meeting: {
-      Titel: "Test-Meeting",
-      Datum: "01.01.2026",
-      Startzeit: "10:00",
-      Endzeit: "11:00",
-      Ort: "Buero",
-      Typ: "Bauherrenmeeting",
-      Agenda: "Tagesordnungspunkt 1\nTagesordnungspunkt 2",
-      Protokoll: "Test-Protokoll-Inhalt",
-      Beschluesse: "Beschluss 1",
-    },
-    Teilnehmer: [
-      { Name: "Max Mustermann", Rolle: "Architekt", Firma: "Sima Architecture" },
-      { Name: "Erika Beispiel", Rolle: "Bauherr", Firma: "" },
-    ],
-    Aufgaben: [{ Text: "Test-Aufgabe", Faellig: "31.01.2026", Erledigt: false }],
-    Eintrag: {
-      Datum: "01.01.2026",
-      Wetter: "sonnig",
-      TemperaturMin: 5,
-      TemperaturMax: 12,
-      Maschinen: "Bagger, Kran",
-      Taetigkeiten: "Aushub, Schalung",
-      Vorkommnisse: "(keine)",
-    },
-    Personal: [
-      { Name: "Trupp 1", Stunden: 8, Rolle: "Bagger" },
-      { Name: "Trupp 2", Stunden: 8, Rolle: "Beton" },
-    ],
-    Zeitraum: { Von: "01.01.2026", Bis: "31.01.2026", Projekt: "(Test-Projekt)" },
-    Eintraege: [{ Datum: "01.01.2026", Stunden: 8, Mitarbeiter: "Max", Taetigkeit: "Planung", Projekt: "Test" }],
-    SummeStunden: 8,
-    AnzahlEintraege: 1,
-  };
+  const base = await buildBaseData(currentUserName);
+  // Pro Kind die passende Dummy-Form. So sieht der Admin im Test-Render
+  // genau, was im echten Export geliefert wird.
+  let kindData: Record<string, unknown>;
+  if (kind === "project-summary") {
+    kindData = {
+      Projekt: {
+        Name: "(Test-Projekt)",
+        Projektnummer: "2026-099",
+        Bauherr: "Max Mustermann",
+        Standort: "Wien",
+        Projektart: "Neubau",
+        Nutzung: "Wohnbau",
+        Phase: "Einreichung",
+        Beschreibung: "Test-Projektbeschreibung fuer Vorschau",
+        Status: "aktiv",
+        Start: "01.01.2026",
+        Ende: "31.12.2026",
+      },
+    };
+  } else if (kind === "bautagebuch") {
+    kindData = {
+      Projekt: "(Test-Projekt)",
+      Eintrag: {
+        Datum: "01.01.2026",
+        Wetter: "sonnig",
+        TemperaturMin: 5,
+        TemperaturMax: 12,
+        Maschinen: "Bagger, Kran",
+        Taetigkeiten: "Aushub, Schalung",
+        Vorkommnisse: "(keine)",
+      },
+      Personal: [
+        { Name: "Trupp 1", Stunden: 8, Rolle: "Bagger" },
+        { Name: "Trupp 2", Stunden: 8, Rolle: "Beton" },
+      ],
+    };
+  } else if (kind === "time-entry") {
+    kindData = {
+      Zeitraum: { Von: "01.01.2026", Bis: "31.01.2026", Projekt: "(Test-Projekt)" },
+      Eintraege: [
+        {
+          Datum: "01.01.2026",
+          Stunden: 8,
+          Start: "08:00",
+          Ende: "16:30",
+          Pause: 30,
+          Mitarbeiter: "Max Mustermann",
+          Taetigkeit: "Planung",
+          Notizen: "",
+          Projekt: "(Test-Projekt)",
+        },
+      ],
+      SummeStunden: 8,
+      AnzahlEintraege: 1,
+    };
+  } else {
+    // meeting (Default — vorhandenes Verhalten)
+    kindData = {
+      Projekt: "(Test-Projekt)",
+      Meeting: {
+        Titel: "Test-Meeting",
+        Datum: "01.01.2026",
+        Startzeit: "10:00",
+        Endzeit: "11:00",
+        Ort: "Buero",
+        Typ: "Bauherrenmeeting",
+        Agenda: "Tagesordnungspunkt 1\nTagesordnungspunkt 2",
+        Protokoll: "Test-Protokoll-Inhalt",
+        Beschluesse: "Beschluss 1",
+        NaechstesMeeting: "15.02.2026",
+      },
+      Teilnehmer: [
+        { Name: "Max Mustermann", Rolle: "Architekt", Firma: "Sima Architecture" },
+        { Name: "Erika Beispiel", Rolle: "Bauherr", Firma: "" },
+      ],
+      Aufgaben: [{ Text: "Test-Aufgabe", Faellig: "31.01.2026", Erledigt: false }],
+    };
+  }
+  const dummy = { ...base, ...kindData };
 
   try {
     const zip = new PizZip(templateInfo.buffer);

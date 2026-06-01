@@ -1,4 +1,4 @@
-import type { Context } from "grammy";
+import { InputFile, type Context } from "grammy";
 import {
   workspaceExists,
   getWorkspacePath,
@@ -192,12 +192,23 @@ export async function handleExportSession(ctx: Context): Promise<void> {
   const lines = history.map((h) => `User: ${h.user}\nAgent: ${h.assistant}`).join("\n\n---\n\n");
   const content = `# Session Export – ${today}\n\n${lines}\n`;
 
-  const exportPath = path.join(getWorkspacePath(), "Exports", `session_${today}.md`);
+  const filename = `session_${today}.md`;
+  const exportPath = path.join(getWorkspacePath(), "Exports", filename);
   const exportDir = path.dirname(exportPath);
   if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
   fs.writeFileSync(exportPath, content, "utf-8");
 
-  await ctx.reply(`\u2705 Exportiert nach:\nExports/session_${today}.md`);
+  // Direkt als Datei an den Chat schicken \u2014 vorher kam nur ein Pfad-Hinweis,
+  // mit dem ein Telegram-Nutzer nichts anfangen konnte. Bei Fehler trotzdem
+  // den Pfad melden, damit der Export nicht verloren wirkt.
+  try {
+    await ctx.replyWithDocument(new InputFile(exportPath, filename), {
+      caption: `Session-Export ${today}`,
+    });
+  } catch (err) {
+    logError("[Export Session]", err);
+    await ctx.reply(`\u2705 Exportiert nach:\nExports/${filename} (Datei-Versand fehlgeschlagen)`);
+  }
 }
 
 export async function handleModel(ctx: Context, args: string): Promise<void> {
