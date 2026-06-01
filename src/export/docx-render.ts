@@ -103,8 +103,9 @@ async function buildMeetingData(meetingId: string): Promise<Record<string, unkno
   // Action-Items
   const actionItems = Array.isArray(m.action_items) ? (m.action_items as Array<Record<string, unknown>>) : [];
 
-  // Datum-Format anpassen (ISO-DATE → TT.MM.JJJJ)
-  const datum = String(m.date).split("T")[0]!;
+  // Datum-Format anpassen (ISO-DATE → TT.MM.JJJJ). Schema-Spalte heisst
+  // meeting_date, NICHT date — m.date waere undefined.
+  const datum = String(m.meeting_date).split("T")[0]!;
   const ddmmyyyy = datum.match(/^(\d{4})-(\d{2})-(\d{2})$/)
     ? `${datum.slice(8, 10)}.${datum.slice(5, 7)}.${datum.slice(0, 4)}`
     : datum;
@@ -151,7 +152,8 @@ async function buildBautagebuchData(entryId: string): Promise<Record<string, unk
   if (!e) throw new DocxRenderError("Bautagebuch-Eintrag nicht gefunden");
 
   const personnel = Array.isArray(e.personnel) ? (e.personnel as Array<Record<string, unknown>>) : [];
-  const datum = String(e.date).split("T")[0]!;
+  // Schema-Spalte heisst entry_date, NICHT date.
+  const datum = String(e.entry_date).split("T")[0]!;
   const ddmmyyyy = datum.match(/^(\d{4})-(\d{2})-(\d{2})$/)
     ? `${datum.slice(8, 10)}.${datum.slice(5, 7)}.${datum.slice(0, 4)}`
     : datum;
@@ -211,8 +213,10 @@ async function buildTimeEntryData(opts: {
   // postgres.js + dynamic where: einfacher mit Tagged-Template via .unsafe.
   // Wir bauen das WHERE manuell + Werte als $1,$2,...
   const args: unknown[] = [];
+  // Schema-Spalte heisst entry_date, NICHT date — sonst crasht das SQL
+  // mit "column te.date does not exist".
   let sql = `
-    SELECT te.id, te.date, te.hours, te.start_time, te.end_time, te.break_minutes,
+    SELECT te.id, te.entry_date, te.hours, te.start_time, te.end_time, te.break_minutes,
            te.activity, te.notes, te.member_name,
            tm.name as resolved_member_name, p.name as project_name
       FROM time_entries te
@@ -230,21 +234,21 @@ async function buildTimeEntryData(opts: {
   }
   if (opts.from) {
     args.push(opts.from);
-    whereClauses.push(`te.date >= $${args.length}`);
+    whereClauses.push(`te.entry_date >= $${args.length}`);
   }
   if (opts.to) {
     args.push(opts.to);
-    whereClauses.push(`te.date <= $${args.length}`);
+    whereClauses.push(`te.entry_date <= $${args.length}`);
   }
   if (whereClauses.length) sql += ` WHERE ${whereClauses.join(" AND ")}`;
-  sql += ` ORDER BY te.date, te.start_time`;
+  sql += ` ORDER BY te.entry_date, te.start_time`;
 
   const rows = await db.unsafe(sql, args as never[]);
   let totalHours = 0;
   const eintraege = rows.map((r) => {
     const h = Number(r.hours);
     totalHours += h;
-    const dStr = String(r.date).split("T")[0]!;
+    const dStr = String(r.entry_date).split("T")[0]!;
     const ddmmyyyy = dStr.match(/^(\d{4})-(\d{2})-(\d{2})$/)
       ? `${dStr.slice(8, 10)}.${dStr.slice(5, 7)}.${dStr.slice(0, 4)}`
       : dStr;
