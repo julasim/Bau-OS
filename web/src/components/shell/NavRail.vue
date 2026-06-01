@@ -30,7 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/tasks", label: "Aufgaben", icon: "check" },
   { to: "/calendar", label: "Kalender", icon: "calendar" },
   { to: "/projects", label: "Projekte", icon: "folder" },
-  { to: "/notes", label: "Notizen", icon: "edit" },
+  { to: "/notes", label: "Notizen", icon: "pencil" },
   { to: "/files", label: "Dateien", icon: "file" },
   { to: "/chat", label: "Chat & Agenten", icon: "message" },
   { to: "/team", label: "Team", icon: "users" },
