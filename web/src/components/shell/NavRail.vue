@@ -1,10 +1,9 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — Nav-Rail (56px)
+// PATIO — Sidebar (240px, always dark)
 // ============================================================
-// Linke Spalte des 3-Spalten-Shells. Icon-only, max 8 Sektionen
-// (siehe Design-Handoff). Brand-Mark oben (Logo oder "SIMA"-
-// Wortmarke), Settings + Avatar unten.
+// Linke Spalte des App-Shells. Icon + Label, zwei Sektionen
+// (PROJEKTE / SYSTEM), Brand-Mark oben, Settings + Avatar unten.
 // ============================================================
 
 import { computed, onMounted, ref } from "vue";
@@ -54,7 +53,7 @@ async function loadBranding() {
   try {
     branding.value = await api.get<BrandingLite>("/branding");
   } catch {
-    /* unauth oder Backend down — Fallback auf SIMA-Wortmarke */
+    /* unauth oder Backend down — Fallback auf PATIO-Wortmarke */
   }
 }
 
@@ -76,51 +75,81 @@ onMounted(() => void loadBranding());
 </script>
 
 <template>
-  <nav class="nav-rail" aria-label="Hauptnavigation">
-    <a class="brand-mark" :title="branding.companyName ?? 'SIMA'" @click.prevent="go('/')" href="/">
+  <nav class="pt-sidebar" aria-label="Hauptnavigation">
+    <!-- Brand -->
+    <a class="pt-sidebar-brand" :title="branding.companyName ?? 'PATIO'" @click.prevent="go('/')" href="/">
       <img v-if="branding.logoUrl" :src="branding.logoUrl" :alt="branding.companyName ?? 'Logo'" />
-      <span v-else>SIMA</span>
+      <template v-else>
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          width="24"
+          height="24"
+          aria-hidden="true"
+        >
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+          <rect x="8" y="8" width="8" height="8" rx="1" />
+        </svg>
+        <span>PATIO</span>
+      </template>
     </a>
 
-    <button
-      v-for="it in visibleNav"
-      :key="it.to"
-      class="nav-btn"
-      :data-active="isActive(it.to)"
-      @click="go(it.to)"
-      :title="it.label"
-      :aria-label="it.label"
-    >
-      <BIcon :name="it.icon" :size="18" />
-      <span v-if="it.badge" class="badge">{{ it.badge }}</span>
-    </button>
+    <!-- Section: PROJEKTE -->
+    <div class="pt-nav-section">
+      <span class="pt-nav-label">PROJEKTE</span>
+      <button
+        v-for="it in visibleNav"
+        :key="it.to"
+        class="pt-nav-item"
+        :class="{ 'is-active': isActive(it.to) }"
+        @click="go(it.to)"
+        :title="it.label"
+        :aria-label="it.label"
+      >
+        <BIcon :name="it.icon" :size="16" />
+        <span>{{ it.label }}</span>
+        <span v-if="it.badge" class="badge">{{ it.badge }}</span>
+      </button>
+    </div>
 
-    <div v-if="visibleAdmin.length > 0" style="height: 12px"></div>
-    <button
-      v-for="it in visibleAdmin"
-      :key="it.to"
-      class="nav-btn"
-      :data-active="isActive(it.to)"
-      @click="go(it.to)"
-      :title="it.label"
-    >
-      <BIcon :name="it.icon" :size="18" />
-    </button>
+    <!-- Section: SYSTEM (admin only) -->
+    <div v-if="visibleAdmin.length > 0" class="pt-nav-section">
+      <span class="pt-nav-label">SYSTEM</span>
+      <button
+        v-for="it in visibleAdmin"
+        :key="it.to"
+        class="pt-nav-item"
+        :class="{ 'is-active': isActive(it.to) }"
+        @click="go(it.to)"
+        :title="it.label"
+        :aria-label="it.label"
+      >
+        <BIcon :name="it.icon" :size="16" />
+        <span>{{ it.label }}</span>
+      </button>
+    </div>
 
     <div class="spacer"></div>
 
+    <!-- Settings -->
     <button
-      class="nav-btn"
-      :data-active="isActive('/settings')"
+      class="pt-nav-item"
+      :class="{ 'is-active': isActive('/settings') }"
       @click="go('/settings')"
       title="Einstellungen"
       aria-label="Einstellungen"
     >
-      <BIcon name="settings" :size="18" />
+      <BIcon name="settings" :size="16" />
+      <span>Einstellungen</span>
     </button>
 
-    <div class="me" :title="initials" @click="logout">
-      {{ initials }}
-    </div>
+    <!-- User avatar / logout -->
+    <button class="pt-nav-item pt-nav-avatar" :title="initials" aria-label="Abmelden" @click="logout">
+      <span class="pt-avatar-circle">{{ initials }}</span>
+    </button>
   </nav>
 </template>

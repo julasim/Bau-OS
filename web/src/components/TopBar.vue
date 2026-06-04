@@ -2,11 +2,13 @@
 import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useSidebar } from "../composables/useSidebar";
+import { useTheme } from "../composables/useTheme";
 import BIcon from "./BIcon.vue";
 
 const route = useRoute();
 const router = useRouter();
 const { toggle: toggleSidebar } = useSidebar();
+const { isDark, toggle: toggleTheme } = useTheme();
 
 // Mapping Route-Name → lesbarer Titel (Breadcrumb + window.title).
 const titles: Record<string, string> = {
@@ -74,6 +76,27 @@ function openPalette() {
     <button @click="openPalette" class="topbar-search flex items-center gap-2" aria-label="Suche oeffnen">
       <BIcon name="search" :size="14" style="color: var(--color-text-muted)" />
       <span class="topbar-search-label flex-1 text-left" style="color: var(--color-text-muted)">Suchen…</span>
+    </button>
+
+    <!-- Theme-Toggle -->
+    <button
+      type="button"
+      @click="toggleTheme"
+      :aria-label="isDark() ? 'Zu Light-Mode wechseln' : 'Zu Dark-Mode wechseln'"
+      style="
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        color: var(--fg-muted);
+      "
+    >
+      <BIcon :name="isDark() ? 'sun' : 'moon'" :size="16" />
     </button>
 
     <!-- Bell -->

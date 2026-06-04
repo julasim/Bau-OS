@@ -1,8 +1,14 @@
 import { createApp } from "vue";
+import "./patio-tokens.css";
+import "./patio-components.css";
+import "./patio-shell.css";
 import { createPinia } from "pinia";
 import App from "./App.vue";
 import { router } from "./router";
 import "./style.css";
+// Theme beim Start initialisieren (setzt html.dark synchron — kein FOUC)
+import { useTheme } from "./composables/useTheme";
+useTheme();
 
 const app = createApp(App);
 app.use(createPinia());

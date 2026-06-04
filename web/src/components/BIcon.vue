@@ -42,7 +42,10 @@ const dim = computed(() => props.size);
       <line x1="8" y1="3" x2="8" y2="7" />
       <line x1="16" y1="3" x2="16" y2="7" />
     </template>
-    <path v-else-if="name === 'folder'" d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+    <path
+      v-else-if="name === 'folder'"
+      d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"
+    />
     <template v-else-if="name === 'file'">
       <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
       <polyline points="14 3 14 9 20 9" />
@@ -186,6 +189,23 @@ const dim = computed(() => props.size);
     </template>
     <template v-else-if="name === 'zap'">
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+    </template>
+    <template v-else-if="name === 'menu'">
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </template>
+    <template v-else-if="name === 'trash'">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+    </template>
+    <template v-else-if="name === 'arrow-right'">
+      <line x1="5" y1="12" x2="19" y2="12" />
+      <polyline points="12 5 19 12 12 19" />
+    </template>
+    <template v-else-if="name === 'pin-map'">
+      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+      <circle cx="12" cy="10" r="3" />
     </template>
   </svg>
 </template>

@@ -8,6 +8,33 @@
    ────────────────────────────────────────────────────────────────────────── */
 
 :root {
+  /* ── Design-Token-Bridge ─────────────────────────────────────
+     Alte --color-* Variablen werden auf die neuen Tokens gemappt.
+     patio-tokens.css wird zuerst geladen (main.ts), daher sind
+     die Ziel-Tokens hier bereits verfuegbar.
+  */
+  --color-bg: var(--surface);
+  --color-bg-subtle: var(--surface-subtle);
+  --color-bg-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-subtle: var(--hairline);
+  --color-text: var(--fg);
+  --color-text-secondary: var(--fg-body);
+  --color-text-muted: var(--fg-muted);
+  --color-text-tertiary: var(--fg-subtle);
+  --color-text-faint: var(--fg-subtle);
+  --color-primary: var(--accent);
+  --color-accent: var(--accent);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-success-text: var(--success-fg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-text: var(--warning-fg);
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-text: var(--danger-fg);
+
   /* Neutrale Flaechen & Text */
   --color-bg: #ffffff;
   --color-bg-subtle: #fafafa;
@@ -51,6 +78,15 @@
 @custom-variant dark (&:is(.dark *));
 
 html.dark {
+  --color-bg: var(--surface);
+  --color-bg-subtle: var(--surface-subtle);
+  --color-bg-muted: var(--surface-muted);
+  --color-border: var(--border);
+  --color-border-subtle: var(--hairline);
+  --color-text: var(--fg);
+  --color-text-secondary: var(--fg-body);
+  --color-text-muted: var(--fg-muted);
+  --color-text-tertiary: var(--fg-subtle);
   --color-bg: #0f0f11;
   --color-bg-subtle: #18181b;
   --color-bg-muted: #1f1f22;
@@ -123,7 +159,7 @@ html {
 
 :root {
   /* ── Layout-Konstanten ────────────────────────────────────────────── */
-  --rail-w: 56px;
+  --rail-w: var(--sidebar-width);
   --list-w: 320px;
   --pd-inner-w: 200px;
 
@@ -333,7 +369,7 @@ html.dark .app-v2[data-variant="atelier"] {
 /* ── Typographie ──────────────────────────────────────────────────────────── */
 html,
 body {
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   background: var(--color-bg);
   color: var(--color-text);
