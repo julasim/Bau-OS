@@ -37,11 +37,16 @@ const router = createRouter({
         { path: "calendar", name: "calendar", component: () => import("./views/CalendarView.vue") },
         // Backward-Compat: /termine leitet auf den zusammengefuehrten Kalender weiter
         { path: "termine", redirect: "/calendar" },
-        // Workspace v2: Projekte Master/Detail. ListPane = Projekt-Index,
-        // Detail wrappt das ProjectDetailView (mit Inner-Sidebar + Tabs).
+        // Projektübersicht: vollbild Karten-/Tabellen-Ansicht (Design System v2).
         {
-          path: "projects/:name?",
+          path: "projects",
           name: "projects",
+          component: () => import("./views/projects-v2/ProjectsOverviewView.vue"),
+        },
+        // Projekt-Detail: Master/Detail mit ListPane (Navigation) + Detail.
+        {
+          path: "projects/:name",
+          name: "project-detail",
           components: {
             listpane: () => import("./views/projects-v2/ProjectsListPane.vue"),
             default: () => import("./views/projects-v2/ProjectDetailHost.vue"),
