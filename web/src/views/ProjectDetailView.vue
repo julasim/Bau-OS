@@ -2243,16 +2243,17 @@ async function deleteMeeting() {
       Alle Projekte
     </button>
 
-    <!-- ═══ Hero ═══════════════════════════════════════════════ -->
+    <!-- ═══ Projekt-Kopf (ap-phead) ══════════════════════════════ -->
     <div
       v-if="info"
-      class="hero"
+      class="ap-phead"
       :class="{ 'hero-with-accent': !!info.color }"
       :style="info.color ? { '--accent-color': info.color } : {}"
     >
-      <!-- Zeile 1: Eyebrow + Status + Aktionen -->
-      <div class="hero-top">
-        <div class="hero-eyebrow">
+      <!-- Linke Spalte -->
+      <div class="ap-phead-l">
+        <!-- Breadcrumb / Eyebrow -->
+        <div class="hero-eyebrow" style="margin-bottom: 6px">
           <span v-if="info.parentName">
             <router-link :to="`/projects/${encodeURIComponent(info.parentName)}`" class="parent-link">
               {{ info.parentName }}
@@ -2262,13 +2263,46 @@ async function deleteMeeting() {
           <span v-else>PROJEKT</span>
           <span v-if="info.projektnummer" style="color: var(--color-text-faint)"> — {{ info.projektnummer }}</span>
         </div>
-        <div class="hero-top-actions">
+
+        <!-- Badges: Phase + Nutzung -->
+        <div class="pt-row" style="gap: 6px; margin-bottom: 8px">
+          <button v-if="info.phase" class="pt-badge pt-badge--warning pill-clickable" @click="startEdit('phase')">
+            {{ info.phase }}
+          </button>
+          <button v-else class="pt-badge pill-clickable" @click="startEdit('phase')">Phase setzen</button>
+          <span v-if="info.nutzung" class="pt-badge">{{ info.nutzung }}</span>
+          <span v-if="info.projektart" class="pt-badge">{{ info.projektart }}</span>
+        </div>
+
+        <!-- Titel -->
+        <h1 class="ap-ptitle">{{ info.name }}</h1>
+
+        <!-- Meta-Zeile -->
+        <div class="ap-pmeta">
+          <span v-if="info.bauherrName || info.bauherr">
+            Bauherr <strong>{{ info.bauherrName || info.bauherr }}</strong>
+          </span>
+          <span v-if="(info.bauherrName || info.bauherr) && info.standort" class="sep"></span>
+          <a v-if="info.standort" :href="mapsLink(info.standort)" target="_blank" rel="noopener" class="maps-link">
+            {{ info.standort }}
+          </a>
+          <span v-if="info.projektnummer && info.standort" class="sep"></span>
+          <span v-if="info.projektnummer">Nr. {{ info.projektnummer }}</span>
+        </div>
+      </div>
+
+      <!-- Rechte Spalte -->
+      <div class="ap-phead-r">
+        <!-- Status-Pill + Aktionen -->
+        <div class="pt-row" style="gap: 8px">
           <button
-            class="pill pill-clickable"
-            :class="'pill-status-' + (info.status ?? 'aktiv')"
+            class="pt-badge pill-clickable"
+            :class="{
+              'pt-badge--success': (info.status ?? 'aktiv') === 'aktiv',
+              'pt-badge--warning': info.status === 'pausiert',
+            }"
             @click="startEdit('status')"
           >
-            <span class="pill-dot" :style="{ background: 'var(--pill-dot-color, currentColor)' }" />
             {{ statusLabel }}
           </button>
           <!-- Farbe -->
@@ -2299,7 +2333,7 @@ async function deleteMeeting() {
           </div>
           <!-- Mehr-Menü -->
           <div class="action-menu-wrapper">
-            <button class="action-btn" @click="toggleActionMenu" title="Weitere Aktionen">
+            <button class="pt-iconbtn action-btn" @click="toggleActionMenu" title="Weitere Aktionen">
               <BIcon name="more" :size="14" />
             </button>
             <div v-if="showActionMenu" class="action-menu">
@@ -2340,436 +2374,446 @@ async function deleteMeeting() {
             </div>
           </div>
         </div>
+
+        <!-- Fortschritt -->
+        <div v-if="projectProgress !== null" class="ap-prog">
+          <div class="ap-prog-row">
+            <span class="ap-prog-lbl">Fortschritt</span>
+            <span class="ap-prog-val">{{ projectProgress }} %</span>
+          </div>
+          <div class="pt-progress"><i :style="{ width: projectProgress + '%' }"></i></div>
+        </div>
+        <div v-else-if="info.openTasks !== undefined" class="ap-prog">
+          <div class="ap-prog-row">
+            <span class="ap-prog-lbl">Aufgaben</span>
+            <span class="ap-prog-val">{{ info.openTasks }} offen</span>
+          </div>
+        </div>
+
+        <!-- Export-Button -->
+        <button class="pt-btn pt-btn--secondary pt-btn--sm" @click="exportProjectSummaryDocx">
+          <BIcon name="file" :size="11" /> Export
+        </button>
       </div>
+    </div>
 
-      <!-- Zeile 2: Titel -->
-      <h1 class="hero-title">{{ info.name }}</h1>
-
-      <!-- Zeile 3: Kontextzeile (Bauherr · Standort) -->
-      <div class="hero-meta">
-        <span v-if="info.bauherrName || info.bauherr">
-          {{ info.bauherrName || info.bauherr }}
+    <!-- Status-Editor (inline, unter dem Header) -->
+    <div v-if="info && editingField === 'status'" class="status-editor" style="margin-bottom: 12px">
+      <div class="eyebrow" style="margin-bottom: 6px">Status ändern</div>
+      <select v-model="draftValue" class="stamm-input" style="max-width: 240px" @keyup="(e) => onEditKey(e, 'status')">
+        <option v-for="opt in STATUS_OPTIONS" :key="opt" :value="opt">
+          {{ opt[0].toUpperCase() + opt.slice(1) }}
+        </option>
+      </select>
+      <div class="flex items-center" style="gap: 6px; margin-top: 8px">
+        <button class="bauos-btn solid sm" :disabled="saving" @click="saveField('status')">
+          {{ saving ? "…" : "Speichern" }}
+        </button>
+        <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
+        <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">
+          {{ saveError }}
         </span>
-        <span v-if="(info.bauherrName || info.bauherr) && info.standort" class="hero-meta-dot"> · </span>
-        <a v-if="info.standort" :href="mapsLink(info.standort)" target="_blank" rel="noopener" class="maps-link">
-          {{ info.standort }}
-        </a>
-      </div>
-
-      <!-- Zeile 4: Tags (Projektart · Nutzung · Phase) + Bearbeiten-Button -->
-      <div class="hero-tags-row">
-        <div class="hero-tags">
-          <span v-if="info.projektart" class="hero-tag">{{ info.projektart }}</span>
-          <span v-if="info.nutzung" class="hero-tag">{{ info.nutzung }}</span>
-          <button v-if="info.phase" class="pill pill-clickable" @click="startEdit('phase')">
-            <BIcon name="layers" :size="11" />{{ info.phase }}
-          </button>
-          <button v-else class="pill pill-clickable" @click="startEdit('phase')">
-            <BIcon name="layers" :size="11" />Phase setzen
-          </button>
-        </div>
-        <button class="bauos-btn ghost sm" @click="startEdit('description')" style="font-size: 12px">
-          <BIcon name="pencil" :size="11" /> Bearbeiten
-        </button>
-      </div>
-
-      <!-- Status-Editor -->
-      <div v-if="editingField === 'status'" class="status-editor">
-        <div class="eyebrow" style="margin-bottom: 6px">Status aendern</div>
-        <select
-          v-model="draftValue"
-          class="stamm-input"
-          style="max-width: 240px"
-          @keyup="(e) => onEditKey(e, 'status')"
-        >
-          <option v-for="opt in STATUS_OPTIONS" :key="opt" :value="opt">
-            {{ opt[0].toUpperCase() + opt.slice(1) }}
-          </option>
-        </select>
-        <div class="flex items-center" style="gap: 6px; margin-top: 8px">
-          <button class="bauos-btn solid sm" :disabled="saving" @click="saveField('status')">
-            {{ saving ? "…" : "Speichern" }}
-          </button>
-          <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
-          <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">
-            {{ saveError }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Stammdaten-Grid (immer sichtbar, pro Feld Inline-Edit) -->
-      <div class="stammdaten-grid">
-        <template v-for="f in STAMMDATEN_FIELDS" :key="f.key">
-          <div class="stamm-field" :class="{ 'stamm-field-editing': editingField === f.key }">
-            <div class="eyebrow stamm-label">{{ f.label }}</div>
-
-            <!-- Editing-Mode -->
-            <div v-if="editingField === f.key" class="stamm-edit">
-              <!-- Enum -->
-              <select
-                v-if="f.inputType === 'enum'"
-                v-model="draftValue"
-                class="stamm-input"
-                @keyup="(e) => onEditKey(e, f.key)"
-              >
-                <option value="">—</option>
-                <option v-for="opt in f.options" :key="opt" :value="opt">{{ opt }}</option>
-              </select>
-              <!-- Date -->
-              <input
-                v-else-if="f.inputType === 'date'"
-                v-model="draftValue"
-                type="date"
-                class="stamm-input"
-                @keyup="(e) => onEditKey(e, f.key)"
-              />
-              <!-- Text -->
-              <input
-                v-else
-                v-model="draftValue"
-                type="text"
-                :placeholder="f.placeholder"
-                class="stamm-input"
-                @keyup="(e) => onEditKey(e, f.key)"
-                autofocus
-              />
-
-              <div class="flex items-center" style="gap: 6px; margin-top: 6px">
-                <button class="bauos-btn solid sm" :disabled="saving" @click="saveField(f.key)">
-                  {{ saving ? "…" : "Speichern" }}
-                </button>
-                <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
-                <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">{{
-                  saveError
-                }}</span>
-              </div>
-              <!-- Freitext-Suggestions als Chips -->
-              <div
-                v-if="f.suggestions && f.suggestions.length"
-                class="flex flex-wrap"
-                style="gap: 4px; margin-top: 8px"
-              >
-                <button
-                  v-for="sug in f.suggestions"
-                  :key="sug"
-                  @click="applyPhaseSuggestion(f.key, sug)"
-                  class="chip-suggest"
-                  type="button"
-                >
-                  {{ sug }}
-                </button>
-              </div>
-            </div>
-
-            <!-- View-Mode (klickbar = Edit starten) -->
-            <button v-else class="stamm-value" @click="startEdit(f.key)" :title="'Klicken zum Bearbeiten'">
-              <span v-if="info[f.key as keyof ProjectInfo]" class="stamm-value-text">
-                {{ info[f.key as keyof ProjectInfo] }}
-              </span>
-              <span v-else class="stamm-value-empty">—</span>
-              <BIcon name="pencil" :size="11" class="stamm-edit-icon" />
-            </button>
-          </div>
-        </template>
-      </div>
-
-      <!-- Hinweis, wenn Stammdaten unvollstaendig -->
-      <div v-if="emptyStammCount > 0" class="stamm-hint">
-        <BIcon name="info" :size="12" />
-        <span>{{ emptyStammCount }} Stammdaten fehlen noch — klicke ein Feld an, um es auszufüllen.</span>
-      </div>
-
-      <!-- Verknuepfungen (Migration 005): Bauherr-Team-Link + Parent-Projekt -->
-      <div class="link-row">
-        <!-- Bauherr — Team-Verknuepfung -->
-        <div class="link-picker-wrapper">
-          <button class="link-chip" @click="openBauherrPicker" :title="'Bauherr mit Team-Mitglied verknüpfen'">
-            <BIcon name="user" :size="11" />
-            <span v-if="info.bauherrName">Bauherr: {{ info.bauherrName }}</span>
-            <span v-else style="color: var(--color-text-muted)">Bauherr verknüpfen…</span>
-          </button>
-          <div v-if="showBauherrPicker" class="link-dropdown">
-            <button v-if="info.bauherrId" class="link-dropdown-item link-dropdown-clear" @click="unlinkBauherr">
-              <BIcon name="x" :size="11" />
-              <span>Verknüpfung aufheben</span>
-            </button>
-            <div v-if="info.bauherrId" class="link-dropdown-divider"></div>
-            <div class="link-dropdown-header">Team-Mitglied wählen</div>
-            <button
-              v-for="m in allTeam"
-              :key="m.id"
-              class="link-dropdown-item"
-              :class="{ 'link-dropdown-active': m.id === info.bauherrId }"
-              @click="linkBauherr(m.id, m.name)"
-            >
-              <div class="team-avatar" style="width: 20px; height: 20px; font-size: 9px">
-                {{ initial(m.name) }}
-              </div>
-              <div style="flex: 1; min-width: 0">
-                <div style="font-size: 12px; color: var(--color-text)">{{ m.name }}</div>
-                <div v-if="m.role" style="font-size: 10px; color: var(--color-text-muted)">
-                  {{ m.role }}
-                </div>
-              </div>
-            </button>
-            <p v-if="allTeam.length === 0" class="link-dropdown-empty">Keine Team-Mitglieder vorhanden.</p>
-          </div>
-        </div>
-
-        <!-- Parent-Projekt -->
-        <div class="link-picker-wrapper">
-          <button
-            class="link-chip"
-            @click="openParentPicker"
-            :title="'Als Sub-Projekt unter anderem Projekt einordnen'"
-          >
-            <BIcon name="layers" :size="11" />
-            <span v-if="info.parentName">Teil von: {{ info.parentName }}</span>
-            <span v-else style="color: var(--color-text-muted)">Sub-Projekt von…</span>
-          </button>
-          <div v-if="showParentPicker" class="link-dropdown">
-            <button v-if="info.parentId" class="link-dropdown-item link-dropdown-clear" @click="setParent(null)">
-              <BIcon name="x" :size="11" />
-              <span>Verknüpfung aufheben</span>
-            </button>
-            <div v-if="info.parentId" class="link-dropdown-divider"></div>
-            <div class="link-dropdown-header">Übergeordnetes Projekt</div>
-            <button
-              v-for="p in parentCandidates"
-              :key="p.id"
-              class="link-dropdown-item"
-              :class="{ 'link-dropdown-active': p.id === info.parentId }"
-              @click="setParent(p.id)"
-            >
-              <BIcon name="folder" :size="11" style="color: var(--color-text-muted)" />
-              <span style="font-size: 12px; color: var(--color-text)">{{ p.name }}</span>
-            </button>
-            <p v-if="parentCandidates.length === 0" class="link-dropdown-empty">Keine weiteren Projekte vorhanden.</p>
-          </div>
-        </div>
       </div>
     </div>
 
-    <!-- ═══ Tab-Nav ════════════════════════════════════════════ -->
-    <div
-      class="flex items-center tab-nav"
-      style="
-        gap: 24px;
-        margin-bottom: 20px;
-        border-bottom: 1px solid var(--color-border);
-        overflow-x: auto;
-        position: relative;
-      "
-    >
-      <template
-        v-for="t in [
-          'uebersicht',
-          'notes',
-          'tasks',
-          'termine',
-          'files',
-          'team',
-          'bautagebuch',
-          'meetings',
-          'stunden',
-          'verlauf',
-          'zugriff',
-        ] as const"
-        :key="t"
-      >
-        <!-- "zugriff" nur fuer Admins. Module-gemappte Tabs respektieren
-             projects.modules_override (Phase 6e). uebersicht/verlauf/zugriff
-             sind immer sichtbar (oder admin-only). -->
-        <button
-          v-if="(t !== 'zugriff' || isAdmin) && tabVisible(t)"
-          @click="openTab(t)"
-          :class="['tab-btn', tab === t ? 'tab-btn-active' : '']"
-        >
-          {{
-            t === "uebersicht"
-              ? "Übersicht"
-              : t === "notes"
-                ? "Notizen"
-                : t === "tasks"
-                  ? "Aufgaben"
-                  : t === "termine"
-                    ? "Termine"
-                    : t === "files"
-                      ? "Dateien"
-                      : t === "team"
-                        ? "Team"
-                        : t === "bautagebuch"
-                          ? "Bautagebuch"
-                          : t === "meetings"
-                            ? "Meetings"
-                            : t === "stunden"
-                              ? "Stunden"
-                              : t === "verlauf"
-                                ? "Verlauf"
-                                : "Zugriff"
-          }}
-        </button>
-      </template>
+    <!-- Stammdaten-Grid (immer sichtbar, pro Feld Inline-Edit) -->
+    <div v-if="info" class="stammdaten-grid">
+      <template v-for="f in STAMMDATEN_FIELDS" :key="f.key">
+        <div class="stamm-field" :class="{ 'stamm-field-editing': editingField === f.key }">
+          <div class="eyebrow stamm-label">{{ f.label }}</div>
 
-      <!-- Module konfigurieren (Phase 6e) — am Ende der Tab-Bar -->
-      <div style="margin-left: auto; position: relative">
-        <button
-          @click="moduleSettingsOpen = !moduleSettingsOpen"
-          class="tab-btn"
-          :title="moduleHasOverride ? 'Module konfigurieren — Override aktiv' : 'Module konfigurieren'"
-          style="padding: 8px 10px"
-        >
-          <BIcon name="settings" :size="13" />
-          <span
-            v-if="moduleHasOverride"
-            style="
-              display: inline-block;
-              width: 6px;
-              height: 6px;
-              border-radius: 50%;
-              background: var(--color-primary, #f59e0b);
-              margin-left: 4px;
-            "
-            title="Override fuer dieses Projekt aktiv"
-          ></span>
-        </button>
-        <div v-if="moduleSettingsOpen" @click.self="moduleSettingsOpen = false" class="pm-popover-overlay">
-          <div class="pm-popover" @click.stop>
-            <div class="flex items-center justify-between" style="margin-bottom: 12px">
-              <div style="font-size: 13px; font-weight: 600">Module für dieses Projekt</div>
-              <button @click="moduleSettingsOpen = false" class="bauos-btn ghost sm">×</button>
-            </div>
-            <p class="text-xs" style="color: var(--color-text-muted); margin: 0 0 12px">
-              Tabs deaktivieren die für dieses Projekt nicht relevant sind. Die Daten bleiben erhalten — nur die
-              UI-Anzeige verschwindet.
-            </p>
-            <div class="settings-card settings-divide">
-              <label
-                v-for="m in PROJECT_MODULE_LIST"
-                :key="m.key"
-                class="settings-row flex items-center justify-between gap-3 px-3 py-2 cursor-pointer"
-              >
-                <span style="font-size: 13px">{{ m.label }}</span>
-                <input
-                  type="checkbox"
-                  :checked="moduleFlags[m.key]"
-                  :disabled="moduleBusy"
-                  @change="setProjectModule(m.key, ($event.target as HTMLInputElement).checked)"
-                />
-              </label>
-            </div>
-            <div class="flex items-center justify-between" style="margin-top: 12px; gap: 8px">
-              <button
-                v-if="moduleHasOverride"
-                @click="resetProjectModulesToGlobal"
-                :disabled="moduleBusy"
-                class="bauos-btn ghost sm"
-                title="Override entfernen — globale Defaults gelten"
-              >
-                Auf Default zurücksetzen
+          <!-- Editing-Mode -->
+          <div v-if="editingField === f.key" class="stamm-edit">
+            <!-- Enum -->
+            <select
+              v-if="f.inputType === 'enum'"
+              v-model="draftValue"
+              class="stamm-input"
+              @keyup="(e) => onEditKey(e, f.key)"
+            >
+              <option value="">—</option>
+              <option v-for="opt in f.options" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+            <!-- Date -->
+            <input
+              v-else-if="f.inputType === 'date'"
+              v-model="draftValue"
+              type="date"
+              class="stamm-input"
+              @keyup="(e) => onEditKey(e, f.key)"
+            />
+            <!-- Text -->
+            <input
+              v-else
+              v-model="draftValue"
+              type="text"
+              :placeholder="f.placeholder"
+              class="stamm-input"
+              @keyup="(e) => onEditKey(e, f.key)"
+              autofocus
+            />
+
+            <div class="flex items-center" style="gap: 6px; margin-top: 6px">
+              <button class="bauos-btn solid sm" :disabled="saving" @click="saveField(f.key)">
+                {{ saving ? "…" : "Speichern" }}
               </button>
-              <span v-else class="text-xs" style="color: var(--color-text-tertiary)"> Globale Defaults aktiv </span>
-              <button @click="moduleSettingsOpen = false" class="bauos-btn solid sm">Schließen</button>
+              <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
+              <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">{{
+                saveError
+              }}</span>
+            </div>
+            <!-- Freitext-Suggestions als Chips -->
+            <div v-if="f.suggestions && f.suggestions.length" class="flex flex-wrap" style="gap: 4px; margin-top: 8px">
+              <button
+                v-for="sug in f.suggestions"
+                :key="sug"
+                @click="applyPhaseSuggestion(f.key, sug)"
+                class="chip-suggest"
+                type="button"
+              >
+                {{ sug }}
+              </button>
+            </div>
+          </div>
+
+          <!-- View-Mode (klickbar = Edit starten) -->
+          <button v-else class="stamm-value" @click="startEdit(f.key)" :title="'Klicken zum Bearbeiten'">
+            <span v-if="info[f.key as keyof ProjectInfo]" class="stamm-value-text">
+              {{ info[f.key as keyof ProjectInfo] }}
+            </span>
+            <span v-else class="stamm-value-empty">—</span>
+            <BIcon name="pencil" :size="11" class="stamm-edit-icon" />
+          </button>
+        </div>
+      </template>
+    </div>
+
+    <!-- Hinweis, wenn Stammdaten unvollstaendig -->
+    <div v-if="info && emptyStammCount > 0" class="stamm-hint">
+      <BIcon name="info" :size="12" />
+      <span>{{ emptyStammCount }} Stammdaten fehlen noch — klicke ein Feld an, um es auszufüllen.</span>
+    </div>
+
+    <!-- Verknuepfungen (Migration 005): Bauherr-Team-Link + Parent-Projekt -->
+    <div v-if="info" class="link-row">
+      <!-- Bauherr — Team-Verknuepfung -->
+      <div class="link-picker-wrapper">
+        <button class="link-chip" @click="openBauherrPicker" :title="'Bauherr mit Team-Mitglied verknüpfen'">
+          <BIcon name="user" :size="11" />
+          <span v-if="info.bauherrName">Bauherr: {{ info.bauherrName }}</span>
+          <span v-else style="color: var(--color-text-muted)">Bauherr verknüpfen…</span>
+        </button>
+        <div v-if="showBauherrPicker" class="link-dropdown">
+          <button v-if="info.bauherrId" class="link-dropdown-item link-dropdown-clear" @click="unlinkBauherr">
+            <BIcon name="x" :size="11" />
+            <span>Verknüpfung aufheben</span>
+          </button>
+          <div v-if="info.bauherrId" class="link-dropdown-divider"></div>
+          <div class="link-dropdown-header">Team-Mitglied wählen</div>
+          <button
+            v-for="m in allTeam"
+            :key="m.id"
+            class="link-dropdown-item"
+            :class="{ 'link-dropdown-active': m.id === info.bauherrId }"
+            @click="linkBauherr(m.id, m.name)"
+          >
+            <div class="team-avatar" style="width: 20px; height: 20px; font-size: 9px">
+              {{ initial(m.name) }}
+            </div>
+            <div style="flex: 1; min-width: 0">
+              <div style="font-size: 12px; color: var(--color-text)">{{ m.name }}</div>
+              <div v-if="m.role" style="font-size: 10px; color: var(--color-text-muted)">
+                {{ m.role }}
+              </div>
+            </div>
+          </button>
+          <p v-if="allTeam.length === 0" class="link-dropdown-empty">Keine Team-Mitglieder vorhanden.</p>
+        </div>
+      </div>
+
+      <!-- Parent-Projekt -->
+      <div class="link-picker-wrapper">
+        <button class="link-chip" @click="openParentPicker" :title="'Als Sub-Projekt unter anderem Projekt einordnen'">
+          <BIcon name="layers" :size="11" />
+          <span v-if="info.parentName">Teil von: {{ info.parentName }}</span>
+          <span v-else style="color: var(--color-text-muted)">Sub-Projekt von…</span>
+        </button>
+        <div v-if="showParentPicker" class="link-dropdown">
+          <button v-if="info.parentId" class="link-dropdown-item link-dropdown-clear" @click="setParent(null)">
+            <BIcon name="x" :size="11" />
+            <span>Verknüpfung aufheben</span>
+          </button>
+          <div v-if="info.parentId" class="link-dropdown-divider"></div>
+          <div class="link-dropdown-header">Übergeordnetes Projekt</div>
+          <button
+            v-for="p in parentCandidates"
+            :key="p.id"
+            class="link-dropdown-item"
+            :class="{ 'link-dropdown-active': p.id === info.parentId }"
+            @click="setParent(p.id)"
+          >
+            <BIcon name="folder" :size="11" style="color: var(--color-text-muted)" />
+            <span style="font-size: 12px; color: var(--color-text)">{{ p.name }}</span>
+          </button>
+          <p v-if="parentCandidates.length === 0" class="link-dropdown-empty">Keine weiteren Projekte vorhanden.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ Tab-Nav (pt-tabs) ════════════════════════════════════ -->
+    <div class="ap-tabs">
+      <div class="pt-tabs tab-nav">
+        <template
+          v-for="t in [
+            'uebersicht',
+            'notes',
+            'tasks',
+            'termine',
+            'files',
+            'team',
+            'bautagebuch',
+            'meetings',
+            'stunden',
+            'verlauf',
+            'zugriff',
+          ] as const"
+          :key="t"
+        >
+          <button
+            v-if="(t !== 'zugriff' || isAdmin) && tabVisible(t)"
+            @click="openTab(t)"
+            :class="['pt-tab', tab === t ? 'is-active' : '']"
+          >
+            {{
+              t === "uebersicht"
+                ? "Übersicht"
+                : t === "notes"
+                  ? "Notizen"
+                  : t === "tasks"
+                    ? "Aufgaben"
+                    : t === "termine"
+                      ? "Termine"
+                      : t === "files"
+                        ? "Dateien"
+                        : t === "team"
+                          ? "Team"
+                          : t === "bautagebuch"
+                            ? "Bautagebuch"
+                            : t === "meetings"
+                              ? "Meetings"
+                              : t === "stunden"
+                                ? "Stunden"
+                                : t === "verlauf"
+                                  ? "Verlauf"
+                                  : "Zugriff"
+            }}
+          </button>
+        </template>
+
+        <!-- Module konfigurieren (Phase 6e) -->
+        <div style="margin-left: auto; position: relative">
+          <button
+            @click="moduleSettingsOpen = !moduleSettingsOpen"
+            class="pt-tab"
+            :title="moduleHasOverride ? 'Module konfigurieren — Override aktiv' : 'Module konfigurieren'"
+            style="padding: 8px 10px"
+          >
+            <BIcon name="settings" :size="13" />
+            <span
+              v-if="moduleHasOverride"
+              style="
+                display: inline-block;
+                width: 6px;
+                height: 6px;
+                border-radius: 50%;
+                background: var(--color-primary, #f59e0b);
+                margin-left: 4px;
+              "
+              title="Override fuer dieses Projekt aktiv"
+            ></span>
+          </button>
+          <div v-if="moduleSettingsOpen" @click.self="moduleSettingsOpen = false" class="pm-popover-overlay">
+            <div class="pm-popover" @click.stop>
+              <div class="flex items-center justify-between" style="margin-bottom: 12px">
+                <div style="font-size: 13px; font-weight: 600">Module für dieses Projekt</div>
+                <button @click="moduleSettingsOpen = false" class="bauos-btn ghost sm">×</button>
+              </div>
+              <p class="text-xs" style="color: var(--color-text-muted); margin: 0 0 12px">
+                Tabs deaktivieren die für dieses Projekt nicht relevant sind. Die Daten bleiben erhalten — nur die
+                UI-Anzeige verschwindet.
+              </p>
+              <div class="settings-card settings-divide">
+                <label
+                  v-for="m in PROJECT_MODULE_LIST"
+                  :key="m.key"
+                  class="settings-row flex items-center justify-between gap-3 px-3 py-2 cursor-pointer"
+                >
+                  <span style="font-size: 13px">{{ m.label }}</span>
+                  <input
+                    type="checkbox"
+                    :checked="moduleFlags[m.key]"
+                    :disabled="moduleBusy"
+                    @change="setProjectModule(m.key, ($event.target as HTMLInputElement).checked)"
+                  />
+                </label>
+              </div>
+              <div class="flex items-center justify-between" style="margin-top: 12px; gap: 8px">
+                <button
+                  v-if="moduleHasOverride"
+                  @click="resetProjectModulesToGlobal"
+                  :disabled="moduleBusy"
+                  class="bauos-btn ghost sm"
+                  title="Override entfernen — globale Defaults gelten"
+                >
+                  Auf Default zurücksetzen
+                </button>
+                <span v-else class="text-xs" style="color: var(--color-text-tertiary)"> Globale Defaults aktiv </span>
+                <button @click="moduleSettingsOpen = false" class="bauos-btn solid sm">Schließen</button>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- Uebersicht (V1 Stage — 2-Spalten) -->
+    <!-- Uebersicht (ap-grid — 2-Spalten) -->
     <div v-if="tab === 'uebersicht' && info">
       <!-- Unterprojekte (nur wenn vorhanden) -->
-      <div v-if="children.length > 0" class="ueb-card" style="margin-bottom: 16px">
-        <div class="flex items-center justify-between" style="margin-bottom: 8px">
-          <div class="eyebrow">Unterprojekte ({{ children.length }})</div>
+      <section v-if="children.length > 0" class="ap-panel" style="margin-bottom: 16px">
+        <div class="ap-panel-head">
+          <span class="ap-panel-title">Unterprojekte</span>
+          <span class="ap-panel-sub">· {{ children.length }}</span>
         </div>
-        <div class="children-grid">
-          <router-link
-            v-for="c in children"
-            :key="c.id"
-            :to="`/projects/${encodeURIComponent(c.name)}`"
-            class="child-card"
-          >
-            <BIcon name="folder" :size="12" style="color: var(--color-text-muted); flex-shrink: 0" />
-            <span class="child-name">{{ c.name }}</span>
-            <span
-              v-if="c.status && c.status !== 'aktiv'"
-              :class="['pill', `pill-status-${c.status}`]"
-              style="font-size: 9px"
+        <div class="ap-panel-body">
+          <div class="children-grid">
+            <router-link
+              v-for="c in children"
+              :key="c.id"
+              :to="`/projects/${encodeURIComponent(c.name)}`"
+              class="child-card"
             >
-              {{ c.status }}
-            </span>
-          </router-link>
-        </div>
-      </div>
-
-      <!-- Beschreibung (falls vorhanden oder im Edit-Mode) -->
-      <div v-if="info.description || editingField === 'description'" class="ueb-card" style="margin-bottom: 16px">
-        <div class="flex items-center justify-between" style="margin-bottom: 8px">
-          <div class="eyebrow">Beschreibung</div>
-          <button v-if="editingField !== 'description'" class="desc-edit-btn" @click="startEditDescription">
-            <BIcon name="pencil" :size="11" /><span style="margin-left: 4px">Bearbeiten</span>
-          </button>
-        </div>
-        <div v-if="editingField === 'description'">
-          <textarea
-            v-model="draftValue"
-            class="stamm-input"
-            rows="4"
-            placeholder="Kurz beschreiben, worum es bei diesem Projekt geht…"
-            style="resize: vertical; font-family: inherit; line-height: 1.5"
-          ></textarea>
-          <div class="flex items-center" style="gap: 6px; margin-top: 8px">
-            <button class="bauos-btn solid sm" :disabled="saving" @click="saveField('description')">
-              {{ saving ? "…" : "Speichern" }}
-            </button>
-            <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
-            <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">{{
-              saveError
-            }}</span>
+              <BIcon name="folder" :size="12" style="color: var(--color-text-muted); flex-shrink: 0" />
+              <span class="child-name">{{ c.name }}</span>
+              <span
+                v-if="c.status && c.status !== 'aktiv'"
+                :class="['pt-badge', c.status === 'pausiert' ? 'pt-badge--warning' : '']"
+                style="font-size: 9px"
+              >
+                {{ c.status }}
+              </span>
+            </router-link>
           </div>
         </div>
-        <p v-else class="desc-text">{{ info.description }}</p>
-      </div>
+      </section>
+
+      <!-- Beschreibung -->
+      <section v-if="info.description || editingField === 'description'" class="ap-panel" style="margin-bottom: 16px">
+        <div class="ap-panel-head">
+          <span class="ap-panel-title">Beschreibung</span>
+          <span style="flex: 1"></span>
+          <button
+            v-if="editingField !== 'description'"
+            class="pt-btn pt-btn--ghost pt-btn--sm"
+            @click="startEditDescription"
+          >
+            <BIcon name="pencil" :size="11" /> Bearbeiten
+          </button>
+        </div>
+        <div class="ap-panel-body">
+          <div v-if="editingField === 'description'">
+            <textarea
+              v-model="draftValue"
+              class="stamm-input"
+              rows="4"
+              placeholder="Kurz beschreiben, worum es bei diesem Projekt geht…"
+              style="resize: vertical; font-family: inherit; line-height: 1.5"
+            ></textarea>
+            <div class="flex items-center" style="gap: 6px; margin-top: 8px">
+              <button class="bauos-btn solid sm" :disabled="saving" @click="saveField('description')">
+                {{ saving ? "…" : "Speichern" }}
+              </button>
+              <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
+              <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">{{
+                saveError
+              }}</span>
+            </div>
+          </div>
+          <p v-else class="desc-text">{{ info.description }}</p>
+        </div>
+      </section>
 
       <!-- 2-Spalten-Hauptgrid -->
-      <div class="ueb-main-grid">
-        <!-- LINKE SPALTE: Aufgaben + Stammdaten -->
-        <div class="ueb-left-col">
-          <!-- Offene Aufgaben -->
-          <div class="ueb-card" style="margin-bottom: 16px">
-            <div class="flex items-center justify-between" style="margin-bottom: 8px">
-              <div class="eyebrow">Offene Aufgaben</div>
-              <button class="link-btn" @click="openTab('tasks')">Alle ansehen →</button>
+      <div class="ap-grid">
+        <!-- LINKE SPALTE -->
+        <div class="ap-col">
+          <!-- Stammdaten -->
+          <section class="ap-panel">
+            <div class="ap-panel-head">
+              <span class="ap-panel-title">Stammdaten</span>
+              <span style="flex: 1"></span>
+              <button class="pt-btn pt-btn--ghost pt-btn--sm" @click="startEdit('projektnummer')">Bearbeiten</button>
             </div>
-            <div v-if="openTasksSorted.length === 0" class="ueb-empty">Keine offenen Aufgaben.</div>
-            <div v-for="t in openTasksSorted" :key="t.id" class="ueb-task-row">
-              <div
-                class="task-prio-badge"
-                :class="{
-                  'prio-hoch': t.priority === 'hoch',
-                  'prio-mittel': t.priority === 'mittel',
-                  'prio-niedrig': t.priority === 'niedrig' || !t.priority,
-                }"
-              >
-                {{ t.priority === "hoch" ? "H" : t.priority === "mittel" ? "M" : "N" }}
+            <div class="ap-panel-body">
+              <dl class="ap-dl">
+                <template
+                  v-for="f in STAMMDATEN_FIELDS.filter((f) => f.key !== 'startDate' && f.key !== 'endDate')"
+                  :key="f.key"
+                >
+                  <dt>{{ f.label }}</dt>
+                  <dd>
+                    <button class="ueb-stamm-value" @click="startEdit(f.key)" title="Bearbeiten">
+                      {{ (info[f.key as keyof ProjectInfo] as string) || "—" }}
+                    </button>
+                  </dd>
+                </template>
+                <template v-if="info.startDate || info.endDate">
+                  <dt>Zeitraum</dt>
+                  <dd>{{ fmtDate(info.startDate) }} – {{ fmtDate(info.endDate) }}</dd>
+                </template>
+                <template v-if="info.budget != null">
+                  <dt>Budget</dt>
+                  <dd>{{ fmtEur(info.budget) }}</dd>
+                </template>
+              </dl>
+            </div>
+          </section>
+
+          <!-- Offene Aufgaben -->
+          <section class="ap-panel">
+            <div class="ap-panel-head">
+              <span class="ap-panel-title">Aufgaben</span>
+              <span class="ap-panel-sub">· {{ openTasksSorted.length }} offen</span>
+              <span style="flex: 1"></span>
+              <button class="pt-btn pt-btn--ghost pt-btn--sm" @click="openTab('tasks')">Alle →</button>
+            </div>
+            <div class="ap-panel-body flush">
+              <div v-if="openTasksSorted.length === 0" class="ueb-empty" style="padding: 16px 20px">
+                Keine offenen Aufgaben.
               </div>
-              <div style="flex: 1; min-width: 0">
-                <div class="ueb-row-title">{{ t.text }}</div>
-                <div v-if="t.assignee || t.date" class="ueb-row-meta">
-                  <span v-if="t.assignee">{{ t.assignee }}</span>
-                  <span v-if="t.assignee && t.date"> · </span>
-                  <span v-if="t.date">{{ fmtDate(t.date) }}</span>
+              <div v-for="t in openTasksSorted" :key="t.id" class="pt-list-item">
+                <input class="pt-check" type="checkbox" @change="completeTask(t)" />
+                <div class="pt-list-grow">
+                  <div class="pt-li-title">{{ t.text }}</div>
+                  <div v-if="t.assignee || t.date" class="pt-li-meta">
+                    <span v-if="t.assignee">{{ t.assignee }}</span>
+                    <span v-if="t.assignee && t.date"> · </span>
+                    <span v-if="t.date">{{ fmtDate(t.date) }}</span>
+                  </div>
                 </div>
+                <span
+                  v-if="t.priority"
+                  class="pt-badge"
+                  :class="{
+                    'pt-badge--danger': t.priority === 'hoch',
+                    'pt-badge--warning': t.priority === 'mittel',
+                  }"
+                  style="font-size: 10px"
+                  >{{ t.priority }}</span
+                >
               </div>
-              <input
-                type="checkbox"
-                @change="completeTask(t)"
-                style="accent-color: var(--color-primary); flex-shrink: 0"
-              />
             </div>
             <!-- Quick-Add -->
-            <div class="quick-add" style="margin-top: 8px">
+            <div class="quick-add" style="padding: 8px 16px; border-top: 1px dashed var(--color-border-subtle)">
               <input
                 v-model="quickTaskText"
                 placeholder="Neue Aufgabe…"
@@ -2781,55 +2825,39 @@ async function deleteMeeting() {
                 <BIcon name="plus" :size="12" />
               </button>
             </div>
-          </div>
-
-          <!-- Stammdaten (kompakte Liste) -->
-          <div class="ueb-card">
-            <div class="eyebrow" style="margin-bottom: 10px">Stammdaten</div>
-            <div class="ueb-stamm-list">
-              <div
-                v-for="f in STAMMDATEN_FIELDS.filter((f) => f.key !== 'startDate' && f.key !== 'endDate')"
-                :key="f.key"
-                class="ueb-stamm-row"
-              >
-                <span class="ueb-stamm-label">{{ f.label }}</span>
-                <button class="ueb-stamm-value" @click="startEdit(f.key)" title="Bearbeiten">
-                  {{ (info[f.key as keyof ProjectInfo] as string) || "—" }}
-                </button>
-              </div>
-              <div v-if="info.budget != null" class="ueb-stamm-row">
-                <span class="ueb-stamm-label">Budget</span>
-                <span class="ueb-stamm-value-plain">{{ fmtEur(info.budget) }}</span>
-              </div>
-            </div>
-          </div>
+          </section>
         </div>
 
-        <!-- RECHTE SPALTE: Termine + Team + Aktivität -->
-        <div class="ueb-right-col">
-          <!-- Als nächstes / Termine -->
-          <div class="ueb-card" style="margin-bottom: 16px">
-            <div class="flex items-center justify-between" style="margin-bottom: 8px">
-              <div class="eyebrow">Als nächstes</div>
-              <button class="link-btn" @click="openTab('termine')">Kalender →</button>
+        <!-- RECHTE SPALTE -->
+        <div class="ap-col">
+          <!-- Termine -->
+          <section class="ap-panel">
+            <div class="ap-panel-head">
+              <span class="ap-panel-title">Termine</span>
+              <span style="flex: 1"></span>
+              <button class="pt-btn pt-btn--ghost pt-btn--sm" @click="openTab('termine')">Kalender →</button>
             </div>
-            <div v-if="upcomingTermine.length === 0" class="ueb-empty">Keine anstehenden Termine.</div>
-            <div v-for="t in upcomingTermine" :key="t.id" class="ueb-termin-row">
-              <div class="ueb-termin-date">
-                <span class="ueb-termin-day">{{ fmtDate(t.datum).slice(0, 2) }}</span>
-                <span class="ueb-termin-monthday">{{ t.datum.slice(5, 7) }}/{{ t.datum.slice(8, 10) }}</span>
+            <div class="ap-panel-body flush">
+              <div v-if="upcomingTermine.length === 0" class="ueb-empty" style="padding: 16px 20px">
+                Keine anstehenden Termine.
               </div>
-              <div style="flex: 1; min-width: 0">
-                <div class="ueb-row-title">{{ t.text }}</div>
-                <div class="ueb-row-meta">
-                  <span v-if="t.uhrzeit">{{ t.uhrzeit }}</span>
-                  <span v-if="t.uhrzeit && t.location"> · </span>
-                  <span v-if="t.location">{{ t.location }}</span>
+              <div v-for="t in upcomingTermine" :key="t.id" class="ap-termin">
+                <div class="ap-termin-date">
+                  <div class="d">{{ fmtDate(t.datum).slice(0, 2) }}</div>
+                  <div class="m">{{ t.datum.slice(5, 7) }}</div>
+                </div>
+                <div class="ap-termin-body">
+                  <div class="ap-termin-title">{{ t.text }}</div>
+                  <div class="ap-termin-meta">
+                    <span v-if="t.uhrzeit">{{ t.uhrzeit }}</span>
+                    <span v-if="t.uhrzeit && t.location"> · </span>
+                    <span v-if="t.location">{{ t.location }}</span>
+                  </div>
                 </div>
               </div>
             </div>
             <!-- Quick-Add Termin -->
-            <div class="quick-add" style="margin-top: 8px">
+            <div class="quick-add" style="padding: 8px 16px; border-top: 1px dashed var(--color-border-subtle)">
               <input v-model="quickTerminDate" type="date" class="quick-input" style="width: 120px" />
               <input
                 v-model="quickTerminText"
@@ -2847,41 +2875,55 @@ async function deleteMeeting() {
                 <BIcon name="plus" :size="12" />
               </button>
             </div>
-          </div>
+          </section>
 
           <!-- Team -->
-          <div class="ueb-card" style="margin-bottom: 16px">
-            <div class="flex items-center justify-between" style="margin-bottom: 8px">
-              <div class="eyebrow">Team</div>
-              <button class="link-btn" @click="openTab('team')">Alle →</button>
+          <section class="ap-panel">
+            <div class="ap-panel-head">
+              <span class="ap-panel-title">Team</span>
+              <span style="flex: 1"></span>
+              <button class="pt-btn pt-btn--ghost pt-btn--sm" @click="openTab('team')">Alle →</button>
             </div>
-            <div v-if="projectTeam.length === 0" class="ueb-empty">Noch keine Teammitglieder zugeordnet.</div>
-            <div v-for="m in projectTeam.slice(0, 4)" :key="m.id" class="ueb-team-row">
-              <div class="ueb-avatar">{{ (m.name[0] ?? "?").toUpperCase() }}</div>
-              <div style="flex: 1; min-width: 0">
-                <div class="ueb-row-title">{{ m.name }}</div>
-                <div class="ueb-row-meta">{{ m.role || "Keine Rolle" }}</div>
+            <div class="ap-panel-body flush">
+              <div v-if="projectTeam.length === 0" class="ueb-empty" style="padding: 16px 20px">
+                Noch keine Teammitglieder zugeordnet.
               </div>
-            </div>
-          </div>
-
-          <!-- Letzte Aktivität -->
-          <div class="ueb-card">
-            <div class="flex items-center justify-between" style="margin-bottom: 8px">
-              <div class="eyebrow">Letzte Aktivität</div>
-              <button class="link-btn" @click="openTab('verlauf')">Alle →</button>
-            </div>
-            <div v-if="!recentActivityLoaded" class="ueb-empty">Lade…</div>
-            <div v-else-if="recentActivity.length === 0" class="ueb-empty">Noch keine Aktivität.</div>
-            <div v-for="log in recentActivity" :key="log.id ?? `${log.sessionId}-${log.createdAt}`" class="ueb-row">
-              <div style="flex: 1; min-width: 0">
-                <div class="ueb-row-title">{{ activityLabel(log) }}</div>
-                <div class="ueb-row-meta">
-                  {{ activityTime(log.createdAt) }}<span v-if="log.agentName"> · {{ log.agentName }}</span>
+              <div v-for="m in projectTeam.slice(0, 4)" :key="m.id" class="pt-list-item">
+                <div class="ueb-avatar">{{ initial(m.name) }}</div>
+                <div class="pt-list-grow">
+                  <div class="pt-li-title">{{ m.name }}</div>
+                  <div class="pt-li-meta">{{ m.role || "Keine Rolle" }}</div>
                 </div>
               </div>
             </div>
-          </div>
+          </section>
+
+          <!-- Letzte Aktivität -->
+          <section class="ap-panel">
+            <div class="ap-panel-head">
+              <span class="ap-panel-title">Letzte Aktivität</span>
+              <span style="flex: 1"></span>
+              <button class="pt-btn pt-btn--ghost pt-btn--sm" @click="openTab('verlauf')">Alle →</button>
+            </div>
+            <div class="ap-panel-body flush">
+              <div v-if="!recentActivityLoaded" class="ueb-empty" style="padding: 16px 20px">Lade…</div>
+              <div v-else-if="recentActivity.length === 0" class="ueb-empty" style="padding: 16px 20px">
+                Noch keine Aktivität.
+              </div>
+              <div
+                v-for="log in recentActivity"
+                :key="log.id ?? `${log.sessionId}-${log.createdAt}`"
+                class="pt-list-item"
+              >
+                <div class="pt-list-grow">
+                  <div class="pt-li-title">{{ activityLabel(log) }}</div>
+                  <div class="pt-li-meta">
+                    {{ activityTime(log.createdAt) }}<span v-if="log.agentName"> · {{ log.agentName }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
@@ -5631,14 +5673,253 @@ async function deleteMeeting() {
   white-space: nowrap;
 }
 
-/* ── Hero Redesign ─────────────────────────────────── */
-.hero-top {
+/* ── Projekt-Kopf (ap-phead) ───────────────────────── */
+.ap-phead {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 16px;
+  padding: 20px 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg);
+}
+.hero-with-accent {
+  border-top: 3px solid var(--accent-color);
+}
+.ap-phead-l {
+  min-width: 0;
+  flex: 1;
+}
+.ap-ptitle {
+  font-size: 32px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: var(--color-text);
+  margin: 0 0 8px;
+}
+.ap-pmeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.ap-pmeta .sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--color-border);
+  display: inline-block;
+}
+.ap-phead-r {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  flex: none;
+}
+.ap-prog {
+  width: 200px;
+}
+.ap-prog-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+.ap-prog-lbl {
+  font-size: 11px;
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+.ap-prog-val {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+/* pt-progress — bar track */
+.pt-progress {
+  height: 4px;
+  background: var(--color-border);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.pt-progress i {
+  display: block;
+  height: 100%;
+  background: var(--color-primary, #f59e0b);
+  border-radius: 999px;
+  transition: width 300ms ease;
+}
+
+/* ── ap-tabs wrapper ───────────────────────────────── */
+.ap-tabs {
+  margin-bottom: 20px;
+}
+
+/* ── ap-grid / ap-col ──────────────────────────────── */
+.ap-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .ap-grid {
+    grid-template-columns: 1fr;
+  }
+  .ap-phead {
+    flex-direction: column;
+    gap: 12px;
+  }
+  .ap-phead-r {
+    align-items: flex-start;
+  }
+}
+.ap-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+/* ── ap-panel ──────────────────────────────────────── */
+.ap-panel {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.ap-panel-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 6px;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
+.ap-panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+.ap-panel-sub {
+  font-size: 12px;
+  color: var(--color-text-faint);
+}
+.ap-panel-body {
+  padding: 16px;
+}
+.ap-panel-body.flush {
+  padding: 0;
+}
+
+/* ── ap-dl (Stammdaten definition list) ────────────── */
+.ap-dl {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 8px 12px;
+  margin: 0;
+}
+.ap-dl dt {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+.ap-dl dd {
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+/* ── ap-termin ─────────────────────────────────────── */
+.ap-termin {
+  display: flex;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.ap-termin:last-child {
+  border-bottom: 0;
+}
+.ap-termin-date {
+  flex: none;
+  width: 40px;
+  text-align: center;
+}
+.ap-termin-date .d {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+  line-height: 1;
+  display: block;
+}
+.ap-termin-date .m {
+  font-size: 11px;
+  color: var(--color-text-faint);
+  text-transform: uppercase;
+  display: block;
+  margin-top: 2px;
+}
+.ap-termin-body {
+  min-width: 0;
+}
+.ap-termin-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text);
+}
+.ap-termin-meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* ── pt-list-item (tasks / team in overview) ───────── */
+.pt-list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.pt-list-item:last-child {
+  border-bottom: 0;
+}
+.pt-check {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  accent-color: var(--color-primary, #f59e0b);
+}
+.pt-list-grow {
+  flex: 1;
+  min-width: 0;
+}
+.pt-li-title {
+  font-size: 13px;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pt-li-title.is-done {
+  text-decoration: line-through;
+  color: var(--color-text-faint);
+}
+.pt-li-meta {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* ── Hero Eyebrow (kept for breadcrumb line) ───────── */
 .hero-eyebrow {
   font-size: 11px;
   font-weight: 600;
@@ -5646,133 +5927,8 @@ async function deleteMeeting() {
   text-transform: uppercase;
   color: var(--color-text-faint);
 }
-.hero-top-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.hero-title {
-  font-size: 26px;
-  font-weight: 600;
-  margin: 0 0 4px;
-  letter-spacing: -0.01em;
-  color: var(--color-text);
-  line-height: 1.2;
-}
-.hero-meta {
-  font-size: 13px;
-  color: var(--color-text-muted);
-  margin-bottom: 8px;
-}
-.hero-meta-dot {
-  margin: 0 4px;
-  color: var(--color-text-faint);
-}
-.hero-tags-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.hero-tags {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.hero-tag {
-  font-size: 12px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
-}
 
-/* ── Übersicht 2-Spalten ───────────────────────────── */
-.ueb-main-grid {
-  display: grid;
-  grid-template-columns: 1fr 1.4fr;
-  gap: 16px;
-  align-items: start;
-}
-@media (max-width: 900px) {
-  .ueb-main-grid {
-    grid-template-columns: 1fr;
-  }
-}
-.ueb-left-col,
-.ueb-right-col {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-/* ── Task-Priority-Badge ───────────────────────────── */
-.ueb-task-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-.ueb-task-row:last-child {
-  border-bottom: none;
-}
-.task-prio-badge {
-  flex-shrink: 0;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0;
-  margin-top: 2px;
-}
-.prio-hoch {
-  background: #fee2e2;
-  color: #b91c1c;
-  border: 1px solid #fca5a5;
-}
-.prio-mittel {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
-}
-.prio-niedrig {
-  background: var(--color-bg-subtle);
-  color: var(--color-text-tertiary);
-  border: 1px solid var(--color-border);
-}
-
-/* ── Stammdaten-Liste (Übersicht) ──────────────────── */
-.ueb-stamm-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.ueb-stamm-row {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--color-border-subtle);
-  font-size: 13px;
-}
-.ueb-stamm-row:last-child {
-  border-bottom: none;
-}
-.ueb-stamm-label {
-  color: var(--color-text-muted);
-  min-width: 90px;
-  flex-shrink: 0;
-  font-size: 12px;
-}
+/* ── ueb-stamm-value (click-to-edit in ap-dl) ──────── */
 .ueb-stamm-value {
   color: var(--color-text);
   background: transparent;
@@ -5782,54 +5938,13 @@ async function deleteMeeting() {
   text-align: left;
   font-size: 13px;
   font-family: inherit;
+  font-weight: 500;
 }
 .ueb-stamm-value:hover {
   color: var(--color-primary);
 }
-.ueb-stamm-value-plain {
-  color: var(--color-text);
-  font-size: 13px;
-}
 
-/* ── Termin-Rows ───────────────────────────────────── */
-.ueb-termin-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 7px 0;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-.ueb-termin-row:last-child {
-  border-bottom: none;
-}
-.ueb-termin-date {
-  flex-shrink: 0;
-  width: 36px;
-  text-align: center;
-}
-.ueb-termin-day {
-  display: block;
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--color-text);
-  line-height: 1;
-}
-.ueb-termin-monthday {
-  font-size: 10px;
-  color: var(--color-text-tertiary);
-}
-
-/* ── Team-Rows ─────────────────────────────────────── */
-.ueb-team-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-.ueb-team-row:last-child {
-  border-bottom: none;
-}
+/* ── ueb-avatar (team member circle in overview) ───── */
 .ueb-avatar {
   width: 28px;
   height: 28px;
@@ -5873,16 +5988,16 @@ async function deleteMeeting() {
     background: #fff !important;
     color: #000 !important;
   }
-  .hero,
-  .ueb-card,
+  .ap-phead,
+  .ap-panel,
   .stat-tile {
     page-break-inside: avoid;
     border-color: #ccc !important;
     background: #fff !important;
     box-shadow: none !important;
   }
-  /* Tabs-Header-Bar: weg. Nur der aktive Uebersichts-Inhalt wird gedruckt. */
-  .flex[style*="border-bottom"] {
+  /* Tab-Bar ausblenden, nur aktiver Inhalt wird gedruckt */
+  .ap-tabs {
     display: none !important;
   }
   /* Kompaktere Schriften fuer Druck */
