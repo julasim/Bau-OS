@@ -2416,149 +2416,8 @@ async function deleteMeeting() {
       </div>
     </div>
 
-    <!-- Stammdaten-Grid (immer sichtbar, pro Feld Inline-Edit) -->
-    <div v-if="info" class="stammdaten-grid">
-      <template v-for="f in STAMMDATEN_FIELDS" :key="f.key">
-        <div class="stamm-field" :class="{ 'stamm-field-editing': editingField === f.key }">
-          <div class="eyebrow stamm-label">{{ f.label }}</div>
-
-          <!-- Editing-Mode -->
-          <div v-if="editingField === f.key" class="stamm-edit">
-            <!-- Enum -->
-            <select
-              v-if="f.inputType === 'enum'"
-              v-model="draftValue"
-              class="stamm-input"
-              @keyup="(e) => onEditKey(e, f.key)"
-            >
-              <option value="">—</option>
-              <option v-for="opt in f.options" :key="opt" :value="opt">{{ opt }}</option>
-            </select>
-            <!-- Date -->
-            <input
-              v-else-if="f.inputType === 'date'"
-              v-model="draftValue"
-              type="date"
-              class="stamm-input"
-              @keyup="(e) => onEditKey(e, f.key)"
-            />
-            <!-- Text -->
-            <input
-              v-else
-              v-model="draftValue"
-              type="text"
-              :placeholder="f.placeholder"
-              class="stamm-input"
-              @keyup="(e) => onEditKey(e, f.key)"
-              autofocus
-            />
-
-            <div class="flex items-center" style="gap: 6px; margin-top: 6px">
-              <button class="bauos-btn solid sm" :disabled="saving" @click="saveField(f.key)">
-                {{ saving ? "…" : "Speichern" }}
-              </button>
-              <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
-              <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">{{
-                saveError
-              }}</span>
-            </div>
-            <!-- Freitext-Suggestions als Chips -->
-            <div v-if="f.suggestions && f.suggestions.length" class="flex flex-wrap" style="gap: 4px; margin-top: 8px">
-              <button
-                v-for="sug in f.suggestions"
-                :key="sug"
-                @click="applyPhaseSuggestion(f.key, sug)"
-                class="chip-suggest"
-                type="button"
-              >
-                {{ sug }}
-              </button>
-            </div>
-          </div>
-
-          <!-- View-Mode (klickbar = Edit starten) -->
-          <button v-else class="stamm-value" @click="startEdit(f.key)" :title="'Klicken zum Bearbeiten'">
-            <span v-if="info[f.key as keyof ProjectInfo]" class="stamm-value-text">
-              {{ info[f.key as keyof ProjectInfo] }}
-            </span>
-            <span v-else class="stamm-value-empty">—</span>
-            <BIcon name="pencil" :size="11" class="stamm-edit-icon" />
-          </button>
-        </div>
-      </template>
-    </div>
-
-    <!-- Hinweis, wenn Stammdaten unvollstaendig -->
-    <div v-if="info && emptyStammCount > 0" class="stamm-hint">
-      <BIcon name="info" :size="12" />
-      <span>{{ emptyStammCount }} Stammdaten fehlen noch — klicke ein Feld an, um es auszufüllen.</span>
-    </div>
-
-    <!-- Verknuepfungen (Migration 005): Bauherr-Team-Link + Parent-Projekt -->
-    <div v-if="info" class="link-row">
-      <!-- Bauherr — Team-Verknuepfung -->
-      <div class="link-picker-wrapper">
-        <button class="link-chip" @click="openBauherrPicker" :title="'Bauherr mit Team-Mitglied verknüpfen'">
-          <BIcon name="user" :size="11" />
-          <span v-if="info.bauherrName">Bauherr: {{ info.bauherrName }}</span>
-          <span v-else style="color: var(--color-text-muted)">Bauherr verknüpfen…</span>
-        </button>
-        <div v-if="showBauherrPicker" class="link-dropdown">
-          <button v-if="info.bauherrId" class="link-dropdown-item link-dropdown-clear" @click="unlinkBauherr">
-            <BIcon name="x" :size="11" />
-            <span>Verknüpfung aufheben</span>
-          </button>
-          <div v-if="info.bauherrId" class="link-dropdown-divider"></div>
-          <div class="link-dropdown-header">Team-Mitglied wählen</div>
-          <button
-            v-for="m in allTeam"
-            :key="m.id"
-            class="link-dropdown-item"
-            :class="{ 'link-dropdown-active': m.id === info.bauherrId }"
-            @click="linkBauherr(m.id, m.name)"
-          >
-            <div class="team-avatar" style="width: 20px; height: 20px; font-size: 9px">
-              {{ initial(m.name) }}
-            </div>
-            <div style="flex: 1; min-width: 0">
-              <div style="font-size: 12px; color: var(--color-text)">{{ m.name }}</div>
-              <div v-if="m.role" style="font-size: 10px; color: var(--color-text-muted)">
-                {{ m.role }}
-              </div>
-            </div>
-          </button>
-          <p v-if="allTeam.length === 0" class="link-dropdown-empty">Keine Team-Mitglieder vorhanden.</p>
-        </div>
-      </div>
-
-      <!-- Parent-Projekt -->
-      <div class="link-picker-wrapper">
-        <button class="link-chip" @click="openParentPicker" :title="'Als Sub-Projekt unter anderem Projekt einordnen'">
-          <BIcon name="layers" :size="11" />
-          <span v-if="info.parentName">Teil von: {{ info.parentName }}</span>
-          <span v-else style="color: var(--color-text-muted)">Sub-Projekt von…</span>
-        </button>
-        <div v-if="showParentPicker" class="link-dropdown">
-          <button v-if="info.parentId" class="link-dropdown-item link-dropdown-clear" @click="setParent(null)">
-            <BIcon name="x" :size="11" />
-            <span>Verknüpfung aufheben</span>
-          </button>
-          <div v-if="info.parentId" class="link-dropdown-divider"></div>
-          <div class="link-dropdown-header">Übergeordnetes Projekt</div>
-          <button
-            v-for="p in parentCandidates"
-            :key="p.id"
-            class="link-dropdown-item"
-            :class="{ 'link-dropdown-active': p.id === info.parentId }"
-            @click="setParent(p.id)"
-          >
-            <BIcon name="folder" :size="11" style="color: var(--color-text-muted)" />
-            <span style="font-size: 12px; color: var(--color-text)">{{ p.name }}</span>
-          </button>
-          <p v-if="parentCandidates.length === 0" class="link-dropdown-empty">Keine weiteren Projekte vorhanden.</p>
-        </div>
-      </div>
-    </div>
+    <!-- Stammdaten-Editor + Verknuepfungen liegen jetzt im Uebersicht-Panel
+         (Design-System-Referenz: zwischen ap-phead und Tabs steht nichts). -->
 
     <!-- ═══ Tab-Nav (pt-tabs) ════════════════════════════════════ -->
     <div class="ap-tabs">
@@ -2755,26 +2614,140 @@ async function deleteMeeting() {
             </div>
             <div class="ap-panel-body">
               <dl class="ap-dl">
-                <template
-                  v-for="f in STAMMDATEN_FIELDS.filter((f) => f.key !== 'startDate' && f.key !== 'endDate')"
-                  :key="f.key"
-                >
+                <template v-for="f in STAMMDATEN_FIELDS" :key="f.key">
                   <dt>{{ f.label }}</dt>
                   <dd>
-                    <button class="ueb-stamm-value" @click="startEdit(f.key)" title="Bearbeiten">
+                    <!-- Inline-Editor (im Panel, wie Referenz) -->
+                    <div v-if="editingField === f.key" class="ueb-stamm-edit">
+                      <select
+                        v-if="f.inputType === 'enum'"
+                        v-model="draftValue"
+                        class="pt-select"
+                        @keyup="(e) => onEditKey(e, f.key)"
+                      >
+                        <option value="">—</option>
+                        <option v-for="opt in f.options" :key="opt" :value="opt">{{ opt }}</option>
+                      </select>
+                      <input
+                        v-else-if="f.inputType === 'date'"
+                        v-model="draftValue"
+                        type="date"
+                        class="pt-input"
+                        @keyup="(e) => onEditKey(e, f.key)"
+                      />
+                      <input
+                        v-else
+                        v-model="draftValue"
+                        type="text"
+                        :placeholder="f.placeholder"
+                        class="pt-input"
+                        @keyup="(e) => onEditKey(e, f.key)"
+                        autofocus
+                      />
+                      <div class="ueb-stamm-actions">
+                        <button class="pt-btn pt-btn--primary pt-btn--sm" :disabled="saving" @click="saveField(f.key)">
+                          {{ saving ? "…" : "Speichern" }}
+                        </button>
+                        <button class="pt-btn pt-btn--ghost pt-btn--sm" @click="cancelEdit">Abbrechen</button>
+                        <span v-if="saveError" class="ueb-stamm-err">{{ saveError }}</span>
+                      </div>
+                      <div v-if="f.suggestions && f.suggestions.length" class="ueb-stamm-sugg">
+                        <button
+                          v-for="sug in f.suggestions"
+                          :key="sug"
+                          type="button"
+                          class="chip-suggest"
+                          @click="applyPhaseSuggestion(f.key, sug)"
+                        >
+                          {{ sug }}
+                        </button>
+                      </div>
+                    </div>
+                    <!-- Anzeige (Klick = Bearbeiten) -->
+                    <button v-else class="ueb-stamm-value" @click="startEdit(f.key)" title="Bearbeiten">
                       {{ (info[f.key as keyof ProjectInfo] as string) || "—" }}
                     </button>
                   </dd>
-                </template>
-                <template v-if="info.startDate || info.endDate">
-                  <dt>Zeitraum</dt>
-                  <dd>{{ fmtDate(info.startDate) }} – {{ fmtDate(info.endDate) }}</dd>
                 </template>
                 <template v-if="info.budget != null">
                   <dt>Budget</dt>
                   <dd>{{ fmtEur(info.budget) }}</dd>
                 </template>
               </dl>
+
+              <!-- Hinweis bei unvollstaendigen Stammdaten -->
+              <div v-if="emptyStammCount > 0" class="ueb-stamm-hint">
+                <BIcon name="info" :size="12" />
+                <span>{{ emptyStammCount }} Stammdaten fehlen noch — klicke ein Feld an, um es auszufüllen.</span>
+              </div>
+
+              <!-- Verknuepfungen: Bauherr + Sub-Projekt -->
+              <div class="ueb-link-row">
+                <div class="link-picker-wrapper">
+                  <button class="link-chip" @click="openBauherrPicker" title="Bauherr mit Team-Mitglied verknüpfen">
+                    <BIcon name="user" :size="11" />
+                    <span v-if="info.bauherrName">Bauherr: {{ info.bauherrName }}</span>
+                    <span v-else style="color: var(--color-text-muted)">Bauherr verknüpfen…</span>
+                  </button>
+                  <div v-if="showBauherrPicker" class="link-dropdown">
+                    <button v-if="info.bauherrId" class="link-dropdown-item link-dropdown-clear" @click="unlinkBauherr">
+                      <BIcon name="x" :size="11" />
+                      <span>Verknüpfung aufheben</span>
+                    </button>
+                    <div v-if="info.bauherrId" class="link-dropdown-divider"></div>
+                    <div class="link-dropdown-header">Team-Mitglied wählen</div>
+                    <button
+                      v-for="m in allTeam"
+                      :key="m.id"
+                      class="link-dropdown-item"
+                      :class="{ 'link-dropdown-active': m.id === info.bauherrId }"
+                      @click="linkBauherr(m.id, m.name)"
+                    >
+                      <div class="team-avatar" style="width: 20px; height: 20px; font-size: 9px">
+                        {{ initial(m.name) }}
+                      </div>
+                      <div style="flex: 1; min-width: 0">
+                        <div style="font-size: 12px; color: var(--color-text)">{{ m.name }}</div>
+                        <div v-if="m.role" style="font-size: 10px; color: var(--color-text-muted)">{{ m.role }}</div>
+                      </div>
+                    </button>
+                    <p v-if="allTeam.length === 0" class="link-dropdown-empty">Keine Team-Mitglieder vorhanden.</p>
+                  </div>
+                </div>
+
+                <div class="link-picker-wrapper">
+                  <button class="link-chip" @click="openParentPicker" title="Als Sub-Projekt einordnen">
+                    <BIcon name="layers" :size="11" />
+                    <span v-if="info.parentName">Teil von: {{ info.parentName }}</span>
+                    <span v-else style="color: var(--color-text-muted)">Sub-Projekt von…</span>
+                  </button>
+                  <div v-if="showParentPicker" class="link-dropdown">
+                    <button
+                      v-if="info.parentId"
+                      class="link-dropdown-item link-dropdown-clear"
+                      @click="setParent(null)"
+                    >
+                      <BIcon name="x" :size="11" />
+                      <span>Verknüpfung aufheben</span>
+                    </button>
+                    <div v-if="info.parentId" class="link-dropdown-divider"></div>
+                    <div class="link-dropdown-header">Übergeordnetes Projekt</div>
+                    <button
+                      v-for="p in parentCandidates"
+                      :key="p.id"
+                      class="link-dropdown-item"
+                      :class="{ 'link-dropdown-active': p.id === info.parentId }"
+                      @click="setParent(p.id)"
+                    >
+                      <BIcon name="folder" :size="11" style="color: var(--color-text-muted)" />
+                      <span style="font-size: 12px; color: var(--color-text)">{{ p.name }}</span>
+                    </button>
+                    <p v-if="parentCandidates.length === 0" class="link-dropdown-empty">
+                      Keine weiteren Projekte vorhanden.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -5673,31 +5646,25 @@ async function deleteMeeting() {
   white-space: nowrap;
 }
 
-/* ── Projekt-Kopf (ap-phead) ───────────────────────── */
+/* ── Projekt-Kopf (ap-phead) — rahmenlos, wie Referenz ─────── */
 .ap-phead {
   display: flex;
   align-items: flex-start;
-  gap: 24px;
-  margin-bottom: 16px;
-  padding: 20px 24px;
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  background: var(--color-bg);
+  gap: var(--space-6, 24px);
+  margin-bottom: var(--space-6, 24px);
 }
-.hero-with-accent {
-  border-top: 3px solid var(--accent-color);
+.ap-ptitle {
+  font-family: var(--font-display, "Inter Tight", "Inter", sans-serif);
+  font-size: var(--fs-36, 36px);
+  font-weight: var(--fw-semibold, 600);
+  letter-spacing: var(--tracking-display, -0.03em);
+  line-height: var(--lh-tight, 1.1);
+  color: var(--fg, var(--color-text));
+  margin: 0 0 var(--space-3, 12px);
 }
 .ap-phead-l {
   min-width: 0;
   flex: 1;
-}
-.ap-ptitle {
-  font-size: 32px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.15;
-  color: var(--color-text);
-  margin: 0 0 8px;
 }
 .ap-pmeta {
   display: flex;
@@ -5942,6 +5909,52 @@ async function deleteMeeting() {
 }
 .ueb-stamm-value:hover {
   color: var(--color-primary);
+}
+
+/* ── Inline-Editor im Stammdaten-Panel (verlagert aus der alten Leiste) ── */
+.ueb-stamm-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ueb-stamm-edit .pt-input,
+.ueb-stamm-edit .pt-select {
+  width: 100%;
+  max-width: 240px;
+}
+.ueb-stamm-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.ueb-stamm-err {
+  font-size: 11px;
+  color: var(--color-danger-text);
+  margin-left: 4px;
+}
+.ueb-stamm-sugg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.ueb-stamm-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  background: var(--color-bg-subtle);
+  border-radius: var(--radius-md, 6px);
+}
+.ueb-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-border-subtle);
 }
 
 /* ── ueb-avatar (team member circle in overview) ───── */
