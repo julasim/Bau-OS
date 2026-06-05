@@ -2236,20 +2236,16 @@ async function deleteMeeting() {
 </script>
 
 <template>
-  <div class="proj-detail-page" style="padding: 24px 32px 32px; color: var(--color-text)">
-    <!-- Back-Link -->
-    <button @click="router.push('/projects')" class="back-link">
-      <BIcon name="arrowLeft" :size="12" />
-      Alle Projekte
-    </button>
+  <div class="proj-detail-page">
+    <!-- Breadcrumb (Referenz: Projekte › Name) -->
+    <nav class="pd-crumbs">
+      <button class="pd-crumb-link" @click="router.push('/projects')">Projekte</button>
+      <BIcon name="arrowRight" :size="13" class="pd-crumb-sep" />
+      <span class="pd-crumb-here">{{ info?.name ?? "…" }}</span>
+    </nav>
 
     <!-- ═══ Projekt-Kopf (ap-phead) ══════════════════════════════ -->
-    <div
-      v-if="info"
-      class="ap-phead"
-      :class="{ 'hero-with-accent': !!info.color }"
-      :style="info.color ? { '--accent-color': info.color } : {}"
-    >
+    <div v-if="info" class="ap-phead">
       <!-- Linke Spalte -->
       <div class="ap-phead-l">
         <!-- Breadcrumb / Eyebrow -->
@@ -4147,6 +4143,42 @@ async function deleteMeeting() {
 }
 
 /* ── Back-Link ──────────────────────────────────────────── */
+/* ── Vollbreit-Wrapper, zentriert (Referenz: max 1120px) ──── */
+.proj-detail-page {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-8, 32px) var(--space-8, 32px) var(--space-16, 64px);
+  color: var(--color-text);
+}
+
+/* ── Breadcrumb (Projekte › Name) ──────────────────────────── */
+.pd-crumbs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  margin-bottom: var(--space-5, 20px);
+}
+.pd-crumb-link {
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.pd-crumb-link:hover {
+  color: var(--color-text);
+}
+.pd-crumb-sep {
+  color: var(--color-text-faint);
+  flex: none;
+}
+.pd-crumb-here {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
 .back-link {
   display: inline-flex;
   align-items: center;

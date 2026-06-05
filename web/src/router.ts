@@ -43,14 +43,12 @@ const router = createRouter({
           name: "projects",
           component: () => import("./views/projects-v2/ProjectsOverviewView.vue"),
         },
-        // Projekt-Detail: Master/Detail mit ListPane (Navigation) + Detail.
+        // Projekt-Detail: vollbreit (Referenz-Design) — keine ListPane,
+        // Navigation über Breadcrumb "Projekte › Name".
         {
           path: "projects/:name",
           name: "project-detail",
-          components: {
-            listpane: () => import("./views/projects-v2/ProjectsListPane.vue"),
-            default: () => import("./views/projects-v2/ProjectDetailHost.vue"),
-          },
+          component: () => import("./views/projects-v2/ProjectDetailHost.vue"),
         },
         // Workspace v2: Team Master/Detail. ListPane mit Filter nach
         // Kategorie (Intern/Planer/...). Detail wrappt TeamDetailView.
