@@ -159,7 +159,7 @@ html {
 
 :root {
   /* ── Layout-Konstanten ────────────────────────────────────────────── */
-  --rail-w: var(--sidebar-width);
+  --rail-w: 240px; /* = var(--sidebar-width); direkt gesetzt wegen Produktions-Build */
   --list-w: 320px;
   --pd-inner-w: 200px;
 
