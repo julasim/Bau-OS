@@ -2863,15 +2863,17 @@ onMounted(() => {
 }
 
 .settings-h3 {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text);
+  font-family: var(--font-display, "Inter Tight", "Inter", sans-serif);
+  font-size: var(--fs-13, 13px);
+  font-weight: var(--fw-semibold, 600);
+  letter-spacing: var(--tracking-tight, -0.015em);
+  color: var(--fg, var(--color-text));
 }
 
 .settings-card {
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  background: var(--color-bg);
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-lg, 8px);
+  background: var(--surface, var(--color-bg));
 }
 
 .settings-divide > .settings-row + .settings-row,
@@ -2914,13 +2916,14 @@ onMounted(() => {
 }
 
 .settings-input {
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text);
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-sm, 4px);
+  background: var(--surface, var(--color-bg));
+  color: var(--fg-body, var(--color-text));
 }
 .settings-input:focus {
-  border-color: var(--color-text-faint);
-  box-shadow: 0 0 0 1px var(--color-text-faint);
+  border-color: var(--fg, var(--color-text-faint));
+  box-shadow: 0 0 0 1px var(--fg, var(--color-text-faint));
 }
 
 .settings-ghost-btn {
@@ -3053,24 +3056,27 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  border-radius: 6px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
+  border-radius: var(--radius-md, 6px);
+  font-size: var(--fs-13, 13px);
+  font-weight: var(--fw-medium, 500);
+  color: var(--fg-muted, var(--color-text-secondary));
   background: transparent;
   border: 0;
   cursor: pointer;
   text-align: left;
-  transition: background 120ms ease;
+  transition:
+    background-color var(--t-fast, 120ms) var(--ease, ease),
+    color var(--t-fast, 120ms) var(--ease, ease);
 }
 .settings-nav-item:hover {
-  background: var(--color-border-subtle);
-  color: var(--color-text);
+  background: var(--surface-muted, var(--color-border-subtle));
+  color: var(--fg, var(--color-text));
 }
 .settings-nav-item-active {
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  background: var(--surface, var(--color-bg));
+  color: var(--fg, var(--color-text));
+  font-weight: var(--fw-semibold, 600);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
 }
 .settings-nav-dot {
   width: 6px;
