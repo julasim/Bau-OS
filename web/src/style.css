@@ -23,8 +23,6 @@
   --color-text-muted: var(--fg-muted);
   --color-text-tertiary: var(--fg-subtle);
   --color-text-faint: var(--fg-subtle);
-  --color-primary: var(--accent);
-  --color-accent: var(--accent);
   --color-success: var(--success);
   --color-success-bg: var(--success-bg);
   --color-success-text: var(--success-fg);
@@ -35,69 +33,51 @@
   --color-danger-bg: var(--danger-bg);
   --color-danger-text: var(--danger-fg);
 
-  /* Neutrale Flaechen & Text */
-  --color-bg: #ffffff;
-  --color-bg-subtle: #fafafa;
-  --color-bg-muted: #f9fafb;
-  --color-border: #e5e7eb;
-  --color-border-subtle: #f3f4f6;
-  --color-text: #111827;
-  --color-text-secondary: #374151;
-  --color-text-muted: #6b7280;
-  --color-text-tertiary: #9ca3af;
-  --color-text-faint: #d1d5db;
-  --color-primary: #111827;
+  /* Primaer / Akzent — bleibt hardcodiert, damit der User-Akzent-Picker
+     (data-accent-active + inline --color-accent) zuverlaessig greift. */
+  --color-primary: var(--fg);
+  --color-accent: var(--fg);
 
-  /* User-waehlbarer Akzent (Default = schwarz) */
-  --color-accent: #111827;
-
-  /* Status */
-  --color-success: #22c55e;
-  --color-success-bg: #f0fdf4;
-  --color-success-text: #15803d;
+  /* Status-Borders (kein Token-Pendant) */
   --color-success-border: #bbf7d0;
-
-  --color-warning: #f59e0b;
-  --color-warning-bg: #fffbeb;
-  --color-warning-text: #b45309;
   --color-warning-border: #fde68a;
-
-  --color-danger: #dc2626;
-  --color-danger-bg: #fef2f2;
-  --color-danger-text: #b91c1c;
   --color-danger-border: #fee2e2;
 
-  /* Login-Split-Panel (nur dort genutzt) */
+  /* ── Schrift-Tokens neu durchsetzen ───────────────────────────
+     Tailwind v4 (@import oben) definiert ein eigenes --font-sans
+     (System-Stack) und ueberschreibt damit das Inter-Token aus
+     patio-tokens.css. Dieser Block laeuft NACH dem Tailwind-Import,
+     daher gewinnt Inter wieder. */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-display: "Inter Tight", "Inter", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Login-Split-Panel (nur dort genutzt) */
+:root {
   --color-login-bg: #0a0a0a;
   --color-login-text-secondary: #a1a1aa;
   --color-login-border: #27272a;
   --color-login-faint: #52525b;
 }
 
+/* Body explizit auf Inter — kein var(), damit Tailwind-Preflight nicht
+   doch noch dazwischenfunkt. */
+html,
+body {
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
 /* Dark-Mode: Tokens flippen. Der Look bleibt dezent, Fokus auf Kontrast. */
 @custom-variant dark (&:is(.dark *));
 
 html.dark {
-  --color-bg: var(--surface);
-  --color-bg-subtle: var(--surface-subtle);
-  --color-bg-muted: var(--surface-muted);
-  --color-border: var(--border);
-  --color-border-subtle: var(--hairline);
-  --color-text: var(--fg);
-  --color-text-secondary: var(--fg-body);
-  --color-text-muted: var(--fg-muted);
-  --color-text-tertiary: var(--fg-subtle);
-  --color-bg: #0f0f11;
-  --color-bg-subtle: #18181b;
-  --color-bg-muted: #1f1f22;
-  --color-border: #27272a;
-  --color-border-subtle: #1f1f22;
-  --color-text: #f4f4f5;
-  --color-text-secondary: #e4e4e7;
-  --color-text-muted: #a1a1aa;
-  --color-text-tertiary: #71717a;
-  --color-text-faint: #3f3f46;
-  --color-primary: #f4f4f5;
+  /* Bridge greift via patio-tokens.css (html.dark ueberschreibt --surface,
+     --fg etc.). --color-* zeigen ueber die :root-Bridge automatisch auf die
+     Dark-Werte. Nur --color-primary muss hier explizit auf den Dark-Vordergrund. */
+  --color-primary: var(--fg);
   color-scheme: dark;
 }
 html {
