@@ -219,6 +219,34 @@ type Tab =
   | "zugriff";
 const tab = ref<Tab>("uebersicht");
 
+// Gueltige Tab-Keys (fuer URL-Query-Validierung via NavRail-Sidebar).
+const VALID_TABS: Tab[] = [
+  "uebersicht",
+  "notes",
+  "tasks",
+  "termine",
+  "files",
+  "team",
+  "bautagebuch",
+  "meetings",
+  "stunden",
+  "verlauf",
+  "zugriff",
+];
+function isValidTab(t: unknown): t is Tab {
+  return typeof t === "string" && (VALID_TABS as string[]).includes(t);
+}
+
+// NavRail (Projekt-Sidebar) navigiert ueber ?tab=. Aenderung der Query →
+// internen Tab umschalten. Der Guard in openTab verhindert eine Push-Schleife.
+watch(
+  () => route.query.tab,
+  (q) => {
+    const t: Tab = isValidTab(q) ? q : "uebersicht";
+    if (t !== tab.value) void openTab(t);
+  },
+);
+
 // ── Projekt-Module (Phase 6e) ────────────────────────────────────────────
 // Effektive Modul-Sicht (globale Defaults + per-Projekt-Override). Tabs
 // deren Modul auf false ist werden ausgeblendet. uebersicht/verlauf/zugriff
@@ -568,8 +596,12 @@ const STATUS_OPTIONS = ["aktiv", "pausiert", "archiviert"] as const;
 
 onMounted(async () => {
   projectName.value = route.params.name as string;
+  // Tab aus URL-Query uebernehmen (NavRail-Sidebar oder geteilter Link).
+  if (isValidTab(route.query.tab)) tab.value = route.query.tab;
   await loadAll();
   void loadProjectModules();
+  // Lazy-Loads fuer den initialen Tab anstossen (falls nicht Uebersicht).
+  if (tab.value !== "uebersicht") void openTab(tab.value);
   // Uebersicht ist Default-Tab — Activity + Children erst nach loadAll laden,
   // weil info.id als Filter fuer beides gebraucht wird.
   if (tab.value === "uebersicht") {
@@ -993,6 +1025,13 @@ async function openTab(t: Tab) {
     return;
   }
   tab.value = t;
+  // URL-Query synchron halten, damit die NavRail-Projekt-Sidebar den aktiven
+  // Tab spiegelt. replace() statt push() — kein History-Spam. Guard verhindert
+  // Endlosschleife mit dem route.query.tab-Watcher.
+  const wantQuery = t === "uebersicht" ? undefined : t;
+  if ((route.query.tab ?? undefined) !== wantQuery) {
+    void router.replace({ query: wantQuery ? { tab: wantQuery } : {} }).catch(() => {});
+  }
   viewingNote.value = null;
   viewingFile.value = null;
   // Lazy-Load pro Tab — pro Tab max. einmal.

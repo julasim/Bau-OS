@@ -43,6 +43,33 @@ const ADMIN_ITEMS: NavItem[] = [
 const visibleNav = computed(() => NAV_ITEMS);
 const visibleAdmin = computed(() => (isAdmin.value ? ADMIN_ITEMS : []));
 
+// ── Projekt-Kontext: in der Projekt-Detailseite wird die Sidebar zur
+//    Projekt-Navigation (Übersicht/Aufgaben/Termine/Akten). Kopplung an die
+//    internen Tabs des ProjectDetailView via URL-Query ?tab=.
+const isProjectCtx = computed(() => route.name === "project-detail");
+const projectName = computed(() => decodeURIComponent((route.params.name as string) ?? ""));
+const currentTab = computed(() => (typeof route.query.tab === "string" ? route.query.tab : "uebersicht"));
+
+interface ProjNavItem {
+  tab: string;
+  label: string;
+  icon: string;
+}
+const PROJECT_NAV: ProjNavItem[] = [
+  { tab: "uebersicht", label: "Übersicht", icon: "grid" },
+  { tab: "tasks", label: "Aufgaben", icon: "check" },
+  { tab: "termine", label: "Termine", icon: "calendar" },
+  { tab: "files", label: "Akten", icon: "folder" },
+];
+
+function goProjectTab(t: string) {
+  router.push({
+    name: "project-detail",
+    params: { name: route.params.name },
+    query: t === "uebersicht" ? {} : { tab: t },
+  });
+}
+
 // ── Branding-Logo (Phase 6g) ─────────────────────────────────────────
 interface BrandingLite {
   companyName: string | null;
@@ -98,40 +125,73 @@ onMounted(() => void loadBranding());
       </template>
     </a>
 
-    <!-- Section: PROJEKTE -->
-    <div class="pt-nav-section">
-      <span class="pt-nav-label">PROJEKTE</span>
-      <button
-        v-for="it in visibleNav"
-        :key="it.to"
-        class="pt-nav-item"
-        :class="{ 'is-active': isActive(it.to) }"
-        @click="go(it.to)"
-        :title="it.label"
-        :aria-label="it.label"
-      >
-        <BIcon :name="it.icon" :size="16" />
-        <span>{{ it.label }}</span>
-        <span v-if="it.badge" class="badge">{{ it.badge }}</span>
-      </button>
-    </div>
+    <!-- ══ PROJEKT-KONTEXT: Sidebar = Projekt-Navigation ══ -->
+    <template v-if="isProjectCtx">
+      <div class="pt-nav-section">
+        <button class="pt-nav-item" style="color: var(--fg-dark-subtle)" @click="go('/projects')" title="Alle Projekte">
+          <BIcon name="arrowLeft" :size="16" />
+          <span>Alle Projekte</span>
+        </button>
+      </div>
+      <div class="pt-nav-section">
+        <span class="pt-nav-label">{{ projectName }}</span>
+        <button
+          v-for="it in PROJECT_NAV"
+          :key="it.tab"
+          class="pt-nav-item"
+          :class="{ 'is-active': currentTab === it.tab }"
+          @click="goProjectTab(it.tab)"
+          :title="it.label"
+          :aria-label="it.label"
+        >
+          <BIcon :name="it.icon" :size="16" />
+          <span>{{ it.label }}</span>
+        </button>
+      </div>
+      <div class="pt-nav-section">
+        <span class="pt-nav-label">SYSTEM</span>
+        <button class="pt-nav-item" @click="go('/chat')" title="Telegram-Agent">
+          <BIcon name="message" :size="16" />
+          <span>Telegram-Agent</span>
+        </button>
+      </div>
+    </template>
 
-    <!-- Section: SYSTEM (admin only) -->
-    <div v-if="visibleAdmin.length > 0" class="pt-nav-section">
-      <span class="pt-nav-label">SYSTEM</span>
-      <button
-        v-for="it in visibleAdmin"
-        :key="it.to"
-        class="pt-nav-item"
-        :class="{ 'is-active': isActive(it.to) }"
-        @click="go(it.to)"
-        :title="it.label"
-        :aria-label="it.label"
-      >
-        <BIcon :name="it.icon" :size="16" />
-        <span>{{ it.label }}</span>
-      </button>
-    </div>
+    <!-- ══ GLOBAL: normale App-Navigation ══ -->
+    <template v-else>
+      <div class="pt-nav-section">
+        <span class="pt-nav-label">Arbeitsbereich</span>
+        <button
+          v-for="it in visibleNav"
+          :key="it.to"
+          class="pt-nav-item"
+          :class="{ 'is-active': isActive(it.to) }"
+          @click="go(it.to)"
+          :title="it.label"
+          :aria-label="it.label"
+        >
+          <BIcon :name="it.icon" :size="16" />
+          <span>{{ it.label }}</span>
+          <span v-if="it.badge" class="badge">{{ it.badge }}</span>
+        </button>
+      </div>
+
+      <div v-if="visibleAdmin.length > 0" class="pt-nav-section">
+        <span class="pt-nav-label">SYSTEM</span>
+        <button
+          v-for="it in visibleAdmin"
+          :key="it.to"
+          class="pt-nav-item"
+          :class="{ 'is-active': isActive(it.to) }"
+          @click="go(it.to)"
+          :title="it.label"
+          :aria-label="it.label"
+        >
+          <BIcon :name="it.icon" :size="16" />
+          <span>{{ it.label }}</span>
+        </button>
+      </div>
+    </template>
 
     <div class="spacer"></div>
 
