@@ -760,13 +760,44 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="files-root" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
-    <!-- ─── Toolbar ─────────────────────────────────────────────── -->
-    <header class="files-toolbar">
+  <div class="fb-root" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+    <!-- ─── Page-Head ──────────────────────────────────────────── -->
+    <header class="ap-pagehead fb-pagehead">
+      <div class="fb-pagehead-left">
+        <h1>Dateien</h1>
+        <p>Projektübergreifende Ablage — Pläne, Dokumente und Schriftverkehr.</p>
+      </div>
+      <div class="fb-pagehead-actions">
+        <button class="pt-btn pt-btn--secondary" :disabled="uploading" @click="triggerUpload">
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="17 8 12 3 7 8" />
+            <line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+          <span>{{ uploading ? "Hochladen…" : "Hochladen" }}</span>
+        </button>
+        <input ref="fileInputRef" type="file" multiple style="display: none" @change="onFileInput" />
+      </div>
+    </header>
+
+    <!-- Upload-Feedback -->
+    <div v-if="uploadMsg" class="fb-upload-msg">{{ uploadMsg }}</div>
+
+    <!-- ─── Toolbar ────────────────────────────────────────────── -->
+    <div class="ap-toolbar fb-toolbar">
       <!-- Sidebar-Toggle -->
       <button
-        class="files-icon-btn"
-        :class="{ 'files-icon-btn-active': sidebarOpen }"
+        class="pt-btn pt-btn--ghost fb-icon-btn"
+        :class="{ 'fb-icon-btn--active': sidebarOpen }"
         @click="sidebarOpen = !sidebarOpen"
         title="Seitenleiste"
       >
@@ -786,8 +817,8 @@ onBeforeUnmount(() => {
       </button>
 
       <!-- Back / Forward -->
-      <div class="files-nav-btns">
-        <button class="files-icon-btn" :disabled="path.length === 0" @click="onBack" title="Zurück">
+      <div class="fb-nav-btns">
+        <button class="pt-btn pt-btn--ghost fb-icon-btn" :disabled="path.length === 0" @click="onBack" title="Zurück">
           <svg
             width="14"
             height="14"
@@ -801,7 +832,12 @@ onBeforeUnmount(() => {
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
-        <button class="files-icon-btn" :disabled="historyForward.length === 0" @click="onForward" title="Weiter">
+        <button
+          class="pt-btn pt-btn--ghost fb-icon-btn"
+          :disabled="historyForward.length === 0"
+          @click="onForward"
+          title="Weiter"
+        >
           <svg
             width="14"
             height="14"
@@ -818,13 +854,12 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Breadcrumb -->
-      <div class="files-breadcrumb">
-        <span class="files-breadcrumb-eyebrow">Pfad</span>
+      <div class="fb-breadcrumb">
         <template v-for="(seg, i) in breadcrumb" :key="i">
-          <span v-if="i > 0" class="files-breadcrumb-sep">/</span>
+          <span v-if="i > 0" class="fb-breadcrumb-sep">/</span>
           <button
-            class="files-breadcrumb-seg"
-            :class="{ 'files-breadcrumb-seg-active': i === breadcrumb.length - 1 }"
+            class="fb-breadcrumb-seg"
+            :class="{ 'fb-breadcrumb-seg--active': i === breadcrumb.length - 1 }"
             @click="onBreadcrumbClick(i)"
           >
             {{ seg }}
@@ -832,8 +867,10 @@ onBeforeUnmount(() => {
         </template>
       </div>
 
+      <div class="fb-toolbar-gap"></div>
+
       <!-- View-Segmented-Control -->
-      <div class="files-segmented">
+      <div class="pt-tabs fb-view-tabs">
         <button
           v-for="opt in [
             { v: 'column', label: 'Spalten' },
@@ -841,8 +878,8 @@ onBeforeUnmount(() => {
             { v: 'icons', label: 'Symbole' },
           ]"
           :key="opt.v"
-          class="files-seg-btn"
-          :class="{ 'files-seg-btn-active': view === opt.v }"
+          class="pt-tab"
+          :class="{ 'pt-tab--active': view === opt.v }"
           @click="view = opt.v as 'column' | 'list' | 'icons'"
         >
           <svg
@@ -899,7 +936,7 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- Search -->
-      <div class="files-search">
+      <div class="ap-search fb-search">
         <svg
           width="13"
           height="13"
@@ -912,45 +949,21 @@ onBeforeUnmount(() => {
           <circle cx="11" cy="11" r="7" />
           <line x1="21" y1="21" x2="16.5" y2="16.5" />
         </svg>
-        <input v-model="searchTerm" placeholder="Im Vault suchen…" />
+        <input v-model="searchTerm" class="pt-input" placeholder="Im Vault suchen…" />
       </div>
+    </div>
 
-      <!-- Upload -->
-      <button class="files-upload-btn" :disabled="uploading" @click="triggerUpload">
-        <svg
-          width="13"
-          height="13"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-        <span>{{ uploading ? "..." : "Hochladen" }}</span>
-      </button>
-
-      <input ref="fileInputRef" type="file" multiple style="display: none" @change="onFileInput" />
-    </header>
-
-    <!-- Upload-Feedback -->
-    <div v-if="uploadMsg" class="files-upload-msg">{{ uploadMsg }}</div>
-
-    <!-- ─── Body: Sidebar + Browser + Status ───────────────────── -->
-    <div class="files-body">
+    <!-- ─── Body: Sidebar + Browser ───────────────────────────── -->
+    <div class="fb-body">
       <!-- Sidebar -->
-      <aside v-if="sidebarOpen" class="files-sidebar">
-        <div class="files-sidebar-scroll">
+      <aside v-if="sidebarOpen" class="fb-sidebar">
+        <div class="fb-sidebar-scroll">
           <!-- Section: Vault -->
-          <div class="files-sidebar-section">
-            <div class="files-sidebar-label">Vault</div>
+          <div class="fb-sidebar-section">
+            <div class="fb-sidebar-label">Vault</div>
             <div
-              class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': mode === 'all' && path.length === 0 && !searchTerm }"
+              class="fb-sidebar-item"
+              :class="{ 'fb-sidebar-item--active': mode === 'all' && path.length === 0 && !searchTerm }"
               @click="setMode('all')"
             >
               <svg
@@ -968,8 +981,8 @@ onBeforeUnmount(() => {
               <span>Alle Dateien</span>
             </div>
             <div
-              class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': mode === 'recent' }"
+              class="fb-sidebar-item"
+              :class="{ 'fb-sidebar-item--active': mode === 'recent' }"
               @click="setMode('recent')"
             >
               <svg
@@ -988,8 +1001,8 @@ onBeforeUnmount(() => {
               <span>Zuletzt bearbeitet</span>
             </div>
             <div
-              class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': mode === 'starred' }"
+              class="fb-sidebar-item"
+              :class="{ 'fb-sidebar-item--active': mode === 'starred' }"
               @click="setMode('starred')"
             >
               <svg
@@ -1007,8 +1020,8 @@ onBeforeUnmount(() => {
               <span>Markiert</span>
             </div>
             <div
-              class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': mode === 'shared' }"
+              class="fb-sidebar-item"
+              :class="{ 'fb-sidebar-item--active': mode === 'shared' }"
               @click="setMode('shared')"
             >
               <svg
@@ -1029,11 +1042,11 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Section: Hierarchie -->
-          <div class="files-sidebar-section">
-            <div class="files-sidebar-label">Hierarchie</div>
+          <div class="fb-sidebar-section">
+            <div class="fb-sidebar-label">Hierarchie</div>
             <div
-              class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': mode === 'all' && path[0] === 'Projekte' }"
+              class="fb-sidebar-item"
+              :class="{ 'fb-sidebar-item--active': mode === 'all' && path[0] === 'Projekte' }"
               @click="
                 mode = 'all';
                 setSidebarTarget(['Projekte']);
@@ -1054,8 +1067,8 @@ onBeforeUnmount(() => {
               <span>Projekte</span>
             </div>
             <div
-              class="files-sidebar-item"
-              :class="{ 'files-sidebar-item-active': mode === 'all' && path[0] === 'Privat' }"
+              class="fb-sidebar-item"
+              :class="{ 'fb-sidebar-item--active': mode === 'all' && path[0] === 'Privat' }"
               @click="
                 mode = 'all';
                 setSidebarTarget(['Privat']);
@@ -1078,9 +1091,9 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Section: Speicher -->
-          <div class="files-sidebar-section">
-            <div class="files-sidebar-label">Speicher</div>
-            <div class="files-sidebar-item files-sidebar-item-disabled">
+          <div class="fb-sidebar-section">
+            <div class="fb-sidebar-label">Speicher</div>
+            <div class="fb-sidebar-item fb-sidebar-item--disabled">
               <svg
                 width="14"
                 height="14"
@@ -1097,9 +1110,9 @@ onBeforeUnmount(() => {
                 <line x1="6" y1="16.5" x2="6.01" y2="16.5" />
               </svg>
               <span>bau-os.local</span>
-              <span class="files-sidebar-badge">self-hosted</span>
+              <span class="pt-badge pt-badge--neutral fb-sidebar-badge">self-hosted</span>
             </div>
-            <div class="files-sidebar-item files-sidebar-item-disabled">
+            <div class="fb-sidebar-item fb-sidebar-item--disabled">
               <svg
                 width="14"
                 height="14"
@@ -1115,39 +1128,39 @@ onBeforeUnmount(() => {
                 <path d="M3 12a9 3 0 0 0 18 0" />
               </svg>
               <span>Postgres</span>
-              <span class="files-sidebar-badge">{{ totalSizeLabel }}</span>
+              <span class="pt-badge pt-badge--neutral fb-sidebar-badge">{{ totalSizeLabel }}</span>
             </div>
           </div>
         </div>
 
         <!-- Storage-Footer -->
-        <div class="files-sidebar-footer">
-          <div class="files-storage-row">
+        <div class="fb-sidebar-footer">
+          <div class="fb-storage-row">
             <span>Speicher</span>
-            <span class="mono">{{ totalSizeLabel }} / 50 GB</span>
+            <span class="fb-mono">{{ totalSizeLabel }} / 50 GB</span>
           </div>
-          <div class="files-storage-bar">
+          <div class="fb-storage-bar">
             <div
-              class="files-storage-bar-fill"
+              class="fb-storage-bar-fill"
               :style="{ width: Math.min(100, (totalSizeBytes / (50 * 1024 * 1024 * 1024)) * 100) + '%' }"
             ></div>
           </div>
-          <div class="files-storage-sub mono">
+          <div class="fb-storage-sub fb-mono">
             {{ totalFileCount }} Datei<span v-if="totalFileCount !== 1">en</span> · DSGVO-konform
           </div>
         </div>
       </aside>
 
-      <!-- Browser-Wrapper (Browser + Status) -->
-      <div class="files-browser-wrap" :class="{ 'files-browser-wrap-with-sidebar': sidebarOpen }">
+      <!-- Browser-Wrapper (Browser + Statusleiste) -->
+      <div class="fb-browser-wrap" :class="{ 'fb-browser-wrap--with-sidebar': sidebarOpen }">
         <!-- Loading-Empty-State -->
-        <div v-if="loading && allFiles.length === 0" class="files-empty">Laedt…</div>
+        <div v-if="loading && allFiles.length === 0" class="ap-empty">Laedt…</div>
 
         <!-- ══ Vollbild-Vorschau (ersetzt Browser wenn Datei geöffnet) ══ -->
-        <div v-else-if="selected?.node && selected.node.kind !== 'folder'" class="files-detail-full">
+        <div v-else-if="selected?.node && selected.node.kind !== 'folder'" class="fb-detail-full">
           <!-- Topbar -->
-          <div class="files-detail-topbar">
-            <button class="files-detail-back" @click="selected = null">
+          <div class="fb-detail-topbar">
+            <button class="pt-btn pt-btn--ghost fb-detail-back" @click="selected = null">
               <svg
                 width="14"
                 height="14"
@@ -1162,10 +1175,10 @@ onBeforeUnmount(() => {
               </svg>
               Zurück
             </button>
-            <span class="files-detail-breadcrumb">{{ selected.node.name }}</span>
+            <span class="fb-detail-breadcrumb">{{ selected.node.name }}</span>
             <button
-              class="files-preview-star"
-              :class="{ 'files-preview-star-on': selected.node.starred }"
+              class="fb-preview-star"
+              :class="{ 'fb-preview-star--on': selected.node.starred }"
               @click="toggleStar(selected.node)"
               :title="selected.node.starred ? 'Markierung entfernen' : 'Markieren'"
             >
@@ -1185,57 +1198,59 @@ onBeforeUnmount(() => {
           </div>
 
           <!-- Body: Info-Spalte links + Inhalt rechts -->
-          <div class="files-detail-body">
+          <div class="fb-detail-body">
             <!-- Info-Panel -->
-            <div class="files-detail-info">
-              <div class="files-preview-hero">
+            <div class="fb-detail-info ap-panel">
+              <div class="fb-preview-hero">
                 <img
                   v-if="selected.node.kind === 'image' && selected.node.id"
                   :src="downloadUrl(selected.node)"
                   :alt="selected.node.name"
-                  class="files-preview-image"
+                  class="fb-preview-image"
                 />
                 <FileGlyph v-else :kind="selected.node.kind" size="hero" />
               </div>
               <div>
-                <div class="files-preview-name" :class="{ mono: isMonoKind(selected.node.kind) }">
+                <div class="fb-preview-name" :class="{ 'fb-mono': isMonoKind(selected.node.kind) }">
                   {{ selected.node.name }}
                 </div>
-                <div class="files-preview-sub">{{ kindLabel(selected.node.kind) }}</div>
+                <div class="fb-preview-sub">{{ kindLabel(selected.node.kind) }}</div>
               </div>
-              <div class="files-preview-meta">
-                <div class="files-preview-row">
-                  <span class="files-preview-key">Größe</span>
-                  <span class="files-preview-val mono">{{ selected.node.size ?? "—" }}</span>
+              <div class="fb-preview-meta">
+                <div class="fb-preview-row">
+                  <span class="fb-preview-key">Größe</span>
+                  <span class="fb-preview-val fb-mono">{{ selected.node.size ?? "—" }}</span>
                 </div>
-                <div class="files-preview-row">
-                  <span class="files-preview-key">Geändert</span>
-                  <span class="files-preview-val mono">{{ selected.node.updated ?? "—" }}</span>
+                <div class="fb-preview-row">
+                  <span class="fb-preview-key">Geändert</span>
+                  <span class="fb-preview-val fb-mono">{{ selected.node.updated ?? "—" }}</span>
                 </div>
-                <div class="files-preview-row">
-                  <span class="files-preview-key">Projekt</span>
-                  <span class="files-preview-val">{{ selected.node.project ?? "—" }}</span>
+                <div class="fb-preview-row">
+                  <span class="fb-preview-key">Projekt</span>
+                  <span class="fb-preview-val">{{ selected.node.project ?? "—" }}</span>
                 </div>
-                <div class="files-preview-row">
-                  <span class="files-preview-key">Speicher</span>
-                  <span class="files-preview-val mono">bau-os.local</span>
+                <div class="fb-preview-row">
+                  <span class="fb-preview-key">Speicher</span>
+                  <span class="fb-preview-val fb-mono">bau-os.local</span>
                 </div>
               </div>
-              <div class="files-preview-actions">
-                <a class="files-preview-btn-primary" :href="downloadUrl(selected.node)" target="_blank">Öffnen</a>
-                <button class="files-preview-btn-secondary" @click="openShareModal(selected.node)">Teilen</button>
-                <div class="files-preview-actions-menu-wrap">
+              <div class="fb-preview-actions">
+                <a class="pt-btn pt-btn--primary fb-preview-btn-open" :href="downloadUrl(selected.node)" target="_blank"
+                  >Öffnen</a
+                >
+                <button class="pt-btn pt-btn--secondary" @click="openShareModal(selected.node)">Teilen</button>
+                <div class="files-preview-actions-menu-wrap fb-action-menu-wrap">
                   <button
-                    class="files-preview-btn-secondary"
+                    class="pt-btn pt-btn--secondary fb-action-menu-trigger"
                     @click="actionMenuOpen = !actionMenuOpen"
-                    :class="{ 'files-preview-btn-active': actionMenuOpen }"
+                    :class="{ 'fb-action-menu-trigger--open': actionMenuOpen }"
                     title="Mehr"
                   >
                     ···
                   </button>
-                  <div v-if="actionMenuOpen" class="files-action-menu" @click.stop>
+                  <div v-if="actionMenuOpen" class="fb-action-menu" @click.stop>
                     <button
-                      class="files-action-item"
+                      class="fb-action-item"
                       @click="
                         actionMenuOpen = false;
                         toggleStar(selected.node);
@@ -1256,7 +1271,7 @@ onBeforeUnmount(() => {
                       {{ selected.node.starred ? "Markierung entfernen" : "Markieren" }}
                     </button>
                     <a
-                      class="files-action-item"
+                      class="fb-action-item"
                       :href="downloadUrl(selected.node)"
                       download
                       @click="actionMenuOpen = false"
@@ -1278,7 +1293,7 @@ onBeforeUnmount(() => {
                       Herunterladen
                     </a>
                     <button
-                      class="files-action-item"
+                      class="fb-action-item"
                       @click="
                         actionMenuOpen = false;
                         openShareModal(selected.node);
@@ -1302,9 +1317,9 @@ onBeforeUnmount(() => {
                       </svg>
                       Teilen…
                     </button>
-                    <div class="files-action-divider"></div>
+                    <div class="fb-action-divider"></div>
                     <button
-                      class="files-action-item files-action-danger"
+                      class="fb-action-item fb-action-item--danger"
                       @click="
                         actionMenuOpen = false;
                         deleteSelected();
@@ -1334,47 +1349,47 @@ onBeforeUnmount(() => {
             </div>
 
             <!-- Inhalts-Panel -->
-            <div class="files-detail-content">
+            <div class="fb-detail-content">
               <iframe
                 v-if="selected.node.kind === 'pdf' && selected.node.id"
                 :src="downloadUrl(selected.node)"
-                class="files-detail-pdf"
+                class="fb-detail-pdf"
                 :title="selected.node.name"
               />
               <img
                 v-else-if="selected.node.kind === 'image' && selected.node.id"
                 :src="downloadUrl(selected.node)"
                 :alt="selected.node.name"
-                class="files-detail-img"
+                class="fb-detail-img"
               />
-              <div v-else-if="previewIsMarkdown && previewContent" class="files-detail-md">
+              <div v-else-if="previewIsMarkdown && previewContent" class="fb-detail-md">
                 <MarkdownRenderer :content="previewContent" />
               </div>
-              <pre v-else-if="previewContent" class="files-detail-code">{{ previewContent }}</pre>
-              <div v-else-if="previewLoading" class="files-preview-loading">Lädt…</div>
-              <div v-else class="files-detail-empty">
+              <pre v-else-if="previewContent" class="fb-detail-code">{{ previewContent }}</pre>
+              <div v-else-if="previewLoading" class="fb-preview-loading">Lädt…</div>
+              <div v-else class="fb-detail-empty">
                 <FileGlyph :kind="selected.node.kind" size="hero" />
                 <p>Keine Vorschau verfügbar.</p>
-                <a class="files-preview-btn-primary" :href="downloadUrl(selected.node)" target="_blank">Datei öffnen</a>
+                <a class="pt-btn pt-btn--secondary" :href="downloadUrl(selected.node)" target="_blank">Datei öffnen</a>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Spalten-View -->
-        <div v-else-if="view === 'column'" class="files-columns">
-          <div v-for="(col, idx) in columns" :key="idx" class="files-column">
-            <div class="files-column-header">
+        <!-- ══ Spalten-View ══ -->
+        <div v-else-if="view === 'column'" class="fb-columns">
+          <div v-for="(col, idx) in columns" :key="idx" class="fb-column">
+            <div class="fb-column-header">
               <span>{{ col.parent.kind === "root" ? "Vault" : col.parent.name }}</span>
-              <span class="mono files-column-count">{{ col.items.length }}</span>
+              <span class="fb-mono fb-column-count">{{ col.items.length }}</span>
             </div>
-            <div class="files-column-body">
+            <div class="fb-column-body">
               <div
                 v-for="(it, i) in col.items"
                 :key="i"
-                class="files-row"
+                class="pt-list-item fb-row"
                 :class="{
-                  'files-row-active':
+                  'fb-row--active':
                     (path.length > 0 && path[idx + 1] === it.name) ||
                     (path.length === 0 && path[idx] === it.name) ||
                     (selected?.columnIndex === idx && selected?.node?.name === it.name && it.kind !== 'folder'),
@@ -1390,18 +1405,17 @@ onBeforeUnmount(() => {
                   "
                 />
                 <span
-                  class="files-row-name"
-                  :class="{ mono: isMonoKind(it.kind) }"
+                  class="pt-li-title fb-row-name"
+                  :class="{ 'fb-mono': isMonoKind(it.kind) }"
                   :style="{ fontSize: isMonoKind(it.kind) ? '12px' : '13px' }"
+                  >{{ it.name }}</span
                 >
-                  {{ it.name }}
-                </span>
                 <button
                   v-if="it.kind !== 'folder' && it.id"
-                  class="files-row-star"
+                  class="fb-row-star"
                   :class="{
-                    'files-row-star-on': it.starred,
-                    'files-row-star-active-row': selected?.columnIndex === idx && selected?.node?.name === it.name,
+                    'fb-row-star--on': it.starred,
+                    'fb-row-star--active-row': selected?.columnIndex === idx && selected?.node?.name === it.name,
                   }"
                   @click="toggleStar(it, $event)"
                   :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
@@ -1429,39 +1443,39 @@ onBeforeUnmount(() => {
                   stroke-width="2"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  class="files-row-chev"
+                  class="fb-row-chev"
                 >
                   <polyline points="9 18 15 12 9 6" />
                 </svg>
               </div>
-              <div v-if="col.items.length === 0" class="files-empty-col">Leer</div>
+              <div v-if="col.items.length === 0" class="fb-empty-col">Leer</div>
             </div>
           </div>
         </div>
 
-        <!-- Liste-View -->
-        <div v-else-if="view === 'list'" class="files-list">
-          <div class="files-list-header"><span>Name</span><span>Geändert</span><span>Größe</span><span>Art</span></div>
+        <!-- ══ Liste-View ══ -->
+        <div v-else-if="view === 'list'" class="fb-list">
+          <div class="fb-list-header"><span>Name</span><span>Geändert</span><span>Größe</span><span>Art</span></div>
           <div
             v-for="(it, i) in currentFolder.children ?? []"
             :key="i"
-            class="files-list-row"
-            :class="{ 'files-list-row-active': selected?.node?.name === it.name }"
+            class="fb-list-row"
+            :class="{ 'fb-list-row--active': selected?.node?.name === it.name }"
             @click="onClickItem(it, path.length)"
           >
-            <span class="files-list-name">
+            <span class="fb-list-name">
               <FileGlyph :kind="it.kind" :active="selected?.node?.name === it.name" />
               <span
-                :class="{ mono: isMonoKind(it.kind) }"
+                :class="{ 'fb-mono': isMonoKind(it.kind) }"
                 :style="{ fontSize: isMonoKind(it.kind) ? '12px' : '13px' }"
                 >{{ it.name }}</span
               >
               <button
                 v-if="it.kind !== 'folder' && it.id"
-                class="files-row-star files-row-star-inline"
+                class="fb-row-star fb-row-star--inline"
                 :class="{
-                  'files-row-star-on': it.starred,
-                  'files-row-star-active-row': selected?.node?.name === it.name,
+                  'fb-row-star--on': it.starred,
+                  'fb-row-star--active-row': selected?.node?.name === it.name,
                 }"
                 @click="toggleStar(it, $event)"
                 :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
@@ -1480,55 +1494,51 @@ onBeforeUnmount(() => {
                 </svg>
               </button>
             </span>
-            <span class="mono files-list-meta">{{ it.updated ?? "—" }}</span>
-            <span class="mono files-list-meta">{{ it.size ?? "—" }}</span>
-            <span class="files-list-kind">{{ kindLabel(it.kind) }}</span>
+            <span class="fb-mono fb-list-meta">{{ it.updated ?? "—" }}</span>
+            <span class="fb-mono fb-list-meta">{{ it.size ?? "—" }}</span>
+            <span class="fb-list-kind">{{ kindLabel(it.kind) }}</span>
           </div>
-          <div v-if="(currentFolder.children?.length ?? 0) === 0" class="files-empty">
-            Keine Dateien in diesem Ordner.
-          </div>
+          <div v-if="(currentFolder.children?.length ?? 0) === 0" class="ap-empty">Keine Dateien in diesem Ordner.</div>
         </div>
 
-        <!-- Symbole-View -->
-        <div v-else class="files-icons">
+        <!-- ══ Symbole-View ══ -->
+        <div v-else class="fb-icons">
           <div
             v-for="(it, i) in currentFolder.children ?? []"
             :key="i"
-            class="files-icon-cell"
-            :class="{ 'files-icon-cell-active': selected?.node?.name === it.name }"
+            class="fb-icon-cell"
+            :class="{ 'fb-icon-cell--active': selected?.node?.name === it.name }"
             @click="onClickItem(it, path.length)"
           >
             <FileGlyph :kind="it.kind" size="large" :active="selected?.node?.name === it.name" />
-            <span class="files-icon-name" :class="{ mono: isMonoKind(it.kind) }">{{ it.name }}</span>
+            <span class="fb-icon-name" :class="{ 'fb-mono': isMonoKind(it.kind) }">{{ it.name }}</span>
           </div>
-          <div v-if="(currentFolder.children?.length ?? 0) === 0" class="files-empty">
-            Keine Dateien in diesem Ordner.
-          </div>
+          <div v-if="(currentFolder.children?.length ?? 0) === 0" class="ap-empty">Keine Dateien in diesem Ordner.</div>
         </div>
 
         <!-- Status-Bar -->
-        <div class="files-status">
+        <div class="fb-status">
           <span>{{ statusLeft }}</span>
-          <span class="files-status-spacer"></span>
+          <span class="fb-status-spacer"></span>
           <span>{{ statusRight }}</span>
         </div>
       </div>
     </div>
 
     <!-- Drag-Overlay -->
-    <div v-if="dragging" class="files-drag-overlay">
-      <div class="files-drag-card">Dateien hier ablegen</div>
+    <div v-if="dragging" class="fb-drag-overlay">
+      <div class="fb-drag-card">Dateien hier ablegen</div>
     </div>
 
-    <!-- ─── Teilen-Modal ───────────────────────────────────── -->
-    <div v-if="shareModalOpen" class="files-modal-backdrop" @click="closeShareModal">
-      <div class="files-modal" @click.stop>
-        <div class="files-modal-header">
+    <!-- ─── Teilen-Modal ──────────────────────────────────────── -->
+    <div v-if="shareModalOpen" class="fb-modal-backdrop" @click="closeShareModal">
+      <div class="fb-modal" @click.stop>
+        <div class="fb-modal-header">
           <div>
-            <div class="eyebrow">Teilen</div>
-            <h3 class="files-modal-title">{{ shareModalFile?.name ?? "Datei" }}</h3>
+            <div class="fb-eyebrow">Teilen</div>
+            <h3 class="fb-modal-title">{{ shareModalFile?.name ?? "Datei" }}</h3>
           </div>
-          <button class="files-modal-close" @click="closeShareModal" title="Schließen">
+          <button class="pt-btn pt-btn--ghost fb-modal-close" @click="closeShareModal" title="Schließen">
             <svg
               width="14"
               height="14"
@@ -1546,53 +1556,57 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Aktuelle Shares -->
-        <div class="files-modal-section">
-          <div class="files-modal-section-label">Aktuell geteilt mit</div>
-          <div v-if="shareModalShares.length === 0" class="files-modal-empty">Noch mit niemandem geteilt.</div>
-          <div v-for="s in shareModalShares" :key="s.userId" class="files-modal-share-row">
-            <div class="files-modal-share-info">
-              <span class="files-modal-share-name">{{ s.displayName ?? s.username }}</span>
-              <span v-if="s.displayName" class="files-modal-share-username">@{{ s.username }}</span>
-              <span v-if="s.canEdit" class="files-modal-pill">Bearbeiten</span>
-              <span v-else class="files-modal-pill files-modal-pill-muted">Lesen</span>
+        <div class="fb-modal-section">
+          <div class="fb-modal-section-label">Aktuell geteilt mit</div>
+          <div v-if="shareModalShares.length === 0" class="ap-empty fb-modal-empty">Noch mit niemandem geteilt.</div>
+          <div v-for="s in shareModalShares" :key="s.userId" class="fb-modal-share-row">
+            <div class="fb-modal-share-info">
+              <span class="fb-modal-share-name">{{ s.displayName ?? s.username }}</span>
+              <span v-if="s.displayName" class="fb-modal-share-username fb-mono">@{{ s.username }}</span>
+              <span v-if="s.canEdit" class="pt-badge pt-badge--green">Bearbeiten</span>
+              <span v-else class="pt-badge pt-badge--neutral">Lesen</span>
             </div>
-            <button class="files-modal-share-remove" :disabled="shareModalBusy" @click="removeShare(s.userId)">
+            <button
+              class="pt-btn pt-btn--ghost fb-modal-remove-btn"
+              :disabled="shareModalBusy"
+              @click="removeShare(s.userId)"
+            >
               Entfernen
             </button>
           </div>
         </div>
 
         <!-- Hinzufuegen -->
-        <div class="files-modal-section">
-          <div class="files-modal-section-label">Hinzufügen</div>
-          <div class="files-modal-add-controls">
+        <div class="fb-modal-section">
+          <div class="fb-modal-section-label">Hinzufügen</div>
+          <div class="fb-modal-add-controls">
             <input
               v-model="shareModalSearchTerm"
               type="text"
               placeholder="Benutzer suchen…"
-              class="files-modal-input"
+              class="pt-input fb-modal-input"
             />
-            <label class="files-modal-checkbox">
+            <label class="fb-modal-checkbox">
               <input v-model="shareModalCanEdit" type="checkbox" />
               <span>Bearbeiten erlauben</span>
             </label>
           </div>
-          <div class="files-modal-candidates">
-            <div v-if="shareModalCandidates.length === 0" class="files-modal-empty">
+          <div class="fb-modal-candidates">
+            <div v-if="shareModalCandidates.length === 0" class="ap-empty fb-modal-empty">
               {{ shareModalSearchTerm ? "Keine Treffer." : "Alle verfügbaren User sind bereits hinzugefügt." }}
             </div>
             <button
               v-for="u in shareModalCandidates.slice(0, 50)"
               :key="u.id"
-              class="files-modal-candidate"
+              class="fb-modal-candidate"
               :disabled="shareModalBusy"
               @click="addShare(u.id)"
             >
-              <div class="files-modal-candidate-info">
-                <span class="files-modal-candidate-name">{{ u.displayName ?? u.username }}</span>
-                <span v-if="u.displayName" class="files-modal-candidate-username">@{{ u.username }}</span>
+              <div class="fb-modal-candidate-info">
+                <span class="fb-modal-candidate-name">{{ u.displayName ?? u.username }}</span>
+                <span v-if="u.displayName" class="fb-modal-candidate-username fb-mono">@{{ u.username }}</span>
               </div>
-              <span class="files-modal-candidate-add">+ Hinzufügen</span>
+              <span class="fb-modal-candidate-add">+ Hinzufügen</span>
             </button>
           </div>
         </div>
@@ -1602,700 +1616,697 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.files-root {
+/* ── Root ──────────────────────────────────────────────────── */
+.fb-root {
   height: calc(100vh - 0px);
   display: flex;
   flex-direction: column;
-  font-family: "Inter", sans-serif;
-  background: var(--color-bg);
-  color: var(--color-text);
+  background: var(--surface-base, var(--color-bg));
+  color: var(--fg-body, var(--color-text));
   overflow: hidden;
   position: relative;
 }
 
-/* ── Toolbar ─────────────────────────────────────────────── */
-.files-toolbar {
-  height: 64px;
-  padding: 0 24px 0 18px;
+/* ── Page-Head ─────────────────────────────────────────────── */
+.fb-pagehead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-16, 16px);
+  padding: var(--space-20, 20px) var(--space-24, 24px) var(--space-16, 16px);
+  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
+  flex-shrink: 0;
+}
+.fb-pagehead h1 {
+  font-size: var(--fs-20, 20px);
+  font-weight: var(--fw-semibold, 600);
+  color: var(--fg-title, var(--color-text));
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+.fb-pagehead p {
+  font-size: var(--fs-13, 13px);
+  color: var(--fg-muted, var(--color-text-muted));
+  margin: var(--space-4, 4px) 0 0;
+}
+.fb-pagehead-left {
+  flex: 1;
+  min-width: 0;
+}
+.fb-pagehead-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
-  border-bottom: 1px solid var(--color-border-subtle);
+  gap: var(--space-8, 8px);
   flex-shrink: 0;
-  background: var(--color-bg);
 }
 
-.files-icon-btn {
+/* ── Upload message ────────────────────────────────────────── */
+.fb-upload-msg {
+  background: var(--surface-muted, var(--color-bg-subtle));
+  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
+  padding: var(--space-8, 8px) var(--space-24, 24px);
+  font-size: var(--fs-12, 12px);
+  color: var(--fg-muted, var(--color-text-muted));
+}
+
+/* ── Toolbar ───────────────────────────────────────────────── */
+.fb-toolbar {
+  height: 48px;
+  padding: 0 var(--space-16, 16px);
+  display: flex;
+  align-items: center;
+  gap: var(--space-8, 8px);
+  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
+  flex-shrink: 0;
+  background: var(--surface-base, var(--color-bg));
+}
+.fb-toolbar-gap {
+  flex: 1;
+}
+
+.fb-icon-btn {
   width: 28px;
   height: 28px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  cursor: pointer;
-  color: var(--color-text-muted);
   flex-shrink: 0;
 }
-.files-icon-btn:hover:not(:disabled) {
-  background: var(--color-bg-subtle);
+.fb-icon-btn--active {
+  background: var(--surface-muted, var(--color-border-subtle));
 }
-.files-icon-btn:disabled {
-  color: var(--color-text-faint);
-  cursor: default;
-}
-.files-icon-btn-active {
-  background: var(--color-border-subtle);
-}
-
-.files-nav-btns {
+.fb-nav-btns {
   display: flex;
   gap: 2px;
 }
 
-.files-breadcrumb {
-  flex: 1;
+/* Breadcrumb */
+.fb-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--space-4, 4px);
   min-width: 0;
   overflow: hidden;
 }
-.files-breadcrumb-eyebrow {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-text-tertiary);
-  margin-right: 4px;
-  flex-shrink: 0;
+.fb-breadcrumb-sep {
+  color: var(--fg-faint, var(--color-text-faint));
+  font-size: var(--fs-12, 12px);
 }
-.files-breadcrumb-sep {
-  color: var(--color-text-faint);
-  font-size: 12px;
-}
-.files-breadcrumb-seg {
+.fb-breadcrumb-seg {
   background: transparent;
   border: 0;
-  font-size: 13px;
-  color: var(--color-text-muted);
+  font-size: var(--fs-13, 13px);
+  color: var(--fg-muted, var(--color-text-muted));
   font-weight: 400;
-  padding: 4px 6px;
-  border-radius: 4px;
+  padding: 3px 6px;
+  border-radius: var(--radius-sm, 4px);
   cursor: pointer;
   font-family: inherit;
   white-space: nowrap;
+  transition: background 80ms ease;
 }
-.files-breadcrumb-seg:hover {
-  background: var(--color-border-subtle);
+.fb-breadcrumb-seg:hover {
+  background: var(--surface-muted, var(--color-bg-subtle));
 }
-.files-breadcrumb-seg-active {
-  color: var(--color-text);
+.fb-breadcrumb-seg--active {
+  color: var(--fg-title, var(--color-text));
   font-weight: 500;
 }
 
-.files-segmented {
+/* View tabs */
+.fb-view-tabs {
   display: flex;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+  border: 1px solid var(--border-default, var(--color-border));
+  border-radius: var(--radius-sm, 6px);
   overflow: hidden;
   flex-shrink: 0;
 }
-.files-seg-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  border: 0;
-  background: var(--color-bg);
-  color: var(--color-text-muted);
-  font-size: 12px;
-  font-weight: 400;
-  cursor: pointer;
-  font-family: inherit;
-}
-.files-seg-btn + .files-seg-btn {
-  border-left: 1px solid var(--color-border);
-}
-.files-seg-btn-active {
-  background: var(--color-text);
-  color: var(--color-bg);
-  font-weight: 500;
-}
-
-.files-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  width: 220px;
-  background: var(--color-bg);
-  color: var(--color-text-tertiary);
-  flex-shrink: 0;
-}
-.files-search input {
-  border: 0;
-  outline: 0;
-  font-size: 12px;
-  flex: 1;
-  font-family: inherit;
-  background: transparent;
-  color: var(--color-text);
-  min-width: 0;
-}
-
-.files-upload-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--color-text);
-  color: var(--color-bg);
-  border: 0;
-  border-radius: 6px;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: inherit;
-  flex-shrink: 0;
-}
-.files-upload-btn:disabled {
-  opacity: 0.6;
-}
-
-.files-upload-msg {
-  background: var(--color-bg-subtle);
-  border-bottom: 1px solid var(--color-border-subtle);
-  padding: 8px 24px;
-  font-size: 12px;
-  color: var(--color-text-muted);
-}
-
-/* ── Body ─────────────────────────────────────────────── */
-.files-body {
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-/* ── Sidebar ─────────────────────────────────────────────── */
-.files-sidebar {
-  width: 220px;
-  background: var(--color-bg-subtle);
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-}
-.files-sidebar-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 14px 0;
-}
-.files-sidebar-section {
-  margin-bottom: 16px;
-}
-.files-sidebar-label {
-  padding: 0 16px 6px;
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-text-tertiary);
-}
-.files-sidebar-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 16px 6px 16px;
-  font-size: 13px;
-  color: var(--color-text-secondary);
-  background: transparent;
-  border-left: 2px solid transparent;
-  cursor: pointer;
-  font-weight: 400;
-}
-.files-sidebar-item:hover:not(.files-sidebar-item-disabled):not(.files-sidebar-item-active) {
-  background: var(--color-border-subtle);
-}
-.files-sidebar-item-active {
-  color: var(--color-text);
-  background: var(--color-bg);
-  border-left: 2px solid var(--color-text);
-  padding-left: 14px;
-  font-weight: 500;
-}
-.files-sidebar-item-disabled {
-  color: var(--color-text-tertiary);
-  cursor: default;
-}
-.files-sidebar-item svg {
-  color: var(--color-text-muted);
-}
-.files-sidebar-item-disabled svg {
-  color: var(--color-text-faint);
-}
-.files-sidebar-item span:first-of-type {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.files-sidebar-badge {
-  font-size: 9px;
-  padding: 1px 6px;
-  background: var(--color-border-subtle);
-  color: var(--color-text-muted);
-  border-radius: 9999px;
-  font-family: "JetBrains Mono", monospace;
-  letter-spacing: 0.02em;
-  flex-shrink: 0;
-}
-
-.files-sidebar-footer {
-  padding: 14px 16px;
-  border-top: 1px solid var(--color-border-subtle);
-  font-size: 11px;
-  color: var(--color-text-muted);
-}
-.files-storage-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 6px;
-}
-.files-storage-row .mono {
-  color: var(--color-text);
-}
-.files-storage-bar {
-  height: 3px;
-  background: var(--color-border);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.files-storage-bar-fill {
-  height: 100%;
-  background: var(--color-text);
-}
-.files-storage-sub {
-  margin-top: 8px;
-  font-size: 10px;
-  color: var(--color-text-tertiary);
-}
-
-/* ── Browser-Wrap ─────────────────────────────────────────────── */
-.files-browser-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  background: var(--color-bg);
-}
-.files-browser-wrap-with-sidebar {
-  border-left: 1px solid var(--color-border-subtle);
-}
-
-/* Spalten-View */
-.files-columns {
-  flex: 1;
-  display: flex;
-  overflow-x: auto;
-  min-height: 0;
-}
-.files-column {
-  width: 240px;
-  min-width: 240px;
-  border-right: 1px solid var(--color-border-subtle);
-  display: flex;
-  flex-direction: column;
-  background: var(--color-bg);
-}
-.files-column-header {
-  padding: 10px 14px 8px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-text-tertiary);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.files-column-count {
-  color: var(--color-text-faint);
-}
-.files-column-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
-}
-.files-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 14px;
-  font-size: 13px;
-  cursor: pointer;
-  background: transparent;
-  color: var(--color-text);
-  font-weight: 400;
-}
-.files-row:hover:not(.files-row-active) {
-  background: var(--color-bg-subtle);
-}
-.files-row-active {
-  background: var(--color-text);
-  color: var(--color-bg);
-  font-weight: 500;
-}
-.files-row-name {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.files-row-chev {
-  color: var(--color-text-faint);
-}
-.files-row-active .files-row-chev {
-  color: var(--color-bg);
-}
-.files-empty-col {
-  padding: 16px 14px;
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-
-/* ── Vollbild-Detail-Ansicht ──────────────────────────────────────────────── */
-.files-detail-full {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-height: 0;
-}
-.files-detail-topbar {
-  height: 48px;
-  border-bottom: 1px solid var(--color-border-subtle);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 0 20px;
-  flex-shrink: 0;
-  background: var(--color-bg);
-}
-.files-detail-back {
+.fb-view-tabs .pt-tab {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 13px;
-  font-family: inherit;
-  color: var(--color-text-secondary);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 10px;
-  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: var(--fs-12, 12px);
+  border-radius: 0;
+  border: 0;
+}
+.fb-view-tabs .pt-tab + .pt-tab {
+  border-left: 1px solid var(--border-subtle, var(--color-border-subtle));
+}
+
+/* Search */
+.fb-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8, 8px);
+  padding: 5px 10px;
+  border: 1px solid var(--border-default, var(--color-border));
+  border-radius: var(--radius-sm, 6px);
+  width: 200px;
+  background: var(--surface-base, var(--color-bg));
+  color: var(--fg-muted, var(--color-text-muted));
   flex-shrink: 0;
-  transition: background 80ms ease;
 }
-.files-detail-back:hover {
-  background: var(--color-bg-subtle);
-  color: var(--color-text);
-}
-.files-detail-breadcrumb {
+.fb-search .pt-input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: var(--fs-12, 12px);
   flex: 1;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--color-text);
+  min-width: 0;
+  padding: 0;
+  box-shadow: none;
+}
+
+/* ── Body ──────────────────────────────────────────────────── */
+.fb-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────── */
+.fb-sidebar {
+  width: 220px;
+  background: var(--surface-muted, var(--color-bg-subtle));
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border-subtle, var(--color-border-subtle));
+}
+.fb-sidebar-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-12, 12px) 0;
+}
+.fb-sidebar-section {
+  margin-bottom: var(--space-16, 16px);
+}
+.fb-sidebar-label {
+  padding: 0 var(--space-16, 16px) var(--space-6, 6px);
+  font-size: var(--fs-10, 10px);
+  font-weight: var(--fw-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-faint, var(--color-text-tertiary));
+}
+.fb-sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10, 10px);
+  padding: 5px var(--space-16, 16px);
+  font-size: var(--fs-13, 13px);
+  color: var(--fg-secondary, var(--color-text-secondary));
+  background: transparent;
+  border-left: 2px solid transparent;
+  cursor: pointer;
+  user-select: none;
+}
+.fb-sidebar-item:hover:not(.fb-sidebar-item--disabled):not(.fb-sidebar-item--active) {
+  background: var(--border-subtle, var(--color-border-subtle));
+}
+.fb-sidebar-item--active {
+  color: var(--fg-title, var(--color-text));
+  background: var(--surface-base, var(--color-bg));
+  border-left-color: var(--fg-title, var(--color-text));
+  padding-left: 14px;
+  font-weight: 500;
+}
+.fb-sidebar-item--disabled {
+  color: var(--fg-faint, var(--color-text-tertiary));
+  cursor: default;
+}
+.fb-sidebar-item > span:first-of-type {
+  flex: 1;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.files-detail-body {
+.fb-sidebar-badge {
+  font-size: 9px;
+  flex-shrink: 0;
+}
+.fb-sidebar-footer {
+  padding: var(--space-12, 12px) var(--space-16, 16px);
+  border-top: 1px solid var(--border-subtle, var(--color-border-subtle));
+  font-size: var(--fs-11, 11px);
+  color: var(--fg-muted, var(--color-text-muted));
+}
+.fb-storage-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: var(--space-6, 6px);
+}
+.fb-storage-row .fb-mono {
+  color: var(--fg-title, var(--color-text));
+}
+.fb-storage-bar {
+  height: 3px;
+  background: var(--border-default, var(--color-border));
+  border-radius: 2px;
+  overflow: hidden;
+}
+.fb-storage-bar-fill {
+  height: 100%;
+  background: var(--fg-title, var(--color-text));
+  transition: width 300ms ease;
+}
+.fb-storage-sub {
+  margin-top: var(--space-8, 8px);
+  font-size: 10px;
+  color: var(--fg-faint, var(--color-text-tertiary));
+}
+
+/* ── Browser-Wrap ──────────────────────────────────────────── */
+.fb-browser-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface-base, var(--color-bg));
+}
+.fb-browser-wrap--with-sidebar {
+  /* border already on sidebar right side */
+}
+
+/* ── Vollbild-Detail ───────────────────────────────────────── */
+.fb-detail-full {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-height: 0;
+}
+.fb-detail-topbar {
+  height: 48px;
+  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
+  display: flex;
+  align-items: center;
+  gap: var(--space-12, 12px);
+  padding: 0 var(--space-20, 20px);
+  flex-shrink: 0;
+}
+.fb-detail-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fs-13, 13px);
+  flex-shrink: 0;
+}
+.fb-detail-breadcrumb {
+  flex: 1;
+  font-size: var(--fs-14, 14px);
+  font-weight: var(--fw-semibold, 600);
+  color: var(--fg-title, var(--color-text));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fb-detail-body {
   flex: 1;
   display: flex;
   overflow: hidden;
   min-height: 0;
 }
-.files-detail-info {
+.fb-detail-info {
   width: 280px;
   min-width: 280px;
-  border-right: 1px solid var(--color-border-subtle);
-  padding: 24px;
+  border-right: 1px solid var(--border-subtle, var(--color-border-subtle));
+  padding: var(--space-20, 20px);
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--space-16, 16px);
   overflow-y: auto;
-  background: var(--color-bg-subtle);
+  background: var(--surface-muted, var(--color-bg-subtle));
+  border-radius: 0;
 }
-.files-detail-content {
+.fb-detail-content {
   flex: 1;
   overflow: auto;
-  padding: 32px;
-  background: var(--color-bg);
+  padding: var(--space-24, 24px) var(--space-32, 32px);
+  background: var(--surface-base, var(--color-bg));
   display: flex;
   flex-direction: column;
 }
-.files-detail-pdf {
+.fb-detail-pdf {
   flex: 1;
   width: 100%;
   min-height: 600px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 6px;
+  border: 1px solid var(--border-subtle, var(--color-border-subtle));
+  border-radius: var(--radius-sm, 6px);
 }
-.files-detail-img {
+.fb-detail-img {
   max-width: 100%;
   max-height: 80vh;
   object-fit: contain;
   display: block;
   margin: 0 auto;
-  border-radius: 6px;
-  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--border-subtle, var(--color-border-subtle));
 }
-.files-detail-md {
+.fb-detail-md {
   max-width: 800px;
   width: 100%;
 }
-.files-detail-code {
-  font-family: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
-  font-size: 12.5px;
+.fb-detail-code {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: var(--fs-12, 12px);
   line-height: 1.6;
-  color: var(--color-text);
+  color: var(--fg-body, var(--color-text));
   white-space: pre-wrap;
   word-break: break-word;
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 6px;
-  padding: 20px 24px;
+  background: var(--surface-muted, var(--color-bg-subtle));
+  border: 1px solid var(--border-subtle, var(--color-border-subtle));
+  border-radius: var(--radius-sm, 6px);
+  padding: var(--space-20, 20px) var(--space-24, 24px);
   margin: 0;
 }
-.files-detail-empty {
+.fb-detail-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 14px;
+  gap: var(--space-12, 12px);
   height: 100%;
-  color: var(--color-text-tertiary);
-  font-size: 13px;
+  color: var(--fg-faint, var(--color-text-tertiary));
+  font-size: var(--fs-13, 13px);
 }
 
-/* Preview-Pane (legacy, für responsive-Fallback) */
-.files-preview {
-  width: 300px;
-  min-width: 300px;
-  padding: 24px;
-  background: var(--color-bg-subtle);
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  overflow: auto;
-}
-.files-preview-eyebrow {
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--color-text-tertiary);
-}
-.files-preview-hero {
+/* Preview info panel */
+.fb-preview-hero {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 30px 20px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
+  padding: 28px 16px;
+  background: var(--surface-base, var(--color-bg));
+  border: 1px solid var(--border-subtle, var(--color-border-subtle));
+  border-radius: var(--radius-sm, 6px);
 }
-.files-preview-name {
-  font-size: 14px;
-  font-weight: 600;
+.fb-preview-image {
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  display: block;
+}
+.fb-preview-name {
+  font-size: var(--fs-14, 14px);
+  font-weight: var(--fw-semibold, 600);
   word-break: break-word;
-  color: var(--color-text);
+  color: var(--fg-title, var(--color-text));
 }
-.files-preview-sub {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  margin-top: 4px;
+.fb-preview-sub {
+  font-size: var(--fs-11, 11px);
+  color: var(--fg-faint, var(--color-text-tertiary));
+  margin-top: 3px;
 }
-.files-preview-meta {
+.fb-preview-meta {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  font-size: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--color-border-subtle);
+  gap: var(--space-8, 8px);
+  font-size: var(--fs-12, 12px);
+  padding-top: var(--space-12, 12px);
+  border-top: 1px solid var(--border-subtle, var(--color-border-subtle));
 }
-.files-preview-row {
+.fb-preview-row {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-12, 12px);
 }
-.files-preview-key {
-  color: var(--color-text-tertiary);
+.fb-preview-key {
+  color: var(--fg-faint, var(--color-text-tertiary));
 }
-.files-preview-val {
+.fb-preview-val {
   text-align: right;
-  color: var(--color-text);
-  font-size: 11px;
+  color: var(--fg-body, var(--color-text));
+  font-size: var(--fs-11, 11px);
 }
-.files-preview-actions {
+.fb-preview-actions {
   display: flex;
-  gap: 6px;
+  gap: var(--space-6, 6px);
+  flex-wrap: wrap;
 }
-.files-preview-btn-primary {
+.fb-preview-btn-open {
   flex: 2;
-  padding: 7px 12px;
-  font-size: 12px;
-  background: var(--color-text);
-  color: var(--color-bg);
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
   text-align: center;
   text-decoration: none;
+  justify-content: center;
 }
-.files-preview-btn-secondary {
-  flex: 1;
-  padding: 7px 12px;
-  font-size: 12px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+.fb-preview-star {
+  background: transparent;
+  border: 0;
   cursor: pointer;
-  font-family: inherit;
-  font-weight: 500;
+  padding: 4px;
+  border-radius: var(--radius-sm, 4px);
+  color: var(--fg-faint, var(--color-text-faint));
+  display: inline-flex;
+  align-items: center;
 }
-.files-preview-btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: default;
+.fb-preview-star:hover {
+  background: var(--surface-muted, var(--color-bg-subtle));
 }
-.files-preview-md {
-  border-top: 1px solid var(--color-border-subtle);
-  padding-top: 14px;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--color-text);
+.fb-preview-star--on {
+  color: #f59e0b;
 }
-.files-preview-code {
-  border-top: 1px solid var(--color-border-subtle);
-  padding-top: 14px;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--color-text-secondary);
-  white-space: pre-wrap;
-  word-break: break-word;
-  margin: 0;
-}
-.files-preview-loading {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
+.fb-preview-loading {
+  font-size: var(--fs-12, 12px);
+  color: var(--fg-faint, var(--color-text-tertiary));
   text-align: center;
-  padding: 12px 0;
+  padding: var(--space-12, 12px) 0;
 }
 
-/* Liste-View */
-.files-list {
+/* Action-Menu */
+.fb-action-menu-wrap {
+  position: relative;
   flex: 1;
-  overflow-y: auto;
-  background: var(--color-bg);
 }
-.files-list-header {
-  display: grid;
-  grid-template-columns: 1fr 160px 100px 130px;
-  padding: 10px 20px;
+.fb-action-menu-wrap .pt-btn {
+  width: 100%;
+}
+.fb-action-menu-trigger--open {
+  background: var(--surface-muted, var(--color-border-subtle));
+}
+.fb-action-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  min-width: 200px;
+  background: var(--surface-base, var(--color-bg));
+  border: 1px solid var(--border-default, var(--color-border));
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+  z-index: 20;
+}
+.fb-action-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8, 8px);
+  width: 100%;
+  padding: 6px 10px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs, 4px);
+  font-size: var(--fs-12, 12px);
+  font-family: inherit;
+  color: var(--fg-body, var(--color-text));
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+}
+.fb-action-item:hover {
+  background: var(--surface-muted, var(--color-bg-subtle));
+}
+.fb-action-item svg {
+  color: var(--fg-muted, var(--color-text-muted));
+  flex-shrink: 0;
+}
+.fb-action-divider {
+  height: 1px;
+  background: var(--border-subtle, var(--color-border-subtle));
+  margin: 4px 0;
+}
+.fb-action-item--danger {
+  color: var(--red-600, #dc2626);
+}
+.fb-action-item--danger svg {
+  color: var(--red-600, #dc2626);
+}
+.fb-action-item--danger:hover {
+  background: #fef2f2;
+}
+
+/* ── Spalten-View ──────────────────────────────────────────── */
+.fb-columns {
+  flex: 1;
+  display: flex;
+  overflow-x: auto;
+  min-height: 0;
+}
+.fb-column {
+  width: 240px;
+  min-width: 240px;
+  border-right: 1px solid var(--border-subtle, var(--color-border-subtle));
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-base, var(--color-bg));
+}
+.fb-column-header {
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
   font-size: 10px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold, 600);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--color-text-tertiary);
-  background: var(--color-bg-subtle);
-  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--fg-faint, var(--color-text-tertiary));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.fb-column-count {
+  color: var(--fg-faint, var(--color-text-faint));
+}
+.fb-column-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.fb-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8, 8px);
+  padding: 6px 14px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--fg-body, var(--color-text));
+  border-bottom: none;
+  border-radius: 0;
+}
+.fb-row:hover:not(.fb-row--active) {
+  background: var(--surface-muted, var(--color-bg-subtle));
+}
+.fb-row--active {
+  background: var(--fg-title, var(--color-text));
+  color: var(--surface-base, var(--color-bg));
+  font-weight: 500;
+}
+.fb-row-name {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--fs-13, 13px);
+}
+.fb-row-chev {
+  color: var(--fg-faint, var(--color-text-faint));
+}
+.fb-row--active .fb-row-chev {
+  color: var(--surface-base, var(--color-bg));
+}
+.fb-empty-col {
+  padding: var(--space-16, 16px) 14px;
+  font-size: var(--fs-12, 12px);
+  color: var(--fg-faint, var(--color-text-tertiary));
+}
+
+/* ── Liste-View ────────────────────────────────────────────── */
+.fb-list {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--surface-base, var(--color-bg));
+}
+.fb-list-header {
+  display: grid;
+  grid-template-columns: 1fr 150px 90px 120px;
+  padding: 8px var(--space-20, 20px);
+  font-size: 10px;
+  font-weight: var(--fw-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-faint, var(--color-text-tertiary));
+  background: var(--surface-muted, var(--color-bg-subtle));
+  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
   position: sticky;
   top: 0;
   z-index: 1;
 }
-.files-list-row {
+.fb-list-row {
   display: grid;
-  grid-template-columns: 1fr 160px 100px 130px;
-  padding: 10px 20px;
-  font-size: 13px;
+  grid-template-columns: 1fr 150px 90px 120px;
+  padding: 9px var(--space-20, 20px);
+  font-size: var(--fs-13, 13px);
   align-items: center;
   cursor: pointer;
-  border-bottom: 1px solid var(--color-border-subtle);
-  background: var(--color-bg);
-  color: var(--color-text);
+  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
+  background: var(--surface-base, var(--color-bg));
+  color: var(--fg-body, var(--color-text));
+  transition: background 60ms ease;
 }
-.files-list-row:hover:not(.files-list-row-active) {
-  background: var(--color-bg-subtle);
+.fb-list-row:hover:not(.fb-list-row--active) {
+  background: var(--surface-muted, var(--color-bg-subtle));
 }
-.files-list-row-active {
-  background: var(--color-text);
-  color: var(--color-bg);
+.fb-list-row--active {
+  background: var(--fg-title, var(--color-text));
+  color: var(--surface-base, var(--color-bg));
 }
-.files-list-name {
+.fb-list-name {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--space-8, 8px);
   min-width: 0;
 }
-.files-list-name > span:last-child {
+.fb-list-name > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.files-list-meta {
-  font-size: 11px;
-  color: var(--color-text-muted);
+.fb-list-meta {
+  font-size: var(--fs-11, 11px);
+  color: var(--fg-muted, var(--color-text-muted));
 }
-.files-list-row-active .files-list-meta {
-  color: var(--color-text-faint);
+.fb-list-row--active .fb-list-meta {
+  color: rgba(255, 255, 255, 0.65);
 }
-.files-list-kind {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
+.fb-list-kind {
+  font-size: var(--fs-11, 11px);
+  color: var(--fg-faint, var(--color-text-tertiary));
 }
-.files-list-row-active .files-list-kind {
-  color: var(--color-text-faint);
+.fb-list-row--active .fb-list-kind {
+  color: rgba(255, 255, 255, 0.55);
 }
 
-/* Symbole-View */
-.files-icons {
+/* ── Symbole-View ──────────────────────────────────────────── */
+.fb-icons {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
-  background: var(--color-bg);
+  padding: var(--space-20, 20px);
+  background: var(--surface-base, var(--color-bg));
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 8px;
+  gap: var(--space-8, 8px);
+  align-content: start;
 }
-.files-icon-cell {
+.fb-icon-cell {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 16px 8px;
-  border-radius: 6px;
+  gap: var(--space-8, 8px);
+  padding: 14px 8px;
+  border-radius: var(--radius-sm, 6px);
   cursor: pointer;
   background: transparent;
-  color: var(--color-text);
+  color: var(--fg-body, var(--color-text));
+  transition: background 60ms ease;
 }
-.files-icon-cell:hover:not(.files-icon-cell-active) {
-  background: var(--color-bg-subtle);
+.fb-icon-cell:hover:not(.fb-icon-cell--active) {
+  background: var(--surface-muted, var(--color-bg-subtle));
 }
-.files-icon-cell-active {
-  background: var(--color-text);
-  color: var(--color-bg);
+.fb-icon-cell--active {
+  background: var(--fg-title, var(--color-text));
+  color: var(--surface-base, var(--color-bg));
 }
-.files-icon-name {
-  font-size: 12px;
+.fb-icon-name {
+  font-size: var(--fs-12, 12px);
   text-align: center;
   line-height: 1.3;
   max-width: 100%;
@@ -2304,39 +2315,72 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
-/* Status-Bar */
-.files-status {
+/* ── Status-Bar ────────────────────────────────────────────── */
+.fb-status {
   height: 26px;
-  border-top: 1px solid var(--color-border-subtle);
-  background: var(--color-bg-subtle);
+  border-top: 1px solid var(--border-subtle, var(--color-border-subtle));
+  background: var(--surface-muted, var(--color-bg-subtle));
   display: flex;
   align-items: center;
   padding: 0 14px;
-  font-size: 11px;
-  color: var(--color-text-muted);
-  font-family: "JetBrains Mono", monospace;
+  font-size: var(--fs-11, 11px);
+  color: var(--fg-muted, var(--color-text-muted));
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
   letter-spacing: 0.02em;
   flex-shrink: 0;
 }
-.files-status-spacer {
+.fb-status-spacer {
   flex: 1;
 }
 
-/* Empty-States */
-.files-empty {
-  padding: 48px 24px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--color-text-tertiary);
+/* ── Star buttons ──────────────────────────────────────────── */
+.fb-row-star {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-faint, var(--color-text-faint));
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 80ms ease;
+}
+.fb-row:hover .fb-row-star,
+.fb-row--active .fb-row-star,
+.fb-row-star.fb-row-star--on,
+.fb-list-row:hover .fb-row-star,
+.fb-list-row--active .fb-row-star,
+.fb-icon-cell:hover .fb-row-star,
+.fb-icon-cell--active .fb-row-star {
+  opacity: 1;
+}
+.fb-row-star:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+.fb-row-star--on {
+  color: #f59e0b;
+}
+.fb-row-star--active-row {
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+.fb-row-star--active-row.fb-row-star--on {
+  color: #fbbf24 !important;
+}
+.fb-row-star--inline {
+  margin-left: 4px;
+}
+.fb-list-row--active .fb-row-star {
+  color: rgba(255, 255, 255, 0.7);
+}
+.fb-list-row--active .fb-row-star--on {
+  color: #fbbf24;
 }
 
-/* Helpers */
-.mono {
-  font-family: "JetBrains Mono", monospace;
-}
-
-/* Drag-Overlay */
-.files-drag-overlay {
+/* ── Drag-Overlay ──────────────────────────────────────────── */
+.fb-drag-overlay {
   position: absolute;
   inset: 0;
   background: rgba(17, 24, 39, 0.45);
@@ -2346,210 +2390,18 @@ onBeforeUnmount(() => {
   z-index: 10;
   pointer-events: none;
 }
-.files-drag-card {
-  background: var(--color-bg);
-  color: var(--color-text);
+.fb-drag-card {
+  background: var(--surface-base, var(--color-bg));
+  color: var(--fg-title, var(--color-text));
   padding: 20px 28px;
-  border-radius: 8px;
-  font-size: 14px;
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--fs-14, 14px);
   font-weight: 500;
-  border: 2px dashed var(--color-text);
+  border: 2px dashed var(--fg-title, var(--color-text));
 }
 
-/* ─── Mobile-Anpassung (≤767px) ────────────────────────────── */
-@media (max-width: 767.98px) {
-  .files-toolbar {
-    height: auto;
-    padding: 12px 16px;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-  .files-breadcrumb {
-    width: 100%;
-    order: 10; /* in eigene Zeile */
-  }
-  .files-search {
-    width: 100%;
-    order: 11;
-  }
-  .files-segmented {
-    order: 12;
-  }
-  .files-upload-btn {
-    order: 13;
-  }
-  .files-sidebar {
-    width: 200px;
-  }
-  .files-detail-info {
-    width: 220px;
-    min-width: 220px;
-  }
-  .files-detail-content {
-    padding: 16px;
-  }
-  .files-columns {
-    flex-direction: column;
-  }
-  .files-column {
-    width: 100%;
-    min-width: unset;
-    border-right: 0;
-    border-bottom: 1px solid var(--color-border-subtle);
-  }
-  .files-list-header,
-  .files-list-row {
-    grid-template-columns: 1fr 90px;
-  }
-  .files-list-header span:nth-child(2),
-  .files-list-row > span:nth-child(2),
-  .files-list-header span:nth-child(4),
-  .files-list-row > span:nth-child(4) {
-    display: none;
-  }
-}
-
-/* ─── Star-Buttons in Rows ──────────────────────────────────────────────── */
-.files-row-star {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  padding: 2px;
-  border-radius: 3px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-faint);
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 80ms ease;
-}
-.files-row:hover .files-row-star,
-.files-row-active .files-row-star,
-.files-row-star.files-row-star-on,
-.files-list-row:hover .files-row-star,
-.files-list-row-active .files-row-star,
-.files-icon-cell:hover .files-row-star,
-.files-icon-cell-active .files-row-star {
-  opacity: 1;
-}
-.files-row-star:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-.files-row-star-on {
-  color: #f59e0b; /* amber-500 */
-}
-.files-row-star-active-row {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-.files-row-star-active-row.files-row-star-on {
-  color: #fbbf24 !important; /* amber-400 — gut sichtbar auf schwarz */
-}
-.files-row-star-inline {
-  margin-left: 6px;
-}
-
-/* ─── Preview-Header (Eyebrow + Star) ──────────────────────────────────── */
-.files-preview-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.files-preview-star {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
-  color: var(--color-text-faint);
-}
-.files-preview-star:hover {
-  background: var(--color-border-subtle);
-}
-.files-preview-star-on {
-  color: #f59e0b;
-}
-
-/* ─── Bild-Vorschau ─────────────────────────────────────────────────────── */
-.files-preview-image {
-  max-width: 100%;
-  max-height: 220px;
-  object-fit: contain;
-  display: block;
-}
-
-/* ─── PDF-Vorschau ──────────────────────────────────────────────────────── */
-.files-preview-pdf {
-  width: 100%;
-  height: 480px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 6px;
-  background: var(--color-bg);
-}
-
-/* ─── Action-Menu (··· Dropdown) ────────────────────────────────────────── */
-.files-preview-actions-menu-wrap {
-  position: relative;
-  flex: 1;
-}
-.files-preview-actions-menu-wrap .files-preview-btn-secondary {
-  width: 100%;
-}
-.files-preview-btn-active {
-  background: var(--color-border-subtle);
-}
-.files-action-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  min-width: 200px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  padding: 4px;
-  z-index: 20;
-}
-.files-action-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 7px 10px;
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  font-size: 12px;
-  font-family: inherit;
-  color: var(--color-text);
-  cursor: pointer;
-  text-align: left;
-  text-decoration: none;
-}
-.files-action-item:hover {
-  background: var(--color-bg-subtle);
-}
-.files-action-item svg {
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-.files-action-divider {
-  height: 1px;
-  background: var(--color-border-subtle);
-  margin: 4px 0;
-}
-.files-action-danger {
-  color: #dc2626;
-}
-.files-action-danger svg {
-  color: #dc2626;
-}
-.files-action-danger:hover {
-  background: #fef2f2;
-}
-
-/* ─── Teilen-Modal ──────────────────────────────────────────────────────── */
-.files-modal-backdrop {
+/* ── Teilen-Modal ──────────────────────────────────────────── */
+.fb-modal-backdrop {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
@@ -2559,197 +2411,215 @@ onBeforeUnmount(() => {
   z-index: 50;
   padding: 20px;
 }
-.files-modal {
-  background: var(--color-bg);
-  border-radius: 10px;
+.fb-modal {
+  background: var(--surface-base, var(--color-bg));
+  border-radius: var(--radius-md, 10px);
   width: 100%;
   max-width: 520px;
   max-height: 80vh;
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--border-default, var(--color-border));
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
   overflow: hidden;
 }
-.files-modal-header {
-  padding: 18px 20px;
-  border-bottom: 1px solid var(--color-border-subtle);
+.fb-modal-header {
+  padding: var(--space-16, 16px) var(--space-20, 20px);
+  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-12, 12px);
 }
-.files-modal-title {
-  font-size: 15px;
-  font-weight: 600;
+.fb-eyebrow {
+  font-size: var(--fs-10, 10px);
+  font-weight: var(--fw-semibold, 600);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-faint, var(--color-text-tertiary));
+}
+.fb-modal-title {
+  font-size: var(--fs-15, 15px);
+  font-weight: var(--fw-semibold, 600);
   margin: 4px 0 0 0;
   letter-spacing: -0.01em;
   word-break: break-word;
+  color: var(--fg-title, var(--color-text));
 }
-.files-modal-close {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
+.fb-modal-close {
   width: 28px;
   height: 28px;
-  border-radius: 5px;
+  padding: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: var(--color-text-muted);
   flex-shrink: 0;
 }
-.files-modal-close:hover {
-  background: var(--color-bg-subtle);
+.fb-modal-section {
+  padding: var(--space-16, 16px) var(--space-20, 20px);
+  border-top: 1px solid var(--border-subtle, var(--color-border-subtle));
+  overflow-y: auto;
 }
-.files-modal-section {
-  padding: 16px 20px;
-  border-top: 1px solid var(--color-border-subtle);
-}
-.files-modal-section:first-of-type {
+.fb-modal-section:first-of-type {
   border-top: 0;
 }
-.files-modal-section-label {
+.fb-modal-section-label {
   font-size: 10px;
-  font-weight: 600;
+  font-weight: var(--fw-semibold, 600);
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--color-text-tertiary);
-  margin-bottom: 10px;
+  color: var(--fg-faint, var(--color-text-tertiary));
+  margin-bottom: var(--space-8, 8px);
 }
-.files-modal-empty {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  padding: 8px 0;
+.fb-modal-empty {
+  font-size: var(--fs-12, 12px);
+  color: var(--fg-faint, var(--color-text-tertiary));
+  padding: 6px 0;
+  text-align: left;
 }
-.files-modal-share-row {
+.fb-modal-share-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
+  gap: var(--space-12, 12px);
+  padding: var(--space-8, 8px) 0;
 }
-.files-modal-share-info {
+.fb-modal-share-info {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-8, 8px);
   flex-wrap: wrap;
   flex: 1;
   min-width: 0;
 }
-.files-modal-share-name {
-  font-size: 13px;
+.fb-modal-share-name {
+  font-size: var(--fs-13, 13px);
   font-weight: 500;
 }
-.files-modal-share-username {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  font-family: "JetBrains Mono", monospace;
+.fb-modal-share-username {
+  font-size: var(--fs-11, 11px);
+  color: var(--fg-faint, var(--color-text-tertiary));
 }
-.files-modal-pill {
-  font-size: 10px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: #dcfce7;
-  color: #166534;
-  font-weight: 500;
+.fb-modal-remove-btn {
+  font-size: var(--fs-12, 12px);
 }
-.files-modal-pill-muted {
-  background: var(--color-border-subtle);
-  color: var(--color-text-muted);
-}
-.files-modal-share-remove {
-  font-size: 12px;
-  background: transparent;
-  border: 1px solid var(--color-border);
-  border-radius: 5px;
-  padding: 4px 10px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-.files-modal-share-remove:hover:not(:disabled) {
-  background: #fef2f2;
-  color: #dc2626;
-  border-color: #fecaca;
-}
-.files-modal-add-controls {
+.fb-modal-add-controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: var(--space-8, 8px);
+  margin-bottom: var(--space-8, 8px);
 }
-.files-modal-input {
+.fb-modal-input {
   flex: 1;
   min-width: 180px;
-  padding: 7px 10px;
-  font-size: 13px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  font-family: inherit;
-  outline: 0;
 }
-.files-modal-checkbox {
+.fb-modal-checkbox {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--color-text-muted);
+  gap: var(--space-6, 6px);
+  font-size: var(--fs-12, 12px);
+  color: var(--fg-muted, var(--color-text-muted));
   cursor: pointer;
 }
-.files-modal-candidates {
+.fb-modal-candidates {
   max-height: 240px;
   overflow-y: auto;
   margin: 0 -8px;
 }
-.files-modal-candidate {
+.fb-modal-candidate {
   display: flex;
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  padding: 8px 12px;
+  padding: var(--space-8, 8px) 12px;
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: var(--radius-xs, 4px);
   cursor: pointer;
   font-family: inherit;
   text-align: left;
+  transition: background 60ms ease;
 }
-.files-modal-candidate:hover:not(:disabled) {
-  background: var(--color-bg-subtle);
+.fb-modal-candidate:hover:not(:disabled) {
+  background: var(--surface-muted, var(--color-bg-subtle));
 }
-.files-modal-candidate:disabled {
+.fb-modal-candidate:disabled {
   opacity: 0.6;
   cursor: default;
 }
-.files-modal-candidate-info {
+.fb-modal-candidate-info {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-8, 8px);
   min-width: 0;
 }
-.files-modal-candidate-name {
-  font-size: 13px;
+.fb-modal-candidate-name {
+  font-size: var(--fs-13, 13px);
   font-weight: 500;
 }
-.files-modal-candidate-username {
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-  font-family: "JetBrains Mono", monospace;
+.fb-modal-candidate-username {
+  font-size: var(--fs-11, 11px);
+  color: var(--fg-faint, var(--color-text-tertiary));
 }
-.files-modal-candidate-add {
-  font-size: 11px;
-  color: var(--color-text-muted);
+.fb-modal-candidate-add {
+  font-size: var(--fs-11, 11px);
+  color: var(--fg-muted, var(--color-text-muted));
   font-weight: 500;
 }
 
-/* Star nicht im Active-State (selected file in dunkel) ueberdecken */
-.files-list-row-active .files-row-star {
-  color: rgba(255, 255, 255, 0.7);
+/* ── Mono helper ───────────────────────────────────────────── */
+.fb-mono {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
 }
-.files-list-row-active .files-row-star-on {
-  color: #fbbf24;
+
+/* ── Mobile ────────────────────────────────────────────────── */
+@media (max-width: 767.98px) {
+  .fb-toolbar {
+    height: auto;
+    padding: var(--space-8, 8px) var(--space-12, 12px);
+    flex-wrap: wrap;
+    gap: var(--space-8, 8px);
+  }
+  .fb-breadcrumb {
+    width: 100%;
+    order: 10;
+  }
+  .fb-search {
+    width: 100%;
+    order: 11;
+  }
+  .fb-view-tabs {
+    order: 12;
+  }
+  .fb-sidebar {
+    width: 200px;
+  }
+  .fb-detail-info {
+    width: 220px;
+    min-width: 220px;
+  }
+  .fb-detail-content {
+    padding: var(--space-16, 16px);
+  }
+  .fb-columns {
+    flex-direction: column;
+  }
+  .fb-column {
+    width: 100%;
+    min-width: unset;
+    border-right: 0;
+    border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
+  }
+  .fb-list-header,
+  .fb-list-row {
+    grid-template-columns: 1fr 90px;
+  }
+  .fb-list-header span:nth-child(2),
+  .fb-list-row > span:nth-child(2),
+  .fb-list-header span:nth-child(4),
+  .fb-list-row > span:nth-child(4) {
+    display: none;
+  }
 }
 </style>

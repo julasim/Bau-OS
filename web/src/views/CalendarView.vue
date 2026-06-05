@@ -338,249 +338,375 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
   }
   return { show: true, cls: "ms-badge", title: "Mit Outlook synchronisiert" };
 }
+
+// ── Agenda-Filter ────────────────────────────────────────────────────────────
+// In Monatsansicht: Klick auf Tag filtert die Agenda auf diesen Tag.
+// "Ganzer Monat" setzt zurück.
+const agendaFilter = ref<string | null>(null);
+
+function selectAgendaDay(iso: string) {
+  agendaFilter.value = agendaFilter.value === iso ? null : iso;
+}
+
+const agendaGroups = computed(() => {
+  if (agendaFilter.value) {
+    const items = termineForDate(agendaFilter.value);
+    items.sort((a, b) => (a.uhrzeit ?? "99:99").localeCompare(b.uhrzeit ?? "99:99"));
+    const iso = agendaFilter.value;
+    const todayISO = toISO(new Date());
+    let label = formatDateLong(iso);
+    if (iso === todayISO) label = "Heute — " + label;
+    return items.length > 0 ? [{ date: iso, label, items }] : [];
+  }
+  // Zeige nur den aktuellen Monat
+  const y = current.value.getFullYear();
+  const m = current.value.getMonth();
+  return grouped.value.filter((g) => {
+    const d = new Date(g.date + "T00:00:00");
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+});
+
+function agendaMonthAbbrev(iso: string): string {
+  return new Date(iso + "T00:00:00").toLocaleDateString("de-AT", { month: "short" });
+}
+function agendaDayNum(iso: string): string {
+  return String(new Date(iso + "T00:00:00").getDate());
+}
 </script>
 
 <template>
-  <div class="cal-page" style="padding: 24px 32px 32px; color: var(--color-text)">
-    <!-- ── Flash-Message ──────────────────────────────────────── -->
-    <div
-      v-if="message"
-      :style="{
-        padding: '8px 14px',
-        marginBottom: '12px',
-        borderRadius: '6px',
-        fontSize: '13px',
-        border: '1px solid',
-        background: message.type === 'success' ? 'var(--color-success-bg)' : 'var(--color-danger-bg)',
-        borderColor: message.type === 'success' ? 'var(--color-success-border)' : 'var(--color-danger-border)',
-        color: message.type === 'success' ? 'var(--color-success-text)' : 'var(--color-danger-text)',
-      }"
-    >
+  <div class="ap-page">
+    <!-- ── Flash-Message ──────────────────────────────────────────────────── -->
+    <div v-if="message" :class="['ap-flash', message.type === 'success' ? 'ap-flash--success' : 'ap-flash--danger']">
       {{ message.text }}
     </div>
 
-    <!-- ── Header ─────────────────────────────────────────────── -->
-    <div class="cal-header">
-      <div class="cal-title min-w-0">
-        <div class="eyebrow" style="margin-bottom: 6px">Arbeit</div>
-        <h1 class="cal-h1">Kalender</h1>
-        <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">
-          {{ termine.length }} Termine insgesamt
-        </p>
+    <!-- ── Page Header ────────────────────────────────────────────────────── -->
+    <header class="ap-pagehead">
+      <div>
+        <h1 class="ap-pagetitle">Termine</h1>
+        <p class="ap-pagesub">Alle Behörden-, Bauherren- und Abstimmungstermine deiner Projekte.</p>
       </div>
-      <div class="cal-toolbar">
-        <!-- Navigation (nur in Grid-Ansichten) -->
-        <div v-if="view !== 'list'" class="cal-nav">
-          <button @click="prev" class="cal-nav-btn" aria-label="Zurück">‹</button>
-          <span class="cal-range-label">{{ rangeLabel }}</span>
-          <button @click="next" class="cal-nav-btn" aria-label="Vor">›</button>
-          <button @click="goToday" class="bauos-btn ghost cal-today-btn">Heute</button>
-        </div>
+      <div class="ap-pagehead-actions">
+        <button @click="startCreate()" class="pt-btn pt-btn--primary pt-btn--sm" type="button">
+          <svg
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            width="14"
+            height="14"
+            style="flex-shrink: 0"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          Neuer Termin
+        </button>
+      </div>
+    </header>
 
-        <div class="cal-actions">
-          <!-- Segmented View-Switcher -->
-          <div class="flex" style="border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden">
+    <!-- ── Inline Create-Formular ─────────────────────────────────────────── -->
+    <div v-if="showCreate" class="ap-panel ap-create-panel">
+      <div class="ap-panel-head">
+        <span class="ap-panel-title">Neuer Termin</span>
+        <button @click="showCreate = false" class="pt-iconbtn" type="button" aria-label="Schliessen">
+          <svg
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="ap-panel-body">
+        <div class="ap-form-row">
+          <div class="pt-field">
+            <label class="pt-label" for="nc-datum">Datum</label>
+            <input v-model="newDatum" type="date" class="pt-input" id="nc-datum" />
+          </div>
+          <div class="pt-field">
+            <label class="pt-label" for="nc-uhrzeit">Uhrzeit</label>
+            <input v-model="newUhrzeit" type="time" class="pt-input" id="nc-uhrzeit" />
+          </div>
+          <div class="pt-field" style="flex: 2">
+            <label class="pt-label" for="nc-text">Beschreibung <span class="pt-req">*</span></label>
+            <input
+              v-model="newText"
+              type="text"
+              placeholder="Termin…"
+              @keyup.enter="create"
+              class="pt-input"
+              id="nc-text"
+            />
+          </div>
+        </div>
+        <div class="ap-group-h" style="margin-top: 12px">
+          <button @click="create" class="pt-btn pt-btn--primary pt-btn--sm" type="button">Erstellen</button>
+          <button @click="showCreate = false" class="pt-btn pt-btn--ghost pt-btn--sm" type="button">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Inline Edit-Formular ───────────────────────────────────────────── -->
+    <div v-if="editing" class="ap-panel ap-create-panel">
+      <div class="ap-panel-head">
+        <span class="ap-panel-title">Termin bearbeiten</span>
+        <button @click="editing = null" class="pt-iconbtn" type="button" aria-label="Schliessen">
+          <svg
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M18 6L6 18M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div class="ap-panel-body">
+        <div class="pt-field" style="margin-bottom: 12px">
+          <label class="pt-label" for="ed-text">Beschreibung</label>
+          <input v-model="editing.text" class="pt-input" id="ed-text" />
+        </div>
+        <div class="ap-form-row" style="margin-bottom: 12px">
+          <div class="pt-field">
+            <label class="pt-label" for="ed-datum">Datum</label>
+            <input v-model="editing.datum" type="date" class="pt-input" id="ed-datum" />
+          </div>
+          <div class="pt-field">
+            <label class="pt-label" for="ed-von">Von</label>
+            <input v-model="editing.uhrzeit" type="time" class="pt-input" id="ed-von" />
+          </div>
+          <div class="pt-field">
+            <label class="pt-label" for="ed-bis">Bis</label>
+            <input v-model="editing.endzeit" type="time" class="pt-input" id="ed-bis" />
+          </div>
+        </div>
+        <div class="pt-field" style="margin-bottom: 12px">
+          <label class="pt-label" for="ed-ort">Ort</label>
+          <input v-model="editing.location" placeholder="z. B. Büro, Magistrat…" class="pt-input" id="ed-ort" />
+        </div>
+        <div v-if="team.length > 0" style="margin-bottom: 16px">
+          <div class="pt-label" style="margin-bottom: 6px">Personen</div>
+          <div class="ap-group-h" style="flex-wrap: wrap; gap: 6px">
             <button
-              v-for="(v, i) in VIEWS"
-              :key="v.id"
-              @click="view = v.id"
-              :class="['seg-btn', view === v.id ? 'seg-btn-active' : '', i > 0 ? 'seg-divider' : '']"
+              v-for="m in team"
+              :key="m"
+              @click="toggleAssignee(m)"
+              :class="['ap-chip-btn', editing.assignees.includes(m) ? 'ap-chip-btn--active' : '']"
+              type="button"
             >
-              {{ v.label }}
+              {{ m }}
             </button>
           </div>
-
-          <button @click="startCreate()" class="bauos-btn solid cal-add-btn">
-            <span class="cal-add-icon">+</span>
-            <span class="cal-add-label">Termin</span>
-          </button>
         </div>
-      </div>
-    </div>
-
-    <!-- ── Inline Create-Formular ─────────────────────────────── -->
-    <div v-if="showCreate" class="form-card">
-      <div class="grid" style="grid-template-columns: 140px 120px 1fr; gap: 12px; margin-bottom: 12px">
-        <div>
-          <label class="eyebrow" style="display: block; margin-bottom: 4px">Datum</label>
-          <input v-model="newDatum" type="date" class="form-input" />
-        </div>
-        <div>
-          <label class="eyebrow" style="display: block; margin-bottom: 4px">Uhrzeit</label>
-          <input v-model="newUhrzeit" type="time" class="form-input" />
-        </div>
-        <div>
-          <label class="eyebrow" style="display: block; margin-bottom: 4px">Beschreibung</label>
-          <input v-model="newText" placeholder="Termin…" @keyup.enter="create" class="form-input" />
-        </div>
-      </div>
-      <div class="flex gap-2">
-        <button @click="create" class="bauos-btn solid">Erstellen</button>
-        <button @click="showCreate = false" class="bauos-btn ghost">Abbrechen</button>
-      </div>
-    </div>
-
-    <!-- ── Inline Edit-Formular ───────────────────────────────── -->
-    <div v-if="editing" class="form-card">
-      <div style="margin-bottom: 12px">
-        <label class="eyebrow" style="display: block; margin-bottom: 4px">Beschreibung</label>
-        <input v-model="editing.text" class="form-input" />
-      </div>
-      <div class="grid" style="grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 12px">
-        <div>
-          <label class="eyebrow" style="display: block; margin-bottom: 4px">Datum</label>
-          <input v-model="editing.datum" type="date" class="form-input" />
-        </div>
-        <div>
-          <label class="eyebrow" style="display: block; margin-bottom: 4px">Von</label>
-          <input v-model="editing.uhrzeit" type="time" class="form-input" />
-        </div>
-        <div>
-          <label class="eyebrow" style="display: block; margin-bottom: 4px">Bis</label>
-          <input v-model="editing.endzeit" type="time" class="form-input" />
-        </div>
-      </div>
-      <div style="margin-bottom: 12px">
-        <label class="eyebrow" style="display: block; margin-bottom: 4px">Ort</label>
-        <input v-model="editing.location" placeholder="z. B. Büro, Baustelle…" class="form-input" />
-      </div>
-      <div v-if="team.length > 0" style="margin-bottom: 16px">
-        <label class="eyebrow" style="display: block; margin-bottom: 4px">Personen</label>
-        <div class="flex flex-wrap" style="gap: 6px">
+        <div class="ap-group-h">
+          <button @click="save(editing!)" class="pt-btn pt-btn--primary pt-btn--sm" type="button">Speichern</button>
+          <button @click="editing = null" class="pt-btn pt-btn--ghost pt-btn--sm" type="button">Abbrechen</button>
+          <span style="flex: 1" />
           <button
-            v-for="m in team"
-            :key="m"
-            @click="toggleAssignee(m)"
-            :class="['chip-btn', editing.assignees.includes(m) ? 'chip-btn-active' : '']"
+            @click="
+              remove(editing.id);
+              editing = null;
+            "
+            class="pt-btn pt-btn--ghost pt-btn--sm ap-btn--danger"
+            type="button"
           >
-            {{ m }}
+            Löschen
           </button>
         </div>
       </div>
-      <div class="flex gap-2">
-        <button @click="save(editing!)" class="bauos-btn solid">Speichern</button>
-        <button @click="editing = null" class="bauos-btn ghost">Abbrechen</button>
-        <div class="flex-1" />
+    </div>
+
+    <!-- ── Toolbar: View-Switcher + Navigation ────────────────────────────── -->
+    <div class="ap-toolbar ap-cal-toolbar">
+      <!-- Navigation (nur in Grid-Ansichten) -->
+      <div v-if="view !== 'list'" class="ap-group-h ap-cal-nav">
+        <button @click="prev" class="pt-iconbtn" type="button" aria-label="Zurück">
+          <svg
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M15 6l-6 6 6 6" />
+          </svg>
+        </button>
+        <span class="ap-cal-range-label">{{ rangeLabel }}</span>
+        <button @click="next" class="pt-iconbtn" type="button" aria-label="Vor">
+          <svg
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M9 6l6 6-6 6" />
+          </svg>
+        </button>
+        <button @click="goToday" class="pt-btn pt-btn--ghost pt-btn--sm" type="button">Heute</button>
+      </div>
+      <span class="pt-spacer" style="flex: 1" />
+      <!-- Segmented View-Switcher -->
+      <div class="pt-segment" aria-label="Ansicht">
         <button
-          @click="
-            remove(editing.id);
-            editing = null;
-          "
-          class="bauos-btn ghost"
-          style="color: var(--color-danger-text)"
+          v-for="(v, i) in VIEWS"
+          :key="v.id"
+          @click="view = v.id"
+          :class="['pt-seg-btn', view === v.id ? 'is-active' : '']"
+          type="button"
         >
-          Löschen
+          {{ v.label }}
         </button>
       </div>
     </div>
 
-    <!-- ── MONATS-ANSICHT ─────────────────────────────────────── -->
-    <div v-if="view === 'month'">
-      <div
-        class="grid"
-        style="
-          grid-template-columns: repeat(7, minmax(0, 1fr));
-          background: var(--color-bg-subtle);
-          border: 1px solid var(--color-border);
-          border-bottom: 0;
-        "
-      >
-        <div v-for="wd in weekdays" :key="wd" class="eyebrow" style="padding: 8px; text-align: center">
-          {{ wd }}
+    <!-- ── MONATS-ANSICHT: two-column layout ─────────────────────────────── -->
+    <div v-if="view === 'month'" class="ap-termin-layout">
+      <!-- Left: Calendar grid -->
+      <div class="ap-cal">
+        <!-- Day-of-week header -->
+        <div class="ap-cal-grid ap-cal-dows">
+          <div v-for="wd in weekdays" :key="wd" class="ap-cal-dow">{{ wd }}</div>
         </div>
-      </div>
-      <div
-        class="grid"
-        style="
-          grid-template-columns: repeat(7, minmax(0, 1fr));
-          grid-auto-rows: 1fr;
-          border: 1px solid var(--color-border);
-          position: relative;
-        "
-      >
-        <div v-if="termine.length === 0" class="cal-grid-empty">
-          <span class="cal-grid-empty-icon">📅</span>
-          <span class="cal-grid-empty-title">Noch keine Termine</span>
-          <span class="cal-grid-empty-hint">Klicke auf einen Tag um einen neuen Termin zu erstellen.</span>
-        </div>
-        <div
-          v-for="day in monthDays"
-          :key="day.iso"
-          class="cal-day-cell"
-          :class="{
-            'cal-day-today': day.today,
-            'cal-day-outside': !day.inMonth,
-          }"
-          @click="startCreate(day.iso)"
-        >
-          <div class="flex items-start justify-between">
-            <span @click.stop="goToDate(day.iso)" :class="['cal-day-num', day.today ? 'cal-day-num-today' : '']">{{
+        <!-- Day cells -->
+        <div class="ap-cal-grid ap-cal-cells">
+          <div
+            v-for="day in monthDays"
+            :key="day.iso"
+            class="ap-cal-cell"
+            :class="{
+              'is-muted': !day.inMonth,
+              'is-today': day.today,
+              'is-selected': agendaFilter === day.iso,
+            }"
+            @click="
+              selectAgendaDay(day.iso);
+              startCreate(day.iso);
+            "
+          >
+            <span @click.stop="selectAgendaDay(day.iso)" :class="['d', day.today ? 'is-today-num' : '']">{{
               day.date.getDate()
             }}</span>
-          </div>
-          <div style="margin-top: 4px; display: flex; flex-direction: column; gap: 2px">
             <button
               v-for="t in termineForDate(day.iso).slice(0, 3)"
               :key="t.id"
               @click.stop="edit(t)"
-              class="cal-event"
+              class="ap-chip ap-chip--termin"
+              type="button"
             >
-              <span v-if="t.uhrzeit" class="font-mono" style="color: var(--color-text-tertiary)">
-                {{ t.uhrzeit }}
-              </span>
-              <span class="truncate" style="flex: 1">{{ t.text }}</span>
+              <span v-if="t.uhrzeit" class="ap-chip-time">{{ t.uhrzeit }}</span>
+              <span class="ap-chip-text">{{ t.text }}</span>
               <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
             </button>
-            <div
-              v-if="termineForDate(day.iso).length > 3"
-              style="font-size: 10px; color: var(--color-text-tertiary); padding-left: 4px"
-            >
-              +{{ termineForDate(day.iso).length - 3 }} weitere
+            <div v-if="termineForDate(day.iso).length > 3" class="ap-chip-more">
+              +{{ termineForDate(day.iso).length - 3 }}
             </div>
           </div>
         </div>
       </div>
+
+      <!-- Right: Agenda -->
+      <div class="ap-agenda">
+        <div class="ap-agenda-head">
+          <span class="ap-agenda-title">
+            {{ agendaFilter ? formatDateLong(agendaFilter) : "Agenda · " + monthTitle }}
+          </span>
+          <button
+            v-if="agendaFilter"
+            @click="agendaFilter = null"
+            class="pt-btn pt-btn--ghost pt-btn--sm"
+            type="button"
+          >
+            Ganzer Monat
+          </button>
+        </div>
+        <div v-if="agendaGroups.length === 0" class="ap-agenda-empty">Keine Termine.</div>
+        <div v-for="group in agendaGroups" :key="group.date" class="ap-agenda-group">
+          <div v-for="t in group.items" :key="t.id" class="ap-termin-row">
+            <div class="ap-termin-date">
+              <span class="d">{{ agendaDayNum(group.date) }}</span>
+              <span class="m">{{ agendaMonthAbbrev(group.date) }}</span>
+            </div>
+            <div class="ap-termin-body">
+              <button @click="edit(t)" class="ap-termin-title" type="button">
+                {{ t.text }}
+                <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
+              </button>
+              <div class="ap-termin-meta">
+                <span v-if="t.uhrzeit" class="font-mono">{{ t.uhrzeit }}{{ t.endzeit ? ` – ${t.endzeit}` : "" }}</span>
+                <span v-if="t.location">{{ t.location }}</span>
+                <span v-if="t.assignees.length">{{ t.assignees.join(", ") }}</span>
+              </div>
+            </div>
+            <button @click="remove(t.id)" class="ap-termin-del" type="button" aria-label="Löschen">
+              <svg
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                width="14"
+                height="14"
+              >
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
 
-    <!-- ── WOCHEN-ANSICHT ─────────────────────────────────────── -->
-    <div v-if="view === 'week'">
-      <div
-        class="grid"
-        style="
-          grid-template-columns: repeat(7, minmax(0, 1fr));
-          border: 1px solid var(--color-border);
-          position: relative;
-        "
-      >
-        <div v-if="termine.length === 0" class="cal-grid-empty">
-          <span class="cal-grid-empty-icon">📅</span>
-          <span class="cal-grid-empty-title">Noch keine Termine</span>
-          <span class="cal-grid-empty-hint">Klicke auf einen Tag um einen neuen Termin zu erstellen.</span>
+    <!-- ── WOCHEN-ANSICHT ─────────────────────────────────────────────────── -->
+    <div v-if="view === 'week'" class="ap-panel">
+      <div class="ap-cal-grid ap-week-grid" style="position: relative">
+        <div v-if="termine.length === 0" class="ap-grid-empty">
+          <span class="ap-grid-empty-title">Keine Termine diese Woche.</span>
+          <span class="ap-grid-empty-hint">Klicke auf einen Tag um einen Termin zu erstellen.</span>
         </div>
-        <div v-for="day in weekDays" :key="day.iso" class="cal-week-cell" :class="{ 'cal-day-today': day.today }">
-          <div class="flex items-center justify-between" style="margin-bottom: 8px">
+        <div v-for="day in weekDays" :key="day.iso" class="ap-week-cell" :class="{ 'is-today': day.today }">
+          <div class="ap-week-cell-head">
             <button
               @click="goToDate(day.iso)"
-              :style="{
-                fontSize: '11px',
-                fontWeight: day.today ? 600 : 500,
-                color: day.today ? 'var(--color-text)' : 'var(--color-text-muted)',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: 0,
-              }"
+              class="ap-week-cell-label"
+              :class="{ 'is-today': day.today }"
+              type="button"
             >
               {{ day.label }}
             </button>
-            <button @click="startCreate(day.iso)" class="cal-add-btn">+</button>
+            <button
+              @click="startCreate(day.iso)"
+              class="pt-iconbtn ap-week-add"
+              type="button"
+              aria-label="Termin hinzufügen"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
           </div>
-          <div style="display: flex; flex-direction: column; gap: 4px">
-            <button v-for="t in termineForDate(day.iso)" :key="t.id" @click="edit(t)" class="cal-event">
-              <span v-if="t.uhrzeit" class="font-mono" style="color: var(--color-text-tertiary)">
-                {{ t.uhrzeit }}
-              </span>
-              <span class="truncate" style="flex: 1">{{ t.text }}</span>
+          <div class="ap-week-events">
+            <button
+              v-for="t in termineForDate(day.iso)"
+              :key="t.id"
+              @click="edit(t)"
+              class="ap-chip ap-chip--termin"
+              type="button"
+            >
+              <span v-if="t.uhrzeit" class="ap-chip-time">{{ t.uhrzeit }}</span>
+              <span class="ap-chip-text">{{ t.text }}</span>
               <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
             </button>
           </div>
@@ -588,79 +714,54 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
       </div>
     </div>
 
-    <!-- ── TAGES-ANSICHT ──────────────────────────────────────── -->
+    <!-- ── TAGES-ANSICHT ──────────────────────────────────────────────────── -->
     <div v-if="view === 'day'">
-      <div v-if="termineForDate(dayISO).length === 0" class="cal-day-empty">
-        <span style="font-size: 28px; line-height: 1">📅</span>
-        <span style="font-size: 14px; font-weight: 500; color: var(--color-text-muted)">Noch keine Termine</span>
-        <span style="font-size: 12px; color: var(--color-text-tertiary)"
-          >Klicke auf einen Tag um einen neuen Termin zu erstellen.</span
-        >
+      <div v-if="termineForDate(dayISO).length === 0" class="ap-grid-empty ap-day-empty">
+        <span class="ap-grid-empty-title">Keine Termine an diesem Tag.</span>
+        <span class="ap-grid-empty-hint">Klicke auf "+ Neuer Termin" um einen Termin zu erstellen.</span>
       </div>
-      <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-        <div
-          v-for="h in hours"
-          :key="h"
-          class="flex"
-          style="min-height: 48px; border-bottom: 1px solid var(--color-border-subtle)"
-        >
-          <div
-            class="font-mono"
-            style="width: 56px; padding: 8px 10px; font-size: 11px; color: var(--color-text-tertiary); flex-shrink: 0"
-          >
-            {{ String(h).padStart(2, "0") }}:00
-          </div>
-          <div
-            style="
-              flex: 1;
-              padding: 4px 12px;
-              border-left: 1px solid var(--color-border-subtle);
-              display: flex;
-              flex-direction: column;
-              gap: 4px;
-            "
-          >
+      <div class="ap-panel">
+        <div v-for="h in hours" :key="h" class="ap-day-row">
+          <div class="ap-day-hour font-mono">{{ String(h).padStart(2, "0") }}:00</div>
+          <div class="ap-day-slot">
             <button
               v-for="t in termineForDate(dayISO).filter((t) => t.uhrzeit && parseInt(t.uhrzeit) === h)"
               :key="t.id"
               @click="edit(t)"
-              class="cal-event-big"
+              class="ap-event-full"
+              type="button"
             >
-              <span class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary)">
-                {{ t.uhrzeit }}{{ t.endzeit ? ` – ${t.endzeit}` : "" }}
-              </span>
-              <span style="font-weight: 500">{{ t.text }}</span>
-              <span v-if="t.location" style="color: var(--color-text-muted); font-size: 11px">
-                · {{ t.location }}
-              </span>
+              <span class="ap-event-time font-mono"> {{ t.uhrzeit }}{{ t.endzeit ? ` – ${t.endzeit}` : "" }} </span>
+              <span class="ap-event-title">{{ t.text }}</span>
+              <span v-if="t.location" class="ap-event-loc">· {{ t.location }}</span>
               <span
                 v-if="msBadgeFor(t).show"
                 :class="msBadgeFor(t).cls"
                 :title="msBadgeFor(t).title"
-                style="margin-left: auto"
+                style="margin-left: auto; flex-shrink: 0"
                 >O</span
               >
             </button>
           </div>
         </div>
       </div>
-
       <div v-if="termineForDate(dayISO).filter((t) => !t.uhrzeit).length > 0" style="margin-top: 16px">
-        <div class="eyebrow" style="margin-bottom: 8px">Ganztägig</div>
-        <div style="display: flex; flex-direction: column; gap: 4px">
+        <div class="ap-section-label" style="margin-bottom: 8px">Ganztägig</div>
+        <div class="ap-panel">
           <button
             v-for="t in termineForDate(dayISO).filter((t) => !t.uhrzeit)"
             :key="t.id"
             @click="edit(t)"
-            class="cal-event-big"
+            class="ap-event-full"
+            type="button"
           >
-            <span style="font-weight: 500">{{ t.text }}</span>
-            <span v-if="t.location" style="color: var(--color-text-muted); font-size: 11px"> · {{ t.location }} </span>
+            <span class="ap-event-title">{{ t.text }}</span>
+            <span v-if="t.location" class="ap-event-loc">· {{ t.location }}</span>
             <span
               v-if="msBadgeFor(t).show"
               :class="msBadgeFor(t).cls"
               :title="msBadgeFor(t).title"
-              style="margin-left: auto"
+              style="margin-left: auto; flex-shrink: 0"
               >O</span
             >
           </button>
@@ -668,61 +769,32 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
       </div>
     </div>
 
-    <!-- ── LISTEN-ANSICHT ─────────────────────────────────────── -->
+    <!-- ── LISTEN-ANSICHT ─────────────────────────────────────────────────── -->
     <div v-if="view === 'list'">
-      <div v-for="group in grouped" :key="group.date" style="margin-bottom: 24px">
-        <div class="eyebrow" style="margin-bottom: 8px">{{ group.label }}</div>
-        <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-          <div v-for="t in group.items" :key="t.id" class="cal-list-row">
-            <button @click="edit(t)" class="cal-list-btn">
-              <span
-                v-if="t.uhrzeit"
-                class="font-mono"
-                style="font-size: 12px; color: var(--color-text-muted); width: 52px; flex-shrink: 0"
-                >{{ t.uhrzeit }}</span
-              >
-              <span
-                v-else
-                class="font-mono"
-                style="font-size: 12px; color: var(--color-text-faint); width: 52px; flex-shrink: 0"
-                >–:–</span
-              >
-              <div class="min-w-0" style="flex: 1">
-                <div
-                  style="
-                    font-size: 13px;
-                    color: var(--color-text);
-                    font-weight: 500;
-                    display: flex;
-                    align-items: center;
-                    gap: 6px;
-                  "
-                >
+      <p v-if="termine.length === 0" class="ap-list-empty">Keine Termine vorhanden.</p>
+      <div v-for="group in grouped" :key="group.date" class="ap-list-group">
+        <div class="ap-section-label">{{ group.label }}</div>
+        <div class="ap-panel">
+          <div v-for="t in group.items" :key="t.id" class="ap-list-row">
+            <button @click="edit(t)" class="ap-list-btn" type="button">
+              <span v-if="t.uhrzeit" class="font-mono ap-list-time">{{ t.uhrzeit }}</span>
+              <span v-else class="font-mono ap-list-time ap-list-time--empty">–:–</span>
+              <div class="ap-list-body">
+                <div class="ap-list-title">
                   <span>{{ t.text }}</span>
                   <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
                 </div>
-                <div
-                  class="flex flex-wrap"
-                  style="gap: 12px; margin-top: 2px; font-size: 11px; color: var(--color-text-tertiary)"
-                >
+                <div class="ap-list-meta">
                   <span v-if="t.endzeit" class="font-mono">bis {{ t.endzeit }}</span>
                   <span v-if="t.location">{{ t.location }}</span>
                   <span v-if="t.assignees.length">{{ t.assignees.join(", ") }}</span>
                 </div>
               </div>
             </button>
-            <button @click="remove(t.id)" class="cal-del-btn" aria-label="Löschen">
-              <span style="font-size: 11px">Löschen</span>
-            </button>
+            <button @click="remove(t.id)" class="ap-list-del" type="button" aria-label="Löschen">Löschen</button>
           </div>
         </div>
       </div>
-      <p
-        v-if="termine.length === 0"
-        style="font-size: 13px; color: var(--color-text-tertiary); text-align: center; padding: 32px 0"
-      >
-        Keine Termine vorhanden.
-      </p>
     </div>
 
     <!-- Konflikt-Auflösungs-Dialog (Phase 5b). Wird von edit() aufgerufen
@@ -737,27 +809,171 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
 </template>
 
 <style scoped>
-.cal-nav-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 180ms ease;
-}
-.cal-nav-btn:hover {
-  background: var(--color-bg-subtle);
-  color: var(--color-text);
+/* ── Page wrapper ──────────────────────────────────────────────────────────── */
+.ap-page {
+  padding: var(--space-6, 24px) var(--space-8, 32px) var(--space-8, 32px);
+  color: var(--fg, var(--color-text));
+  max-width: 1400px;
 }
 
-.seg-btn {
+/* ── Flash ─────────────────────────────────────────────────────────────────── */
+.ap-flash {
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-md, 6px);
+  font-size: 13px;
+  border: 1px solid;
+}
+.ap-flash--success {
+  background: var(--success-bg, var(--color-success-bg));
+  border-color: var(--success-border, var(--color-success-border));
+  color: var(--success-fg, var(--color-success-text));
+}
+.ap-flash--danger {
+  background: var(--danger-bg, var(--color-danger-bg));
+  border-color: var(--danger-border, var(--color-danger-border));
+  color: var(--danger-fg, var(--color-danger-text));
+}
+
+/* ── Page head ─────────────────────────────────────────────────────────────── */
+.ap-pagehead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: var(--space-5, 20px);
+}
+.ap-pagetitle {
+  font-size: var(--fs-24, 22px);
+  font-weight: var(--fw-semibold, 600);
+  letter-spacing: var(--tracking-tight, -0.01em);
+  color: var(--fg, var(--color-text));
+  margin: 0 0 4px;
+}
+.ap-pagesub {
+  font-size: 13px;
+  color: var(--fg-subtle, var(--color-text-muted));
+  margin: 0;
+}
+.ap-pagehead-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ── Panel ─────────────────────────────────────────────────────────────────── */
+.ap-panel {
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-lg, 8px);
+  background: var(--surface, var(--color-bg));
+  overflow: hidden;
+}
+.ap-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hairline, var(--color-border-subtle));
+}
+.ap-panel-title {
+  font-size: 14px;
+  font-weight: var(--fw-semibold, 600);
+  color: var(--fg, var(--color-text));
+}
+.ap-panel-body {
+  padding: 16px;
+}
+
+/* ── Create panel ──────────────────────────────────────────────────────────── */
+.ap-create-panel {
+  margin-bottom: 20px;
+}
+
+/* ── Form helpers ──────────────────────────────────────────────────────────── */
+.ap-form-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+.ap-form-row .pt-field {
+  flex: 1;
+}
+.ap-group-h {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Chip button (assignee toggle) ─────────────────────────────────────────── */
+.ap-chip-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-md, 6px);
+  background: var(--surface, var(--color-bg));
+  color: var(--fg-muted, var(--color-text-muted));
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+.ap-chip-btn--active {
+  background: var(--accent, var(--color-primary));
+  color: var(--accent-fg, var(--color-bg));
+  border-color: var(--accent, var(--color-primary));
+}
+
+/* ── Danger btn ────────────────────────────────────────────────────────────── */
+.ap-btn--danger {
+  color: var(--danger-fg, var(--color-danger-text)) !important;
+}
+
+/* ── Section label ─────────────────────────────────────────────────────────── */
+.ap-section-label {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: var(--fs-11, 11px);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide, 0.06em);
+  color: var(--fg-subtle, var(--color-text-muted));
+  margin-bottom: var(--space-2, 8px);
+}
+
+/* ── Toolbar ────────────────────────────────────────────────────────────────── */
+.ap-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.ap-cal-toolbar {
+  flex-wrap: wrap;
+}
+.ap-cal-nav {
+  gap: 6px;
+}
+.ap-cal-range-label {
+  font-size: 14px;
+  font-weight: var(--fw-semibold, 600);
+  color: var(--fg, var(--color-text));
+  min-width: 180px;
+  text-align: center;
+}
+.pt-spacer {
+  flex: 1;
+}
+
+/* ── Segmented control ─────────────────────────────────────────────────────── */
+.pt-segment {
+  display: flex;
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-md, 6px);
+  overflow: hidden;
+}
+.pt-seg-btn {
   padding: 6px 12px;
   border: 0;
+  border-left: 1px solid var(--border, var(--color-border));
   background: transparent;
-  color: var(--color-text-muted);
+  color: var(--fg-subtle, var(--color-text-muted));
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -765,122 +981,148 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
     background 180ms ease,
     color 180ms ease;
 }
-.seg-btn-active {
-  background: var(--color-border-subtle);
-  color: var(--color-text);
+.pt-seg-btn:first-child {
+  border-left: 0;
 }
-.seg-divider {
-  border-left: 1px solid var(--color-border);
-}
-
-.form-card {
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
-  background: var(--color-bg);
+.pt-seg-btn.is-active {
+  background: var(--surface-muted, var(--color-border-subtle));
+  color: var(--fg, var(--color-text));
 }
 
-.form-input {
-  width: 100%;
+/* ── Two-column layout (month view) ────────────────────────────────────────── */
+.ap-termin-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-6, 24px);
+  align-items: start;
+}
+
+/* ── Calendar grid ─────────────────────────────────────────────────────────── */
+.ap-cal {
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-lg, 8px);
+  background: var(--surface, var(--color-bg));
+  overflow: hidden;
+}
+.ap-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+}
+.ap-cal-dows {
+  border-bottom: 1px solid var(--hairline, var(--color-border-subtle));
+  background: var(--surface-subtle, var(--color-bg-subtle));
+}
+.ap-cal-dow {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: var(--fs-11, 11px);
+  color: var(--fg-subtle, var(--color-text-muted));
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide, 0.06em);
   padding: 8px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  font-size: 13px;
-  outline: none;
-  background: var(--color-bg);
-  color: var(--color-text);
+  text-align: left;
 }
-
-.chip-btn {
-  padding: 4px 10px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  background: var(--color-bg);
-  color: var(--color-text-muted);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 180ms ease;
-}
-.chip-btn-active {
-  background: var(--color-primary);
-  color: var(--color-bg);
-  border-color: var(--color-primary);
-}
-
-/* Kalender-Zellen */
-.cal-day-cell {
-  min-height: 96px;
-  padding: 6px 8px;
-  border-right: 1px solid var(--color-border-subtle);
-  border-bottom: 1px solid var(--color-border-subtle);
-  cursor: pointer;
-  transition: background 180ms ease;
+.ap-cal-cells {
+  grid-auto-rows: minmax(92px, auto);
   position: relative;
 }
-.cal-day-cell:hover {
-  background: var(--color-bg-subtle);
+.ap-cal-cell {
+  padding: 6px;
+  border-right: 1px solid var(--hairline, var(--color-border-subtle));
+  border-bottom: 1px solid var(--hairline, var(--color-border-subtle));
+  cursor: pointer;
+  transition: background-color 180ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
 }
-.cal-day-cell:nth-child(7n) {
+.ap-cal-cell:nth-child(7n) {
   border-right: 0;
 }
-.cal-day-outside {
-  background: var(--color-bg-muted);
-  color: var(--color-text-faint);
+.ap-cal-cell:hover {
+  background: var(--surface-subtle, var(--color-bg-subtle));
 }
-.cal-day-today {
-  background: var(--color-bg-subtle);
+.ap-cal-cell.is-muted {
+  background: var(--surface-subtle, var(--color-bg-subtle));
+  cursor: default;
 }
-
-.cal-day-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
+.ap-cal-cell.is-muted:hover {
+  background: var(--surface-subtle, var(--color-bg-subtle));
+}
+.ap-cal-cell.is-today {
+  background: color-mix(in srgb, var(--accent, var(--color-primary)) 6%, transparent);
+}
+.ap-cal-cell.is-selected {
+  background: var(--surface-subtle, var(--color-bg-subtle));
+  box-shadow: inset 0 0 0 1.5px var(--border-strong, var(--color-border));
+}
+.ap-cal-cell .d {
+  font-size: 13px;
+  color: var(--fg-body, var(--color-text-secondary));
+  font-variant-numeric: tabular-nums;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
   border-radius: 9999px;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11px;
-  line-height: 1;
-  color: var(--color-text-secondary);
-  cursor: pointer;
   flex-shrink: 0;
   font-weight: 500;
+  line-height: 1;
 }
-.cal-day-outside .cal-day-num {
-  color: var(--color-text-faint);
+.ap-cal-cell.is-muted .d {
+  color: var(--fg-subtle, var(--color-text-faint));
 }
-.cal-day-num-today {
-  background: var(--color-primary);
-  color: var(--color-bg);
+.ap-cal-cell .d.is-today-num {
+  background: var(--accent, var(--color-primary));
+  color: var(--accent-fg, var(--color-bg));
+  font-weight: var(--fw-medium, 500);
 }
 
-.cal-event {
-  display: inline-flex;
+/* ── Event chips (inside cells) ─────────────────────────────────────────────── */
+.ap-chip {
+  display: flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 6px;
-  border-radius: 3px;
-  background: var(--color-border-subtle);
-  border-left: 2px solid var(--color-text);
-  font-size: 10px;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
+  padding: 2px 5px;
+  border-radius: var(--radius-sm, 3px);
+  background: var(--surface-muted, var(--color-border-subtle));
+  color: var(--fg-body, var(--color-text-secondary));
+  font-size: 11px;
+  line-height: 1.35;
   white-space: nowrap;
   overflow: hidden;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
+  text-overflow: ellipsis;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border: 0;
   transition: background 180ms ease;
 }
-.cal-event:hover {
-  background: var(--color-border);
+.ap-chip--termin {
+  border-left: 2px solid var(--fg-muted, var(--color-text-muted));
+}
+.ap-chip:hover {
+  background: var(--border, var(--color-border));
+}
+.ap-chip-time {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  color: var(--fg-subtle, var(--color-text-tertiary));
+  flex-shrink: 0;
+}
+.ap-chip-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+.ap-chip-more {
+  font-size: 10px;
+  color: var(--fg-subtle, var(--color-text-tertiary));
+  font-family: var(--font-mono, monospace);
+  padding-left: 2px;
 }
 
-/* Outlook-Sync-Badges (Phase 2/3) — Visualisierung woher der Termin kommt
-   und ob er gerade in Sync ist. Outlook-Blau ist Microsofts Brand-Farbe. */
+/* ── Outlook-Sync-Badges ────────────────────────────────────────────────────── */
 .ms-badge {
   display: inline-flex;
   align-items: center;
@@ -908,258 +1150,437 @@ function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
   background: #6b7280;
 }
 
-.cal-event-big {
+/* ── Agenda (right column in month view) ───────────────────────────────────── */
+.ap-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.ap-agenda-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3, 12px);
+  gap: 8px;
+}
+.ap-agenda-title {
+  font-size: var(--fs-15, 15px);
+  font-weight: var(--fw-semibold, 600);
+  letter-spacing: var(--tracking-tight, -0.01em);
+  color: var(--fg, var(--color-text));
+}
+.ap-agenda-empty {
+  font-size: 13px;
+  color: var(--fg-subtle, var(--color-text-muted));
+  padding: 24px 0;
+  text-align: center;
+}
+.ap-agenda-group {
+  margin-bottom: 0;
+}
+
+/* ── Agenda termin rows ──────────────────────────────────────────────────────── */
+.ap-termin-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hairline, var(--color-border-subtle));
+  background: var(--surface, var(--color-bg));
+  transition: background 180ms ease;
+}
+.ap-termin-row:first-child {
+  border-top: 1px solid var(--hairline, var(--color-border-subtle));
+  border-radius: var(--radius-md, 6px) var(--radius-md, 6px) 0 0;
+}
+.ap-termin-row:last-child {
+  border-bottom: 0;
+  border-radius: 0 0 var(--radius-md, 6px) var(--radius-md, 6px);
+}
+.ap-termin-row:only-child {
+  border-radius: var(--radius-md, 6px);
+}
+.ap-termin-row + .ap-termin-row:last-child {
+  border-radius: 0 0 var(--radius-md, 6px) var(--radius-md, 6px);
+}
+.ap-termin-row:hover {
+  background: var(--surface-subtle, var(--color-bg-subtle));
+}
+.ap-agenda-group + .ap-agenda-group .ap-termin-row:first-child {
+  margin-top: 8px;
+  border-radius: var(--radius-md, 6px) var(--radius-md, 6px) 0 0;
+}
+.ap-termin-date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  width: 32px;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+.ap-termin-date .d {
+  font-family: var(--font-display, inherit);
+  font-size: var(--fs-18, 18px);
+  font-weight: var(--fw-semibold, 600);
+  color: var(--fg, var(--color-text));
+  line-height: 1;
+}
+.ap-termin-date .m {
+  font-family: var(--font-mono, monospace);
+  font-size: var(--fs-11, 11px);
+  text-transform: uppercase;
+  color: var(--fg-subtle, var(--color-text-muted));
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+.ap-termin-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ap-termin-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg, var(--color-text));
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ap-termin-title:hover {
+  color: var(--accent, var(--color-primary));
+}
+.ap-termin-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--fg-subtle, var(--color-text-tertiary));
+}
+.ap-termin-meta .font-mono {
+  font-family: var(--font-mono, monospace);
+}
+.ap-termin-del {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 180ms ease;
+  background: transparent;
+  border: 0;
+  color: var(--fg-subtle, var(--color-text-muted));
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm, 4px);
+  flex-shrink: 0;
+}
+.ap-termin-row:hover .ap-termin-del {
+  opacity: 1;
+}
+.ap-termin-del:hover {
+  color: var(--danger-fg, var(--color-danger-text));
+  background: var(--danger-bg, var(--color-danger-bg));
+}
+
+/* ── Week view ──────────────────────────────────────────────────────────────── */
+.ap-week-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-lg, 8px);
+  overflow: hidden;
+  background: var(--surface, var(--color-bg));
+  position: relative;
+}
+.ap-week-cell {
+  min-height: 240px;
+  padding: 8px 10px;
+  border-right: 1px solid var(--hairline, var(--color-border-subtle));
+  transition: background 180ms ease;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ap-week-cell:last-child {
+  border-right: 0;
+}
+.ap-week-cell:hover {
+  background: var(--surface-subtle, var(--color-bg-subtle));
+}
+.ap-week-cell.is-today {
+  background: color-mix(in srgb, var(--accent, var(--color-primary)) 4%, transparent);
+}
+.ap-week-cell-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.ap-week-cell-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-muted, var(--color-text-muted));
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.ap-week-cell-label.is-today {
+  font-weight: 600;
+  color: var(--fg, var(--color-text));
+}
+.ap-week-add {
+  opacity: 0;
+  transition: opacity 180ms ease;
+  width: 18px;
+  height: 18px;
+}
+.ap-week-cell:hover .ap-week-add {
+  opacity: 1;
+}
+.ap-week-events {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* ── Day view ───────────────────────────────────────────────────────────────── */
+.ap-day-row {
+  display: flex;
+  min-height: 48px;
+  border-bottom: 1px solid var(--hairline, var(--color-border-subtle));
+}
+.ap-day-row:last-child {
+  border-bottom: 0;
+}
+.ap-day-hour {
+  width: 56px;
+  padding: 8px 10px;
+  font-size: 11px;
+  color: var(--fg-subtle, var(--color-text-tertiary));
+  flex-shrink: 0;
+}
+.ap-day-slot {
+  flex: 1;
+  padding: 4px 12px;
+  border-left: 1px solid var(--hairline, var(--color-border-subtle));
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ap-event-full {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md, 6px);
+  background: var(--surface-subtle, var(--color-bg-subtle));
+  border: 1px solid var(--hairline, var(--color-border-subtle));
   font-size: 13px;
-  color: var(--color-text);
+  color: var(--fg, var(--color-text));
   cursor: pointer;
   text-align: left;
+  width: 100%;
   transition: background 180ms ease;
 }
-.cal-event-big:hover {
-  background: var(--color-border-subtle);
+.ap-event-full:hover {
+  background: var(--surface-muted, var(--color-border-subtle));
+}
+.ap-event-time {
+  font-size: 11px;
+  color: var(--fg-subtle, var(--color-text-tertiary));
+  flex-shrink: 0;
+}
+.ap-event-title {
+  font-weight: 500;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-event-loc {
+  color: var(--fg-muted, var(--color-text-muted));
+  font-size: 11px;
+  flex-shrink: 0;
+}
+.ap-day-empty {
+  padding: 48px 24px;
 }
 
-.cal-week-cell {
-  min-height: 240px;
-  padding: 8px 10px;
-  border-right: 1px solid var(--color-border-subtle);
-  transition: background 180ms ease;
+/* ── List view ──────────────────────────────────────────────────────────────── */
+.ap-list-group {
+  margin-bottom: 24px;
 }
-.cal-week-cell:nth-child(7n) {
-  border-right: 0;
+.ap-list-empty {
+  font-size: 13px;
+  color: var(--fg-subtle, var(--color-text-tertiary));
+  text-align: center;
+  padding: 32px 0;
 }
-.cal-week-cell:hover {
-  background: var(--color-bg-subtle);
-}
-
-.cal-add-btn {
-  opacity: 0;
-  background: transparent;
-  border: none;
-  color: var(--color-text-muted);
-  cursor: pointer;
-  font-size: 12px;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  transition: all 180ms ease;
-}
-.cal-day-cell:hover .cal-add-btn,
-.cal-week-cell:hover .cal-add-btn {
-  opacity: 1;
-}
-.cal-add-btn:hover {
-  background: var(--color-border);
-  color: var(--color-text);
-}
-
-.cal-list-row {
+.ap-list-row {
   display: flex;
   align-items: stretch;
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--hairline, var(--color-border-subtle));
+  transition: background 180ms ease;
 }
-.cal-list-row:first-child {
+.ap-list-row:first-child {
   border-top: 0;
 }
-.cal-list-row:hover {
-  background: var(--color-bg-subtle);
+.ap-list-row:hover {
+  background: var(--surface-subtle, var(--color-bg-subtle));
 }
-.cal-list-btn {
+.ap-list-btn {
   display: flex;
   align-items: flex-start;
   gap: 12px;
   flex: 1;
   padding: 12px 16px;
   background: transparent;
-  border: none;
+  border: 0;
   text-align: left;
   cursor: pointer;
 }
-.cal-del-btn {
+.ap-list-time {
+  font-size: 12px;
+  color: var(--fg-muted, var(--color-text-muted));
+  width: 52px;
+  flex-shrink: 0;
+  padding-top: 1px;
+}
+.ap-list-time--empty {
+  color: var(--fg-faint, var(--color-text-faint));
+}
+.ap-list-body {
+  flex: 1;
+  min-width: 0;
+}
+.ap-list-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg, var(--color-text));
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+.ap-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--fg-subtle, var(--color-text-tertiary));
+}
+.ap-list-del {
   padding: 0 16px;
-  color: var(--color-text-faint);
+  color: var(--fg-faint, var(--color-text-faint));
   background: transparent;
-  border: none;
+  border: 0;
   cursor: pointer;
   opacity: 0;
   transition: opacity 180ms ease;
+  font-size: 11px;
 }
-.cal-list-row:hover .cal-del-btn {
+.ap-list-row:hover .ap-list-del {
   opacity: 1;
 }
-.cal-del-btn:hover {
-  color: var(--color-danger-text);
+.ap-list-del:hover {
+  color: var(--danger-fg, var(--color-danger-text));
 }
 
-/* ── Header (Phase 2 Mobile-Fix) ────────────────────────── */
-.cal-header {
+/* ── Empty states ───────────────────────────────────────────────────────────── */
+.ap-grid-empty {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-.cal-h1 {
-  font-size: 24px;
-  font-weight: 600;
-  margin: 0;
-  letter-spacing: -0.01em;
-  color: var(--color-text);
-}
-.cal-toolbar {
-  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-}
-.cal-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.cal-range-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-text);
-  min-width: 180px;
+  justify-content: center;
+  gap: 6px;
   text-align: center;
 }
-.cal-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+.ap-grid-empty-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg-muted, var(--color-text-muted));
 }
-.cal-add-icon {
-  display: none;
+.ap-grid-empty-hint {
+  font-size: 12px;
+  color: var(--fg-subtle, var(--color-text-tertiary));
+  max-width: 280px;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────────────── */
+@media (max-width: 1199.98px) {
+  .ap-termin-layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 16px;
+  }
 }
 
 @media (max-width: 1023.98px) {
-  /* Tablet: Header bleibt 1 Zeile, Range-Label wird kompakter */
-  .cal-range-label {
+  .ap-termin-layout {
+    grid-template-columns: 1fr;
+  }
+  .ap-cal-range-label {
     min-width: 120px;
-    font-size: 12px;
+    font-size: 13px;
   }
 }
 
 @media (max-width: 767.98px) {
-  /* Mobile: Title oben, Toolbar darunter — alles wrap */
-  .cal-header {
+  .ap-page {
+    padding: 16px 14px 32px;
+  }
+  .ap-pagehead {
     flex-direction: column;
     align-items: stretch;
-    gap: 12px;
+    gap: 10px;
     margin-bottom: 14px;
   }
-  .cal-h1 {
-    font-size: 20px;
+  .ap-pagehead-actions {
+    justify-content: flex-end;
   }
-  .cal-title p {
-    margin-top: 2px !important;
-  }
-  .cal-toolbar {
-    justify-content: space-between;
+  .ap-cal-toolbar {
     gap: 8px;
   }
-  .cal-nav {
+  .ap-cal-nav {
     flex: 1;
     justify-content: space-between;
     width: 100%;
   }
-  .cal-range-label {
+  .ap-cal-range-label {
     flex: 1;
     min-width: 0;
     font-size: 13px;
     font-weight: 600;
   }
-  .cal-today-btn {
-    padding: 6px 10px !important;
-    font-size: 12px !important;
+  .pt-seg-btn {
+    padding: 6px 8px;
+    font-size: 11px;
   }
-  .cal-actions {
-    width: 100%;
-    justify-content: space-between;
-    gap: 8px;
+  .ap-cal-cell {
+    min-height: 56px;
+    padding: 3px 4px;
   }
-  /* "+ Termin" auf Mobile auf reines Plus-Icon (spart Platz) */
-  .cal-add-btn {
-    padding: 6px 12px !important;
+  .ap-cal-cell .d {
+    width: 20px;
+    height: 20px;
+    font-size: 10px;
   }
-  .cal-add-label {
-    display: none;
+  .ap-form-row {
+    flex-direction: column;
   }
-  .cal-add-icon {
-    display: inline;
-    font-size: 16px;
-    font-weight: 600;
+  .ap-termin-layout {
+    grid-template-columns: 1fr;
   }
-  /* Segmented View-Switcher: kleinere Padding */
-  .seg-btn {
-    padding: 6px 10px !important;
-    font-size: 11px !important;
-  }
-
-  /* Monats-Zellen: kompakter auf Phone, falls User trotzdem Monat waehlt */
-  .cal-day-cell {
-    min-height: 56px !important;
-    padding: 3px 4px !important;
-  }
-  .cal-day-num {
-    width: 22px !important;
-    height: 22px !important;
-    font-size: 10px !important;
-  }
-
-  /* Aussen-Padding der Page reduzieren (war 28px 32px) */
-  .cal-page {
-    padding: 16px 14px 32px !important;
-  }
-}
-
-/* ── Grid Empty States (Monat + Woche) ────────────────── */
-/* Das Element spannt das gesamte 7-Spalten-Grid und
-   wird absolut über die Grid-Zellen gelegt. */
-.cal-grid-empty {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  pointer-events: none;
-  z-index: 1;
-}
-.cal-grid-empty-icon {
-  font-size: 28px;
-  line-height: 1;
-}
-.cal-grid-empty-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-muted);
-}
-.cal-grid-empty-hint {
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-  text-align: center;
-  max-width: 280px;
-}
-
-/* ── Tages-Ansicht Empty State ─────────────────────────── */
-.cal-day-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 48px 24px;
-  text-align: center;
 }
 </style>
