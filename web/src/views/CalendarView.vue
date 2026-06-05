@@ -992,7 +992,7 @@ function agendaDayNum(iso: string): string {
 /* ── Two-column layout (month view) ────────────────────────────────────────── */
 .ap-termin-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: var(--space-6, 24px);
   align-items: start;
 }
@@ -1018,7 +1018,7 @@ function agendaDayNum(iso: string): string {
   color: var(--fg-subtle, var(--color-text-muted));
   text-transform: uppercase;
   letter-spacing: var(--tracking-wide, 0.06em);
-  padding: 8px 10px;
+  padding: 8px 12px;
   text-align: left;
 }
 .ap-cal-cells {
@@ -1050,7 +1050,7 @@ function agendaDayNum(iso: string): string {
   background: var(--surface-subtle, var(--color-bg-subtle));
 }
 .ap-cal-cell.is-today {
-  background: color-mix(in srgb, var(--accent, var(--color-primary)) 6%, transparent);
+  background: transparent;
 }
 .ap-cal-cell.is-selected {
   background: var(--surface-subtle, var(--color-bg-subtle));
@@ -1083,7 +1083,7 @@ function agendaDayNum(iso: string): string {
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 5px;
+  padding: 2px 6px;
   border-radius: var(--radius-sm, 3px);
   background: var(--surface-muted, var(--color-border-subtle));
   color: var(--fg-body, var(--color-text-secondary));
@@ -1096,10 +1096,11 @@ function agendaDayNum(iso: string): string {
   text-align: left;
   cursor: pointer;
   border: 0;
+  border-left: 2px solid var(--fg-subtle, var(--color-text-muted));
   transition: background 180ms ease;
 }
 .ap-chip--termin {
-  border-left: 2px solid var(--fg-muted, var(--color-text-muted));
+  border-left-color: var(--fg-muted, var(--color-text-muted));
 }
 .ap-chip:hover {
   background: var(--border, var(--color-border));

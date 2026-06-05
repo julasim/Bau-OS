@@ -2851,12 +2851,18 @@ onMounted(() => {
 
 <style scoped>
 .primary-btn {
-  background: var(--color-primary);
-  color: var(--color-bg);
-  border: 1px solid var(--color-primary);
+  background: var(--accent, var(--color-primary));
+  color: var(--accent-fg, var(--color-bg));
+  border: 1px solid var(--accent, var(--color-primary));
+  border-radius: var(--radius-lg, 8px);
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
+  font-weight: var(--fw-medium, 500);
+  transition:
+    background-color var(--t-fast, 120ms) var(--ease, ease),
+    opacity var(--t-fast, 120ms) var(--ease, ease);
 }
 .primary-btn:hover:not(:disabled) {
-  opacity: 0.9;
+  background: var(--accent-hover, var(--color-primary));
 }
 .primary-btn:disabled {
   cursor: not-allowed;
@@ -2880,14 +2886,14 @@ onMounted(() => {
 .settings-divide > label.settings-row + .settings-row,
 .settings-divide > .settings-row + label.settings-row,
 .settings-divide > label.settings-row + label.settings-row {
-  border-top: 1px solid var(--color-border-subtle);
+  border-top: 1px solid var(--hairline, var(--color-border-subtle));
 }
 
 .settings-label {
-  color: var(--color-text-muted);
+  color: var(--fg-muted, var(--color-text-muted));
 }
 .settings-value {
-  color: var(--color-text);
+  color: var(--fg-body, var(--color-text));
 }
 
 /* Mobile: settings-rows duerfen wrappen statt zu quetschen.
@@ -2917,56 +2923,77 @@ onMounted(() => {
 
 .settings-input {
   border: 1px solid var(--border, var(--color-border));
-  border-radius: var(--radius-sm, 4px);
+  border-radius: var(--radius-md, 6px);
   background: var(--surface, var(--color-bg));
   color: var(--fg-body, var(--color-text));
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
+  transition:
+    border-color var(--t-fast, 120ms) var(--ease, ease),
+    box-shadow var(--t-fast, 120ms) var(--ease, ease);
 }
 .settings-input:focus {
   border-color: var(--fg, var(--color-text-faint));
-  box-shadow: 0 0 0 1px var(--fg, var(--color-text-faint));
+  box-shadow: var(--shadow-focus, 0 0 0 2px rgba(10, 10, 10, 0.1));
 }
 
 .settings-ghost-btn {
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text-secondary);
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-md, 6px);
+  background: var(--surface, var(--color-bg));
+  color: var(--fg-body, var(--color-text-secondary));
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
+  font-weight: var(--fw-medium, 500);
   cursor: pointer;
+  transition:
+    background-color var(--t-fast, 120ms) var(--ease, ease),
+    color var(--t-fast, 120ms) var(--ease, ease);
 }
 .settings-ghost-btn:hover:not(:disabled) {
-  background: var(--color-bg-subtle);
-  color: var(--color-text);
+  background: var(--surface-subtle, var(--color-bg-subtle));
+  color: var(--fg, var(--color-text));
 }
 
 .settings-chip {
-  border: 1px solid var(--color-border);
-  background: var(--color-bg);
-  color: var(--color-text-secondary);
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-md, 6px);
+  background: var(--surface, var(--color-bg));
+  color: var(--fg-muted, var(--color-text-secondary));
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
   cursor: pointer;
+  transition:
+    background-color var(--t-fast, 120ms) var(--ease, ease),
+    border-color var(--t-fast, 120ms) var(--ease, ease),
+    color var(--t-fast, 120ms) var(--ease, ease);
 }
 .settings-chip:hover {
-  background: var(--color-bg-subtle);
+  background: var(--surface-subtle, var(--color-bg-subtle));
+  color: var(--fg, var(--color-text));
 }
 .settings-chip-active {
-  border-color: var(--color-primary);
-  background: var(--color-primary);
-  color: var(--color-bg);
+  border-color: var(--accent, var(--color-primary));
+  background: var(--accent, var(--color-primary));
+  color: var(--accent-fg, var(--color-bg));
 }
 .settings-chip-active:hover {
-  background: var(--color-primary);
-  opacity: 0.9;
+  background: var(--accent-hover, var(--color-primary));
+  color: var(--accent-fg, var(--color-bg));
+  opacity: 1;
 }
 
 .settings-checkbox {
-  accent-color: var(--color-primary);
+  accent-color: var(--accent, var(--color-primary));
 }
 
 .settings-flash {
   border: 1px solid;
 }
+.settings-flash {
+  border-radius: var(--radius-md, 6px);
+}
 .settings-flash-ok {
-  border-color: var(--color-border);
-  background: var(--color-bg-subtle);
-  color: var(--color-text-secondary);
+  border-color: var(--border, var(--color-border));
+  background: var(--surface-subtle, var(--color-bg-subtle));
+  color: var(--fg-body, var(--color-text-secondary));
 }
 .settings-flash-err {
   border-color: var(--color-danger-border, #fecaca);
@@ -3010,11 +3037,12 @@ onMounted(() => {
   display: grid;
   grid-template-columns: 240px 1fr;
   min-height: 100%;
-  color: var(--color-text);
+  color: var(--fg-body, var(--color-text));
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
 }
 .settings-sidebar {
-  border-right: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
+  border-right: 1px solid var(--border, var(--color-border));
+  background: var(--surface-subtle, var(--color-bg-subtle));
   position: sticky;
   top: 0;
   align-self: start;
@@ -3044,11 +3072,11 @@ onMounted(() => {
   margin-top: 16px;
 }
 .settings-nav-group-title {
-  font-size: 10px;
+  font-size: var(--fs-11, 10px);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--color-text-tertiary);
-  font-weight: 600;
+  letter-spacing: var(--tracking-label, 0.08em);
+  color: var(--fg-subtle, var(--color-text-tertiary));
+  font-weight: var(--fw-semibold, 600);
   padding: 0 8px 6px;
 }
 .settings-nav-item {
@@ -3057,11 +3085,14 @@ onMounted(() => {
   gap: 8px;
   padding: 7px 10px;
   border-radius: var(--radius-md, 6px);
+  border-left: 2px solid transparent;
   font-size: var(--fs-13, 13px);
   font-weight: var(--fw-medium, 500);
   color: var(--fg-muted, var(--color-text-secondary));
   background: transparent;
-  border: 0;
+  border-top: 0;
+  border-right: 0;
+  border-bottom: 0;
   cursor: pointer;
   text-align: left;
   transition:
@@ -3070,23 +3101,24 @@ onMounted(() => {
 }
 .settings-nav-item:hover {
   background: var(--surface-muted, var(--color-border-subtle));
-  color: var(--fg, var(--color-text));
+  color: var(--fg-body, var(--color-text));
 }
 .settings-nav-item-active {
   background: var(--surface, var(--color-bg));
   color: var(--fg, var(--color-text));
   font-weight: var(--fw-semibold, 600);
-  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+  border-left-color: var(--fg, var(--color-primary));
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(10, 10, 10, 0.04));
 }
 .settings-nav-dot {
   width: 6px;
   height: 6px;
-  border-radius: 50%;
-  background: var(--color-text-faint);
+  border-radius: var(--radius-full, 50%);
+  background: var(--fg-subtle, var(--color-text-faint));
   flex-shrink: 0;
 }
 .settings-nav-item-active .settings-nav-dot {
-  background: var(--color-primary, #111827);
+  background: var(--accent, var(--color-primary, #111827));
 }
 
 /* Mobile: Sidebar wird zur Top-Bar (horizontale Tabs). */
@@ -3124,24 +3156,24 @@ onMounted(() => {
   gap: 12px;
 }
 .theme-tile {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
+  background: var(--surface, var(--color-bg));
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-xl, 10px);
   padding: 12px;
   cursor: pointer;
   text-align: left;
-  transition: all 200ms ease;
+  transition: all 200ms var(--ease, ease);
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
 .theme-tile:hover {
-  border-color: var(--color-text-faint);
+  border-color: var(--fg-subtle, var(--color-text-faint));
   transform: translateY(-1px);
 }
 .theme-tile-active {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 2px var(--color-primary);
+  border-color: var(--accent, var(--color-primary));
+  box-shadow: 0 0 0 2px var(--accent, var(--color-primary));
 }
 .theme-tile-preview {
   height: 80px;
@@ -3211,20 +3243,21 @@ onMounted(() => {
   background: transparent;
   border: 0;
   padding: 8px 14px;
-  font-size: 13px;
-  color: var(--color-text-muted);
+  font-size: var(--fs-13, 13px);
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
+  color: var(--fg-muted, var(--color-text-muted));
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
-  transition: color 120ms ease;
+  transition: color var(--t-fast, 120ms) var(--ease, ease);
 }
 .tpl-kind-tab:hover {
-  color: var(--color-text);
+  color: var(--fg, var(--color-text));
 }
 .tpl-kind-tab-active {
-  color: var(--color-text);
-  font-weight: 500;
-  border-bottom-color: var(--color-text);
+  color: var(--fg, var(--color-text));
+  font-weight: var(--fw-medium, 500);
+  border-bottom-color: var(--fg, var(--color-text));
 }
 
 .tpl-grid {
@@ -3237,32 +3270,33 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-lg, 8px);
   padding: 6px;
-  background: var(--color-bg);
+  background: var(--surface, var(--color-bg));
 }
 .tpl-list-item {
   text-align: left;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-md, 6px);
   background: transparent;
   border: 0;
   cursor: pointer;
-  font-size: 13px;
-  color: var(--color-text);
-  transition: background 120ms ease;
+  font-size: var(--fs-13, 13px);
+  font-family: var(--font-sans, "Inter", system-ui, sans-serif);
+  color: var(--fg-body, var(--color-text));
+  transition: background-color var(--t-fast, 120ms) var(--ease, ease);
 }
 .tpl-list-item:hover {
-  background: var(--color-bg-subtle);
+  background: var(--surface-subtle, var(--color-bg-subtle));
 }
 .tpl-list-item-active {
-  background: var(--color-border-subtle);
+  background: var(--surface-muted, var(--color-border-subtle));
 }
 .tpl-new-btn {
-  color: var(--color-text-muted);
+  color: var(--fg-muted, var(--color-text-muted));
   font-style: italic;
-  border-bottom: 1px dashed var(--color-border-subtle);
+  border-bottom: 1px dashed var(--hairline, var(--color-border-subtle));
   border-radius: 0;
   padding-bottom: 8px;
   margin-bottom: 4px;
@@ -3292,18 +3326,18 @@ onMounted(() => {
 .tpl-default-pill {
   font-size: 9px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: var(--tracking-wide, 0.05em);
   padding: 2px 6px;
-  border-radius: 3px;
-  background: var(--color-text);
-  color: var(--color-bg);
-  font-weight: 600;
+  border-radius: var(--radius-xs, 3px);
+  background: var(--accent, var(--color-text));
+  color: var(--accent-fg, var(--color-bg));
+  font-weight: var(--fw-semibold, 600);
 }
 
 .tpl-editor {
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
+  background: var(--surface, var(--color-bg));
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-lg, 8px);
   padding: 14px;
 }
 .tpl-editor-row {
@@ -3322,12 +3356,12 @@ onMounted(() => {
 }
 .tpl-preview {
   flex: 1;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 6px;
+  border: 1px solid var(--hairline, var(--color-border-subtle));
+  border-radius: var(--radius-md, 6px);
   padding: 12px;
-  background: var(--color-bg-subtle);
-  font-size: 13px;
-  color: var(--color-text);
+  background: var(--surface-subtle, var(--color-bg-subtle));
+  font-size: var(--fs-13, 13px);
+  color: var(--fg-body, var(--color-text));
   min-height: 440px;
   max-height: 560px;
   overflow-y: auto;
@@ -3337,15 +3371,15 @@ onMounted(() => {
 .tpl-vars-help {
   margin-top: 12px;
   padding: 10px;
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 6px;
-  font-size: 12px;
+  background: var(--surface-subtle, var(--color-bg-subtle));
+  border: 1px solid var(--hairline, var(--color-border-subtle));
+  border-radius: var(--radius-md, 6px);
+  font-size: var(--fs-12, 12px);
 }
 .tpl-vars-help summary {
   cursor: pointer;
-  font-weight: 500;
-  color: var(--color-text-secondary);
+  font-weight: var(--fw-medium, 500);
+  color: var(--fg-body, var(--color-text-secondary));
 }
 .tpl-vars-grid {
   display: grid;

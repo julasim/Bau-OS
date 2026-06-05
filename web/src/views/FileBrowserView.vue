@@ -764,18 +764,18 @@ onBeforeUnmount(() => {
     <!-- ─── Page-Head ──────────────────────────────────────────── -->
     <header class="ap-pagehead fb-pagehead">
       <div class="fb-pagehead-left">
-        <h1>Dateien</h1>
-        <p>Projektübergreifende Ablage — Pläne, Dokumente und Schriftverkehr.</p>
+        <h1 class="ap-pagetitle">Dateien</h1>
+        <p class="ap-pagesub">Projektübergreifende Ablage — Pläne, Dokumente und Schriftverkehr aller Projekte.</p>
       </div>
       <div class="fb-pagehead-actions">
-        <button class="pt-btn pt-btn--secondary" :disabled="uploading" @click="triggerUpload">
+        <button class="pt-btn pt-btn--secondary pt-btn--sm" :disabled="uploading" @click="triggerUpload">
           <svg
             width="13"
             height="13"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
-            stroke-width="2"
+            stroke-width="1.5"
             stroke-linecap="round"
             stroke-linejoin="round"
           >
@@ -794,148 +794,7 @@ onBeforeUnmount(() => {
 
     <!-- ─── Toolbar ────────────────────────────────────────────── -->
     <div class="ap-toolbar fb-toolbar">
-      <!-- Sidebar-Toggle -->
-      <button
-        class="pt-btn pt-btn--ghost fb-icon-btn"
-        :class="{ 'fb-icon-btn--active': sidebarOpen }"
-        @click="sidebarOpen = !sidebarOpen"
-        title="Seitenleiste"
-      >
-        <svg
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <rect x="3" y="4" width="18" height="16" rx="1.5" />
-          <line x1="9" y1="4" x2="9" y2="20" />
-        </svg>
-      </button>
-
-      <!-- Back / Forward -->
-      <div class="fb-nav-btns">
-        <button class="pt-btn pt-btn--ghost fb-icon-btn" :disabled="path.length === 0" @click="onBack" title="Zurück">
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-        <button
-          class="pt-btn pt-btn--ghost fb-icon-btn"
-          :disabled="historyForward.length === 0"
-          @click="onForward"
-          title="Weiter"
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </button>
-      </div>
-
-      <!-- Breadcrumb -->
-      <div class="fb-breadcrumb">
-        <template v-for="(seg, i) in breadcrumb" :key="i">
-          <span v-if="i > 0" class="fb-breadcrumb-sep">/</span>
-          <button
-            class="fb-breadcrumb-seg"
-            :class="{ 'fb-breadcrumb-seg--active': i === breadcrumb.length - 1 }"
-            @click="onBreadcrumbClick(i)"
-          >
-            {{ seg }}
-          </button>
-        </template>
-      </div>
-
-      <div class="fb-toolbar-gap"></div>
-
-      <!-- View-Segmented-Control -->
-      <div class="pt-tabs fb-view-tabs">
-        <button
-          v-for="opt in [
-            { v: 'column', label: 'Spalten' },
-            { v: 'list', label: 'Liste' },
-            { v: 'icons', label: 'Symbole' },
-          ]"
-          :key="opt.v"
-          class="pt-tab"
-          :class="{ 'pt-tab--active': view === opt.v }"
-          @click="view = opt.v as 'column' | 'list' | 'icons'"
-        >
-          <svg
-            v-if="opt.v === 'column'"
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="3" y="4" width="5" height="16" rx="0.5" />
-            <rect x="10" y="4" width="5" height="16" rx="0.5" />
-            <rect x="17" y="4" width="4" height="16" rx="0.5" />
-          </svg>
-          <svg
-            v-else-if="opt.v === 'list'"
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <line x1="8" y1="6" x2="21" y2="6" />
-            <line x1="8" y1="12" x2="21" y2="12" />
-            <line x1="8" y1="18" x2="21" y2="18" />
-            <circle cx="4" cy="6" r="1" />
-            <circle cx="4" cy="12" r="1" />
-            <circle cx="4" cy="18" r="1" />
-          </svg>
-          <svg
-            v-else
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <rect x="3" y="3" width="7" height="7" rx="0.5" />
-            <rect x="14" y="3" width="7" height="7" rx="0.5" />
-            <rect x="3" y="14" width="7" height="7" rx="0.5" />
-            <rect x="14" y="14" width="7" height="7" rx="0.5" />
-          </svg>
-          <span>{{ opt.label }}</span>
-        </button>
-      </div>
-
-      <!-- Search -->
+      <!-- Suche -->
       <div class="ap-search fb-search">
         <svg
           width="13"
@@ -945,322 +804,88 @@ onBeforeUnmount(() => {
           stroke="currentColor"
           stroke-width="1.5"
           stroke-linecap="round"
+          stroke-linejoin="round"
         >
           <circle cx="11" cy="11" r="7" />
           <line x1="21" y1="21" x2="16.5" y2="16.5" />
         </svg>
-        <input v-model="searchTerm" class="pt-input" placeholder="Im Vault suchen…" />
+        <input v-model="searchTerm" class="pt-input" type="search" placeholder="Dateiname suchen …" />
+      </div>
+
+      <!-- Modus-Filter (Alle / Zuletzt / Markiert / Geteilt) -->
+      <div class="ap-filter">
+        <select
+          class="pt-select"
+          :value="mode"
+          @change="setMode(($event.target as HTMLSelectElement).value as 'all' | 'recent' | 'starred' | 'shared')"
+          aria-label="Ansicht filtern"
+        >
+          <option value="all">Alle Dateien</option>
+          <option value="recent">Zuletzt bearbeitet</option>
+          <option value="starred">Markiert</option>
+          <option value="shared">Geteilt</option>
+        </select>
+      </div>
+
+      <span class="pt-spacer fb-toolbar-gap"></span>
+
+      <!-- Speicher-Anzeige -->
+      <div class="fb-storage-pill fb-mono">
+        {{ totalFileCount }} Datei<span v-if="totalFileCount !== 1">en</span> · {{ totalSizeLabel }}
       </div>
     </div>
 
-    <!-- ─── Body: Sidebar + Browser ───────────────────────────── -->
-    <div class="fb-body">
-      <!-- Sidebar -->
-      <aside v-if="sidebarOpen" class="fb-sidebar">
-        <div class="fb-sidebar-scroll">
-          <!-- Section: Vault -->
-          <div class="fb-sidebar-section">
-            <div class="fb-sidebar-label">Vault</div>
-            <div
-              class="fb-sidebar-item"
-              :class="{ 'fb-sidebar-item--active': mode === 'all' && path.length === 0 && !searchTerm }"
-              @click="setMode('all')"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M3 11l9-8 9 8v9a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2v-9z" />
-              </svg>
-              <span>Alle Dateien</span>
-            </div>
-            <div
-              class="fb-sidebar-item"
-              :class="{ 'fb-sidebar-item--active': mode === 'recent' }"
-              @click="setMode('recent')"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <circle cx="12" cy="12" r="9" />
-                <polyline points="12 7 12 12 15 14" />
-              </svg>
-              <span>Zuletzt bearbeitet</span>
-            </div>
-            <div
-              class="fb-sidebar-item"
-              :class="{ 'fb-sidebar-item--active': mode === 'starred' }"
-              @click="setMode('starred')"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-              </svg>
-              <span>Markiert</span>
-            </div>
-            <div
-              class="fb-sidebar-item"
-              :class="{ 'fb-sidebar-item--active': mode === 'shared' }"
-              @click="setMode('shared')"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1" />
-                <path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1" />
-              </svg>
-              <span>Geteilt</span>
-            </div>
-          </div>
+    <!-- ─── Inhalt ─────────────────────────────────────────────── -->
+    <div class="fb-scroll">
+      <!-- Loading -->
+      <div v-if="loading && allFiles.length === 0" class="ap-empty">Lädt…</div>
 
-          <!-- Section: Hierarchie -->
-          <div class="fb-sidebar-section">
-            <div class="fb-sidebar-label">Hierarchie</div>
-            <div
-              class="fb-sidebar-item"
-              :class="{ 'fb-sidebar-item--active': mode === 'all' && path[0] === 'Projekte' }"
-              @click="
-                mode = 'all';
-                setSidebarTarget(['Projekte']);
-              "
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-              </svg>
-              <span>Projekte</span>
-            </div>
-            <div
-              class="fb-sidebar-item"
-              :class="{ 'fb-sidebar-item--active': mode === 'all' && path[0] === 'Privat' }"
-              @click="
-                mode = 'all';
-                setSidebarTarget(['Privat']);
-              "
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-              </svg>
-              <span>Privat</span>
-            </div>
-          </div>
+      <!-- Leer -->
+      <div v-else-if="(tree.children?.length ?? 0) === 0" class="ap-empty">
+        <p>{{ searchTerm ? "Keine Treffer für diese Suche." : "Noch keine Dateien abgelegt." }}</p>
+      </div>
 
-          <!-- Section: Speicher -->
-          <div class="fb-sidebar-section">
-            <div class="fb-sidebar-label">Speicher</div>
-            <div class="fb-sidebar-item fb-sidebar-item--disabled">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <rect x="2" y="4" width="20" height="7" rx="1" />
-                <rect x="2" y="13" width="20" height="7" rx="1" />
-                <line x1="6" y1="7.5" x2="6.01" y2="7.5" />
-                <line x1="6" y1="16.5" x2="6.01" y2="16.5" />
-              </svg>
-              <span>bau-os.local</span>
-              <span class="pt-badge pt-badge--neutral fb-sidebar-badge">self-hosted</span>
-            </div>
-            <div class="fb-sidebar-item fb-sidebar-item--disabled">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <ellipse cx="12" cy="5" rx="9" ry="3" />
-                <path d="M3 5v14a9 3 0 0 0 18 0V5" />
-                <path d="M3 12a9 3 0 0 0 18 0" />
-              </svg>
-              <span>Postgres</span>
-              <span class="pt-badge pt-badge--neutral fb-sidebar-badge">{{ totalSizeLabel }}</span>
-            </div>
-          </div>
-        </div>
+      <!-- Projektgruppierte Flachliste -->
+      <template v-else>
+        <template v-for="(top, ti) in tree.children ?? []" :key="ti">
+          <!-- Mode 'all': top = Projekte (Container mit Projekt-Ordnern) oder Privat (direkte Files).
+               Andere Modes: top = virtueller Folder mit direkten Files. -->
 
-        <!-- Storage-Footer -->
-        <div class="fb-sidebar-footer">
-          <div class="fb-storage-row">
-            <span>Speicher</span>
-            <span class="fb-mono">{{ totalSizeLabel }} / 50 GB</span>
-          </div>
-          <div class="fb-storage-bar">
-            <div
-              class="fb-storage-bar-fill"
-              :style="{ width: Math.min(100, (totalSizeBytes / (50 * 1024 * 1024 * 1024)) * 100) + '%' }"
-            ></div>
-          </div>
-          <div class="fb-storage-sub fb-mono">
-            {{ totalFileCount }} Datei<span v-if="totalFileCount !== 1">en</span> · DSGVO-konform
-          </div>
-        </div>
-      </aside>
-
-      <!-- Browser-Wrapper (Browser + Statusleiste) -->
-      <div class="fb-browser-wrap" :class="{ 'fb-browser-wrap--with-sidebar': sidebarOpen }">
-        <!-- Loading-Empty-State -->
-        <div v-if="loading && allFiles.length === 0" class="ap-empty">Laedt…</div>
-
-        <!-- ══ Vollbild-Vorschau (ersetzt Browser wenn Datei geöffnet) ══ -->
-        <div v-else-if="selected?.node && selected.node.kind !== 'folder'" class="fb-detail-full">
-          <!-- Topbar -->
-          <div class="fb-detail-topbar">
-            <button class="pt-btn pt-btn--ghost fb-detail-back" @click="selected = null">
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polyline points="15 18 9 12 15 6" />
-              </svg>
-              Zurück
-            </button>
-            <span class="fb-detail-breadcrumb">{{ selected.node.name }}</span>
-            <button
-              class="fb-preview-star"
-              :class="{ 'fb-preview-star--on': selected.node.starred }"
-              @click="toggleStar(selected.node)"
-              :title="selected.node.starred ? 'Markierung entfernen' : 'Markieren'"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                :fill="selected.node.starred ? 'currentColor' : 'none'"
-                stroke="currentColor"
-                stroke-width="1.5"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-              </svg>
-            </button>
-          </div>
-
-          <!-- Body: Info-Spalte links + Inhalt rechts -->
-          <div class="fb-detail-body">
-            <!-- Info-Panel -->
-            <div class="fb-detail-info ap-panel">
-              <div class="fb-preview-hero">
-                <img
-                  v-if="selected.node.kind === 'image' && selected.node.id"
-                  :src="downloadUrl(selected.node)"
-                  :alt="selected.node.name"
-                  class="fb-preview-image"
-                />
-                <FileGlyph v-else :kind="selected.node.kind" size="hero" />
+          <!-- Container 'Projekte' → je Unterordner eine Gruppe -->
+          <template v-if="top.name === 'Projekte' && mode === 'all'">
+            <template v-for="(proj, pi) in top.children ?? []" :key="'p' + pi">
+              <div class="ap-group-h">
+                {{ proj.name }}
+                <span class="ct">· {{ proj.children?.length ?? 0 }}</span>
+                <span class="ln"></span>
               </div>
-              <div>
-                <div class="fb-preview-name" :class="{ 'fb-mono': isMonoKind(selected.node.kind) }">
-                  {{ selected.node.name }}
-                </div>
-                <div class="fb-preview-sub">{{ kindLabel(selected.node.kind) }}</div>
-              </div>
-              <div class="fb-preview-meta">
-                <div class="fb-preview-row">
-                  <span class="fb-preview-key">Größe</span>
-                  <span class="fb-preview-val fb-mono">{{ selected.node.size ?? "—" }}</span>
-                </div>
-                <div class="fb-preview-row">
-                  <span class="fb-preview-key">Geändert</span>
-                  <span class="fb-preview-val fb-mono">{{ selected.node.updated ?? "—" }}</span>
-                </div>
-                <div class="fb-preview-row">
-                  <span class="fb-preview-key">Projekt</span>
-                  <span class="fb-preview-val">{{ selected.node.project ?? "—" }}</span>
-                </div>
-                <div class="fb-preview-row">
-                  <span class="fb-preview-key">Speicher</span>
-                  <span class="fb-preview-val fb-mono">bau-os.local</span>
-                </div>
-              </div>
-              <div class="fb-preview-actions">
-                <a class="pt-btn pt-btn--primary fb-preview-btn-open" :href="downloadUrl(selected.node)" target="_blank"
-                  >Öffnen</a
+              <div class="pt-list fb-list">
+                <div
+                  v-for="(it, i) in proj.children ?? []"
+                  :key="i"
+                  class="pt-list-item fb-doc-row"
+                  @click="onClickItem(it, 0)"
                 >
-                <button class="pt-btn pt-btn--secondary" @click="openShareModal(selected.node)">Teilen</button>
-                <div class="files-preview-actions-menu-wrap fb-action-menu-wrap">
-                  <button
-                    class="pt-btn pt-btn--secondary fb-action-menu-trigger"
-                    @click="actionMenuOpen = !actionMenuOpen"
-                    :class="{ 'fb-action-menu-trigger--open': actionMenuOpen }"
-                    title="Mehr"
-                  >
-                    ···
-                  </button>
-                  <div v-if="actionMenuOpen" class="fb-action-menu" @click.stop>
+                  <FileGlyph :kind="it.kind" />
+                  <div class="fb-doc-text">
+                    <div class="pt-li-title fb-doc-name" :class="{ 'fb-mono': isMonoKind(it.kind) }">{{ it.name }}</div>
+                    <div class="pt-li-meta fb-doc-meta fb-mono">
+                      {{ kindLabel(it.kind) }} · {{ it.size ?? "—" }} · {{ it.updated ?? "—" }}
+                    </div>
+                  </div>
+                  <div class="fb-doc-actions">
                     <button
-                      class="fb-action-item"
-                      @click="
-                        actionMenuOpen = false;
-                        toggleStar(selected.node);
-                      "
+                      v-if="it.id"
+                      class="pt-iconbtn fb-doc-star"
+                      :class="{ 'fb-doc-star--on': it.starred }"
+                      @click="toggleStar(it, $event)"
+                      :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
                     >
                       <svg
-                        width="13"
-                        height="13"
+                        width="14"
+                        height="14"
                         viewBox="0 0 24 24"
-                        fill="none"
+                        :fill="it.starred ? 'currentColor' : 'none'"
                         stroke="currentColor"
                         stroke-width="1.5"
                         stroke-linecap="round"
@@ -1268,40 +893,11 @@ onBeforeUnmount(() => {
                       >
                         <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
                       </svg>
-                      {{ selected.node.starred ? "Markierung entfernen" : "Markieren" }}
                     </button>
-                    <a
-                      class="fb-action-item"
-                      :href="downloadUrl(selected.node)"
-                      download
-                      @click="actionMenuOpen = false"
-                    >
+                    <button v-if="it.id" class="pt-iconbtn" @click.stop="openShareModal(it)" title="Teilen">
                       <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                      </svg>
-                      Herunterladen
-                    </a>
-                    <button
-                      class="fb-action-item"
-                      @click="
-                        actionMenuOpen = false;
-                        openShareModal(selected.node);
-                      "
-                    >
-                      <svg
-                        width="13"
-                        height="13"
+                        width="14"
+                        height="14"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -1315,19 +911,18 @@ onBeforeUnmount(() => {
                         <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
                         <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
                       </svg>
-                      Teilen…
                     </button>
-                    <div class="fb-action-divider"></div>
-                    <button
-                      class="fb-action-item fb-action-item--danger"
-                      @click="
-                        actionMenuOpen = false;
-                        deleteSelected();
-                      "
+                    <a
+                      v-if="it.id"
+                      class="pt-iconbtn"
+                      :href="downloadUrl(it)"
+                      target="_blank"
+                      @click.stop
+                      title="Herunterladen"
                     >
                       <svg
-                        width="13"
-                        height="13"
+                        width="14"
+                        height="14"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
@@ -1335,192 +930,227 @@ onBeforeUnmount(() => {
                         stroke-linecap="round"
                         stroke-linejoin="round"
                       >
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
-                        <path d="M10 11v6" />
-                        <path d="M14 11v6" />
-                        <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
                       </svg>
-                      Löschen
-                    </button>
+                    </a>
                   </div>
                 </div>
+                <div v-if="(proj.children?.length ?? 0) === 0" class="fb-empty-col">Keine Dateien.</div>
               </div>
-            </div>
+            </template>
+          </template>
 
-            <!-- Inhalts-Panel -->
-            <div class="fb-detail-content">
-              <iframe
-                v-if="selected.node.kind === 'pdf' && selected.node.id"
-                :src="downloadUrl(selected.node)"
-                class="fb-detail-pdf"
-                :title="selected.node.name"
-              />
+          <!-- 'Privat' (mode all) oder virtueller Folder (recent/starred/shared) → eine Gruppe -->
+          <template v-else>
+            <div class="ap-group-h">
+              {{ top.name }}
+              <span class="ct">· {{ top.children?.length ?? 0 }}</span>
+              <span class="ln"></span>
+            </div>
+            <div class="pt-list fb-list">
+              <div
+                v-for="(it, i) in top.children ?? []"
+                :key="i"
+                class="pt-list-item fb-doc-row"
+                @click="onClickItem(it, 0)"
+              >
+                <FileGlyph :kind="it.kind" />
+                <div class="fb-doc-text">
+                  <div class="pt-li-title fb-doc-name" :class="{ 'fb-mono': isMonoKind(it.kind) }">{{ it.name }}</div>
+                  <div class="pt-li-meta fb-doc-meta fb-mono">
+                    {{ kindLabel(it.kind) }} · {{ it.size ?? "—" }} · {{ it.updated ?? "—" }}
+                    <span v-if="it.project"> · {{ it.project }}</span>
+                  </div>
+                </div>
+                <div class="fb-doc-actions">
+                  <button
+                    v-if="it.id"
+                    class="pt-iconbtn fb-doc-star"
+                    :class="{ 'fb-doc-star--on': it.starred }"
+                    @click="toggleStar(it, $event)"
+                    :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      :fill="it.starred ? 'currentColor' : 'none'"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
+                    </svg>
+                  </button>
+                  <button v-if="it.id" class="pt-iconbtn" @click.stop="openShareModal(it)" title="Teilen">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="18" cy="5" r="3" />
+                      <circle cx="6" cy="12" r="3" />
+                      <circle cx="18" cy="19" r="3" />
+                      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                    </svg>
+                  </button>
+                  <a
+                    v-if="it.id"
+                    class="pt-iconbtn"
+                    :href="downloadUrl(it)"
+                    target="_blank"
+                    @click.stop
+                    title="Herunterladen"
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
+              <div v-if="(top.children?.length ?? 0) === 0" class="fb-empty-col">Keine Dateien.</div>
+            </div>
+          </template>
+        </template>
+      </template>
+    </div>
+
+    <!-- ─── Vorschau-Overlay (Klick auf Datei) ─────────────────── -->
+    <div v-if="selected?.node && selected.node.kind !== 'folder'" class="fb-modal-backdrop" @click="selected = null">
+      <div class="fb-preview-modal" @click.stop>
+        <!-- Topbar -->
+        <div class="fb-detail-topbar">
+          <span class="fb-detail-breadcrumb">{{ selected.node.name }}</span>
+          <button
+            class="fb-preview-star"
+            :class="{ 'fb-preview-star--on': selected.node.starred }"
+            @click="toggleStar(selected.node)"
+            :title="selected.node.starred ? 'Markierung entfernen' : 'Markieren'"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              :fill="selected.node.starred ? 'currentColor' : 'none'"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
+            </svg>
+          </button>
+          <button class="pt-iconbtn fb-modal-close" @click="selected = null" title="Schließen">
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <line x1="18" y1="6" x2="6" y2="18" />
+              <line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Body: Info + Inhalt -->
+        <div class="fb-detail-body">
+          <!-- Info-Panel -->
+          <div class="fb-detail-info">
+            <div class="fb-preview-hero">
               <img
-                v-else-if="selected.node.kind === 'image' && selected.node.id"
+                v-if="selected.node.kind === 'image' && selected.node.id"
                 :src="downloadUrl(selected.node)"
                 :alt="selected.node.name"
-                class="fb-detail-img"
+                class="fb-preview-image"
               />
-              <div v-else-if="previewIsMarkdown && previewContent" class="fb-detail-md">
-                <MarkdownRenderer :content="previewContent" />
+              <FileGlyph v-else :kind="selected.node.kind" size="hero" />
+            </div>
+            <div>
+              <div class="fb-preview-name" :class="{ 'fb-mono': isMonoKind(selected.node.kind) }">
+                {{ selected.node.name }}
               </div>
-              <pre v-else-if="previewContent" class="fb-detail-code">{{ previewContent }}</pre>
-              <div v-else-if="previewLoading" class="fb-preview-loading">Lädt…</div>
-              <div v-else class="fb-detail-empty">
-                <FileGlyph :kind="selected.node.kind" size="hero" />
-                <p>Keine Vorschau verfügbar.</p>
-                <a class="pt-btn pt-btn--secondary" :href="downloadUrl(selected.node)" target="_blank">Datei öffnen</a>
+              <div class="fb-preview-sub">{{ kindLabel(selected.node.kind) }}</div>
+            </div>
+            <div class="fb-preview-meta">
+              <div class="fb-preview-row">
+                <span class="fb-preview-key">Größe</span>
+                <span class="fb-preview-val fb-mono">{{ selected.node.size ?? "—" }}</span>
+              </div>
+              <div class="fb-preview-row">
+                <span class="fb-preview-key">Geändert</span>
+                <span class="fb-preview-val fb-mono">{{ selected.node.updated ?? "—" }}</span>
+              </div>
+              <div class="fb-preview-row">
+                <span class="fb-preview-key">Projekt</span>
+                <span class="fb-preview-val">{{ selected.node.project ?? "—" }}</span>
               </div>
             </div>
-          </div>
-        </div>
-
-        <!-- ══ Spalten-View ══ -->
-        <div v-else-if="view === 'column'" class="fb-columns">
-          <div v-for="(col, idx) in columns" :key="idx" class="fb-column">
-            <div class="fb-column-header">
-              <span>{{ col.parent.kind === "root" ? "Vault" : col.parent.name }}</span>
-              <span class="fb-mono fb-column-count">{{ col.items.length }}</span>
-            </div>
-            <div class="fb-column-body">
-              <div
-                v-for="(it, i) in col.items"
-                :key="i"
-                class="pt-list-item fb-row"
-                :class="{
-                  'fb-row--active':
-                    (path.length > 0 && path[idx + 1] === it.name) ||
-                    (path.length === 0 && path[idx] === it.name) ||
-                    (selected?.columnIndex === idx && selected?.node?.name === it.name && it.kind !== 'folder'),
-                }"
-                @click="onClickItem(it, idx)"
+            <div class="fb-preview-actions">
+              <a
+                class="pt-btn pt-btn--primary pt-btn--sm fb-preview-btn-open"
+                :href="downloadUrl(selected.node)"
+                target="_blank"
+                >Öffnen</a
               >
-                <FileGlyph
-                  :kind="it.kind"
-                  :active="
-                    (path.length > 0 && path[idx + 1] === it.name) ||
-                    (path.length === 0 && path[idx] === it.name) ||
-                    (selected?.columnIndex === idx && selected?.node?.name === it.name && it.kind !== 'folder')
-                  "
-                />
-                <span
-                  class="pt-li-title fb-row-name"
-                  :class="{ 'fb-mono': isMonoKind(it.kind) }"
-                  :style="{ fontSize: isMonoKind(it.kind) ? '12px' : '13px' }"
-                  >{{ it.name }}</span
-                >
-                <button
-                  v-if="it.kind !== 'folder' && it.id"
-                  class="fb-row-star"
-                  :class="{
-                    'fb-row-star--on': it.starred,
-                    'fb-row-star--active-row': selected?.columnIndex === idx && selected?.node?.name === it.name,
-                  }"
-                  @click="toggleStar(it, $event)"
-                  :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
-                >
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    :fill="it.starred ? 'currentColor' : 'none'"
-                    stroke="currentColor"
-                    stroke-width="1.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-                  </svg>
-                </button>
-                <svg
-                  v-if="it.kind === 'folder'"
-                  width="10"
-                  height="10"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="fb-row-chev"
-                >
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </div>
-              <div v-if="col.items.length === 0" class="fb-empty-col">Leer</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ══ Liste-View ══ -->
-        <div v-else-if="view === 'list'" class="fb-list">
-          <div class="fb-list-header"><span>Name</span><span>Geändert</span><span>Größe</span><span>Art</span></div>
-          <div
-            v-for="(it, i) in currentFolder.children ?? []"
-            :key="i"
-            class="fb-list-row"
-            :class="{ 'fb-list-row--active': selected?.node?.name === it.name }"
-            @click="onClickItem(it, path.length)"
-          >
-            <span class="fb-list-name">
-              <FileGlyph :kind="it.kind" :active="selected?.node?.name === it.name" />
-              <span
-                :class="{ 'fb-mono': isMonoKind(it.kind) }"
-                :style="{ fontSize: isMonoKind(it.kind) ? '12px' : '13px' }"
-                >{{ it.name }}</span
-              >
-              <button
-                v-if="it.kind !== 'folder' && it.id"
-                class="fb-row-star fb-row-star--inline"
-                :class="{
-                  'fb-row-star--on': it.starred,
-                  'fb-row-star--active-row': selected?.node?.name === it.name,
-                }"
-                @click="toggleStar(it, $event)"
-                :title="it.starred ? 'Markierung entfernen' : 'Markieren'"
-              >
-                <svg
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  :fill="it.starred ? 'currentColor' : 'none'"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                >
-                  <polygon points="12 2 15 9 22 9 17 14 19 21 12 17 5 21 7 14 2 9 9 9 12 2" />
-                </svg>
+              <button class="pt-btn pt-btn--secondary pt-btn--sm" @click="openShareModal(selected.node)">Teilen</button>
+              <button class="pt-btn pt-btn--ghost pt-btn--sm fb-preview-btn-del" @click="deleteSelected">
+                Löschen
               </button>
-            </span>
-            <span class="fb-mono fb-list-meta">{{ it.updated ?? "—" }}</span>
-            <span class="fb-mono fb-list-meta">{{ it.size ?? "—" }}</span>
-            <span class="fb-list-kind">{{ kindLabel(it.kind) }}</span>
+            </div>
           </div>
-          <div v-if="(currentFolder.children?.length ?? 0) === 0" class="ap-empty">Keine Dateien in diesem Ordner.</div>
-        </div>
 
-        <!-- ══ Symbole-View ══ -->
-        <div v-else class="fb-icons">
-          <div
-            v-for="(it, i) in currentFolder.children ?? []"
-            :key="i"
-            class="fb-icon-cell"
-            :class="{ 'fb-icon-cell--active': selected?.node?.name === it.name }"
-            @click="onClickItem(it, path.length)"
-          >
-            <FileGlyph :kind="it.kind" size="large" :active="selected?.node?.name === it.name" />
-            <span class="fb-icon-name" :class="{ 'fb-mono': isMonoKind(it.kind) }">{{ it.name }}</span>
+          <!-- Inhalts-Panel -->
+          <div class="fb-detail-content">
+            <iframe
+              v-if="selected.node.kind === 'pdf' && selected.node.id"
+              :src="downloadUrl(selected.node)"
+              class="fb-detail-pdf"
+              :title="selected.node.name"
+            />
+            <img
+              v-else-if="selected.node.kind === 'image' && selected.node.id"
+              :src="downloadUrl(selected.node)"
+              :alt="selected.node.name"
+              class="fb-detail-img"
+            />
+            <div v-else-if="previewIsMarkdown && previewContent" class="fb-detail-md">
+              <MarkdownRenderer :content="previewContent" />
+            </div>
+            <pre v-else-if="previewContent" class="fb-detail-code">{{ previewContent }}</pre>
+            <div v-else-if="previewLoading" class="fb-preview-loading">Lädt…</div>
+            <div v-else class="fb-detail-empty">
+              <FileGlyph :kind="selected.node.kind" size="hero" />
+              <p>Keine Vorschau verfügbar.</p>
+              <a class="pt-btn pt-btn--secondary pt-btn--sm" :href="downloadUrl(selected.node)" target="_blank"
+                >Datei öffnen</a
+              >
+            </div>
           </div>
-          <div v-if="(currentFolder.children?.length ?? 0) === 0" class="ap-empty">Keine Dateien in diesem Ordner.</div>
-        </div>
-
-        <!-- Status-Bar -->
-        <div class="fb-status">
-          <span>{{ statusLeft }}</span>
-          <span class="fb-status-spacer"></span>
-          <span>{{ statusRight }}</span>
         </div>
       </div>
     </div>
@@ -1538,7 +1168,7 @@ onBeforeUnmount(() => {
             <div class="fb-eyebrow">Teilen</div>
             <h3 class="fb-modal-title">{{ shareModalFile?.name ?? "Datei" }}</h3>
           </div>
-          <button class="pt-btn pt-btn--ghost fb-modal-close" @click="closeShareModal" title="Schließen">
+          <button class="pt-iconbtn fb-modal-close" @click="closeShareModal" title="Schließen">
             <svg
               width="14"
               height="14"
@@ -1567,7 +1197,7 @@ onBeforeUnmount(() => {
               <span v-else class="pt-badge pt-badge--neutral">Lesen</span>
             </div>
             <button
-              class="pt-btn pt-btn--ghost fb-modal-remove-btn"
+              class="pt-btn pt-btn--ghost pt-btn--sm fb-modal-remove-btn"
               :disabled="shareModalBusy"
               @click="removeShare(s.userId)"
             >
@@ -1637,14 +1267,14 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
   flex-shrink: 0;
 }
-.fb-pagehead h1 {
+.fb-pagehead .ap-pagetitle {
   font-size: var(--fs-20, 20px);
   font-weight: var(--fw-semibold, 600);
   color: var(--fg-title, var(--color-text));
   margin: 0;
   letter-spacing: -0.01em;
 }
-.fb-pagehead p {
+.fb-pagehead .ap-pagesub {
   font-size: var(--fs-13, 13px);
   color: var(--fg-muted, var(--color-text-muted));
   margin: var(--space-4, 4px) 0 0;
@@ -1671,11 +1301,10 @@ onBeforeUnmount(() => {
 
 /* ── Toolbar ───────────────────────────────────────────────── */
 .fb-toolbar {
-  height: 48px;
-  padding: 0 var(--space-16, 16px);
+  padding: var(--space-12, 12px) var(--space-24, 24px);
   display: flex;
   align-items: center;
-  gap: var(--space-8, 8px);
+  gap: var(--space-12, 12px);
   border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
   flex-shrink: 0;
   background: var(--surface-base, var(--color-bg));
@@ -1684,86 +1313,16 @@ onBeforeUnmount(() => {
   flex: 1;
 }
 
-.fb-icon-btn {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-.fb-icon-btn--active {
-  background: var(--surface-muted, var(--color-border-subtle));
-}
-.fb-nav-btns {
-  display: flex;
-  gap: 2px;
-}
-
-/* Breadcrumb */
-.fb-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4, 4px);
-  min-width: 0;
-  overflow: hidden;
-}
-.fb-breadcrumb-sep {
-  color: var(--fg-faint, var(--color-text-faint));
-  font-size: var(--fs-12, 12px);
-}
-.fb-breadcrumb-seg {
-  background: transparent;
-  border: 0;
-  font-size: var(--fs-13, 13px);
-  color: var(--fg-muted, var(--color-text-muted));
-  font-weight: 400;
-  padding: 3px 6px;
-  border-radius: var(--radius-sm, 4px);
-  cursor: pointer;
-  font-family: inherit;
-  white-space: nowrap;
-  transition: background 80ms ease;
-}
-.fb-breadcrumb-seg:hover {
-  background: var(--surface-muted, var(--color-bg-subtle));
-}
-.fb-breadcrumb-seg--active {
-  color: var(--fg-title, var(--color-text));
-  font-weight: 500;
-}
-
-/* View tabs */
-.fb-view-tabs {
-  display: flex;
-  border: 1px solid var(--border-default, var(--color-border));
-  border-radius: var(--radius-sm, 6px);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.fb-view-tabs .pt-tab {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 10px;
-  font-size: var(--fs-12, 12px);
-  border-radius: 0;
-  border: 0;
-}
-.fb-view-tabs .pt-tab + .pt-tab {
-  border-left: 1px solid var(--border-subtle, var(--color-border-subtle));
-}
-
 /* Search */
 .fb-search {
   display: flex;
   align-items: center;
   gap: var(--space-8, 8px);
-  padding: 5px 10px;
+  padding: 6px 10px;
   border: 1px solid var(--border-default, var(--color-border));
   border-radius: var(--radius-sm, 6px);
-  width: 200px;
+  width: 280px;
+  max-width: 100%;
   background: var(--surface-base, var(--color-bg));
   color: var(--fg-muted, var(--color-text-muted));
   flex-shrink: 0;
@@ -1772,146 +1331,172 @@ onBeforeUnmount(() => {
   border: 0;
   outline: 0;
   background: transparent;
-  font-size: var(--fs-12, 12px);
+  font-size: var(--fs-13, 13px);
   flex: 1;
   min-width: 0;
   padding: 0;
   box-shadow: none;
 }
 
-/* ── Body ──────────────────────────────────────────────────── */
-.fb-body {
+/* Storage-Pill */
+.fb-storage-pill {
+  font-size: var(--fs-12, 12px);
+  color: var(--fg-muted, var(--color-text-muted));
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Scroll-Bereich ────────────────────────────────────────── */
+.fb-scroll {
   flex: 1;
-  display: flex;
+  overflow-y: auto;
+  padding: var(--space-16, 16px) var(--space-24, 24px) var(--space-32, 32px);
   min-height: 0;
 }
 
-/* ── Sidebar ───────────────────────────────────────────────── */
-.fb-sidebar {
-  width: 220px;
-  background: var(--surface-muted, var(--color-bg-subtle));
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  border-right: 1px solid var(--border-subtle, var(--color-border-subtle));
-}
-.fb-sidebar-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-12, 12px) 0;
-}
-.fb-sidebar-section {
-  margin-bottom: var(--space-16, 16px);
-}
-.fb-sidebar-label {
-  padding: 0 var(--space-16, 16px) var(--space-6, 6px);
-  font-size: var(--fs-10, 10px);
-  font-weight: var(--fw-semibold, 600);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fg-faint, var(--color-text-tertiary));
-}
-.fb-sidebar-item {
+/* ── Gruppen-Header ────────────────────────────────────────── */
+.ap-group-h {
   display: flex;
   align-items: center;
-  gap: var(--space-10, 10px);
-  padding: 5px var(--space-16, 16px);
+  gap: var(--space-8, 8px);
+  margin: var(--space-20, 20px) 0 var(--space-8, 8px);
   font-size: var(--fs-13, 13px);
-  color: var(--fg-secondary, var(--color-text-secondary));
-  background: transparent;
-  border-left: 2px solid transparent;
-  cursor: pointer;
-  user-select: none;
-}
-.fb-sidebar-item:hover:not(.fb-sidebar-item--disabled):not(.fb-sidebar-item--active) {
-  background: var(--border-subtle, var(--color-border-subtle));
-}
-.fb-sidebar-item--active {
+  font-weight: var(--fw-semibold, 600);
   color: var(--fg-title, var(--color-text));
-  background: var(--surface-base, var(--color-bg));
-  border-left-color: var(--fg-title, var(--color-text));
-  padding-left: 14px;
-  font-weight: 500;
+  letter-spacing: -0.005em;
 }
-.fb-sidebar-item--disabled {
+.ap-group-h:first-child {
+  margin-top: 0;
+}
+.ap-group-h .ct {
+  font-size: var(--fs-11, 11px);
+  font-weight: 400;
   color: var(--fg-faint, var(--color-text-tertiary));
-  cursor: default;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
 }
-.fb-sidebar-item > span:first-of-type {
+.ap-group-h .ln {
   flex: 1;
+  height: 1px;
+  background: var(--border-subtle, var(--color-border-subtle));
+  margin-left: var(--space-4, 4px);
+}
+
+/* ── Datei-Liste ───────────────────────────────────────────── */
+.fb-list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-subtle, var(--color-border-subtle));
+  border-radius: var(--radius-sm, 8px);
+  overflow: hidden;
+  background: var(--surface-base, var(--color-bg));
+}
+.fb-doc-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12, 12px);
+  padding: 10px var(--space-16, 16px);
+  cursor: pointer;
+  background: var(--surface-base, var(--color-bg));
+  color: var(--fg-body, var(--color-text));
+  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
+  transition: background 60ms ease;
+}
+.fb-doc-row:last-child {
+  border-bottom: 0;
+}
+.fb-doc-row:hover {
+  background: var(--surface-muted, var(--color-bg-subtle));
+}
+.fb-doc-text {
+  flex: 1;
+  min-width: 0;
+}
+.fb-doc-name {
+  font-size: var(--fs-14, 14px);
+  font-weight: var(--fw-medium, 500);
+  color: var(--fg-title, var(--color-text));
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.fb-sidebar-badge {
-  font-size: 9px;
-  flex-shrink: 0;
-}
-.fb-sidebar-footer {
-  padding: var(--space-12, 12px) var(--space-16, 16px);
-  border-top: 1px solid var(--border-subtle, var(--color-border-subtle));
+.fb-doc-meta {
   font-size: var(--fs-11, 11px);
   color: var(--fg-muted, var(--color-text-muted));
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.fb-storage-row {
+.fb-doc-actions {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: var(--space-6, 6px);
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 80ms ease;
 }
-.fb-storage-row .fb-mono {
+.fb-doc-row:hover .fb-doc-actions,
+.fb-doc-actions:has(.fb-doc-star--on) {
+  opacity: 1;
+}
+.fb-doc-star {
+  color: var(--fg-faint, var(--color-text-faint));
+}
+.fb-doc-star--on {
+  color: #f59e0b;
+}
+.fb-empty-col {
+  padding: var(--space-16, 16px);
+  font-size: var(--fs-12, 12px);
+  color: var(--fg-faint, var(--color-text-tertiary));
+  text-align: center;
+}
+
+/* pt-iconbtn fallback (falls global nicht definiert) */
+.fb-doc-actions .pt-iconbtn,
+.fb-detail-topbar .pt-iconbtn,
+.fb-modal-close.pt-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm, 6px);
+  color: var(--fg-muted, var(--color-text-muted));
+  cursor: pointer;
+  text-decoration: none;
+}
+.fb-doc-actions .pt-iconbtn:hover,
+.fb-detail-topbar .pt-iconbtn:hover,
+.fb-modal-close.pt-iconbtn:hover {
+  background: var(--surface-muted, var(--color-bg-subtle));
   color: var(--fg-title, var(--color-text));
 }
-.fb-storage-bar {
-  height: 3px;
-  background: var(--border-default, var(--color-border));
-  border-radius: 2px;
-  overflow: hidden;
-}
-.fb-storage-bar-fill {
-  height: 100%;
-  background: var(--fg-title, var(--color-text));
-  transition: width 300ms ease;
-}
-.fb-storage-sub {
-  margin-top: var(--space-8, 8px);
-  font-size: 10px;
-  color: var(--fg-faint, var(--color-text-tertiary));
-}
 
-/* ── Browser-Wrap ──────────────────────────────────────────── */
-.fb-browser-wrap {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+/* ── Vorschau-Modal ────────────────────────────────────────── */
+.fb-preview-modal {
   background: var(--surface-base, var(--color-bg));
-}
-.fb-browser-wrap--with-sidebar {
-  /* border already on sidebar right side */
-}
-
-/* ── Vollbild-Detail ───────────────────────────────────────── */
-.fb-detail-full {
-  flex: 1;
+  border-radius: var(--radius-md, 10px);
+  width: 100%;
+  max-width: 1000px;
+  height: 80vh;
+  max-height: 80vh;
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--border-default, var(--color-border));
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.18);
   overflow: hidden;
-  min-height: 0;
 }
 .fb-detail-topbar {
   height: 48px;
   border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
   display: flex;
   align-items: center;
-  gap: var(--space-12, 12px);
-  padding: 0 var(--space-20, 20px);
-  flex-shrink: 0;
-}
-.fb-detail-back {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-13, 13px);
+  gap: var(--space-8, 8px);
+  padding: 0 var(--space-16, 16px);
   flex-shrink: 0;
 }
 .fb-detail-breadcrumb {
@@ -1930,8 +1515,8 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 .fb-detail-info {
-  width: 280px;
-  min-width: 280px;
+  width: 260px;
+  min-width: 260px;
   border-right: 1px solid var(--border-subtle, var(--color-border-subtle));
   padding: var(--space-20, 20px);
   display: flex;
@@ -1939,12 +1524,11 @@ onBeforeUnmount(() => {
   gap: var(--space-16, 16px);
   overflow-y: auto;
   background: var(--surface-muted, var(--color-bg-subtle));
-  border-radius: 0;
 }
 .fb-detail-content {
   flex: 1;
   overflow: auto;
-  padding: var(--space-24, 24px) var(--space-32, 32px);
+  padding: var(--space-20, 20px) var(--space-24, 24px);
   background: var(--surface-base, var(--color-bg));
   display: flex;
   flex-direction: column;
@@ -1952,13 +1536,13 @@ onBeforeUnmount(() => {
 .fb-detail-pdf {
   flex: 1;
   width: 100%;
-  min-height: 600px;
+  min-height: 400px;
   border: 1px solid var(--border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-sm, 6px);
 }
 .fb-detail-img {
   max-width: 100%;
-  max-height: 80vh;
+  max-height: 100%;
   object-fit: contain;
   display: block;
   margin: 0 auto;
@@ -1979,7 +1563,7 @@ onBeforeUnmount(() => {
   background: var(--surface-muted, var(--color-bg-subtle));
   border: 1px solid var(--border-subtle, var(--color-border-subtle));
   border-radius: var(--radius-sm, 6px);
-  padding: var(--space-20, 20px) var(--space-24, 24px);
+  padding: var(--space-16, 16px) var(--space-20, 20px);
   margin: 0;
 }
 .fb-detail-empty {
@@ -2005,7 +1589,7 @@ onBeforeUnmount(() => {
 }
 .fb-preview-image {
   max-width: 100%;
-  max-height: 220px;
+  max-height: 200px;
   object-fit: contain;
   display: block;
 }
@@ -2047,10 +1631,13 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
 }
 .fb-preview-btn-open {
-  flex: 2;
+  flex: 1;
   text-align: center;
   text-decoration: none;
   justify-content: center;
+}
+.fb-preview-btn-del {
+  color: var(--red-600, #dc2626);
 }
 .fb-preview-star {
   background: transparent;
@@ -2061,6 +1648,7 @@ onBeforeUnmount(() => {
   color: var(--fg-faint, var(--color-text-faint));
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
 }
 .fb-preview-star:hover {
   background: var(--surface-muted, var(--color-bg-subtle));
@@ -2073,310 +1661,6 @@ onBeforeUnmount(() => {
   color: var(--fg-faint, var(--color-text-tertiary));
   text-align: center;
   padding: var(--space-12, 12px) 0;
-}
-
-/* Action-Menu */
-.fb-action-menu-wrap {
-  position: relative;
-  flex: 1;
-}
-.fb-action-menu-wrap .pt-btn {
-  width: 100%;
-}
-.fb-action-menu-trigger--open {
-  background: var(--surface-muted, var(--color-border-subtle));
-}
-.fb-action-menu {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  min-width: 200px;
-  background: var(--surface-base, var(--color-bg));
-  border: 1px solid var(--border-default, var(--color-border));
-  border-radius: var(--radius-sm, 6px);
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.1);
-  padding: 4px;
-  z-index: 20;
-}
-.fb-action-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8, 8px);
-  width: 100%;
-  padding: 6px 10px;
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-xs, 4px);
-  font-size: var(--fs-12, 12px);
-  font-family: inherit;
-  color: var(--fg-body, var(--color-text));
-  cursor: pointer;
-  text-align: left;
-  text-decoration: none;
-}
-.fb-action-item:hover {
-  background: var(--surface-muted, var(--color-bg-subtle));
-}
-.fb-action-item svg {
-  color: var(--fg-muted, var(--color-text-muted));
-  flex-shrink: 0;
-}
-.fb-action-divider {
-  height: 1px;
-  background: var(--border-subtle, var(--color-border-subtle));
-  margin: 4px 0;
-}
-.fb-action-item--danger {
-  color: var(--red-600, #dc2626);
-}
-.fb-action-item--danger svg {
-  color: var(--red-600, #dc2626);
-}
-.fb-action-item--danger:hover {
-  background: #fef2f2;
-}
-
-/* ── Spalten-View ──────────────────────────────────────────── */
-.fb-columns {
-  flex: 1;
-  display: flex;
-  overflow-x: auto;
-  min-height: 0;
-}
-.fb-column {
-  width: 240px;
-  min-width: 240px;
-  border-right: 1px solid var(--border-subtle, var(--color-border-subtle));
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-base, var(--color-bg));
-}
-.fb-column-header {
-  padding: 10px 14px 8px;
-  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
-  font-size: 10px;
-  font-weight: var(--fw-semibold, 600);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fg-faint, var(--color-text-tertiary));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.fb-column-count {
-  color: var(--fg-faint, var(--color-text-faint));
-}
-.fb-column-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
-}
-.fb-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8, 8px);
-  padding: 6px 14px;
-  cursor: pointer;
-  background: transparent;
-  color: var(--fg-body, var(--color-text));
-  border-bottom: none;
-  border-radius: 0;
-}
-.fb-row:hover:not(.fb-row--active) {
-  background: var(--surface-muted, var(--color-bg-subtle));
-}
-.fb-row--active {
-  background: var(--fg-title, var(--color-text));
-  color: var(--surface-base, var(--color-bg));
-  font-weight: 500;
-}
-.fb-row-name {
-  flex: 1;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  font-size: var(--fs-13, 13px);
-}
-.fb-row-chev {
-  color: var(--fg-faint, var(--color-text-faint));
-}
-.fb-row--active .fb-row-chev {
-  color: var(--surface-base, var(--color-bg));
-}
-.fb-empty-col {
-  padding: var(--space-16, 16px) 14px;
-  font-size: var(--fs-12, 12px);
-  color: var(--fg-faint, var(--color-text-tertiary));
-}
-
-/* ── Liste-View ────────────────────────────────────────────── */
-.fb-list {
-  flex: 1;
-  overflow-y: auto;
-  background: var(--surface-base, var(--color-bg));
-}
-.fb-list-header {
-  display: grid;
-  grid-template-columns: 1fr 150px 90px 120px;
-  padding: 8px var(--space-20, 20px);
-  font-size: 10px;
-  font-weight: var(--fw-semibold, 600);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--fg-faint, var(--color-text-tertiary));
-  background: var(--surface-muted, var(--color-bg-subtle));
-  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-.fb-list-row {
-  display: grid;
-  grid-template-columns: 1fr 150px 90px 120px;
-  padding: 9px var(--space-20, 20px);
-  font-size: var(--fs-13, 13px);
-  align-items: center;
-  cursor: pointer;
-  border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
-  background: var(--surface-base, var(--color-bg));
-  color: var(--fg-body, var(--color-text));
-  transition: background 60ms ease;
-}
-.fb-list-row:hover:not(.fb-list-row--active) {
-  background: var(--surface-muted, var(--color-bg-subtle));
-}
-.fb-list-row--active {
-  background: var(--fg-title, var(--color-text));
-  color: var(--surface-base, var(--color-bg));
-}
-.fb-list-name {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8, 8px);
-  min-width: 0;
-}
-.fb-list-name > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.fb-list-meta {
-  font-size: var(--fs-11, 11px);
-  color: var(--fg-muted, var(--color-text-muted));
-}
-.fb-list-row--active .fb-list-meta {
-  color: rgba(255, 255, 255, 0.65);
-}
-.fb-list-kind {
-  font-size: var(--fs-11, 11px);
-  color: var(--fg-faint, var(--color-text-tertiary));
-}
-.fb-list-row--active .fb-list-kind {
-  color: rgba(255, 255, 255, 0.55);
-}
-
-/* ── Symbole-View ──────────────────────────────────────────── */
-.fb-icons {
-  flex: 1;
-  overflow-y: auto;
-  padding: var(--space-20, 20px);
-  background: var(--surface-base, var(--color-bg));
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: var(--space-8, 8px);
-  align-content: start;
-}
-.fb-icon-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-8, 8px);
-  padding: 14px 8px;
-  border-radius: var(--radius-sm, 6px);
-  cursor: pointer;
-  background: transparent;
-  color: var(--fg-body, var(--color-text));
-  transition: background 60ms ease;
-}
-.fb-icon-cell:hover:not(.fb-icon-cell--active) {
-  background: var(--surface-muted, var(--color-bg-subtle));
-}
-.fb-icon-cell--active {
-  background: var(--fg-title, var(--color-text));
-  color: var(--surface-base, var(--color-bg));
-}
-.fb-icon-name {
-  font-size: var(--fs-12, 12px);
-  text-align: center;
-  line-height: 1.3;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* ── Status-Bar ────────────────────────────────────────────── */
-.fb-status {
-  height: 26px;
-  border-top: 1px solid var(--border-subtle, var(--color-border-subtle));
-  background: var(--surface-muted, var(--color-bg-subtle));
-  display: flex;
-  align-items: center;
-  padding: 0 14px;
-  font-size: var(--fs-11, 11px);
-  color: var(--fg-muted, var(--color-text-muted));
-  font-family: var(--font-mono, "JetBrains Mono", monospace);
-  letter-spacing: 0.02em;
-  flex-shrink: 0;
-}
-.fb-status-spacer {
-  flex: 1;
-}
-
-/* ── Star buttons ──────────────────────────────────────────── */
-.fb-row-star {
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  padding: 2px;
-  border-radius: 3px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--fg-faint, var(--color-text-faint));
-  flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 80ms ease;
-}
-.fb-row:hover .fb-row-star,
-.fb-row--active .fb-row-star,
-.fb-row-star.fb-row-star--on,
-.fb-list-row:hover .fb-row-star,
-.fb-list-row--active .fb-row-star,
-.fb-icon-cell:hover .fb-row-star,
-.fb-icon-cell--active .fb-row-star {
-  opacity: 1;
-}
-.fb-row-star:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-.fb-row-star--on {
-  color: #f59e0b;
-}
-.fb-row-star--active-row {
-  color: rgba(255, 255, 255, 0.85) !important;
-}
-.fb-row-star--active-row.fb-row-star--on {
-  color: #fbbf24 !important;
-}
-.fb-row-star--inline {
-  margin-left: 4px;
-}
-.fb-list-row--active .fb-row-star {
-  color: rgba(255, 255, 255, 0.7);
-}
-.fb-list-row--active .fb-row-star--on {
-  color: #fbbf24;
 }
 
 /* ── Drag-Overlay ──────────────────────────────────────────── */
@@ -2400,7 +1684,7 @@ onBeforeUnmount(() => {
   border: 2px dashed var(--fg-title, var(--color-text));
 }
 
-/* ── Teilen-Modal ──────────────────────────────────────────── */
+/* ── Modal (Teilen + Vorschau-Backdrop) ────────────────────── */
 .fb-modal-backdrop {
   position: fixed;
   inset: 0;
@@ -2445,15 +1729,6 @@ onBeforeUnmount(() => {
   letter-spacing: -0.01em;
   word-break: break-word;
   color: var(--fg-title, var(--color-text));
-}
-.fb-modal-close {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
 }
 .fb-modal-section {
   padding: var(--space-16, 16px) var(--space-20, 20px);
@@ -2576,50 +1851,30 @@ onBeforeUnmount(() => {
 /* ── Mobile ────────────────────────────────────────────────── */
 @media (max-width: 767.98px) {
   .fb-toolbar {
-    height: auto;
-    padding: var(--space-8, 8px) var(--space-12, 12px);
     flex-wrap: wrap;
-    gap: var(--space-8, 8px);
-  }
-  .fb-breadcrumb {
-    width: 100%;
-    order: 10;
   }
   .fb-search {
     width: 100%;
-    order: 11;
+    order: 1;
   }
-  .fb-view-tabs {
-    order: 12;
+  .fb-storage-pill {
+    display: none;
   }
-  .fb-sidebar {
-    width: 200px;
-  }
-  .fb-detail-info {
-    width: 220px;
-    min-width: 220px;
-  }
-  .fb-detail-content {
-    padding: var(--space-16, 16px);
-  }
-  .fb-columns {
+  .fb-detail-body {
     flex-direction: column;
   }
-  .fb-column {
+  .fb-detail-info {
     width: 100%;
     min-width: unset;
     border-right: 0;
     border-bottom: 1px solid var(--border-subtle, var(--color-border-subtle));
   }
-  .fb-list-header,
-  .fb-list-row {
-    grid-template-columns: 1fr 90px;
+  .fb-preview-modal {
+    height: 90vh;
+    max-height: 90vh;
   }
-  .fb-list-header span:nth-child(2),
-  .fb-list-row > span:nth-child(2),
-  .fb-list-header span:nth-child(4),
-  .fb-list-row > span:nth-child(4) {
-    display: none;
+  .fb-doc-actions {
+    opacity: 1;
   }
 }
 </style>

@@ -264,10 +264,10 @@ onMounted(load);
       <span class="pt-spacer"></span>
 
       <!-- Ansicht-Toggle -->
-      <div class="ov-viewseg" role="group" aria-label="Ansicht wechseln">
+      <div class="pt-segment ov-viewseg" role="group" aria-label="Ansicht wechseln">
         <button
           type="button"
-          :class="['ov-seg-btn', { 'is-active': view === 'cards' }]"
+          :class="{ 'is-active': view === 'cards' }"
           @click="setView('cards')"
           title="Karten"
           :aria-pressed="view === 'cards'"
@@ -276,7 +276,7 @@ onMounted(load);
         </button>
         <button
           type="button"
-          :class="['ov-seg-btn', { 'is-active': view === 'table' }]"
+          :class="{ 'is-active': view === 'table' }"
           @click="setView('table')"
           title="Tabelle"
           :aria-pressed="view === 'table'"
@@ -602,6 +602,8 @@ onMounted(load);
   left: 11px;
   top: 50%;
   transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
   color: var(--fg-subtle);
   pointer-events: none;
 }
@@ -618,38 +620,14 @@ onMounted(load);
   border-radius: var(--radius-md);
   font-size: var(--fs-13);
 }
+.ov-toolbar .pt-spacer {
+  flex: 1;
+  min-width: var(--space-3);
+}
 
-/* Ansicht-Toggle-Segment */
-.ov-viewseg {
-  display: flex;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-.ov-seg-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: var(--surface);
-  border: 0;
-  color: var(--fg-muted);
-  cursor: pointer;
-  transition:
-    background-color var(--t-fast) var(--ease),
-    color var(--t-fast) var(--ease);
-}
-.ov-seg-btn + .ov-seg-btn {
-  border-left: 1px solid var(--border);
-}
-.ov-seg-btn:hover {
-  background: var(--surface-subtle);
-  color: var(--fg);
-}
-.ov-seg-btn.is-active {
-  background: var(--fg);
-  color: var(--fg-inverse);
+/* Ansicht-Toggle (pt-segment-Optik, Icon-Buttons) */
+.ov-viewseg button {
+  padding: 0 9px;
 }
 
 /* ── Karten-Raster ───────────────────────────────────────── */
@@ -735,16 +713,22 @@ onMounted(load);
 .ov-card-foot {
   display: flex;
   align-items: center;
-  gap: var(--space-4);
+  gap: var(--space-3);
   margin-top: var(--space-4);
 }
 .ov-next {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-size: var(--fs-12);
   color: var(--fg-muted);
   white-space: nowrap;
+}
+.ov-next :deep(svg) {
+  width: 14px;
+  height: 14px;
+  color: var(--fg-subtle);
+  flex: none;
 }
 
 /* ── Progress (pt-progress wird von patio-components.css bereitgestellt,

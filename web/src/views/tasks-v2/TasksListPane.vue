@@ -270,8 +270,8 @@ useEvents(["task"], () => load());
         <div
           class="ap-group-h"
           :class="{
-            'tasks-group--overdue': group.key === 'overdue',
-            'tasks-group--done': group.key === 'done',
+            'ap-group--overdue': group.key === 'overdue',
+            'ap-group--done': group.key === 'done',
           }"
         >
           <span v-if="group.key === 'overdue'" class="pt-dot pt-dot--danger"></span>
@@ -282,7 +282,7 @@ useEvents(["task"], () => load());
         </div>
 
         <!-- Task rows -->
-        <div class="pt-list" :class="{ 'tasks-list--done': group.key === 'done' }">
+        <div class="pt-list" :class="{ 'ap-group--done': group.key === 'done' }">
           <div
             v-for="task in group.tasks"
             :key="task.id"
@@ -296,13 +296,13 @@ useEvents(["task"], () => load());
             <input class="pt-check" type="checkbox" :checked="task.status === 'done'" @click.stop @change.stop />
             <div class="pt-list-grow">
               <div class="pt-li-title" :class="{ 'is-done': task.status === 'done' }">{{ task.text }}</div>
-              <div v-if="displayAssignee(task) || task.project" class="pt-li-meta">
+              <div v-if="displayAssignee(task) || task.project" class="pt-li-meta ap-proj-tag">
                 <b v-if="task.project">{{ task.project }}</b>
                 <template v-if="task.project && displayAssignee(task)"> · </template>
                 <span v-if="displayAssignee(task)">{{ displayAssignee(task) }}</span>
               </div>
             </div>
-            <div class="tasks-row-end">
+            <div class="ap-task-meta">
               <!-- Date badge -->
               <template v-if="task.date && task.status !== 'done'">
                 <span v-if="group.key === 'overdue'" class="pt-badge pt-badge--danger">
@@ -359,8 +359,12 @@ useEvents(["task"], () => load());
   padding: 0 var(--space-5);
 }
 
-.ap-group-h.tasks-group--overdue {
+.ap-group-h.ap-group--overdue {
   color: var(--danger-fg);
+}
+
+.pt-list + .ap-group-h {
+  margin-top: var(--space-8);
 }
 
 .pt-list {
@@ -371,11 +375,21 @@ useEvents(["task"], () => load());
   border-bottom: 1px solid var(--hairline);
 }
 
-.tasks-list--done .pt-list-item {
-  opacity: 0.72;
+.ap-group--done .pt-list-item {
+  opacity: 0.78;
 }
 
-.tasks-row-end {
+.ap-proj-tag {
+  font-size: var(--fs-12);
+  color: var(--fg-muted);
+}
+
+.ap-proj-tag b {
+  font-weight: var(--fw-medium);
+  color: var(--fg-body);
+}
+
+.ap-task-meta {
   display: flex;
   align-items: center;
   gap: var(--space-2);
