@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — TaskDetail
+// PATIO — TaskDetail
 // ============================================================
 // DetailPane einer Task. Status-Cycle, Felder editierbar,
 // Loeschen. Empty-State wenn keine Task ausgewaehlt.
@@ -168,156 +168,210 @@ loadAux();
     </template>
 
     <template #actions v-if="task">
-      <button class="v2-btn" @click="cycleStatus">
+      <!-- Status cycle button -->
+      <button class="pt-btn pt-btn--secondary pt-btn--sm" @click="cycleStatus">
         <StatusDot :status="statusToDot(task.status)" />
         {{ STATUS_LABELS[task.status] }}
       </button>
-      <button class="v2-icon-btn" title="Löschen" @click="removeTask">
-        <BIcon name="trash" :size="14" />
+      <!-- Delete -->
+      <button class="pt-iconbtn" title="Löschen" @click="removeTask">
+        <BIcon name="trash" :size="16" />
       </button>
-      <button class="v2-btn v2-btn-primary" :disabled="saving" :style="{ opacity: saving ? 0.5 : 1 }" @click="saveTask">
+      <!-- Save -->
+      <button
+        class="pt-btn pt-btn--primary pt-btn--sm"
+        :disabled="saving"
+        :class="{ 'is-loading': saving }"
+        @click="saveTask"
+      >
         {{ saving ? "Speichert…" : "Speichern" }}
       </button>
     </template>
 
-    <!-- Empty -->
-    <div
-      v-if="!taskId"
-      style="
-        height: 100%;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        color: var(--fg-muted);
-      "
-    >
-      <BIcon name="check" :size="32" />
-      <div style="font-size: 14px">Wähle eine Aufgabe aus der Liste links</div>
-      <div style="font-size: 12px; color: var(--fg-subtle)">oder lege mit dem Quick-Add unten eine neue an</div>
+    <!-- Empty — no task selected -->
+    <div v-if="!taskId" class="task-empty">
+      <p>Wähle eine Aufgabe aus der Liste links.</p>
     </div>
 
     <!-- Loading -->
-    <div v-else-if="loading" style="padding: 40px; text-align: center; color: var(--fg-muted)">Lade…</div>
+    <div v-else-if="loading" class="task-loading">Lade…</div>
 
-    <!-- Not found / Error -->
-    <div
-      v-else-if="error"
-      style="
-        padding: 12px 16px;
-        background: var(--status-error-bg);
-        color: var(--status-error);
-        border: 1px solid var(--status-error);
-        border-radius: 6px;
-      "
-    >
+    <!-- Error / Not found -->
+    <div v-else-if="error" class="task-error">
       {{ error }}
     </div>
 
-    <!-- Task-Detail-Form -->
-    <div v-else-if="task" style="max-width: 720px">
-      <!-- Title -->
-      <div style="margin-bottom: 24px">
-        <label class="h-eyebrow">Titel</label>
-        <input
-          v-model="task.text"
-          style="
-            width: 100%;
-            padding: 10px 14px;
-            border: 1px solid var(--border-default);
-            border-radius: 8px;
-            background: var(--bg-app);
-            color: var(--fg-primary);
-            font-size: 18px;
-            font-weight: 500;
-            outline: none;
-          "
-        />
+    <!-- Task detail form -->
+    <div v-else-if="task" class="task-form">
+      <!-- Title field -->
+      <div class="pt-field task-field--title">
+        <label class="pt-label" for="td-title">Titel</label>
+        <input id="td-title" v-model="task.text" class="pt-input task-input--title" />
       </div>
 
-      <!-- Felder-Grid -->
-      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px">
-        <div>
-          <label class="h-eyebrow">Verantwortlich</label>
+      <!-- Status badge row -->
+      <div class="task-status-row">
+        <span
+          :class="{
+            'pt-badge': true,
+            'pt-badge--warning': task.status === 'in_progress',
+            'pt-badge--success': task.status === 'done',
+          }"
+        >
+          <StatusDot :status="statusToDot(task.status)" />
+          {{ STATUS_LABELS[task.status] }}
+        </span>
+      </div>
+
+      <!-- Fields grid -->
+      <div class="task-grid">
+        <!-- Assignee -->
+        <div class="pt-field">
+          <label class="pt-label" for="td-assignee">Verantwortlich</label>
           <select
+            id="td-assignee"
             :value="task.assigneeId ?? ''"
+            class="pt-select"
             @change="onAssigneeChange(($event.target as HTMLSelectElement).value)"
-            style="
-              width: 100%;
-              padding: 8px 10px;
-              border: 1px solid var(--border-default);
-              border-radius: 6px;
-              background: var(--bg-app);
-              color: var(--fg-primary);
-              font-size: 13px;
-            "
           >
             <option value="">— niemand —</option>
             <option v-for="m in team" :key="m.id" :value="m.id">{{ m.name }}</option>
           </select>
         </div>
-        <div>
-          <label class="h-eyebrow">Fällig</label>
-          <input
-            v-model="task.date"
-            type="date"
-            style="
-              width: 100%;
-              padding: 8px 10px;
-              border: 1px solid var(--border-default);
-              border-radius: 6px;
-              background: var(--bg-app);
-              color: var(--fg-primary);
-              font-size: 13px;
-            "
-          />
+
+        <!-- Due date -->
+        <div class="pt-field">
+          <label class="pt-label" for="td-date">Fällig</label>
+          <input id="td-date" v-model="task.date" type="date" class="pt-input" />
         </div>
-        <div>
-          <label class="h-eyebrow">Projekt</label>
-          <select
-            v-model="task.project"
-            style="
-              width: 100%;
-              padding: 8px 10px;
-              border: 1px solid var(--border-default);
-              border-radius: 6px;
-              background: var(--bg-app);
-              color: var(--fg-primary);
-              font-size: 13px;
-            "
-          >
+
+        <!-- Project -->
+        <div class="pt-field">
+          <label class="pt-label" for="td-project">Projekt</label>
+          <select id="td-project" v-model="task.project" class="pt-select">
             <option :value="null">—</option>
             <option v-for="p in projects" :key="p" :value="p">{{ p }}</option>
           </select>
         </div>
-        <div>
-          <label class="h-eyebrow">Ort</label>
-          <input
-            v-model="task.location"
-            placeholder="(optional)"
-            style="
-              width: 100%;
-              padding: 8px 10px;
-              border: 1px solid var(--border-default);
-              border-radius: 6px;
-              background: var(--bg-app);
-              color: var(--fg-primary);
-              font-size: 13px;
-            "
-          />
+
+        <!-- Location -->
+        <div class="pt-field">
+          <label class="pt-label" for="td-location">Ort</label>
+          <input id="td-location" v-model="task.location" class="pt-input" placeholder="(optional)" />
         </div>
       </div>
 
-      <!-- Meta -->
-      <div class="v2-card v2-card-pad" style="margin-top: 8px">
-        <div class="h-eyebrow">Verlauf</div>
-        <div class="text-xs" style="color: var(--fg-muted); margin-top: 6px; line-height: 1.7">
-          <div>Erstellt: {{ new Date(task.createdAt).toLocaleString("de-AT") }}</div>
-          <div>Zuletzt geändert: {{ new Date(task.updatedAt).toLocaleString("de-AT") }}</div>
-          <div v-if="task.completedAt">Erledigt: {{ new Date(task.completedAt).toLocaleString("de-AT") }}</div>
+      <!-- History panel -->
+      <div class="ap-panel" style="margin-top: var(--space-4)">
+        <div class="ap-panel-head">
+          <span class="ap-panel-title">Verlauf</span>
+        </div>
+        <div class="ap-panel-body">
+          <dl class="task-history">
+            <dt>Erstellt</dt>
+            <dd>{{ new Date(task.createdAt).toLocaleString("de-AT") }}</dd>
+            <dt>Geändert</dt>
+            <dd>{{ new Date(task.updatedAt).toLocaleString("de-AT") }}</dd>
+            <template v-if="task.completedAt">
+              <dt>Erledigt</dt>
+              <dd>{{ new Date(task.completedAt).toLocaleString("de-AT") }}</dd>
+            </template>
+          </dl>
         </div>
       </div>
     </div>
   </DetailPane>
 </template>
+
+<style scoped>
+/* ── Empty / Loading / Error ──────────────────────────────── */
+.task-empty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-6);
+  text-align: center;
+}
+.task-empty p {
+  font-size: var(--fs-14);
+  color: var(--fg-subtle);
+  margin: 0;
+}
+
+.task-loading {
+  padding: var(--space-10) var(--space-6);
+  text-align: center;
+  font-size: var(--fs-13);
+  color: var(--fg-muted);
+}
+
+.task-error {
+  margin: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  font-size: var(--fs-13);
+}
+
+/* ── Form layout ──────────────────────────────────────────── */
+.task-form {
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.task-field--title .pt-label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-11);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-label);
+  color: var(--fg-subtle);
+  font-weight: var(--fw-medium);
+}
+
+.task-input--title {
+  height: 44px;
+  font-size: var(--fs-18);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--tracking-tight);
+}
+
+.task-status-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.task-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+
+/* ── History list ─────────────────────────────────────────── */
+.task-history {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  font-size: var(--fs-13);
+  line-height: var(--lh-normal);
+}
+.task-history dt {
+  color: var(--fg-muted);
+}
+.task-history dd {
+  margin: 0;
+  color: var(--fg-body);
+}
+
+@media (max-width: 640px) {
+  .task-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

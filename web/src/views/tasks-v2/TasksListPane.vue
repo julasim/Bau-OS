@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — TasksListPane
+// PATIO — TasksListPane
 // ============================================================
 // ListPane fuer Tasks. Tabs: Alle / Offen / In Arbeit / Erledigt.
 // Quick-Add unten. Klick auf Task → /tasks/:id (Detail rechts).
@@ -105,6 +105,84 @@ function fmtDate(iso: string | null): string {
   return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit" });
 }
 
+// Group tasks by due date bucket
+type Bucket = "overdue" | "today" | "this_week" | "later" | "no_date" | "done";
+
+function dateBucket(t: Task): Bucket {
+  if (t.status === "done") return "done";
+  if (!t.date) return "no_date";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const due = new Date(t.date.includes("T") ? t.date : t.date + "T00:00:00");
+  due.setHours(0, 0, 0, 0);
+  const diff = Math.round((due.getTime() - today.getTime()) / 86400000);
+  if (diff < 0) return "overdue";
+  if (diff === 0) return "today";
+  // within the next 7 days (same week)
+  if (diff <= 6) return "this_week";
+  return "later";
+}
+
+const BUCKET_ORDER: Bucket[] = ["overdue", "today", "this_week", "later", "no_date", "done"];
+const BUCKET_LABELS: Record<Bucket, string> = {
+  overdue: "Überfällig",
+  today: "Heute",
+  this_week: "Diese Woche",
+  later: "Später",
+  no_date: "Kein Datum",
+  done: "Erledigt",
+};
+
+const grouped = computed(() => {
+  const buckets: Record<Bucket, Task[]> = {
+    overdue: [],
+    today: [],
+    this_week: [],
+    later: [],
+    no_date: [],
+    done: [],
+  };
+  for (const t of filtered.value) {
+    buckets[dateBucket(t)].push(t);
+  }
+  return BUCKET_ORDER.map((key) => ({ key, label: BUCKET_LABELS[key], tasks: buckets[key] })).filter(
+    (g) => g.tasks.length > 0,
+  );
+});
+
+// unique project list for filter dropdown
+const projectOptions = computed(() => {
+  const seen = new Set<string>();
+  for (const t of tasks.value) {
+    if (t.project) seen.add(t.project);
+  }
+  return [...seen].sort();
+});
+
+const projectFilter = ref("");
+
+const filteredByProject = computed(() => {
+  if (!projectFilter.value) return filtered.value;
+  return filtered.value.filter((t) => t.project === projectFilter.value);
+});
+
+const groupedFiltered = computed(() => {
+  const buckets: Record<Bucket, Task[]> = {
+    overdue: [],
+    today: [],
+    this_week: [],
+    later: [],
+    no_date: [],
+    done: [],
+  };
+  for (const t of filteredByProject.value) {
+    buckets[dateBucket(t)].push(t);
+  }
+  return BUCKET_ORDER.map((key) => ({ key, label: BUCKET_LABELS[key], tasks: buckets[key] })).filter(
+    (g) => g.tasks.length > 0,
+  );
+});
+
 onMounted(load);
 useEvents(["task"], () => load());
 </script>
@@ -126,115 +204,195 @@ useEvents(["task"], () => load());
     :active-tab="tab"
     @tab-change="tab = $event as Tab"
   >
-    <button
-      v-for="task in filtered"
-      :key="task.id"
-      class="list-item"
-      :data-active="task.id === activeId"
-      @click="openTask(task.id)"
-    >
-      <div class="li-top" style="align-items: center">
-        <StatusDot :status="statusToDot(task.status)" />
-        <span class="li-title">{{ task.text }}</span>
-        <span v-if="task.date" class="li-time">{{ fmtDate(task.date) }}</span>
+    <!-- Page header -->
+    <div class="tasks-pagehead">
+      <div class="tasks-kpis">
+        <div class="ap-kpi">
+          <span class="ap-kpi-val">{{ counts.open }}</span>
+          <span class="ap-kpi-lbl">Offen</span>
+        </div>
+        <div class="ap-kpi">
+          <span class="ap-kpi-val">{{ counts.in_progress }}</span>
+          <span class="ap-kpi-lbl">In Arbeit</span>
+        </div>
+        <div class="ap-kpi">
+          <span class="ap-kpi-val">{{ counts.done }}</span>
+          <span class="ap-kpi-lbl">Erledigt</span>
+        </div>
       </div>
-      <div v-if="displayAssignee(task) || task.project" class="li-meta">
-        <span v-if="displayAssignee(task)">{{ displayAssignee(task) }}</span>
-        <span v-if="displayAssignee(task) && task.project">·</span>
-        <span v-if="task.project">{{ task.project }}</span>
-      </div>
-    </button>
-
-    <div v-if="filtered.length === 0" class="empty-state">
-      <template v-if="search">
-        <div class="empty-icon">🔍</div>
-        <p class="empty-title">Keine Treffer</p>
-        <p class="empty-sub">Keine Aufgaben für „{{ search }}"</p>
-      </template>
-      <template v-else-if="tab === 'open'">
-        <div class="empty-icon">☑️</div>
-        <p class="empty-title">Alles erledigt</p>
-        <p class="empty-sub">Keine offenen Aufgaben — gut gemacht.</p>
-      </template>
-      <template v-else-if="tab === 'done'">
-        <div class="empty-icon">✓</div>
-        <p class="empty-title">Noch nichts erledigt</p>
-        <p class="empty-sub">Abgeschlossene Aufgaben erscheinen hier.</p>
-      </template>
-      <template v-else>
-        <div class="empty-icon">☑️</div>
-        <p class="empty-title">Noch keine Aufgaben</p>
-        <p class="empty-sub">Trage unten deine erste Aufgabe ein.</p>
-      </template>
     </div>
 
-    <!-- Quick-Add unten  -->
-    <div
-      style="
-        margin-top: auto;
-        padding: 8px;
-        border-top: 1px solid var(--list-border);
-        background: var(--list-bg);
-        position: sticky;
-        bottom: 0;
-      "
-    >
-      <input
-        v-model="newText"
-        placeholder="+ Neue Aufgabe (Enter)"
-        @keyup.enter="quickAdd"
-        style="
-          width: 100%;
-          padding: 8px 10px;
-          border: 1px solid var(--border-default);
-          border-radius: 6px;
-          background: var(--bg-app);
-          color: var(--fg-primary);
-          font-size: 13px;
-          outline: none;
-        "
-      />
+    <!-- Toolbar -->
+    <div class="ap-toolbar">
+      <!-- Status segment -->
+      <div class="pt-segment" aria-label="Status filtern">
+        <button type="button" :class="{ 'is-active': tab === 'all' }" @click="tab = 'all'">Alle</button>
+        <button type="button" :class="{ 'is-active': tab === 'open' }" @click="tab = 'open'">Offen</button>
+        <button type="button" :class="{ 'is-active': tab === 'in_progress' }" @click="tab = 'in_progress'">
+          In Arbeit
+        </button>
+        <button type="button" :class="{ 'is-active': tab === 'done' }" @click="tab = 'done'">Erledigt</button>
+      </div>
+
+      <!-- Project filter -->
+      <div class="ap-filter">
+        <select v-model="projectFilter" class="pt-select" aria-label="Nach Projekt filtern">
+          <option value="">Alle Projekte</option>
+          <option v-for="p in projectOptions" :key="p" :value="p">{{ p }}</option>
+        </select>
+      </div>
+
+      <span class="pt-spacer"></span>
+
+      <!-- New task button (triggers quickAdd inline or can be extended) -->
+      <button
+        class="pt-btn pt-btn--primary pt-btn--sm"
+        type="button"
+        @click="$el.querySelector('.tasks-quickadd input')?.focus()"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          stroke-width="1.5"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        Neue Aufgabe
+      </button>
+    </div>
+
+    <!-- Grouped task list -->
+    <template v-if="groupedFiltered.length > 0">
+      <template v-for="group in groupedFiltered" :key="group.key">
+        <!-- Group header -->
+        <div
+          class="ap-group-h"
+          :class="{
+            'tasks-group--overdue': group.key === 'overdue',
+            'tasks-group--done': group.key === 'done',
+          }"
+        >
+          <span v-if="group.key === 'overdue'" class="pt-dot pt-dot--danger"></span>
+          <span v-else-if="group.key === 'today'" class="pt-dot pt-dot--warning"></span>
+          {{ group.label }}
+          <span class="ct">· {{ group.tasks.length }}</span>
+          <span class="ln"></span>
+        </div>
+
+        <!-- Task rows -->
+        <div class="pt-list" :class="{ 'tasks-list--done': group.key === 'done' }">
+          <div
+            v-for="task in group.tasks"
+            :key="task.id"
+            class="pt-list-item"
+            :class="{ 'is-selected': task.id === activeId }"
+            role="button"
+            tabindex="0"
+            @click="openTask(task.id)"
+            @keyup.enter="openTask(task.id)"
+          >
+            <input class="pt-check" type="checkbox" :checked="task.status === 'done'" @click.stop @change.stop />
+            <div class="pt-list-grow">
+              <div class="pt-li-title" :class="{ 'is-done': task.status === 'done' }">{{ task.text }}</div>
+              <div v-if="displayAssignee(task) || task.project" class="pt-li-meta">
+                <b v-if="task.project">{{ task.project }}</b>
+                <template v-if="task.project && displayAssignee(task)"> · </template>
+                <span v-if="displayAssignee(task)">{{ displayAssignee(task) }}</span>
+              </div>
+            </div>
+            <div class="tasks-row-end">
+              <!-- Date badge -->
+              <template v-if="task.date && task.status !== 'done'">
+                <span v-if="group.key === 'overdue'" class="pt-badge pt-badge--danger">
+                  <span class="pt-dot pt-dot--danger"></span>
+                  {{ fmtDate(task.date) }}
+                </span>
+                <span v-else-if="group.key === 'today'" class="pt-badge pt-badge--warning">
+                  <span class="pt-dot pt-dot--warning"></span>
+                  heute
+                </span>
+                <span v-else class="pt-badge">{{ fmtDate(task.date) }}</span>
+              </template>
+              <span v-if="task.status === 'done'" class="pt-badge pt-badge--success">erledigt</span>
+            </div>
+          </div>
+        </div>
+      </template>
+    </template>
+
+    <!-- Empty state -->
+    <div v-else class="ap-empty" style="display: block">
+      <p v-if="search || projectFilter">Keine Aufgaben für diese Filter.</p>
+      <p v-else-if="tab === 'open'">Keine offenen Aufgaben vorhanden.</p>
+      <p v-else-if="tab === 'done'">Noch keine Aufgaben abgeschlossen.</p>
+      <p v-else>Noch keine Aufgaben angelegt.</p>
+    </div>
+
+    <!-- Quick-Add -->
+    <div class="tasks-quickadd">
+      <input v-model="newText" class="pt-input" placeholder="+ Neue Aufgabe (Enter)" @keyup.enter="quickAdd" />
     </div>
   </ListPane>
 </template>
 
 <style scoped>
-.empty-state {
+.tasks-pagehead {
+  padding: var(--space-4) var(--space-5) 0;
+}
+
+.tasks-kpis {
   display: flex;
-  flex-direction: column;
+  gap: var(--space-8);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.ap-toolbar {
+  padding: var(--space-4) var(--space-5);
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.ap-group-h {
+  padding: 0 var(--space-5);
+}
+
+.ap-group-h.tasks-group--overdue {
+  color: var(--danger-fg);
+}
+
+.pt-list {
+  border-radius: 0;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.tasks-list--done .pt-list-item {
+  opacity: 0.72;
+}
+
+.tasks-row-end {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 48px 24px;
-  text-align: center;
-  color: var(--fg-muted);
+  gap: var(--space-2);
+  flex: none;
 }
-.empty-icon {
-  font-size: 32px;
-  margin-bottom: 4px;
+
+.tasks-quickadd {
+  margin-top: auto;
+  padding: var(--space-3) var(--space-5);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  bottom: 0;
 }
-.empty-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--fg-secondary);
-  margin: 0;
-}
-.empty-sub {
-  font-size: 12px;
-  margin: 0;
-}
-.empty-cta {
-  margin-top: 8px;
-  padding: 7px 16px;
-  background: var(--fg-primary);
-  color: var(--bg-app);
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.empty-cta:hover {
-  opacity: 0.85;
+
+.tasks-quickadd .pt-input {
+  height: 32px;
+  font-size: var(--fs-13);
 }
 </style>
