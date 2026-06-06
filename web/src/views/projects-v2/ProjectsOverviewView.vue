@@ -523,10 +523,10 @@ onMounted(load);
 <style scoped>
 /* ── Wrapper ─────────────────────────────────────────────── */
 .ov-wrap {
-  padding: var(--space-8);
-  max-width: 1120px;
-  margin: 0 auto;
-  padding-bottom: var(--space-16);
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: var(--space-8) var(--space-10) var(--space-16);
 }
 
 /* ── Seiten-Kopf ─────────────────────────────────────────── */

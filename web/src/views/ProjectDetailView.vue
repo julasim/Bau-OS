@@ -4125,11 +4125,12 @@ async function deleteMeeting() {
 }
 
 /* ── Back-Link ──────────────────────────────────────────── */
-/* ── Vollbreit-Wrapper, zentriert (Referenz: max 1120px) ──── */
+/* ── Vollbreit-Wrapper — füllt die gesamte Arbeitsfläche ──── */
 .proj-detail-page {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: var(--space-8, 32px) var(--space-8, 32px) var(--space-16, 64px);
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: var(--space-8, 32px) var(--space-10, 40px) var(--space-16, 64px);
   color: var(--color-text);
 }
 
