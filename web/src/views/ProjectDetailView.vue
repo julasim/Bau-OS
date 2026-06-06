@@ -2402,6 +2402,22 @@ async function deleteMeeting() {
                 <span>Drucken / Als PDF…</span>
               </button>
               <div class="action-menu-divider"></div>
+              <button class="action-menu-item" @click="((showActionMenu = false), (moduleSettingsOpen = true))">
+                <BIcon name="settings" :size="12" />
+                <span>Module konfigurieren…</span>
+                <span
+                  v-if="moduleHasOverride"
+                  style="
+                    margin-left: auto;
+                    width: 6px;
+                    height: 6px;
+                    border-radius: 50%;
+                    background: var(--color-warning, #f59e0b);
+                  "
+                  title="Override aktiv"
+                ></span>
+              </button>
+              <div class="action-menu-divider"></div>
               <button class="action-menu-item action-menu-danger" @click="openDeleteConfirm">
                 <BIcon name="x" :size="12" />
                 <span>Projekt löschen…</span>
@@ -2454,118 +2470,45 @@ async function deleteMeeting() {
     <!-- Stammdaten-Editor + Verknuepfungen liegen jetzt im Uebersicht-Panel
          (Design-System-Referenz: zwischen ap-phead und Tabs steht nichts). -->
 
-    <!-- ═══ Tab-Nav (pt-tabs) ════════════════════════════════════ -->
-    <div class="ap-tabs">
-      <div class="pt-tabs tab-nav">
-        <template
-          v-for="t in [
-            'uebersicht',
-            'notes',
-            'tasks',
-            'termine',
-            'files',
-            'team',
-            'bautagebuch',
-            'meetings',
-            'stunden',
-            'verlauf',
-            'zugriff',
-          ] as const"
-          :key="t"
-        >
-          <button
-            v-if="(t !== 'zugriff' || isAdmin) && tabVisible(t)"
-            @click="openTab(t)"
-            :class="['pt-tab', tab === t ? 'is-active' : '']"
+    <!-- Tab-Leiste entfernt — Navigation läuft über die Projekt-Sidebar (NavRail).
+         Modul-Konfig-Popover bleibt erhalten; Trigger sitzt im Header-„…"-Menü. -->
+    <div v-if="moduleSettingsOpen" @click.self="moduleSettingsOpen = false" class="pm-popover-overlay">
+      <div class="pm-popover" @click.stop>
+        <div class="flex items-center justify-between" style="margin-bottom: 12px">
+          <div style="font-size: 13px; font-weight: 600">Module für dieses Projekt</div>
+          <button @click="moduleSettingsOpen = false" class="bauos-btn ghost sm">×</button>
+        </div>
+        <p class="text-xs" style="color: var(--color-text-muted); margin: 0 0 12px">
+          Tabs deaktivieren die für dieses Projekt nicht relevant sind. Die Daten bleiben erhalten — nur die UI-Anzeige
+          verschwindet.
+        </p>
+        <div class="settings-card settings-divide">
+          <label
+            v-for="m in PROJECT_MODULE_LIST"
+            :key="m.key"
+            class="settings-row flex items-center justify-between gap-3 px-3 py-2 cursor-pointer"
           >
-            {{
-              t === "uebersicht"
-                ? "Übersicht"
-                : t === "notes"
-                  ? "Notizen"
-                  : t === "tasks"
-                    ? "Aufgaben"
-                    : t === "termine"
-                      ? "Termine"
-                      : t === "files"
-                        ? "Dateien"
-                        : t === "team"
-                          ? "Team"
-                          : t === "bautagebuch"
-                            ? "Bautagebuch"
-                            : t === "meetings"
-                              ? "Meetings"
-                              : t === "stunden"
-                                ? "Stunden"
-                                : t === "verlauf"
-                                  ? "Verlauf"
-                                  : "Zugriff"
-            }}
-          </button>
-        </template>
-
-        <!-- Module konfigurieren (Phase 6e) -->
-        <div style="margin-left: auto; position: relative">
+            <span style="font-size: 13px">{{ m.label }}</span>
+            <input
+              type="checkbox"
+              :checked="moduleFlags[m.key]"
+              :disabled="moduleBusy"
+              @change="setProjectModule(m.key, ($event.target as HTMLInputElement).checked)"
+            />
+          </label>
+        </div>
+        <div class="flex items-center justify-between" style="margin-top: 12px; gap: 8px">
           <button
-            @click="moduleSettingsOpen = !moduleSettingsOpen"
-            class="pt-tab"
-            :title="moduleHasOverride ? 'Module konfigurieren — Override aktiv' : 'Module konfigurieren'"
-            style="padding: 8px 10px"
+            v-if="moduleHasOverride"
+            @click="resetProjectModulesToGlobal"
+            :disabled="moduleBusy"
+            class="bauos-btn ghost sm"
+            title="Override entfernen — globale Defaults gelten"
           >
-            <BIcon name="settings" :size="13" />
-            <span
-              v-if="moduleHasOverride"
-              style="
-                display: inline-block;
-                width: 6px;
-                height: 6px;
-                border-radius: 50%;
-                background: var(--color-primary, #f59e0b);
-                margin-left: 4px;
-              "
-              title="Override fuer dieses Projekt aktiv"
-            ></span>
+            Auf Default zurücksetzen
           </button>
-          <div v-if="moduleSettingsOpen" @click.self="moduleSettingsOpen = false" class="pm-popover-overlay">
-            <div class="pm-popover" @click.stop>
-              <div class="flex items-center justify-between" style="margin-bottom: 12px">
-                <div style="font-size: 13px; font-weight: 600">Module für dieses Projekt</div>
-                <button @click="moduleSettingsOpen = false" class="bauos-btn ghost sm">×</button>
-              </div>
-              <p class="text-xs" style="color: var(--color-text-muted); margin: 0 0 12px">
-                Tabs deaktivieren die für dieses Projekt nicht relevant sind. Die Daten bleiben erhalten — nur die
-                UI-Anzeige verschwindet.
-              </p>
-              <div class="settings-card settings-divide">
-                <label
-                  v-for="m in PROJECT_MODULE_LIST"
-                  :key="m.key"
-                  class="settings-row flex items-center justify-between gap-3 px-3 py-2 cursor-pointer"
-                >
-                  <span style="font-size: 13px">{{ m.label }}</span>
-                  <input
-                    type="checkbox"
-                    :checked="moduleFlags[m.key]"
-                    :disabled="moduleBusy"
-                    @change="setProjectModule(m.key, ($event.target as HTMLInputElement).checked)"
-                  />
-                </label>
-              </div>
-              <div class="flex items-center justify-between" style="margin-top: 12px; gap: 8px">
-                <button
-                  v-if="moduleHasOverride"
-                  @click="resetProjectModulesToGlobal"
-                  :disabled="moduleBusy"
-                  class="bauos-btn ghost sm"
-                  title="Override entfernen — globale Defaults gelten"
-                >
-                  Auf Default zurücksetzen
-                </button>
-                <span v-else class="text-xs" style="color: var(--color-text-tertiary)"> Globale Defaults aktiv </span>
-                <button @click="moduleSettingsOpen = false" class="bauos-btn solid sm">Schließen</button>
-              </div>
-            </div>
-          </div>
+          <span v-else class="text-xs" style="color: var(--color-text-tertiary)"> Globale Defaults aktiv </span>
+          <button @click="moduleSettingsOpen = false" class="bauos-btn solid sm">Schließen</button>
         </div>
       </div>
     </div>

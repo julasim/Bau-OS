@@ -54,13 +54,22 @@ interface ProjNavItem {
   tab: string;
   label: string;
   icon: string;
+  adminOnly?: boolean;
 }
 const PROJECT_NAV: ProjNavItem[] = [
   { tab: "uebersicht", label: "Übersicht", icon: "grid" },
+  { tab: "notes", label: "Notizen", icon: "pencil" },
   { tab: "tasks", label: "Aufgaben", icon: "check" },
   { tab: "termine", label: "Termine", icon: "calendar" },
-  { tab: "files", label: "Akten", icon: "folder" },
+  { tab: "files", label: "Dateien", icon: "file" },
+  { tab: "team", label: "Team", icon: "users" },
+  { tab: "bautagebuch", label: "Bautagebuch", icon: "book" },
+  { tab: "meetings", label: "Meetings", icon: "kanban" },
+  { tab: "stunden", label: "Stunden", icon: "clock" },
+  { tab: "verlauf", label: "Verlauf", icon: "layers" },
+  { tab: "zugriff", label: "Zugriff", icon: "lock", adminOnly: true },
 ];
+const visibleProjectNav = computed(() => PROJECT_NAV.filter((it) => !it.adminOnly || isAdmin.value));
 
 function goProjectTab(t: string) {
   router.push({
@@ -136,7 +145,7 @@ onMounted(() => void loadBranding());
       <div class="pt-nav-section">
         <span class="pt-nav-label">{{ projectName }}</span>
         <button
-          v-for="it in PROJECT_NAV"
+          v-for="it in visibleProjectNav"
           :key="it.tab"
           class="pt-nav-item"
           :class="{ 'is-active': currentTab === it.tab }"
