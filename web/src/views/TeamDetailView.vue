@@ -679,8 +679,11 @@ onUnmounted(() => {
               {{ u.displayName ?? u.username }} ({{ u.username }})
             </option>
           </select>
-          <span v-if="member.username" style="font-size: 11px; color: var(--color-text-muted)">
-            ✓ verknüpft mit @{{ member.username }}
+          <span
+            v-if="member.username"
+            style="font-size: 11px; color: var(--color-text-muted); display: inline-flex; align-items: center; gap: 4px"
+          >
+            <BIcon name="check" :size="11" />verknüpft mit @{{ member.username }}
           </span>
         </div>
       </div>
@@ -913,8 +916,12 @@ onUnmounted(() => {
           {{ member.companyName ?? member.company }}
         </div>
         <div class="bc-contact">
-          <div v-if="member.email">✉ {{ member.email }}</div>
-          <div v-if="member.phone">☏ {{ member.phone }}</div>
+          <div v-if="member.email" style="display: inline-flex; align-items: center; gap: 6px">
+            <BIcon name="mail" :size="13" />{{ member.email }}
+          </div>
+          <div v-if="member.phone" style="display: inline-flex; align-items: center; gap: 6px">
+            <BIcon name="phone" :size="13" />{{ member.phone }}
+          </div>
         </div>
       </div>
     </div>

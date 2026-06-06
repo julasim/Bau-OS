@@ -12,6 +12,7 @@ import { useRoute, useRouter } from "vue-router";
 import { api } from "../../api";
 import { useEvents } from "../../composables/useEvents";
 import ListPane from "../../components/shell/ListPane.vue";
+import BIcon from "../../components/BIcon.vue";
 
 interface NoteSummary {
   title: string;
@@ -131,12 +132,12 @@ useEvents(["note"], () => load());
 
     <div v-if="filtered.length === 0" class="empty-state">
       <template v-if="search">
-        <div class="empty-icon">🔍</div>
+        <div class="empty-icon"><BIcon name="search" :size="24" /></div>
         <p class="empty-title">Keine Treffer</p>
         <p class="empty-sub">Keine Notizen für „{{ search }}"</p>
       </template>
       <template v-else>
-        <div class="empty-icon">📝</div>
+        <div class="empty-icon"><BIcon name="pencil" :size="24" /></div>
         <p class="empty-title">Noch keine Notizen</p>
         <p class="empty-sub">Lege deine erste Notiz an um loszulegen.</p>
         <button class="empty-cta" @click="createNote">+ Erste Notiz</button>

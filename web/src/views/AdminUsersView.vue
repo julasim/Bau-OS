@@ -482,9 +482,11 @@ function formatDate(iso?: string) {
                   {{ u.role === "admin" ? "Admin" : "Nutzer" }}
                 </button>
                 <span class="user-meta-text">
-                  {{ u.hasTelegram ? "✓ Telegram" : "kein Telegram" }}
+                  {{ u.hasTelegram ? "Telegram verknüpft" : "kein Telegram" }}
                 </span>
-                <span class="user-meta-text font-mono">📅 {{ formatDate(u.createdAt) }}</span>
+                <span class="user-meta-text font-mono" style="display: inline-flex; align-items: center; gap: 4px">
+                  <BIcon name="calendar" :size="10" />{{ formatDate(u.createdAt) }}
+                </span>
               </div>
             </div>
           </div>
@@ -499,8 +501,12 @@ function formatDate(iso?: string) {
               {{ u.role === "admin" ? "Admin" : "Nutzer" }}
             </button>
           </div>
-          <div class="user-col-telegram" style="width: 70px; font-size: 11px; color: var(--color-text-muted)">
-            {{ u.hasTelegram ? "✓" : "—" }}
+          <div
+            class="user-col-telegram"
+            style="width: 70px; font-size: 11px; color: var(--color-text-muted); display: flex; align-items: center"
+          >
+            <BIcon v-if="u.hasTelegram" name="check" :size="13" />
+            <span v-else>—</span>
           </div>
           <div class="user-col-date font-mono" style="width: 100px; font-size: 11px; color: var(--color-text-tertiary)">
             {{ formatDate(u.createdAt) }}
@@ -732,7 +738,7 @@ function formatDate(iso?: string) {
                 </div>
               </template>
               <div v-else style="font-size: 12px; color: var(--color-warning-text, #b45309)">
-                ⚠ Kein Bot bekannt. Wenn der User einen <strong>eigenen Bot</strong> nutzen soll, muss er sich erst
+                Kein Bot bekannt. Wenn der User einen <strong>eigenen Bot</strong> nutzen soll, muss er sich erst
                 einloggen → Settings → „Mein Telegram-Bot" einrichten. Sonst muss der
                 <code class="inline-cmd">BOT_TOKEN</code> in der <code class="inline-cmd">.env</code> gesetzt sein.
               </div>
@@ -755,7 +761,7 @@ function formatDate(iso?: string) {
                   color: copyMessage.type === 'success' ? 'var(--color-success-text)' : 'var(--color-danger-text)',
                 }"
               >
-                {{ copyMessage.type === "success" ? "✓ " : "⚠ " }}{{ copyMessage.text }}
+                {{ copyMessage.text }}
               </div>
             </div>
           </div>
@@ -811,7 +817,7 @@ function formatDate(iso?: string) {
             </div>
             <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px">
               <template v-if="botStatus.chatId">
-                ✓ gepairt mit Chat
+                gepairt mit Chat
                 <span class="font-mono">{{ botStatus.chatId }}</span>
               </template>
               <template v-else-if="botStatus.botRunning">

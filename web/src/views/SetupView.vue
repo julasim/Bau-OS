@@ -260,7 +260,22 @@ async function submit() {
               gap: 8px;
             "
           >
-            <span>🔒</span>
+            <span style="display: inline-flex; align-items: center">
+              <svg
+                viewBox="0 0 24 24"
+                width="12"
+                height="12"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+            </span>
             <span>
               Direkter Setup-Modus — nur erreichbar, solange kein Konto existiert.
               <span class="font-mono" style="color: var(--color-text)">{{ hostname }}</span>

@@ -382,7 +382,7 @@ const statCards = computed(() => [
         class="empty-state"
         style="border: 1px dashed var(--color-border); border-radius: 8px"
       >
-        <div class="empty-state-icon">📂</div>
+        <div class="empty-state-icon"><BIcon name="folder" :size="26" /></div>
         <div class="empty-state-text">Noch keine Projekte. Im Chat ("leg ein Projekt … an") oder direkt anlegen.</div>
         <router-link to="/projects" class="bauos-btn solid sm" style="text-decoration: none">
           <BIcon name="plus" :size="11" :stroke-width="2" />

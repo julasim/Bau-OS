@@ -486,15 +486,15 @@ const convertError = ref<string | null>(null);
 
 // ── Bautagebuch (Migration 011) ───────────────────────────
 type WeatherKey = "sonnig" | "bewoelkt" | "regen" | "schnee" | "sturm" | "nebel" | "frost" | "hagel";
-const WEATHER_OPTIONS: { value: WeatherKey; label: string; icon: string }[] = [
-  { value: "sonnig", label: "Sonnig", icon: "☀" },
-  { value: "bewoelkt", label: "Bewölkt", icon: "☁" },
-  { value: "regen", label: "Regen", icon: "🌧" },
-  { value: "schnee", label: "Schnee", icon: "❄" },
-  { value: "sturm", label: "Sturm", icon: "🌪" },
-  { value: "nebel", label: "Nebel", icon: "🌫" },
-  { value: "frost", label: "Frost", icon: "❄" },
-  { value: "hagel", label: "Hagel", icon: "🌨" },
+const WEATHER_OPTIONS: { value: WeatherKey; label: string }[] = [
+  { value: "sonnig", label: "Sonnig" },
+  { value: "bewoelkt", label: "Bewölkt" },
+  { value: "regen", label: "Regen" },
+  { value: "schnee", label: "Schnee" },
+  { value: "sturm", label: "Sturm" },
+  { value: "nebel", label: "Nebel" },
+  { value: "frost", label: "Frost" },
+  { value: "hagel", label: "Hagel" },
 ];
 interface BautagebuchPersonnel {
   memberId?: string | null;
@@ -1569,9 +1569,9 @@ function formatBautagDate(iso: string): string {
   const wochentage = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
   return `${wochentage[d.getDay()]} ${String(d.getDate()).padStart(2, "0")}.${String(d.getMonth() + 1).padStart(2, "0")}.${d.getFullYear()}`;
 }
-function weatherIcon(w: WeatherKey | null | undefined): string {
+function weatherLabel(w: WeatherKey | null | undefined): string {
   if (!w) return "·";
-  return WEATHER_OPTIONS.find((o) => o.value === w)?.icon ?? "·";
+  return WEATHER_OPTIONS.find((o) => o.value === w)?.label ?? "·";
 }
 
 async function loadBautagebuch() {
@@ -2909,7 +2909,7 @@ async function deleteMeeting() {
           </button>
         </div>
         <div v-else class="empty-state">
-          <div class="empty-state-icon">📝</div>
+          <div class="empty-state-icon"><BIcon name="pencil" :size="26" /></div>
           <div class="empty-state-text">Noch keine Notizen für dieses Projekt.</div>
           <router-link
             :to="`/notes?project=${encodeURIComponent(projectName)}`"
@@ -2973,7 +2973,7 @@ async function deleteMeeting() {
         </div>
       </div>
       <div v-else class="empty-state">
-        <div class="empty-state-icon">📋</div>
+        <div class="empty-state-icon"><BIcon name="check" :size="26" /></div>
         <div class="empty-state-text">Noch keine offenen Aufgaben in diesem Projekt.</div>
         <button class="bauos-btn solid sm" @click="focusNewTaskInput">
           <BIcon name="plus" :size="11" :stroke-width="2" />
@@ -3027,7 +3027,7 @@ async function deleteMeeting() {
         </div>
       </div>
       <div v-else class="empty-state">
-        <div class="empty-state-icon">📅</div>
+        <div class="empty-state-icon"><BIcon name="calendar" :size="26" /></div>
         <div class="empty-state-text">Noch keine Termine in diesem Projekt.</div>
         <button class="bauos-btn solid sm" @click="focusNewTerminInput">
           <BIcon name="plus" :size="11" :stroke-width="2" />
@@ -3281,13 +3281,15 @@ async function deleteMeeting() {
               @click="selectBautagebuch(e.date)"
             >
               <div class="bt-row-date">
-                <span class="bt-row-icon">{{ weatherIcon(e.weather) }}</span>
+                <span class="bt-row-icon">{{ weatherLabel(e.weather) }}</span>
                 <span>{{ formatBautagDate(e.date) }}</span>
               </div>
               <div class="bt-row-summary">
                 {{ e.activities ? e.activities.split("\n")[0].slice(0, 80) : "(keine Tätigkeiten)" }}
               </div>
-              <div v-if="e.incidents" class="bt-row-incident">⚠ {{ e.incidents.split("\n")[0].slice(0, 60) }}</div>
+              <div v-if="e.incidents" class="bt-row-incident">
+                <BIcon name="info" :size="12" /> {{ e.incidents.split("\n")[0].slice(0, 60) }}
+              </div>
             </div>
           </div>
 
@@ -3341,7 +3343,7 @@ async function deleteMeeting() {
               <label class="bt-label">Wetter</label>
               <select v-model="bautagebuchDraft.weather" class="stamm-input" style="max-width: 220px">
                 <option value="">— wählen —</option>
-                <option v-for="w in WEATHER_OPTIONS" :key="w.value" :value="w.value">{{ w.icon }} {{ w.label }}</option>
+                <option v-for="w in WEATHER_OPTIONS" :key="w.value" :value="w.value">{{ w.label }}</option>
               </select>
             </div>
 
@@ -3723,7 +3725,7 @@ async function deleteMeeting() {
         </div>
 
         <div v-if="timeEntries.length === 0 && !timeDraft" class="empty-state" style="margin-top: 16px">
-          <div class="empty-state-icon">⏱</div>
+          <div class="empty-state-icon"><BIcon name="clock" :size="26" /></div>
           <div class="empty-state-text">Noch keine Stunden für dieses Projekt erfasst.</div>
           <button class="bauos-btn solid sm" @click="newTimeEntry">
             <BIcon name="plus" :size="11" :stroke-width="2" />

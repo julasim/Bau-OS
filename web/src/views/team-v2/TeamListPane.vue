@@ -10,6 +10,7 @@ import { useRoute, useRouter } from "vue-router";
 import { api } from "../../api";
 import ListPane from "../../components/shell/ListPane.vue";
 import Avatar from "../../components/shell/Avatar.vue";
+import BIcon from "../../components/BIcon.vue";
 
 type MemberType = "Intern" | "Planer" | "Ausführende" | "Behörde" | "Lieferant" | "Bauherr";
 
@@ -196,12 +197,12 @@ onMounted(load);
 
     <div v-if="filtered.length === 0" class="empty-state">
       <template v-if="search">
-        <div class="empty-icon">🔍</div>
+        <div class="empty-icon"><BIcon name="search" :size="24" /></div>
         <p class="empty-title">Keine Treffer</p>
         <p class="empty-sub">Keine Mitglieder für „{{ search }}"</p>
       </template>
       <template v-else>
-        <div class="empty-icon">👥</div>
+        <div class="empty-icon"><BIcon name="users" :size="24" /></div>
         <p class="empty-title">Noch keine Mitglieder</p>
         <p class="empty-sub">Lege dein erstes Team-Mitglied an um loszulegen.</p>
         <button class="empty-cta" @click="openCreate">+ Erstes Mitglied</button>

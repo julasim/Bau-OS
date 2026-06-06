@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { api } from "../api";
+import BIcon from "./BIcon.vue";
 
 interface DbStatus {
   enabled: boolean;
@@ -219,7 +220,7 @@ onUnmounted(() => {
       style="font-size: 11px; opacity: 0.5; background: transparent; border: none; cursor: pointer; color: inherit"
       title="Für diese Session ausblenden"
     >
-      ✕
+      <BIcon name="x" :size="12" />
     </button>
   </div>
 </template>
