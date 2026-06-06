@@ -204,63 +204,12 @@ useEvents(["task"], () => load());
     :active-tab="tab"
     @tab-change="tab = $event as Tab"
   >
-    <!-- Page header -->
-    <div class="tasks-pagehead">
-      <div class="tasks-kpis">
-        <div class="ap-kpi">
-          <span class="ap-kpi-val">{{ counts.open }}</span>
-          <span class="ap-kpi-lbl">Offen</span>
-        </div>
-        <div class="ap-kpi">
-          <span class="ap-kpi-val">{{ counts.in_progress }}</span>
-          <span class="ap-kpi-lbl">In Arbeit</span>
-        </div>
-        <div class="ap-kpi">
-          <span class="ap-kpi-val">{{ counts.done }}</span>
-          <span class="ap-kpi-lbl">Erledigt</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Toolbar -->
-    <div class="ap-toolbar">
-      <!-- Status segment -->
-      <div class="pt-segment" aria-label="Status filtern">
-        <button type="button" :class="{ 'is-active': tab === 'all' }" @click="tab = 'all'">Alle</button>
-        <button type="button" :class="{ 'is-active': tab === 'open' }" @click="tab = 'open'">Offen</button>
-        <button type="button" :class="{ 'is-active': tab === 'in_progress' }" @click="tab = 'in_progress'">
-          In Arbeit
-        </button>
-        <button type="button" :class="{ 'is-active': tab === 'done' }" @click="tab = 'done'">Erledigt</button>
-      </div>
-
-      <!-- Project filter -->
-      <div class="ap-filter">
-        <select v-model="projectFilter" class="pt-select" aria-label="Nach Projekt filtern">
-          <option value="">Alle Projekte</option>
-          <option v-for="p in projectOptions" :key="p" :value="p">{{ p }}</option>
-        </select>
-      </div>
-
-      <span class="pt-spacer"></span>
-
-      <!-- New task button (triggers quickAdd inline or can be extended) -->
-      <button
-        class="pt-btn pt-btn--primary pt-btn--sm"
-        type="button"
-        @click="$el.querySelector('.tasks-quickadd input')?.focus()"
-      >
-        <svg
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        Neue Aufgabe
-      </button>
+    <!-- Toolbar: nur Projekt-Filter (Status läuft über die Tabs oben) -->
+    <div v-if="projectOptions.length" class="ap-toolbar">
+      <select v-model="projectFilter" class="pt-select" aria-label="Nach Projekt filtern">
+        <option value="">Alle Projekte</option>
+        <option v-for="p in projectOptions" :key="p" :value="p">{{ p }}</option>
+      </select>
     </div>
 
     <!-- Grouped task list -->
@@ -338,21 +287,14 @@ useEvents(["task"], () => load());
 </template>
 
 <style scoped>
-.tasks-pagehead {
-  padding: var(--space-4) var(--space-5) 0;
-}
-
-.tasks-kpis {
-  display: flex;
-  gap: var(--space-8);
-  padding-bottom: var(--space-4);
-  border-bottom: 1px solid var(--hairline);
-}
-
 .ap-toolbar {
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-5);
   margin-bottom: 0;
   border-bottom: 1px solid var(--hairline);
+}
+
+.ap-toolbar .pt-select {
+  width: 100%;
 }
 
 .ap-group-h {
