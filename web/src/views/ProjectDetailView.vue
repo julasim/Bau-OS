@@ -6,6 +6,7 @@ import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import BIcon from "../components/BIcon.vue";
 import TeamPicker from "../components/TeamPicker.vue";
 import ProjectPhasesTab from "./projects-v2/ProjectPhasesTab.vue";
+import ProjectInvoicesTab from "./projects-v2/ProjectInvoicesTab.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 
@@ -209,6 +210,7 @@ const newTaskAssigneeId = ref<string | null>(null);
 type Tab =
   | "uebersicht"
   | "phasen"
+  | "rechnungen"
   | "notes"
   | "tasks"
   | "termine"
@@ -225,6 +227,7 @@ const tab = ref<Tab>("uebersicht");
 const VALID_TABS: Tab[] = [
   "uebersicht",
   "phasen",
+  "rechnungen",
   "notes",
   "tasks",
   "termine",
@@ -620,16 +623,19 @@ onUnmounted(() => {
 
 async function loadAll() {
   const n = encodeURIComponent(projectName.value);
-  const [i, no, ta, te] = await Promise.all([
+  const [i, no, ta, te, ph] = await Promise.all([
     api.get<ProjectInfo>(`/projects/${n}`),
     api.get<string[]>(`/projects/${n}/notes`),
     api.get<Task[]>(`/projects/${n}/tasks`),
     api.get<Termin[]>(`/projects/${n}/termine`),
+    // Honorargewichteter Phasenfortschritt (DB-only; 503/Fehler → null).
+    api.get<{ phases: unknown[]; progress: number }>(`/projects/${n}/phases`).catch(() => null),
   ]);
   info.value = i;
   notes.value = no;
   tasks.value = ta;
   termine.value = te;
+  phaseOverall.value = ph && Array.isArray(ph.phases) && ph.phases.length > 0 ? ph.progress : null;
 }
 
 // ── Inline-Editor Actions ──────────────────────────────────
@@ -1493,15 +1499,10 @@ async function quickAddTermin() {
 const openTasksTop = computed(() => tasks.value.filter((t) => t.status !== "done").slice(0, 5));
 
 // Fortschritt-Berechnung (0-100%)
-const projectProgress = computed(() => {
-  if (!info.value?.startDate || !info.value?.endDate) return null;
-  const start = new Date(info.value.startDate).getTime();
-  const end = new Date(info.value.endDate).getTime();
-  const now = Date.now();
-  if (end <= start) return null;
-  const pct = Math.round(((now - start) / (end - start)) * 100);
-  return Math.max(0, Math.min(100, pct));
-});
+// Honorargewichteter Phasenfortschritt (aus /phases). Ersetzt die frühere
+// Zeit-Heuristik (verstrichene Zeit), die dem Phasen-Tab widersprach.
+const phaseOverall = ref<number | null>(null);
+const projectProgress = computed(() => phaseOverall.value);
 
 // Nächster Termin (erster upcoming)
 const nextTermin = computed(() => {
@@ -2429,10 +2430,10 @@ async function deleteMeeting() {
           </div>
         </div>
 
-        <!-- Fortschritt -->
+        <!-- Fortschritt (honorargewichtet aus Leistungsphasen) -->
         <div v-if="projectProgress !== null" class="ap-prog">
           <div class="ap-prog-row">
-            <span class="ap-prog-lbl">Fortschritt</span>
+            <span class="ap-prog-lbl">Fortschritt (Phasen)</span>
             <span class="ap-prog-val">{{ projectProgress }} %</span>
           </div>
           <div class="pt-progress"><i :style="{ width: projectProgress + '%' }"></i></div>
@@ -2885,6 +2886,11 @@ async function deleteMeeting() {
     <!-- Phasen (Leistungsphasen) -->
     <div v-if="tab === 'phasen'">
       <ProjectPhasesTab :project-name="projectName" />
+    </div>
+
+    <!-- Rechnungen (Teilrechnungen + Honorarsicht) -->
+    <div v-if="tab === 'rechnungen'">
+      <ProjectInvoicesTab :project-name="projectName" />
     </div>
 
     <!-- Notes -->

@@ -31,6 +31,8 @@ interface Project {
 
 const router = useRouter();
 const projects = ref<Project[]>([]);
+// Honorargewichteter Fortschritt je Projektname, aus dem Portfolio-Cockpit.
+const progressByName = ref<Record<string, number>>({});
 const search = ref("");
 const phaseFilter = ref("all");
 const statusFilter = ref("all");
@@ -121,18 +123,10 @@ function statusLabel(status?: string): string {
   return "Aktiv";
 }
 
-// Fortschritt-Schätzung aus Leistungsphase
-function phaseProgress(phase?: string | null): number {
-  if (!phase) return 0;
-  const p = phase.toLowerCase();
-  if (p.includes("vorentwurf")) return 12;
-  if (p.includes("entwurf")) return 28;
-  if (p.includes("einreichplan")) return 45;
-  if (p.includes("einreich")) return 55;
-  if (p.includes("ausführungsplan")) return 65;
-  if (p.includes("ausführung")) return 80;
-  if (p.includes("übergabe") || p.includes("abgeschl")) return 100;
-  return 10;
+// Echter honorargewichteter Fortschritt aus den Leistungsphasen (Portfolio).
+// Projekte ohne Phasen / im FS-Modus → 0 (statt erfundener Keyword-Prozente).
+function projectProgressPct(p: Project): number {
+  return progressByName.value[p.name] ?? 0;
 }
 
 // ── Aktionen ──────────────────────────────────────────────────
@@ -194,6 +188,11 @@ async function load() {
       .get<Project[]>("/projects?detailed=1")
       .catch(async () => (await api.get<string[]>("/projects")).map((n) => ({ name: n })));
     projects.value = (list as Project[]).map((p) => (typeof p === "string" ? { name: p } : p));
+    // Fortschritt aus dem Portfolio-Cockpit nachladen (DB-only; sonst leer).
+    const portfolio = await api.get<{ name: string; progress: number }[]>("/portfolio").catch(() => []);
+    const map: Record<string, number> = {};
+    for (const e of portfolio) map[e.name] = e.progress;
+    progressByName.value = map;
   } catch {
     projects.value = [];
   }
@@ -325,10 +324,10 @@ onMounted(load);
         <!-- Fortschritt (Phase-basiert) -->
         <div class="ov-prog-row">
           <span class="ov-prog-lbl">Phase</span>
-          <span class="ov-prog-val">{{ phaseProgress(p.phase) }} %</span>
+          <span class="ov-prog-val">{{ projectProgressPct(p) }} %</span>
         </div>
         <div class="pt-progress">
-          <i :style="{ width: phaseProgress(p.phase) + '%' }"></i>
+          <i :style="{ width: projectProgressPct(p) + '%' }"></i>
         </div>
 
         <!-- Fuß: Aufgaben + Termine -->
@@ -395,9 +394,9 @@ onMounted(load);
               <td>
                 <div class="ov-tprog">
                   <div class="pt-progress">
-                    <i :style="{ width: phaseProgress(p.phase) + '%' }"></i>
+                    <i :style="{ width: projectProgressPct(p) + '%' }"></i>
                   </div>
-                  <span class="v">{{ phaseProgress(p.phase) }} %</span>
+                  <span class="v">{{ projectProgressPct(p) }} %</span>
                 </div>
               </td>
               <td>

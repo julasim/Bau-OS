@@ -29,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/tasks", label: "Aufgaben", icon: "check" },
   { to: "/calendar", label: "Kalender", icon: "calendar" },
   { to: "/projects", label: "Projekte", icon: "folder" },
+  { to: "/portfolio", label: "Portfolio", icon: "kanban" },
   { to: "/notes", label: "Notizen", icon: "pencil" },
   { to: "/files", label: "Dateien", icon: "file" },
   { to: "/chat", label: "Chat & Agenten", icon: "message" },
@@ -59,6 +60,7 @@ interface ProjNavItem {
 const PROJECT_NAV: ProjNavItem[] = [
   { tab: "uebersicht", label: "Übersicht", icon: "grid" },
   { tab: "phasen", label: "Phasen", icon: "timeline" },
+  { tab: "rechnungen", label: "Rechnungen", icon: "archive" },
   { tab: "notes", label: "Notizen", icon: "pencil" },
   { tab: "tasks", label: "Aufgaben", icon: "check" },
   { tab: "termine", label: "Termine", icon: "calendar" },

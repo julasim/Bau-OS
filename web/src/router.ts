@@ -43,6 +43,7 @@ const router = createRouter({
           name: "projects",
           component: () => import("./views/projects-v2/ProjectsOverviewView.vue"),
         },
+        { path: "portfolio", name: "portfolio", component: () => import("./views/portfolio/PortfolioView.vue") },
         // Projekt-Detail: vollbreit (Referenz-Design) — keine ListPane,
         // Navigation über Breadcrumb "Projekte › Name".
         {
