@@ -21,6 +21,9 @@ export interface Task {
   project: string | null;
   sortOrder?: number;
   completedAt?: string | null;
+  /** Migration 035: FK auf project_phases. Verknuepft die Aufgabe mit einer
+   *  Leistungsphase — daraus leitet sich der Phasen-Fortschritt ab. */
+  phaseId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +45,10 @@ export interface Termin {
   project: string | null;
   recurring?: string | null;
   color?: string | null;
+  /** Migration 035: FK auf project_phases (optional). */
+  phaseId?: string | null;
+  /** Migration 035: markiert den Termin als Meilenstein (Gantt-Raute). */
+  isMilestone?: boolean;
   createdAt: string;
 
   // ── Microsoft-Graph-Sync (Migration 023) ───────────────────────
@@ -787,4 +794,120 @@ export interface AgentLogRepository {
     limit?: number;
     offset?: number;
   }): Promise<AgentLog[]>;
+}
+
+// ============================================================
+// Projektmanagement (Migration 035) — DB-only
+// ============================================================
+
+export type PhaseStatus = "offen" | "aktiv" | "fertig";
+
+/** Eine Leistungsphase eines Projekts. progress ist abgeleitet (aus den
+ *  verknuepften Aufgaben) bzw. progressManual, wenn gesetzt. */
+export interface ProjectPhase {
+  id: string;
+  projectId: string;
+  projectName?: string | null;
+  name: string;
+  sortOrder: number;
+  status: PhaseStatus;
+  /** Manuelles Fortschritts-Override (0..100) oder null. */
+  progressManual: number | null;
+  /** Honoraranteil in Prozent (0..100). */
+  feeShare: number;
+  sollStart: string | null;
+  sollEnde: string | null;
+  istStart: string | null;
+  istEnde: string | null;
+  // ── Abgeleitete Felder (read-only, aus Aufgaben berechnet) ──
+  /** Effektiver Fortschritt 0..100: progressManual ?? (taskDone/taskTotal). */
+  progress: number;
+  taskTotal: number;
+  taskDone: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Patchable Felder beim Anlegen/Aktualisieren einer Phase. */
+export interface ProjectPhaseUpsert {
+  name?: string;
+  status?: PhaseStatus;
+  progressManual?: number | null;
+  feeShare?: number;
+  sollStart?: string | null;
+  sollEnde?: string | null;
+  istStart?: string | null;
+  istEnde?: string | null;
+  sortOrder?: number;
+}
+
+export type InvoiceStatus = "entwurf" | "gestellt" | "bezahlt";
+
+/** Teilrechnung eines Projekts (optional einer Phase zugeordnet). */
+export interface ProjectInvoice {
+  id: string;
+  projectId: string;
+  phaseId: string | null;
+  phaseName?: string | null;
+  nummer: string | null;
+  betrag: number;
+  datum: string | null;
+  status: InvoiceStatus;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectInvoiceInput {
+  phaseId?: string | null;
+  nummer?: string | null;
+  betrag?: number;
+  datum?: string | null;
+  status?: InvoiceStatus;
+  note?: string | null;
+}
+
+/** Eine Zeile im Portfolio-Cockpit — projektuebergreifend aggregiert. */
+export interface PortfolioEntry {
+  projectId: string;
+  name: string;
+  projektnummer: string | null;
+  status: string | null;
+  /** Name der aktuellen Phase (status='aktiv') bzw. letzte fertige. */
+  currentPhase: string | null;
+  /** Honorargewichteter Gesamtfortschritt 0..100. */
+  progress: number;
+  budget: number | null;
+  /** Summe fakturierter Teilrechnungen. */
+  invoiced: number;
+  /** Naechste Frist (frühestes Soll-Ende einer offenen Phase ODER Termin). */
+  nextDeadline: string | null;
+  nextDeadlineLabel: string | null;
+  openHighPrio: number;
+  /** Ampel: gruen / gelb / rot — serverseitig berechnete Heuristik. */
+  health: "green" | "amber" | "red";
+}
+
+export interface PhaseRepository {
+  list(projectId: string): Promise<ProjectPhase[]>;
+  get(id: string): Promise<ProjectPhase | null>;
+  create(projectId: string, input: ProjectPhaseUpsert): Promise<ProjectPhase | string>;
+  update(id: string, input: ProjectPhaseUpsert): Promise<ProjectPhase | null | string>;
+  delete(id: string): Promise<boolean>;
+  /** Setzt die Reihenfolge anhand einer ID-Liste. */
+  reorder(projectId: string, orderedIds: string[]): Promise<boolean>;
+  /** Honorargewichteter Gesamtfortschritt eines Projekts (0..100). */
+  projectProgress(projectId: string): Promise<number>;
+}
+
+export interface InvoiceRepository {
+  list(projectId: string): Promise<ProjectInvoice[]>;
+  create(projectId: string, input: ProjectInvoiceInput): Promise<ProjectInvoice | string>;
+  update(id: string, input: ProjectInvoiceInput): Promise<ProjectInvoice | null | string>;
+  delete(id: string): Promise<boolean>;
+}
+
+export interface PortfolioRepository {
+  /** Aggregierte Cockpit-Zeilen fuer die sichtbaren Projekte. */
+  list(visibleProjectIds: string[] | "all"): Promise<PortfolioEntry[]>;
 }

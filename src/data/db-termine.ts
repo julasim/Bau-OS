@@ -25,6 +25,8 @@ function rowToTermin(row: Record<string, unknown>): Termin {
     project: row.project_name ? String(row.project_name) : null,
     recurring: row.recurring ? String(row.recurring) : null,
     color: row.color ? String(row.color) : null,
+    phaseId: row.phase_id ? String(row.phase_id) : null,
+    isMilestone: row.is_milestone === true,
     createdAt: String(row.created_at),
     // ── Microsoft-Graph-Sync ──────────────────────────────
     msEventId: row.ms_event_id ? String(row.ms_event_id) : null,
@@ -123,6 +125,9 @@ export const dbTermine: TerminRepository = {
     const uhrzeit = "uhrzeit" in updates ? updates.uhrzeit : current.uhrzeit;
     const endzeit = "endzeit" in updates ? updates.endzeit : current.endzeit;
     const location = "location" in updates ? updates.location : current.location;
+    // Migration 035: Phasen-Verknuepfung + Meilenstein-Flag.
+    const phaseId = "phaseId" in updates ? (updates.phaseId ?? null) : current.phase_id;
+    const isMilestone = "isMilestone" in updates ? (updates.isMilestone ?? false) : current.is_milestone;
     let assignees = "assignees" in updates ? updates.assignees : current.assignees;
     const assigneeIds = "assigneeIds" in updates ? updates.assigneeIds : (current.assignee_ids as string[]);
 
@@ -148,7 +153,8 @@ export const dbTermine: TerminRepository = {
         text = ${text}, datum = ${datum}, uhrzeit = ${uhrzeit},
         endzeit = ${endzeit}, location = ${location},
         assignees = ${assignees as string[]},
-        assignee_ids = ${(assigneeIds ?? []) as string[]}
+        assignee_ids = ${(assigneeIds ?? []) as string[]},
+        phase_id = ${phaseId ?? null}, is_milestone = ${isMilestone ?? false}
       WHERE id = ${id}
     `;
     return this.get(id);

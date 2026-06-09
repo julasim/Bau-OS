@@ -18,6 +18,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     project: row.project_name ? String(row.project_name) : null,
     sortOrder: row.sort_order ? Number(row.sort_order) : undefined,
     completedAt: row.completed_at ? String(row.completed_at) : null,
+    phaseId: row.phase_id ? String(row.phase_id) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -95,6 +96,8 @@ export const dbTasks: TaskRepository = {
     const date = "date" in updates ? updates.date : current.date;
     const location = "location" in updates ? updates.location : current.location;
     const priority = "priority" in updates ? updates.priority : current.priority;
+    // Migration 035: Verknuepfung mit einer Leistungsphase.
+    const phaseId = "phaseId" in updates ? (updates.phaseId ?? null) : current.phase_id;
     // assigneeId kommt als FK dazu. Wenn gesetzt, denormalisieren wir auch
     // den assignee-Text auf den Mitglieder-Namen — das haelt Legacy-Reader
     // konsistent und vermeidet den "Freitext widerspricht FK"-Fall.
@@ -115,6 +118,7 @@ export const dbTasks: TaskRepository = {
         assignee = ${finalAssignee},
         assignee_id = ${assigneeId ?? null},
         date = ${date}, location = ${location}, priority = ${priority},
+        phase_id = ${phaseId ?? null},
         updated_at = ${now}
       WHERE id = ${id}
     `;

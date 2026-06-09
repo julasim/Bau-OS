@@ -107,6 +107,7 @@ tasksRoutes.put("/tasks/:id", async (c) => {
       assigneeId: string | null;
       date: string | null;
       location: string | null;
+      phaseId: string | null;
     }>
   >();
   // Vorherigen Stand laden, damit wir nur bei echter Assignee-Aenderung

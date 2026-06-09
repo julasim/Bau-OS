@@ -135,6 +135,8 @@ termineRoutes.put("/termine/:id", async (c) => {
       location: string | null;
       assignees: string[];
       assigneeIds: string[];
+      phaseId: string | null;
+      isMilestone: boolean;
     }>
   >();
   // Vorigen Stand laden, damit wir nur NEUE Teilnehmer benachrichtigen

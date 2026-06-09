@@ -17,6 +17,9 @@ import type {
   BautagebuchRepository,
   MeetingRepository,
   TimeEntryRepository,
+  PhaseRepository,
+  InvoiceRepository,
+  PortfolioRepository,
 } from "./types.js";
 
 // Statische Imports — DB-Module verbinden sich erst beim ersten Aufruf (lazy)
@@ -34,6 +37,9 @@ import { dbTeam } from "./db-team.js";
 import { dbBautagebuch } from "./db-bautagebuch.js";
 import { dbMeetings } from "./db-meetings.js";
 import { dbTimeEntries } from "./db-time-entries.js";
+import { dbPhases } from "./db-phases.js";
+import { dbInvoices } from "./db-invoices.js";
+import { dbPortfolio } from "./db-portfolio.js";
 import { fsChat } from "./fs-chat.js";
 import { dbChat } from "./db-chat.js";
 import { fsAgentLogs } from "./fs-agent-logs.js";
@@ -55,6 +61,10 @@ export const fileRepo: FileRepository | null = DB_ENABLED ? dbFiles : null;
 export const bautagebuchRepo: BautagebuchRepository | null = DB_ENABLED ? dbBautagebuch : null;
 export const meetingRepo: MeetingRepository | null = DB_ENABLED ? dbMeetings : null;
 export const timeEntryRepo: TimeEntryRepository | null = DB_ENABLED ? dbTimeEntries : null;
+// Projektmanagement (Migration 035) — nur DB-Modus.
+export const phaseRepo: PhaseRepository | null = DB_ENABLED ? dbPhases : null;
+export const invoiceRepo: InvoiceRepository | null = DB_ENABLED ? dbInvoices : null;
+export const portfolioRepo: PortfolioRepository | null = DB_ENABLED ? dbPortfolio : null;
 export const chatRepo: ChatRepository = DB_ENABLED ? dbChat : fsChat;
 export const agentLogRepo: AgentLogRepository = fsAgentLogs;
 
@@ -90,6 +100,13 @@ export type {
   TimeEntry,
   TimeEntryInput,
   TimeSummary,
+  ProjectPhase,
+  ProjectPhaseUpsert,
+  PhaseStatus,
+  ProjectInvoice,
+  ProjectInvoiceInput,
+  InvoiceStatus,
+  PortfolioEntry,
 } from "./types.js";
 export type {
   TaskRepository,
@@ -103,4 +120,7 @@ export type {
   BautagebuchRepository,
   MeetingRepository,
   TimeEntryRepository,
+  PhaseRepository,
+  InvoiceRepository,
+  PortfolioRepository,
 } from "./types.js";
