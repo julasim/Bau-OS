@@ -5,6 +5,7 @@ import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import BIcon from "../components/BIcon.vue";
 import TeamPicker from "../components/TeamPicker.vue";
+import ProjectPhasesTab from "./projects-v2/ProjectPhasesTab.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 
@@ -207,6 +208,7 @@ const newTaskAssigneeId = ref<string | null>(null);
 // Stufe 3d: Uebersicht ist jetzt der Start-Tab.
 type Tab =
   | "uebersicht"
+  | "phasen"
   | "notes"
   | "tasks"
   | "termine"
@@ -222,6 +224,7 @@ const tab = ref<Tab>("uebersicht");
 // Gueltige Tab-Keys (fuer URL-Query-Validierung via NavRail-Sidebar).
 const VALID_TABS: Tab[] = [
   "uebersicht",
+  "phasen",
   "notes",
   "tasks",
   "termine",
@@ -2877,6 +2880,11 @@ async function deleteMeeting() {
           </section>
         </div>
       </div>
+    </div>
+
+    <!-- Phasen (Leistungsphasen) -->
+    <div v-if="tab === 'phasen'">
+      <ProjectPhasesTab :project-name="projectName" />
     </div>
 
     <!-- Notes -->

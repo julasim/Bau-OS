@@ -58,6 +58,7 @@ interface ProjNavItem {
 }
 const PROJECT_NAV: ProjNavItem[] = [
   { tab: "uebersicht", label: "Übersicht", icon: "grid" },
+  { tab: "phasen", label: "Phasen", icon: "timeline" },
   { tab: "notes", label: "Notizen", icon: "pencil" },
   { tab: "tasks", label: "Aufgaben", icon: "check" },
   { tab: "termine", label: "Termine", icon: "calendar" },

@@ -27,6 +27,7 @@ interface Task {
   date: string | null;
   location: string | null;
   project: string | null;
+  phaseId?: string | null;
   completedAt?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -42,6 +43,8 @@ const router = useRouter();
 const task = ref<Task | null>(null);
 const team = ref<TeamMini[]>([]);
 const projects = ref<string[]>([]);
+// Leistungsphasen des aktuellen Projekts (fuer das Phase-Dropdown).
+const phases = ref<{ id: string; name: string }[]>([]);
 const loading = ref(false);
 const saving = ref(false);
 const error = ref<string | null>(null);
@@ -99,6 +102,7 @@ async function saveTask() {
       date: t.date,
       location: t.location,
       project: t.project,
+      phaseId: t.phaseId ?? null,
     });
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
@@ -153,7 +157,35 @@ function onAssigneeChange(memberId: string) {
   }
 }
 
+// Phasen des aktuell gewaehlten Projekts laden. Wechselt das Projekt, wird die
+// Phasen-Zuordnung zurueckgesetzt, falls die alte Phase nicht mehr passt.
+async function loadPhasesFor(project: string | null) {
+  if (!project) {
+    phases.value = [];
+    return;
+  }
+  try {
+    const res = await api.get<{ phases: { id: string; name: string }[] }>(
+      `/projects/${encodeURIComponent(project)}/phases`,
+    );
+    phases.value = (res.phases ?? []).map((p) => ({ id: p.id, name: p.name }));
+  } catch {
+    phases.value = [];
+  }
+}
+
+// Nutzer wechselt das Projekt im Dropdown → Phasen-Zuordnung loesen (die alte
+// Phase gehoert zum alten Projekt). Das Neuladen der Optionen macht der watch.
+function onProjectChange() {
+  if (task.value) task.value.phaseId = null;
+}
+
 watch(taskId, (id) => void loadTask(id), { immediate: true });
+// Optionen laden, sobald ein Projekt bekannt ist (Task-Load ODER Dropdown-Wechsel).
+watch(
+  () => task.value?.project ?? null,
+  (project) => void loadPhasesFor(project),
+);
 loadAux();
 </script>
 
@@ -248,9 +280,18 @@ loadAux();
         <!-- Project -->
         <div class="pt-field">
           <label class="pt-label" for="td-project">Projekt</label>
-          <select id="td-project" v-model="task.project" class="pt-select">
+          <select id="td-project" v-model="task.project" class="pt-select" @change="onProjectChange">
             <option :value="null">—</option>
             <option v-for="p in projects" :key="p" :value="p">{{ p }}</option>
+          </select>
+        </div>
+
+        <!-- Phase (Leistungsphase) — nur wenn Projekt mit Phasen gewählt -->
+        <div v-if="task.project && phases.length" class="pt-field">
+          <label class="pt-label" for="td-phase">Phase</label>
+          <select id="td-phase" v-model="task.phaseId" class="pt-select">
+            <option :value="null">—</option>
+            <option v-for="ph in phases" :key="ph.id" :value="ph.id">{{ ph.name }}</option>
           </select>
         </div>
 
