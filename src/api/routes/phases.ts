@@ -7,7 +7,7 @@
 // ============================================================
 
 import { Hono } from "hono";
-import { phaseRepo, invoiceRepo } from "../../data/index.js";
+import { phaseRepo, invoiceRepo, timeEntryRepo } from "../../data/index.js";
 import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
 import { projectRepo } from "../../data/index.js";
 import type { AppEnv } from "../server.js";
@@ -81,6 +81,10 @@ phasesRoutes.get("/projects/:projectName/finance", async (c) => {
   const budget = info?.budget ?? null;
   const phases = await phaseRepo!.list(proj.id);
   const invoices = invoiceRepo ? await invoiceRepo.list(proj.id) : [];
+  // Ist-Kosten je Phase (Stunden * effektiver Satz).
+  const costs = timeEntryRepo
+    ? await timeEntryRepo.costsByPhase(proj.id)
+    : { byPhase: {} as Record<string, number>, unassigned: 0, total: 0 };
 
   // Fakturiert = Status 'gestellt' oder 'bezahlt' (Entwuerfe zaehlen nicht).
   const invByPhase = new Map<string, number>();
@@ -98,6 +102,9 @@ phasesRoutes.get("/projects/:projectName/finance", async (c) => {
     const sollHonorar = budget != null ? round2((budget * p.feeShare) / 100) : null;
     const invoiced = round2(invByPhase.get(p.id) ?? 0);
     const offen = sollHonorar != null ? round2(sollHonorar - invoiced) : null;
+    const kostenIst = round2(costs.byPhase[p.id] ?? 0);
+    // Deckungsbeitrag: Soll-Honorar minus Ist-Kosten (geplante Marge der Phase).
+    const deckung = sollHonorar != null ? round2(sollHonorar - kostenIst) : null;
     return {
       phaseId: p.id,
       name: p.name,
@@ -107,12 +114,15 @@ phasesRoutes.get("/projects/:projectName/finance", async (c) => {
       sollHonorar,
       invoiced,
       offen,
+      kostenIst,
+      deckung,
     };
   });
   return c.json({
     budget,
     invoicedTotal: round2(invoicedTotal),
     unassignedInvoiced: round2(unassignedInvoiced),
+    kostenIstTotal: round2(costs.total),
     feeShareSum,
     perPhase,
   });

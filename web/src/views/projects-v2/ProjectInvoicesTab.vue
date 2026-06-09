@@ -32,11 +32,14 @@ interface FinancePhase {
   sollHonorar: number | null;
   invoiced: number;
   offen: number | null;
+  kostenIst: number;
+  deckung: number | null;
 }
 interface Finance {
   budget: number | null;
   invoicedTotal: number;
   unassignedInvoiced: number;
+  kostenIstTotal: number;
   feeShareSum: number;
   perPhase: FinancePhase[];
 }
@@ -177,6 +180,10 @@ onMounted(() => void load());
         <div class="inv-sum-item">
           <span class="inv-sum-lbl">Offen</span><span class="inv-sum-val">{{ money(offenGesamt) }}</span>
         </div>
+        <div v-if="finance.kostenIstTotal > 0" class="inv-sum-item">
+          <span class="inv-sum-lbl">Ist-Kosten</span
+          ><span class="inv-sum-val">{{ money(finance.kostenIstTotal) }}</span>
+        </div>
         <div v-if="finance.unassignedInvoiced > 0" class="inv-sum-item">
           <span class="inv-sum-lbl">ohne Phase</span
           ><span class="inv-sum-val">{{ money(finance.unassignedInvoiced) }}</span>
@@ -196,6 +203,8 @@ onMounted(() => void load());
               <th class="r">Soll-Honorar</th>
               <th class="r">Fakturiert</th>
               <th class="r">Offen</th>
+              <th class="r">Ist-Kosten</th>
+              <th class="r">Deckung</th>
             </tr>
           </thead>
           <tbody>
@@ -205,6 +214,8 @@ onMounted(() => void load());
               <td class="r">{{ money(p.sollHonorar) }}</td>
               <td class="r">{{ money(p.invoiced) }}</td>
               <td class="r" :class="{ 'inv-neg': p.offen !== null && p.offen < 0 }">{{ money(p.offen) }}</td>
+              <td class="r">{{ money(p.kostenIst) }}</td>
+              <td class="r" :class="{ 'inv-neg': p.deckung !== null && p.deckung < 0 }">{{ money(p.deckung) }}</td>
             </tr>
           </tbody>
         </table>

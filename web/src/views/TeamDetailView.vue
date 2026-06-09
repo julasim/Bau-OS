@@ -28,6 +28,7 @@ interface TeamMember {
   role: string | null;
   email: string | null;
   phone: string | null;
+  hourlyRate?: number | null;
   company: string | null;
   companyId: string | null;
   companyName: string | null;
@@ -131,7 +132,7 @@ async function setUserLink(userId: string | null) {
 }
 
 // Inline-Edit Stammdaten
-type EditableKey = "role" | "companyName" | "email" | "phone" | "memberType";
+type EditableKey = "role" | "companyName" | "email" | "phone" | "memberType" | "hourlyRate";
 const editingField = ref<EditableKey | null>(null);
 const draftValue = ref<string>("");
 const saving = ref(false);
@@ -580,6 +581,7 @@ onUnmounted(() => {
               { key: 'memberType' as const, label: 'Kategorie', type: 'enum' },
               { key: 'email' as const, label: 'E-Mail', type: 'email', placeholder: 'max@beispiel.at' },
               { key: 'phone' as const, label: 'Telefon', type: 'tel', placeholder: '+43 …' },
+              { key: 'hourlyRate' as const, label: 'Stundensatz (€/h)', type: 'number', placeholder: 'z.B. 95' },
             ]"
             :key="f.key"
             class="stamm-field"

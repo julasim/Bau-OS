@@ -51,6 +51,7 @@ function rowToMember(row: Record<string, unknown>): TeamMember {
     role: row.role ? String(row.role) : null,
     email: row.email ? String(row.email) : null,
     phone: row.phone ? String(row.phone) : null,
+    hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : null,
     company: row.company ? String(row.company) : null,
     projectId: row.project_id ? String(row.project_id) : null,
     companyId: row.company_id ? String(row.company_id) : null,
@@ -88,6 +89,7 @@ const MEMBER_SELECT = `
     tm.role,
     tm.email,
     tm.phone,
+    tm.hourly_rate,
     tm.company,
     tm.project_id,
     tm.company_id,
@@ -215,6 +217,7 @@ export const dbTeam: TeamRepository = {
     const role = member.role ?? null;
     const email = member.email ?? null;
     const phone = member.phone ?? null;
+    const hourlyRate = member.hourlyRate ?? null;
     const projectId = member.projectId ?? null;
     const memberType = member.memberType ?? null;
 
@@ -263,11 +266,11 @@ export const dbTeam: TeamRepository = {
 
     const [row] = await db`
       INSERT INTO team_members (
-        id, name, role, email, phone, company, project_id,
+        id, name, role, email, phone, hourly_rate, company, project_id,
         company_id, member_type, contact_log, user_id,
         created_at, updated_at
       ) VALUES (
-        ${id}, ${name}, ${role}, ${email}, ${phone}, ${companyText}, ${projectId},
+        ${id}, ${name}, ${role}, ${email}, ${phone}, ${hourlyRate}, ${companyText}, ${projectId},
         ${companyId}, ${memberType}, ${"[]"}::jsonb, ${userId},
         ${now}, ${now}
       )
@@ -309,6 +312,7 @@ export const dbTeam: TeamRepository = {
     const role = "role" in updates ? updates.role : current.role;
     const email = "email" in updates ? updates.email : current.email;
     const phone = "phone" in updates ? updates.phone : current.phone;
+    const hourlyRate = "hourlyRate" in updates ? updates.hourlyRate : current.hourly_rate;
     const projectId = "projectId" in updates ? updates.projectId : current.project_id;
     const memberType = "memberType" in updates ? updates.memberType : current.member_type;
     const userId = "userId" in updates ? updates.userId : current.user_id;
@@ -322,6 +326,7 @@ export const dbTeam: TeamRepository = {
         role = ${role},
         email = ${email},
         phone = ${phone},
+        hourly_rate = ${hourlyRate},
         company = ${resolvedCompanyText},
         project_id = ${projectId},
         company_id = ${resolvedCompanyId},

@@ -216,6 +216,8 @@ export interface TeamMember {
   role: string | null;
   email: string | null;
   phone: string | null;
+  /** Standard-Stundensatz EUR/h (Migration 037). NULL = nicht gesetzt. */
+  hourlyRate?: number | null;
   /** Legacy-Textfeld — seit Migration 006 ist companyId/companyName die
    *  Source-of-Truth. Bleibt als Fallback bis vollstaendig migriert. */
   company: string | null;
@@ -420,6 +422,8 @@ export interface TimeEntry {
   memberName: string | null;
   date: string; // YYYY-MM-DD
   hours: number; // dezimal, z.B. 8.5
+  /** Stundensatz-Override EUR/h (Migration 037). NULL = Mitarbeiter-Standard. */
+  hourlyRate?: number | null;
   startTime: string | null; // HH:MM
   endTime: string | null;
   breakMinutes: number;
@@ -435,6 +439,7 @@ export interface TimeEntryInput {
   date: string; // YYYY-MM-DD, required
   hours: number; // required, > 0
   phaseId?: string | null;
+  hourlyRate?: number | null;
   memberId?: string | null;
   memberName?: string | null;
   startTime?: string | null;
@@ -468,6 +473,9 @@ export interface TimeEntryRepository {
   summaryByMember(projectId: string, from?: string, to?: string): Promise<TimeSummary[]>;
   /** Summen pro Tag fuer ein Projekt im Zeitraum. */
   summaryByDate(projectId: string, from?: string, to?: string): Promise<TimeSummary[]>;
+  /** Ist-Kosten (Stunden * effektiver Satz) je Phase fuer ein Projekt.
+   *  Effektiver Satz = time_entry.hourly_rate ?? team_member.hourly_rate ?? 0. */
+  costsByPhase(projectId: string): Promise<{ byPhase: Record<string, number>; unassigned: number; total: number }>;
 }
 
 export interface FileEntry {
@@ -649,6 +657,7 @@ export interface TeamMemberCreateInput {
   role?: string | null;
   email?: string | null;
   phone?: string | null;
+  hourlyRate?: number | null;
   company?: string | null;
   companyId?: string | null;
   companyName?: string | null;
@@ -662,6 +671,7 @@ export interface TeamMemberUpdateInput {
   role?: string | null;
   email?: string | null;
   phone?: string | null;
+  hourlyRate?: number | null;
   company?: string | null;
   companyId?: string | null;
   companyName?: string | null;

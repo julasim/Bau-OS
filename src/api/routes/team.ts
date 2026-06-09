@@ -74,6 +74,7 @@ teamRoutes.patch("/team/:id", async (c) => {
       companyName: string | null;
       memberType: string | null;
       projectId: string | null;
+      hourlyRate: number | string | null;
       // Migration 013: User-Account-Verknuepfung. Nur Admin darf
       // setzen — sonst koennten User sich gegenseitig "uebernehmen".
       userId: string | null;
@@ -84,6 +85,11 @@ teamRoutes.patch("/team/:id", async (c) => {
   // Nur Felder uebernehmen, die explizit im Body sind (inkl. null = leeren).
   for (const key of ["name", "role", "email", "phone", "company", "companyId", "companyName", "projectId"] as const) {
     if (key in body) updates[key] = body[key];
+  }
+  // Stundensatz (Migration 037): in Zahl wandeln, leer/ungueltig → null.
+  if ("hourlyRate" in body) {
+    const n = body.hourlyRate === null || body.hourlyRate === "" ? null : Number(body.hourlyRate);
+    updates.hourlyRate = n !== null && Number.isFinite(n) ? n : null;
   }
   if ("memberType" in body) {
     updates.memberType = body.memberType ? normalizeMemberType(body.memberType) : null;
