@@ -96,7 +96,7 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   Time-Entries sind **DB-only**. Nie direkt aus `db-*`/`fs-*` importieren.
 - **Migrationen:** plain SQL in `src/db/migrations/`, `NNN_name.sql`,
   forward-only, idempotent (`IF NOT EXISTS` / DO-Block-Guards). Aktuellste:
-  `034`. **Schema-Lektion:** Beim JOIN müssen Typen passen — `034` hat
+  `035_project_phases.sql`. **Schema-Lektion:** Beim JOIN müssen Typen passen — `034` hat
   `chat_messages.session_id` von TEXT auf UUID umgestellt (passend zu
   `chat_sessions.id`), sonst `operator does not exist: text = uuid`.
 - **Web-API + Frontend:** Hono in `src/api/server.ts` (Port `API_PORT`,
@@ -106,6 +106,31 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   `.app-v2`: NavRail + ListPane + Detail).
 - **Config:** `src/config.ts` — alle Tunables als Konstanten. Laufzeit-
   Modell-Override via `setRuntimeMainModel` (nur `Main`-Agent).
+
+## Frontend / PATIO Design System v2 (WICHTIG bei UI-Arbeit)
+
+Das gesamte Frontend wurde auf das **PATIO Design System v2** umgestellt
+(Stand Juni 2026). Beim Bauen an Views unbedingt einhalten:
+
+- **Design-Tokens sind die einzige Quelle der Wahrheit:**
+  `web/src/patio-tokens.css` (Brand/Produkt — identisch mit der Mainpage, kein
+  zweites Brand-System), `patio-components.css` (Komponenten-Styles wie
+  `ap-panel`/`ap-grid`/`pt-tabs`), `patio-shell.css` (App-Shell-Layout). Keine
+  Hardcode-Farben/-Abstände — Tokens (`var(--…)`) verwenden. Niveau-Referenz:
+  Linear/Vercel/Stripe; Prinzip: monochrom, flach, präzise, viel Ruhe.
+  Schrift: **Inter / Inter Tight / JetBrains Mono**.
+- **Shell-Bausteine** in `web/src/components/shell/`: `NavRail`, `ListPane`,
+  `DetailPane`, `IconBtn`, `Avatar`, `StatusDot`. Die NavRail ist
+  **kontext-wechselnd** — im Projekt zeigt sie die Projekt-Module (statt einer
+  Tab-Leiste).
+- **v2-Views** liegen in `web/src/views/<bereich>-v2/` (`notes-v2`,
+  `projects-v2`, `tasks-v2`, `team-v2`) im ListPane/DetailPane-Muster. Daneben
+  existieren noch ältere Top-Level-Views (`NotesView.vue`, …) — beim Weiterbauen
+  die **v2-Variante** bevorzugen.
+- **Projekt-Detail** (`ProjectDetailView.vue`) läuft **vollbreit** (keine
+  ListPane), Module über die kontext-wechselnde Sidebar.
+- **Keine Emojis in der UI.** Stattdessen Line-Icons über `BIcon.vue` (Glyph in
+  `BIcon.vue` ergänzen) oder schlichten Text.
 
 ## Bot-Sicherheitsmodell (WICHTIG — nicht aufweichen)
 
