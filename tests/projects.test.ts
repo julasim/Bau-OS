@@ -25,6 +25,9 @@ const mockRepo = {
 
 vi.mock("../src/data/index.js", () => ({
   projectRepo: mockRepo,
+  // PM-Repos sind DB-only; im FS-Test null (Handler ueberspringt sie dann).
+  phaseRepo: null,
+  portfolioRepo: null,
 }));
 
 // Events-Modul mocken — emit() schreibt sonst ueber SSE ins Leere.

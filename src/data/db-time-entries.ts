@@ -32,6 +32,7 @@ function rowToEntry(row: Record<string, unknown>): TimeEntry {
     id: String(row.id),
     projectId: String(row.project_id),
     projectName: row.project_name ? String(row.project_name) : null,
+    phaseId: row.phase_id ? String(row.phase_id) : null,
     memberId: row.member_id ? String(row.member_id) : null,
     memberName: row.member_name ? String(row.member_name) : null,
     date: dateStr,
@@ -63,6 +64,7 @@ function validateInput(input: Partial<TimeEntryInput>):
   | {
       date?: string;
       hours?: number;
+      phaseId?: string | null;
       memberId?: string | null;
       memberName?: string | null;
       startTime?: string | null;
@@ -145,11 +147,11 @@ export const dbTimeEntries: TimeEntryRepository = {
     try {
       await db`
         INSERT INTO time_entries (
-          id, project_id, member_id, member_name,
+          id, project_id, phase_id, member_id, member_name,
           entry_date, hours, start_time, end_time, break_minutes,
           activity, notes, created_by
         ) VALUES (
-          ${id}, ${projectId}, ${memberId}, ${input.memberName ?? null},
+          ${id}, ${projectId}, ${input.phaseId ?? null}, ${memberId}, ${input.memberName ?? null},
           ${input.date}, ${input.hours}, ${input.startTime ?? null}, ${input.endTime ?? null},
           ${input.breakMinutes ?? 0},
           ${input.activity ?? null}, ${input.notes ?? null}, ${createdById}
@@ -190,10 +192,12 @@ export const dbTimeEntries: TimeEntryRepository = {
       if (!m) memberId = null;
     }
     const memberName = "memberName" in input ? (input.memberName ?? null) : (current.member_name as string | null);
+    const phaseId = "phaseId" in input ? (input.phaseId ?? null) : (current.phase_id as string | null);
 
     try {
       await db`
         UPDATE time_entries SET
+          phase_id = ${phaseId},
           member_id = ${memberId},
           member_name = ${memberName},
           entry_date = ${date as string},

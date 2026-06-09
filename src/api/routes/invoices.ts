@@ -70,25 +70,31 @@ invoicesRoutes.put("/invoices/:id", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  // ACL: Rechnung → Projekt. Wir laden die Liste ueber das Projekt nicht
-  // direkt; stattdessen vertrauen wir auf das Update, koennen aber die
-  // Projekt-Zugehoerigkeit nicht ohne Get pruefen. Einfacher Weg: nur Admin
-  // oder Zugriff via Projektliste. Da invoiceRepo kein get(id) hat, halten
-  // wir es minimal — Update liefert null wenn nicht existent.
+  // ACL VOR der Mutation: Rechnung laden, Projekt-Zugriff pruefen, erst dann
+  // schreiben. Verhindert IDOR (fremde Rechnungen aendern).
+  const existing = await invoiceRepo!.get(id);
+  if (!existing) return c.json({ error: "Teilrechnung nicht gefunden" }, 404);
+  if (!(await canSeeProjectById(userCtx(c), existing.projectId))) {
+    return c.json({ error: "Kein Zugriff" }, 403);
+  }
   const result = await invoiceRepo!.update(id, body);
   if (result === null) return c.json({ error: "Teilrechnung nicht gefunden" }, 404);
   if (typeof result === "string") return c.json({ error: result }, 400);
-  if (!(await canSeeProjectById(userCtx(c), result.projectId))) {
-    return c.json({ error: "Kein Zugriff" }, 403);
-  }
   emit({ type: "invoice", action: "updated", id });
   return c.json(result);
 });
 
 invoicesRoutes.delete("/invoices/:id", async (c) => {
   const id = c.req.param("id");
+  // ACL VOR dem Loeschen: ohne Pruefung koennte jeder User jede Rechnung per
+  // ID loeschen (IDOR).
+  const existing = await invoiceRepo!.get(id);
+  if (!existing) return c.json({ error: "Teilrechnung nicht gefunden" }, 404);
+  if (!(await canSeeProjectById(userCtx(c), existing.projectId))) {
+    return c.json({ error: "Kein Zugriff" }, 403);
+  }
   const ok = await invoiceRepo!.delete(id);
-  if (ok) emit({ type: "invoice", action: "deleted", id });
+  if (ok) emit({ type: "invoice", action: "deleted", id, project: existing.projectId });
   return c.json({ ok });
 });
 

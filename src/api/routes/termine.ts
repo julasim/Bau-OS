@@ -77,6 +77,8 @@ termineRoutes.post("/termine", async (c) => {
     assignees?: string[];
     assigneeIds?: string[];
     project?: string;
+    phaseId?: string | null;
+    isMilestone?: boolean;
   }>();
   if (!body.datum || !body.text) return c.json({ error: "Datum und Text erforderlich" }, 400);
   if (body.project && !(await canSeeProjectByName(userCtx(c), body.project))) {
@@ -85,7 +87,14 @@ termineRoutes.post("/termine", async (c) => {
   const termin = await terminRepo.save(body.datum, body.text, body.uhrzeit, body.project);
   if (typeof termin === "string") return c.json({ error: termin }, 400);
   let result = termin;
-  if (body.endzeit || body.location || body.assignees?.length || body.assigneeIds?.length) {
+  if (
+    body.endzeit ||
+    body.location ||
+    body.assignees?.length ||
+    body.assigneeIds?.length ||
+    body.phaseId ||
+    body.isMilestone
+  ) {
     const updated = await terminRepo.update(
       termin.id,
       {
@@ -93,6 +102,8 @@ termineRoutes.post("/termine", async (c) => {
         location: body.location ?? null,
         assignees: body.assignees ?? [],
         assigneeIds: body.assigneeIds ?? [],
+        phaseId: body.phaseId ?? null,
+        isMilestone: body.isMilestone ?? false,
       },
       body.project,
     );

@@ -19,7 +19,7 @@ const GROUPS: { title: string; match: (name: string) => boolean }[] = [
   { title: "Notizen", match: (n) => n.startsWith("notiz") },
   { title: "Aufgaben", match: (n) => n.startsWith("aufgab") },
   { title: "Termine", match: (n) => n.startsWith("termin") },
-  { title: "Projekte", match: (n) => n.startsWith("projekt") },
+  { title: "Projekte", match: (n) => n.startsWith("projekt") || n.startsWith("portfolio") },
   { title: "Team", match: (n) => n.startsWith("team") },
   { title: "Dateien & Suche", match: (n) => /^(datei|ordner|vault|semantisch|dateien|regex|pdf|docx)/.test(n) },
   { title: "Web", match: (n) => /^(http|web|nachrichten|webseite)/.test(n) },

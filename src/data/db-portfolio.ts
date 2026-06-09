@@ -8,8 +8,8 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
-import { dbPhases } from "./db-phases.js";
-import type { PortfolioEntry, PortfolioRepository } from "./types.js";
+import { listPhasesForProjects, weightedProgress } from "./db-phases.js";
+import type { PortfolioEntry, PortfolioRepository, ProjectPhase } from "./types.js";
 
 function daysUntil(iso: string | null): number | null {
   if (!iso) return null;
@@ -33,15 +33,58 @@ export const dbPortfolio: PortfolioRepository = {
           ? []
           : await db`SELECT id, name, projektnummer, status, budget FROM projects WHERE id = ANY(${visibleProjectIds}::uuid[]) ORDER BY name`;
 
+    if (projects.length === 0) return [];
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = today.toISOString().slice(0, 10);
+    const ids = projects.map((p) => String(p.id));
+
+    // ── Alle Aggregate in je EINER Query (kein N+1) ────────────────────────
+    // Phasen aller Projekte, in JS nach projectId gruppiert.
+    const allPhases = await listPhasesForProjects(ids);
+    const phasesByProject = new Map<string, ProjectPhase[]>();
+    for (const ph of allPhases) {
+      const arr = phasesByProject.get(ph.projectId) ?? [];
+      arr.push(ph);
+      phasesByProject.set(ph.projectId, arr);
+    }
+
+    // Fakturiert (gestellt + bezahlt) je Projekt.
+    const invRows = await db`
+      SELECT project_id, COALESCE(SUM(betrag), 0) AS sum FROM project_invoices
+       WHERE project_id = ANY(${ids}::uuid[]) AND status IN ('gestellt','bezahlt')
+       GROUP BY project_id
+    `;
+    const invByProject = new Map<string, number>();
+    for (const r of invRows) invByProject.set(String(r.project_id), Number(r.sum ?? 0));
+
+    // Offene Hoch-Prio-Aufgaben je Projekt.
+    const hpRows = await db`
+      SELECT project_id, COUNT(*) AS c FROM tasks
+       WHERE project_id = ANY(${ids}::uuid[])
+         AND status <> 'done'
+         AND LOWER(COALESCE(priority, '')) IN ('hoch','high','dringend')
+       GROUP BY project_id
+    `;
+    const hpByProject = new Map<string, number>();
+    for (const r of hpRows) hpByProject.set(String(r.project_id), Number(r.c ?? 0));
+
+    // Naechster zukuenftiger Termin je Projekt (Fallback-Frist).
+    const tRows = await db`
+      SELECT DISTINCT ON (project_id) project_id, text, datum FROM termine
+       WHERE project_id = ANY(${ids}::uuid[]) AND datum >= ${todayStr}
+       ORDER BY project_id, datum ASC
+    `;
+    const terminByProject = new Map<string, { text: string; datum: string }>();
+    for (const r of tRows)
+      terminByProject.set(String(r.project_id), { text: String(r.text), datum: String(r.datum).slice(0, 10) });
 
     const out: PortfolioEntry[] = [];
     for (const p of projects) {
       const projectId = String(p.id);
-      const phases = await dbPhases.list(projectId);
-      const progress = await dbPhases.projectProgress(projectId);
+      const phases = phasesByProject.get(projectId) ?? [];
+      const progress = weightedProgress(phases);
 
       // Aktuelle Phase: erste 'aktiv', sonst letzte 'fertig', sonst erste offene.
       const active = phases.find((ph) => ph.status === "aktiv");
@@ -62,33 +105,15 @@ export const dbPortfolio: PortfolioRepository = {
       }
       // Fallback: naechster zukuenftiger Termin, falls keine Phasen-Frist.
       if (!nextDeadline) {
-        const [t] = await db`
-          SELECT text, datum FROM termine
-           WHERE project_id = ${projectId} AND datum >= ${todayStr}
-           ORDER BY datum ASC LIMIT 1
-        `;
+        const t = terminByProject.get(projectId);
         if (t) {
-          nextDeadline = String(t.datum).slice(0, 10);
-          nextDeadlineLabel = String(t.text);
+          nextDeadline = t.datum;
+          nextDeadlineLabel = t.text;
         }
       }
 
-      // Fakturiert (gestellt + bezahlt).
-      const [inv] = await db`
-        SELECT COALESCE(SUM(betrag), 0) AS sum FROM project_invoices
-         WHERE project_id = ${projectId} AND status IN ('gestellt','bezahlt')
-      `;
-      const invoiced = Number(inv?.sum ?? 0);
-
-      // Offene Hoch-Prio-Aufgaben.
-      const [hp] = await db`
-        SELECT COUNT(*) AS c FROM tasks
-         WHERE project_id = ${projectId}
-           AND status <> 'done'
-           AND LOWER(COALESCE(priority, '')) IN ('hoch','high','dringend')
-      `;
-      const openHighPrio = Number(hp?.c ?? 0);
-
+      const invoiced = invByProject.get(projectId) ?? 0;
+      const openHighPrio = hpByProject.get(projectId) ?? 0;
       const budget = p.budget === null || p.budget === undefined ? null : Number(p.budget);
       const budgetRatio = budget && budget > 0 ? invoiced / budget : 0;
       const dleft = daysUntil(nextDeadline);

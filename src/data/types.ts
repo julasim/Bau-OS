@@ -414,6 +414,8 @@ export interface TimeEntry {
   id: string;
   projectId: string;
   projectName?: string | null;
+  /** Optionale Zuordnung zu einer Leistungsphase (Migration 036). */
+  phaseId?: string | null;
   memberId: string | null;
   memberName: string | null;
   date: string; // YYYY-MM-DD
@@ -432,6 +434,7 @@ export interface TimeEntry {
 export interface TimeEntryInput {
   date: string; // YYYY-MM-DD, required
   hours: number; // required, > 0
+  phaseId?: string | null;
   memberId?: string | null;
   memberName?: string | null;
   startTime?: string | null;
@@ -902,6 +905,8 @@ export interface PhaseRepository {
 
 export interface InvoiceRepository {
   list(projectId: string): Promise<ProjectInvoice[]>;
+  /** Einzelne Rechnung — fuer ACL-Pruefung vor Mutationen. */
+  get(id: string): Promise<ProjectInvoice | null>;
   create(projectId: string, input: ProjectInvoiceInput): Promise<ProjectInvoice | string>;
   update(id: string, input: ProjectInvoiceInput): Promise<ProjectInvoice | null | string>;
   delete(id: string): Promise<boolean>;

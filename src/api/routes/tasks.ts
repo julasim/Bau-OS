@@ -56,6 +56,7 @@ tasksRoutes.post("/tasks", async (c) => {
     assigneeId?: string;
     date?: string;
     location?: string;
+    phaseId?: string | null;
   }>();
   if (!body.text) return c.json({ error: "Text erforderlich" }, 400);
   // Wenn Projekt gesetzt: User muss Zugriff darauf haben.
@@ -63,8 +64,8 @@ tasksRoutes.post("/tasks", async (c) => {
     return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
   }
   const task = await taskRepo.save(body.text, body.project);
-  // Apply optional fields inkl. assigneeId (Migration 007).
-  if (body.assignee || body.assigneeId || body.date || body.location) {
+  // Apply optional fields inkl. assigneeId (Migration 007) und phaseId (035).
+  if (body.assignee || body.assigneeId || body.date || body.location || body.phaseId) {
     const updated = await taskRepo.update(
       task.id,
       {
@@ -72,6 +73,7 @@ tasksRoutes.post("/tasks", async (c) => {
         assigneeId: body.assigneeId ?? null,
         date: body.date ?? null,
         location: body.location ?? null,
+        phaseId: body.phaseId ?? null,
       },
       body.project,
     );

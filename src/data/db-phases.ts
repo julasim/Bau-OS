@@ -62,6 +62,31 @@ const SELECT = `
     LEFT JOIN projects p ON p.id = ph.project_id
 `;
 
+/**
+ * Phasen fuer MEHRERE Projekte in EINER Query laden (gegen N+1 im Portfolio).
+ * Liefert eine flache Liste; Gruppierung nach projectId beim Aufrufer.
+ */
+export async function listPhasesForProjects(projectIds: string[]): Promise<ProjectPhase[]> {
+  if (projectIds.length === 0) return [];
+  const db = getDb();
+  const rows = await db.unsafe(
+    `${SELECT} WHERE ph.project_id = ANY($1::uuid[]) ORDER BY ph.project_id, ph.sort_order, ph.created_at`,
+    [projectIds],
+  );
+  return rows.map((r) => rowToPhase(r as Record<string, unknown>));
+}
+
+/** Honorargewichteter Gesamtfortschritt aus einer bereits geladenen Phasenliste. */
+export function weightedProgress(phases: ProjectPhase[]): number {
+  if (phases.length === 0) return 0;
+  const totalShare = phases.reduce((s, p) => s + p.feeShare, 0);
+  if (totalShare > 0) {
+    const weighted = phases.reduce((s, p) => s + p.feeShare * p.progress, 0);
+    return Math.round(weighted / totalShare);
+  }
+  return Math.round(phases.reduce((s, p) => s + p.progress, 0) / phases.length);
+}
+
 export const dbPhases: PhaseRepository = {
   async list(projectId) {
     const db = getDb();
@@ -173,15 +198,6 @@ export const dbPhases: PhaseRepository = {
   },
 
   async projectProgress(projectId) {
-    const phases = await this.list(projectId);
-    if (phases.length === 0) return 0;
-    const totalShare = phases.reduce((s, p) => s + p.feeShare, 0);
-    if (totalShare > 0) {
-      // Honorargewichtet.
-      const weighted = phases.reduce((s, p) => s + p.feeShare * p.progress, 0);
-      return Math.round(weighted / totalShare);
-    }
-    // Kein Honoraranteil gepflegt → einfacher Mittelwert.
-    return Math.round(phases.reduce((s, p) => s + p.progress, 0) / phases.length);
+    return weightedProgress(await this.list(projectId));
   },
 };

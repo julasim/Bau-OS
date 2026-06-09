@@ -7,7 +7,7 @@
 // ============================================================
 
 import { Hono } from "hono";
-import { phaseRepo } from "../../data/index.js";
+import { phaseRepo, invoiceRepo } from "../../data/index.js";
 import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
 import { projectRepo } from "../../data/index.js";
 import type { AppEnv } from "../server.js";
@@ -58,6 +58,7 @@ const guard = async (c: { json: (o: unknown, s?: number) => Response }, next: ()
 };
 phasesRoutes.use("/projects/:projectName/phases", guard);
 phasesRoutes.use("/projects/:projectName/phases/*", guard);
+phasesRoutes.use("/projects/:projectName/finance", guard);
 phasesRoutes.use("/phases/*", guard);
 
 // ── Liste je Projekt ──────────────────────────────────────────
@@ -67,6 +68,54 @@ phasesRoutes.get("/projects/:projectName/phases", async (c) => {
   const phases = await phaseRepo!.list(proj.id);
   const progress = await phaseRepo!.projectProgress(proj.id);
   return c.json({ phases, progress });
+});
+
+// ── Honorar-/Finanz-Aggregat je Projekt ───────────────────────
+// Liefert Budget, fakturierte Summe und je Phase: Soll-Honorar
+// (budget * fee_share), bereits fakturiert und offen. Grundlage fuer
+// die Projekt-Detail-Finanzsicht und spaeter das Cockpit.
+phasesRoutes.get("/projects/:projectName/finance", async (c) => {
+  const proj = await resolveProject(c);
+  if ("error" in proj) return proj.error;
+  const info = await projectRepo.getInfo(proj.name);
+  const budget = info?.budget ?? null;
+  const phases = await phaseRepo!.list(proj.id);
+  const invoices = invoiceRepo ? await invoiceRepo.list(proj.id) : [];
+
+  // Fakturiert = Status 'gestellt' oder 'bezahlt' (Entwuerfe zaehlen nicht).
+  const invByPhase = new Map<string, number>();
+  let invoicedTotal = 0;
+  let unassignedInvoiced = 0;
+  for (const inv of invoices) {
+    if (inv.status !== "gestellt" && inv.status !== "bezahlt") continue;
+    invoicedTotal += inv.betrag;
+    if (inv.phaseId) invByPhase.set(inv.phaseId, (invByPhase.get(inv.phaseId) ?? 0) + inv.betrag);
+    else unassignedInvoiced += inv.betrag;
+  }
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const feeShareSum = phases.reduce((s, p) => s + p.feeShare, 0);
+  const perPhase = phases.map((p) => {
+    const sollHonorar = budget != null ? round2((budget * p.feeShare) / 100) : null;
+    const invoiced = round2(invByPhase.get(p.id) ?? 0);
+    const offen = sollHonorar != null ? round2(sollHonorar - invoiced) : null;
+    return {
+      phaseId: p.id,
+      name: p.name,
+      status: p.status,
+      feeShare: p.feeShare,
+      progress: p.progress,
+      sollHonorar,
+      invoiced,
+      offen,
+    };
+  });
+  return c.json({
+    budget,
+    invoicedTotal: round2(invoicedTotal),
+    unassignedInvoiced: round2(unassignedInvoiced),
+    feeShareSum,
+    perPhase,
+  });
 });
 
 // ── Anlegen ───────────────────────────────────────────────────

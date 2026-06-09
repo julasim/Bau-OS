@@ -49,6 +49,12 @@ export const dbInvoices: InvoiceRepository = {
     return rows.map((r) => rowToInvoice(r as Record<string, unknown>));
   },
 
+  async get(id) {
+    const db = getDb();
+    const rows = await db.unsafe(`${SELECT} WHERE i.id = $1 LIMIT 1`, [id]);
+    return rows[0] ? rowToInvoice(rows[0] as Record<string, unknown>) : null;
+  },
+
   async create(projectId, input) {
     const db = getDb();
     if (input.datum && !ISO_DATE.test(input.datum)) return "Datum muss YYYY-MM-DD sein";

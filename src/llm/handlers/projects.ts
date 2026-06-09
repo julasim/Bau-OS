@@ -1,5 +1,5 @@
 import type OpenAI from "openai";
-import { projectRepo } from "../../data/index.js";
+import { projectRepo, portfolioRepo, phaseRepo } from "../../data/index.js";
 import { emit } from "../../api/events.js";
 import type { ProjectCreateOptions, ProjectUpdate } from "../../data/types.js";
 import type { HandlerMap } from "./types.js";
@@ -53,6 +53,15 @@ export const projectSchemas: OpenAI.Chat.ChatCompletionTool[] = [
       name: "projekte_auflisten",
       description:
         "Listet alle Projekte im Vault auf (Ordner unter Projekte/). Zeigt nur die Namen — fuer Details zu einem Projekt projekt_info verwenden.",
+      parameters: { type: "object", properties: {}, required: [] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "portfolio_uebersicht",
+      description:
+        "Projektuebergreifendes Cockpit ueber alle sichtbaren Projekte: je Projekt aktuelle Phase, honorargewichteter Fortschritt, fakturierter Betrag vs. Budget, naechste Frist, offene High-Prio-Aufgaben und eine Ampel (rot/gelb/gruen). Nutze dies fuer Fragen wie 'Wie stehen meine Projekte?', 'Wo brennt's?', 'Welche Fristen kommen?'. Nur im DB-Modus verfuegbar.",
       parameters: { type: "object", properties: {}, required: [] },
     },
   },
@@ -149,6 +158,40 @@ export const projectHandlers: HandlerMap = {
     return projects.length ? projects.join("\n") : "Keine Projekte vorhanden.";
   },
 
+  portfolio_uebersicht: async () => {
+    if (!portfolioRepo) return "Das Portfolio-Cockpit ist nur im DB-Modus verfuegbar.";
+    const ctx = getCurrentUserCtx();
+    const visible = ctx ? await getVisibleProjectIds(ctx) : "all";
+    const rows = await portfolioRepo.list(visible);
+    if (rows.length === 0) return "Keine Projekte im Portfolio.";
+    // Ampel: rot zuerst (Handlungsbedarf oben).
+    const order = { red: 0, amber: 1, green: 2 } as const;
+    const label = { red: "ROT", amber: "GELB", green: "GRUEN" } as const;
+    const sorted = [...rows].sort((a, b) => order[a.health] - order[b.health]);
+    const dash = "—";
+    const money = (n: number | null) =>
+      n === null || n === undefined ? dash : n.toLocaleString("de-AT", { maximumFractionDigits: 0 }) + " €";
+    const lines = sorted.map((p) => {
+      const head = `[${label[p.health]}] ${p.name}${p.projektnummer ? ` (${p.projektnummer})` : ""}`;
+      const parts = [
+        `Phase: ${p.currentPhase ?? dash}`,
+        `Fortschritt: ${p.progress}%`,
+        `Honorar: ${money(p.invoiced)} fakturiert / ${money(p.budget)} Budget`,
+      ];
+      if (p.nextDeadline) {
+        parts.push(`naechste Frist: ${p.nextDeadline}${p.nextDeadlineLabel ? ` (${p.nextDeadlineLabel})` : ""}`);
+      }
+      if (p.openHighPrio > 0) parts.push(`offene High-Prio: ${p.openHighPrio}`);
+      return `${head}\n  ${parts.join(" · ")}`;
+    });
+    const counts = sorted.reduce(
+      (acc, p) => ((acc[p.health] = (acc[p.health] ?? 0) + 1), acc),
+      {} as Record<string, number>,
+    );
+    const summary = `Portfolio (${rows.length} Projekte) — rot: ${counts.red ?? 0}, gelb: ${counts.amber ?? 0}, gruen: ${counts.green ?? 0}`;
+    return `${summary}\n\n${lines.join("\n\n")}`;
+  },
+
   projekt_info: async (args) => {
     const ctx = getCurrentUserCtx();
     if (ctx && !(await canSeeProjectByName(ctx, String(args.name)))) {
@@ -178,6 +221,23 @@ export const projectHandlers: HandlerMap = {
     lines.push(
       `Notizen: ${info.notes} · Offene Aufgaben: ${info.openTasks} · Termine: ${info.termine} · Dateien: ${info.files ?? 0}`,
     );
+    // Leistungsphasen (Migration 035, nur DB-Modus): honorargewichteter
+    // Fortschritt, aktive Phase und naechste Phasen-Frist.
+    if (phaseRepo && info.id) {
+      const phases = await phaseRepo.list(info.id);
+      if (phases.length > 0) {
+        const progress = await phaseRepo.projectProgress(info.id);
+        const active = phases.find((p) => p.status === "aktiv");
+        const nextDue = phases
+          .filter((p) => p.status !== "fertig" && p.sollEnde)
+          .map((p) => ({ ende: p.sollEnde as string, name: p.name }))
+          .sort((a, b) => a.ende.localeCompare(b.ende))[0];
+        lines.push("");
+        lines.push(`Leistungsphasen: ${phases.length} · Fortschritt (honorargewichtet): ${progress}%`);
+        lines.push(`Aktive Phase: ${active ? active.name : dash}`);
+        if (nextDue) lines.push(`Naechste Phasen-Frist: ${nextDue.ende} (${nextDue.name})`);
+      }
+    }
     if (info.description) {
       lines.push("");
       lines.push(`Beschreibung: ${info.description}`);
