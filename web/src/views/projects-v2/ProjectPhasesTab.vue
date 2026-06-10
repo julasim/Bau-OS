@@ -7,6 +7,7 @@
 import { ref, computed, onMounted } from "vue";
 import { api } from "../../api";
 import BIcon from "../../components/BIcon.vue";
+import PhaseGantt from "./PhaseGantt.vue";
 
 const props = defineProps<{ projectName: string }>();
 
@@ -25,6 +26,7 @@ interface ProjectPhase {
   sollEnde: string | null;
   istStart: string | null;
   istEnde: string | null;
+  dependsOnPhaseId: string | null;
   progress: number;
   taskTotal: number;
   taskDone: number;
@@ -43,6 +45,7 @@ interface PhaseDraft {
   sollEnde: string;
   istStart: string;
   istEnde: string;
+  dependsOnPhaseId: string | null;
 }
 
 const STATUS_LABEL: Record<PhaseStatus, string> = {
@@ -74,8 +77,12 @@ const loaded = ref(false);
 const busy = ref(false);
 const error = ref<string | null>(null);
 const draft = ref<PhaseDraft | null>(null);
+const view = ref<"liste" | "gantt">("liste");
 
 const encName = computed(() => encodeURIComponent(props.projectName));
+
+// Moegliche Vorgaenger im Editor (alle Phasen ausser der bearbeiteten).
+const predecessorOptions = computed(() => (draft.value ? phases.value.filter((p) => p.id !== draft.value!.id) : []));
 
 const feeSum = computed(() => phases.value.reduce((s, p) => s + Number(p.feeShare || 0), 0));
 const feeSumOff = computed(() => Math.abs(feeSum.value - 100) > 0.01 && phases.value.length > 0);
@@ -160,6 +167,7 @@ function emptyDraft(): PhaseDraft {
     sollEnde: "",
     istStart: "",
     istEnde: "",
+    dependsOnPhaseId: null,
   };
 }
 
@@ -178,6 +186,7 @@ function selectPhase(p: ProjectPhase) {
     sollEnde: p.sollEnde ?? "",
     istStart: p.istStart ?? "",
     istEnde: p.istEnde ?? "",
+    dependsOnPhaseId: p.dependsOnPhaseId ?? null,
   };
 }
 
@@ -208,6 +217,7 @@ async function save() {
     sollEnde: d.sollEnde || null,
     istStart: d.istStart || null,
     istEnde: d.istEnde || null,
+    dependsOnPhaseId: d.dependsOnPhaseId,
   };
   try {
     if (d.id) {
@@ -275,6 +285,10 @@ onMounted(() => void load());
           <BIcon name="plus" :size="11" />
           <span style="margin-left: 4px">Phase hinzufügen</span>
         </button>
+        <div class="ph-viewtoggle">
+          <button :class="['ph-vt', view === 'liste' ? 'active' : '']" @click="view = 'liste'">Liste</button>
+          <button :class="['ph-vt', view === 'gantt' ? 'active' : '']" @click="view = 'gantt'">Zeitleiste</button>
+        </div>
         <div class="ph-bar-meta">
           <div class="ph-overall">
             <span class="ph-overall-label">Gesamtfortschritt</span>
@@ -296,210 +310,222 @@ onMounted(() => void load());
       <div v-if="error" class="ph-error">{{ error }}</div>
 
       <!-- Leerzustand -->
-      <div v-if="phases.length === 0 && !draft" class="empty-state" style="margin-top: 16px">
-        <div class="empty-state-icon"><BIcon name="timeline" :size="26" /></div>
-        <div class="empty-state-text">Noch keine Leistungsphasen für dieses Projekt.</div>
-        <button class="bauos-btn solid sm" @click="newPhase">
-          <BIcon name="plus" :size="11" :stroke-width="2" />
-          Erste Phase anlegen
-        </button>
-      </div>
+      <PhaseGantt v-if="view === 'gantt'" :phases="phases" />
 
-      <div v-else class="ph-grid">
-        <!-- Liste -->
-        <div class="ph-list">
-          <div
-            v-for="(p, i) in phases"
-            :key="p.id"
-            :class="['ph-row', draft?.id === p.id ? 'ph-row-active' : '']"
-            @click="selectPhase(p)"
-          >
-            <div class="ph-sort" @click.stop>
-              <button class="ph-sort-btn" :disabled="i === 0 || busy" title="Nach oben" @click="move(i, -1)">
-                <span class="ph-flip"><BIcon name="chevronDown" :size="13" /></span>
-              </button>
-              <button
-                class="ph-sort-btn"
-                :disabled="i === phases.length - 1 || busy"
-                title="Nach unten"
-                @click="move(i, 1)"
-              >
-                <BIcon name="chevronDown" :size="13" />
-              </button>
-            </div>
-            <div class="ph-main">
-              <div class="ph-row-head">
-                <span class="ph-name">{{ p.name }}</span>
-                <span class="ph-status" :class="'st-' + p.status">{{ STATUS_LABEL[p.status] }}</span>
-              </div>
-              <div class="ph-progress">
-                <div class="ph-progress-fill" :style="{ width: p.progress + '%' }"></div>
-              </div>
-              <div class="ph-row-foot">
-                <span class="ph-pct">{{ p.progress }}%</span>
-                <span class="ph-foot-sep">·</span>
-                <span :title="'erledigte / gesamte verknüpfte Aufgaben'"
-                  >{{ p.taskDone }}/{{ p.taskTotal }} Aufgaben</span
-                >
-                <span class="ph-foot-sep">·</span>
-                <span>Honorar {{ Number(p.feeShare).toFixed(0) }}%</span>
-                <span class="ph-foot-sep">·</span>
-                <span class="ph-dates">{{ fmtRange(p.sollStart, p.sollEnde) }}</span>
-              </div>
-            </div>
-          </div>
+      <template v-else>
+        <div v-if="phases.length === 0 && !draft" class="empty-state" style="margin-top: 16px">
+          <div class="empty-state-icon"><BIcon name="timeline" :size="26" /></div>
+          <div class="empty-state-text">Noch keine Leistungsphasen für dieses Projekt.</div>
+          <button class="bauos-btn solid sm" @click="newPhase">
+            <BIcon name="plus" :size="11" :stroke-width="2" />
+            Erste Phase anlegen
+          </button>
         </div>
 
-        <!-- Editor -->
-        <div class="ph-editor" v-if="draft">
-          <div class="ph-editor-head">
-            <h3>{{ draft.id ? "Phase bearbeiten" : "Neue Phase" }}</h3>
-            <button v-if="draft.id" class="bauos-btn ghost sm" :disabled="busy" @click="remove">
-              <BIcon name="trash" :size="11" /><span style="margin-left: 4px">Löschen</span>
-            </button>
-            <button v-else class="bauos-btn ghost sm" :disabled="busy" @click="cancelEdit">Abbrechen</button>
-          </div>
-
-          <div class="ph-field">
-            <label class="ph-label">Name <span class="req">*</span></label>
-            <input
-              v-model="draft.name"
-              type="text"
-              class="stamm-input"
-              placeholder="z. B. Entwurfsplanung"
-              @keyup.enter="save"
-            />
-          </div>
-
-          <div class="ph-field-row">
-            <div class="ph-field">
-              <label class="ph-label">Status</label>
-              <select v-model="draft.status" class="stamm-input">
-                <option value="offen">Offen</option>
-                <option value="aktiv">Aktiv</option>
-                <option value="fertig">Fertig</option>
-              </select>
+        <div v-else class="ph-grid">
+          <!-- Liste -->
+          <div class="ph-list">
+            <div
+              v-for="(p, i) in phases"
+              :key="p.id"
+              :class="['ph-row', draft?.id === p.id ? 'ph-row-active' : '']"
+              @click="selectPhase(p)"
+            >
+              <div class="ph-sort" @click.stop>
+                <button class="ph-sort-btn" :disabled="i === 0 || busy" title="Nach oben" @click="move(i, -1)">
+                  <span class="ph-flip"><BIcon name="chevronDown" :size="13" /></span>
+                </button>
+                <button
+                  class="ph-sort-btn"
+                  :disabled="i === phases.length - 1 || busy"
+                  title="Nach unten"
+                  @click="move(i, 1)"
+                >
+                  <BIcon name="chevronDown" :size="13" />
+                </button>
+              </div>
+              <div class="ph-main">
+                <div class="ph-row-head">
+                  <span class="ph-name">{{ p.name }}</span>
+                  <span class="ph-status" :class="'st-' + p.status">{{ STATUS_LABEL[p.status] }}</span>
+                </div>
+                <div class="ph-progress">
+                  <div class="ph-progress-fill" :style="{ width: p.progress + '%' }"></div>
+                </div>
+                <div class="ph-row-foot">
+                  <span class="ph-pct">{{ p.progress }}%</span>
+                  <span class="ph-foot-sep">·</span>
+                  <span :title="'erledigte / gesamte verknüpfte Aufgaben'"
+                    >{{ p.taskDone }}/{{ p.taskTotal }} Aufgaben</span
+                  >
+                  <span class="ph-foot-sep">·</span>
+                  <span>Honorar {{ Number(p.feeShare).toFixed(0) }}%</span>
+                  <span class="ph-foot-sep">·</span>
+                  <span class="ph-dates">{{ fmtRange(p.sollStart, p.sollEnde) }}</span>
+                </div>
+              </div>
             </div>
+          </div>
+
+          <!-- Editor -->
+          <div class="ph-editor" v-if="draft">
+            <div class="ph-editor-head">
+              <h3>{{ draft.id ? "Phase bearbeiten" : "Neue Phase" }}</h3>
+              <button v-if="draft.id" class="bauos-btn ghost sm" :disabled="busy" @click="remove">
+                <BIcon name="trash" :size="11" /><span style="margin-left: 4px">Löschen</span>
+              </button>
+              <button v-else class="bauos-btn ghost sm" :disabled="busy" @click="cancelEdit">Abbrechen</button>
+            </div>
+
             <div class="ph-field">
-              <label class="ph-label">Honoraranteil %</label>
+              <label class="ph-label">Name <span class="req">*</span></label>
               <input
-                v-model="draft.feeShare"
+                v-model="draft.name"
+                type="text"
+                class="stamm-input"
+                placeholder="z. B. Entwurfsplanung"
+                @keyup.enter="save"
+              />
+            </div>
+
+            <div class="ph-field-row">
+              <div class="ph-field">
+                <label class="ph-label">Status</label>
+                <select v-model="draft.status" class="stamm-input">
+                  <option value="offen">Offen</option>
+                  <option value="aktiv">Aktiv</option>
+                  <option value="fertig">Fertig</option>
+                </select>
+              </div>
+              <div class="ph-field">
+                <label class="ph-label">Honoraranteil %</label>
+                <input
+                  v-model="draft.feeShare"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  class="stamm-input"
+                  placeholder="0"
+                />
+              </div>
+            </div>
+
+            <div class="ph-field">
+              <label class="ph-label">
+                Fortschritt manuell %
+                <span class="hint">leer = automatisch aus Aufgaben</span>
+              </label>
+              <input
+                v-model="draft.progressManual"
                 type="number"
                 min="0"
                 max="100"
-                step="0.5"
+                step="1"
                 class="stamm-input"
-                placeholder="0"
+                placeholder="auto"
               />
             </div>
-          </div>
 
-          <div class="ph-field">
-            <label class="ph-label">
-              Fortschritt manuell %
-              <span class="hint">leer = automatisch aus Aufgaben</span>
-            </label>
-            <input
-              v-model="draft.progressManual"
-              type="number"
-              min="0"
-              max="100"
-              step="1"
-              class="stamm-input"
-              placeholder="auto"
-            />
-          </div>
-
-          <div class="ph-field-row">
-            <div class="ph-field">
-              <label class="ph-label">Soll-Start</label>
-              <input v-model="draft.sollStart" type="date" class="stamm-input" />
-            </div>
-            <div class="ph-field">
-              <label class="ph-label">Soll-Ende</label>
-              <input v-model="draft.sollEnde" type="date" class="stamm-input" />
-            </div>
-          </div>
-          <div class="ph-field-row">
-            <div class="ph-field">
-              <label class="ph-label">Ist-Start</label>
-              <input v-model="draft.istStart" type="date" class="stamm-input" />
-            </div>
-            <div class="ph-field">
-              <label class="ph-label">Ist-Ende</label>
-              <input v-model="draft.istEnde" type="date" class="stamm-input" />
-            </div>
-          </div>
-
-          <div class="ph-editor-actions">
-            <button class="bauos-btn solid sm" :disabled="busy" @click="save">
-              <BIcon name="check" :size="11" /><span style="margin-left: 4px">{{
-                draft.id ? "Speichern" : "Anlegen"
-              }}</span>
-            </button>
-          </div>
-
-          <!-- Zuordnung: Aufgaben & Termine (nur bei bestehender Phase) -->
-          <template v-if="draft.id">
-            <div class="ph-assign">
-              <div class="ph-assign-head">Aufgaben in dieser Phase</div>
-              <div v-if="tasksInPhase.length === 0" class="ph-assign-empty">Keine zugeordnet</div>
-              <div v-for="t in tasksInPhase" :key="t.id" class="ph-assign-row">
-                <span class="ph-assign-text">{{ t.text }}</span>
-                <button
-                  class="ph-assign-x"
-                  :disabled="busy"
-                  title="Aus Phase entfernen"
-                  @click="assignTask(t.id, null)"
-                >
-                  <BIcon name="x" :size="12" />
-                </button>
+            <div class="ph-field-row">
+              <div class="ph-field">
+                <label class="ph-label">Soll-Start</label>
+                <input v-model="draft.sollStart" type="date" class="stamm-input" />
               </div>
-              <select
-                v-if="assignableTasks.length"
-                class="stamm-input ph-assign-pick"
-                :disabled="busy"
-                @change="onAssignTaskPick"
-              >
-                <option value="">+ Aufgabe zuordnen…</option>
-                <option v-for="t in assignableTasks" :key="t.id" :value="t.id">{{ t.text }}</option>
+              <div class="ph-field">
+                <label class="ph-label">Soll-Ende</label>
+                <input v-model="draft.sollEnde" type="date" class="stamm-input" />
+              </div>
+            </div>
+            <div class="ph-field-row">
+              <div class="ph-field">
+                <label class="ph-label">Ist-Start</label>
+                <input v-model="draft.istStart" type="date" class="stamm-input" />
+              </div>
+              <div class="ph-field">
+                <label class="ph-label">Ist-Ende</label>
+                <input v-model="draft.istEnde" type="date" class="stamm-input" />
+              </div>
+            </div>
+
+            <div class="ph-field" v-if="predecessorOptions.length">
+              <label class="ph-label">Vorgänger (Abhängigkeit)</label>
+              <select v-model="draft.dependsOnPhaseId" class="stamm-input">
+                <option :value="null">— (keiner)</option>
+                <option v-for="p in predecessorOptions" :key="p.id" :value="p.id">{{ p.name }}</option>
               </select>
             </div>
 
-            <div class="ph-assign">
-              <div class="ph-assign-head">Termine in dieser Phase</div>
-              <div v-if="termineInPhase.length === 0" class="ph-assign-empty">Keine zugeordnet</div>
-              <div v-for="t in termineInPhase" :key="t.id" class="ph-assign-row">
-                <span class="ph-assign-text">
-                  <span class="ph-assign-date">{{ t.datum }}</span> {{ t.text }}
-                  <BIcon v-if="t.isMilestone" name="zap" :size="11" title="Meilenstein" />
-                </span>
-                <button
-                  class="ph-assign-x"
-                  :disabled="busy"
-                  title="Aus Phase entfernen"
-                  @click="assignTermin(t.id, null)"
-                >
-                  <BIcon name="x" :size="12" />
-                </button>
-              </div>
-              <select
-                v-if="assignableTermine.length"
-                class="stamm-input ph-assign-pick"
-                :disabled="busy"
-                @change="onAssignTerminPick"
-              >
-                <option value="">+ Termin zuordnen…</option>
-                <option v-for="t in assignableTermine" :key="t.id" :value="t.id">{{ t.datum }} · {{ t.text }}</option>
-              </select>
+            <div class="ph-editor-actions">
+              <button class="bauos-btn solid sm" :disabled="busy" @click="save">
+                <BIcon name="check" :size="11" /><span style="margin-left: 4px">{{
+                  draft.id ? "Speichern" : "Anlegen"
+                }}</span>
+              </button>
             </div>
-          </template>
+
+            <!-- Zuordnung: Aufgaben & Termine (nur bei bestehender Phase) -->
+            <template v-if="draft.id">
+              <div class="ph-assign">
+                <div class="ph-assign-head">Aufgaben in dieser Phase</div>
+                <div v-if="tasksInPhase.length === 0" class="ph-assign-empty">Keine zugeordnet</div>
+                <div v-for="t in tasksInPhase" :key="t.id" class="ph-assign-row">
+                  <span class="ph-assign-text">{{ t.text }}</span>
+                  <button
+                    class="ph-assign-x"
+                    :disabled="busy"
+                    title="Aus Phase entfernen"
+                    @click="assignTask(t.id, null)"
+                  >
+                    <BIcon name="x" :size="12" />
+                  </button>
+                </div>
+                <select
+                  v-if="assignableTasks.length"
+                  class="stamm-input ph-assign-pick"
+                  :disabled="busy"
+                  @change="onAssignTaskPick"
+                >
+                  <option value="">+ Aufgabe zuordnen…</option>
+                  <option v-for="t in assignableTasks" :key="t.id" :value="t.id">{{ t.text }}</option>
+                </select>
+              </div>
+
+              <div class="ph-assign">
+                <div class="ph-assign-head">Termine in dieser Phase</div>
+                <div v-if="termineInPhase.length === 0" class="ph-assign-empty">Keine zugeordnet</div>
+                <div v-for="t in termineInPhase" :key="t.id" class="ph-assign-row">
+                  <span class="ph-assign-text">
+                    <span class="ph-assign-date">{{ t.datum }}</span> {{ t.text }}
+                    <BIcon v-if="t.isMilestone" name="zap" :size="11" title="Meilenstein" />
+                  </span>
+                  <button
+                    class="ph-assign-x"
+                    :disabled="busy"
+                    title="Aus Phase entfernen"
+                    @click="assignTermin(t.id, null)"
+                  >
+                    <BIcon name="x" :size="12" />
+                  </button>
+                </div>
+                <select
+                  v-if="assignableTermine.length"
+                  class="stamm-input ph-assign-pick"
+                  :disabled="busy"
+                  @change="onAssignTerminPick"
+                >
+                  <option value="">+ Termin zuordnen…</option>
+                  <option v-for="t in assignableTermine" :key="t.id" :value="t.id">{{ t.datum }} · {{ t.text }}</option>
+                </select>
+              </div>
+            </template>
+          </div>
+          <div v-else class="ph-editor-empty">
+            <BIcon name="timeline" :size="22" />
+            <span>Phase auswählen oder neu anlegen</span>
+          </div>
         </div>
-        <div v-else class="ph-editor-empty">
-          <BIcon name="timeline" :size="22" />
-          <span>Phase auswählen oder neu anlegen</span>
-        </div>
-      </div>
+      </template>
     </template>
   </div>
 </template>
@@ -511,6 +537,25 @@ onMounted(() => void load());
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+}
+.ph-viewtoggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.ph-vt {
+  border: none;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  font-size: 12.5px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.ph-vt.active {
+  background: var(--color-bg-muted);
+  color: var(--color-text);
+  font-weight: 600;
 }
 .ph-bar-meta {
   display: flex;

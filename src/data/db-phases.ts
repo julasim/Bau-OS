@@ -44,6 +44,7 @@ function rowToPhase(row: Record<string, unknown>): ProjectPhase {
     sollEnde: dateStr(row.soll_ende),
     istStart: dateStr(row.ist_start),
     istEnde: dateStr(row.ist_ende),
+    dependsOnPhaseId: row.depends_on_phase_id ? String(row.depends_on_phase_id) : null,
     progress,
     taskTotal,
     taskDone,
@@ -87,6 +88,43 @@ export function weightedProgress(phases: ProjectPhase[]): number {
   return Math.round(phases.reduce((s, p) => s + p.progress, 0) / phases.length);
 }
 
+// Auto-Meilenstein-Sync (Migration 038): ein gesetztes soll_ende erzeugt/
+// aktualisiert einen is_milestone-Termin; die Termin-ID liegt in
+// project_phases.milestone_termin_id (idempotent). soll_ende geleert →
+// Auto-Termin wird geloescht. Manuell angelegte Meilensteine sind nicht
+// betroffen (nur der via milestone_termin_id verknuepfte Termin).
+async function syncMilestone(db: ReturnType<typeof getDb>, phaseId: string): Promise<void> {
+  const [ph] = await db`
+    SELECT id, project_id, name, soll_ende, milestone_termin_id
+      FROM project_phases WHERE id = ${phaseId}
+  `;
+  if (!ph) return;
+  const sollEnde = dateStr(ph.soll_ende);
+  const milestoneId = ph.milestone_termin_id ? String(ph.milestone_termin_id) : null;
+  const label = `Meilenstein: ${String(ph.name)}`;
+
+  if (sollEnde) {
+    if (milestoneId) {
+      const res = await db`
+        UPDATE termine SET datum = ${sollEnde}, text = ${label}, is_milestone = true, phase_id = ${phaseId}
+        WHERE id = ${milestoneId}
+      `;
+      if (res.count > 0) return;
+      // Termin extern geloescht → neu anlegen.
+    }
+    const newId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await db`
+      INSERT INTO termine (id, text, datum, project_id, is_milestone, phase_id, created_at)
+      VALUES (${newId}, ${label}, ${sollEnde}, ${ph.project_id}, true, ${phaseId}, ${now})
+    `;
+    await db`UPDATE project_phases SET milestone_termin_id = ${newId} WHERE id = ${phaseId}`;
+  } else if (milestoneId) {
+    await db`DELETE FROM termine WHERE id = ${milestoneId}`;
+    await db`UPDATE project_phases SET milestone_termin_id = NULL WHERE id = ${phaseId}`;
+  }
+}
+
 export const dbPhases: PhaseRepository = {
   async list(projectId) {
     const db = getDb();
@@ -119,15 +157,16 @@ export const dbPhases: PhaseRepository = {
     }
     const [created] = await db`
       INSERT INTO project_phases (project_id, name, sort_order, status, progress_manual, fee_share,
-                                  soll_start, soll_ende, ist_start, ist_ende)
+                                  soll_start, soll_ende, ist_start, ist_ende, depends_on_phase_id)
       VALUES (
         ${projectId}, ${name}, ${sort}, ${input.status ?? "offen"},
         ${input.progressManual ?? null}, ${input.feeShare ?? 0},
         ${input.sollStart ?? null}, ${input.sollEnde ?? null},
-        ${input.istStart ?? null}, ${input.istEnde ?? null}
+        ${input.istStart ?? null}, ${input.istEnde ?? null}, ${input.dependsOnPhaseId ?? null}
       )
       RETURNING id
     `;
+    await syncMilestone(db, String(created.id));
     const phase = await this.get(String(created.id));
     if (!phase) throw new Error("Phase nach INSERT nicht lesbar");
     return phase;
@@ -151,6 +190,8 @@ export const dbPhases: PhaseRepository = {
     const istStart = "istStart" in input ? (input.istStart ?? null) : current.ist_start;
     const istEnde = "istEnde" in input ? (input.istEnde ?? null) : current.ist_ende;
     const sortOrder = "sortOrder" in input ? (input.sortOrder ?? current.sort_order) : current.sort_order;
+    const dependsOnPhaseId =
+      "dependsOnPhaseId" in input ? (input.dependsOnPhaseId ?? null) : current.depends_on_phase_id;
 
     // Auto-Stempel der Ist-Termine bei Statuswechsel, wenn nicht explizit gesetzt.
     let istStartFinal = istStart;
@@ -167,7 +208,8 @@ export const dbPhases: PhaseRepository = {
         UPDATE project_phases SET
           name = ${name}, status = ${status}, progress_manual = ${progressManual},
           fee_share = ${feeShare}, soll_start = ${sollStart}, soll_ende = ${sollEnde},
-          ist_start = ${istStartFinal}, ist_ende = ${istEndeFinal}, sort_order = ${sortOrder}
+          ist_start = ${istStartFinal}, ist_ende = ${istEndeFinal}, sort_order = ${sortOrder},
+          depends_on_phase_id = ${dependsOnPhaseId}
         WHERE id = ${id}
       `;
     } catch (err) {
@@ -177,11 +219,18 @@ export const dbPhases: PhaseRepository = {
       }
       throw err;
     }
+    await syncMilestone(db, id);
     return this.get(id);
   },
 
   async delete(id) {
     const db = getDb();
+    // Auto-Meilenstein mitloeschen (FK SET NULL wuerde den Termin sonst
+    // verwaisen lassen).
+    const [ph] = await db`SELECT milestone_termin_id FROM project_phases WHERE id = ${id}`;
+    if (ph?.milestone_termin_id) {
+      await db`DELETE FROM termine WHERE id = ${String(ph.milestone_termin_id)}`;
+    }
     const result = await db`DELETE FROM project_phases WHERE id = ${id}`;
     return result.count > 0;
   },

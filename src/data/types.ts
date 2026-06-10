@@ -832,6 +832,8 @@ export interface ProjectPhase {
   sollEnde: string | null;
   istStart: string | null;
   istEnde: string | null;
+  /** Optionaler Vorgaenger (Migration 038) — fuer Gantt/kritischen Pfad. */
+  dependsOnPhaseId: string | null;
   // ── Abgeleitete Felder (read-only, aus Aufgaben berechnet) ──
   /** Effektiver Fortschritt 0..100: progressManual ?? (taskDone/taskTotal). */
   progress: number;
@@ -852,6 +854,7 @@ export interface ProjectPhaseUpsert {
   istStart?: string | null;
   istEnde?: string | null;
   sortOrder?: number;
+  dependsOnPhaseId?: string | null;
 }
 
 export type InvoiceStatus = "entwurf" | "gestellt" | "bezahlt";
