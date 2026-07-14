@@ -137,7 +137,7 @@ replacements = [
 
 base = os.path.join(
     r"C:\Users\juliu\OneDrive - Mag. Georg Sima",
-    "3_Unternehmen", "KI- Autonom", "bau-os", "docs"
+    "3_Unternehmen", "KI- Autonom", "patio", "docs"
 )
 
 count = 0

@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Agent-Logs API
+// PATIO — Agent-Logs API
 // Liefert die Tool-/Thought-/Event-Logs des Agent-Laufs.
 // Quelle: logs/agent-logs.jsonl (immer FS, unabhaengig von DB_ENABLED).
 // ============================================================

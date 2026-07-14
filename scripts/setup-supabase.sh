@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# Bau-OS — Supabase Self-Hosted Setup
+# PATIO — Supabase Self-Hosted Setup
 # Klont das offizielle supabase/supabase Docker-Setup,
 # generiert sichere Secrets und startet alle Services.
 #
@@ -119,8 +119,8 @@ fi
 # Das offizielle supabase/postgres Image hat pgvector bereits vorinstalliert.
 # Wir fuegen trotzdem unsere Extensions in ein Init-Script ein.
 if [ -d "volumes/db/init" ] || mkdir -p "volumes/db/init" 2>/dev/null; then
-  cat > "volumes/db/init/99_bauos_extensions.sql" << 'EOSQL'
--- Bau-OS: Zusaetzliche Extensions
+  cat > "volumes/db/init/99_patio_extensions.sql" << 'EOSQL'
+-- PATIO: Zusaetzliche Extensions
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS unaccent;
@@ -165,12 +165,12 @@ echo -e "  ${BLUE}Storage:${NC}    http://localhost:8000/storage/v1"
 echo -e "  ${BLUE}PostgreSQL:${NC} localhost:5432"
 echo ""
 
-# ── DATABASE_URL fuer Bau-OS .env ausgeben ────────────────────
+# ── DATABASE_URL fuer PATIO .env ausgeben ────────────────────
 POSTGRES_PW=$(grep "^POSTGRES_PASSWORD=" .env | cut -d'=' -f2-)
 SUPABASE_ANON=$(grep "^ANON_KEY=" .env | cut -d'=' -f2-)
 SUPABASE_SERVICE=$(grep "^SERVICE_ROLE_KEY=" .env | cut -d'=' -f2-)
 
-echo -e "  ${YELLOW}Fuege diese Zeilen in deine Bau-OS .env ein:${NC}"
+echo -e "  ${YELLOW}Fuege diese Zeilen in deine PATIO .env ein:${NC}"
 echo ""
 echo "  DATABASE_URL=postgres://postgres:${POSTGRES_PW}@localhost:5432/postgres"
 echo "  SUPABASE_URL=http://localhost:8000"

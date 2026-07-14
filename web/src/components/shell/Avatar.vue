@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — Avatar (Initialen-Bubble)
+// PATIO Workspace v2 — Avatar (Initialen-Bubble)
 // ============================================================
 
 import { computed } from "vue";

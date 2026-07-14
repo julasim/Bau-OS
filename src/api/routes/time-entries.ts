@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Stundenerfassung Routes
+// PATIO — Stundenerfassung Routes
 // ============================================================
 // Pattern angelehnt an meetings.ts:
 //   GET    /projects/:projectName/time-entries           → Liste (Filter via ?from/?to)

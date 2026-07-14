@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — TeamListPane
+// PATIO Workspace v2 — TeamListPane
 // ============================================================
 // ListPane fuer Team. Filter nach Kategorie. Klick → /team/:id.
 // ============================================================

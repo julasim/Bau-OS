@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — ProjectDetailHost
+// PATIO Workspace v2 — ProjectDetailHost
 // ============================================================
 // Wrappt das bestehende ProjectDetailView (4000+ Zeilen, hat
 // eigene Inner-Sidebar mit allen Modulen) im DetailPane-Slot.

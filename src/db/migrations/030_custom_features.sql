@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Custom Template Variables + Custom Project Modules
+-- PATIO — Custom Template Variables + Custom Project Modules
 -- ============================================================
 
 -- Eigene Platzhalter für Vorlagen ({{MeineFeld}})

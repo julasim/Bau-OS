@@ -46,7 +46,7 @@ Auf deinem lokalen Rechner brauchst du:
 
 ```bash
 # SSH Key erstellen (falls noch keiner vorhanden)
-ssh-keygen -t ed25519 -C "bau-os-server"
+ssh-keygen -t ed25519 -C "patio-server"
 
 # Oeffentlichen Key anzeigen (wird bei Hetzner hinterlegt)
 cat ~/.ssh/id_ed25519.pub

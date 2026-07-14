@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Chat Sessions
+-- PATIO — Chat Sessions
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS chat_sessions (

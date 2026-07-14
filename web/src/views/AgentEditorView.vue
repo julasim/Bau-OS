@@ -60,7 +60,7 @@ async function save() {
           {{ filename }}
         </h1>
       </div>
-      <button @click="save" :disabled="saving" class="bauos-btn solid">
+      <button @click="save" :disabled="saving" class="patio-btn solid">
         {{ saving ? "Speichert…" : "Speichern" }}
       </button>
     </div>

@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Embedding-Service
+// PATIO — Embedding-Service
 // Generiert Vektoren via Ollama (nomic-embed-text) und speichert
 // sie in pgvector-Spalten fuer semantische Suche.
 // ============================================================
@@ -176,7 +176,7 @@ export async function checkEmbeddingHealth(): Promise<{
   error?: string;
 }> {
   try {
-    const vec = await generateEmbedding("bau-os-healthcheck");
+    const vec = await generateEmbedding("patio-healthcheck");
     return {
       ok: true,
       model: EMBEDDING_MODEL,

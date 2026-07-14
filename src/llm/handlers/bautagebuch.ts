@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — LLM-Handler: Bautagebuch
+// PATIO — LLM-Handler: Bautagebuch
 // ============================================================
 // Zielgruppe: Architekturbuero / Buero in der Baubranche.
 // Wer benutzt das? Bauleiter / Sachbearbeiter im Buero, der den

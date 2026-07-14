@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS — Globaler Bestätigungs-Dialog
+// PATIO — Globaler Bestätigungs-Dialog
 // ============================================================
 // Ersetzt window.confirm() / window.alert(). Wird einmal in
 // AppLayout gerendert; jede Komponente triggert via useConfirm().
@@ -35,12 +35,12 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
       </h2>
       <div class="confirm-message">{{ _pendingConfirm.message }}</div>
       <div class="confirm-footer">
-        <button v-if="_pendingConfirm.cancelLabel !== ''" type="button" class="bauos-btn ghost" @click="_cancel()">
+        <button v-if="_pendingConfirm.cancelLabel !== ''" type="button" class="patio-btn ghost" @click="_cancel()">
           {{ _pendingConfirm.cancelLabel || "Abbrechen" }}
         </button>
         <button
           type="button"
-          class="bauos-btn"
+          class="patio-btn"
           :class="_pendingConfirm.confirmDanger ? 'danger' : 'solid'"
           @click="_accept()"
         >
@@ -89,12 +89,12 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   gap: 8px;
   margin-top: 20px;
 }
-.bauos-btn.danger {
+.patio-btn.danger {
   background: #dc2626;
   color: #fff;
   border-color: #dc2626;
 }
-.bauos-btn.danger:hover {
+.patio-btn.danger:hover {
   opacity: 0.9;
 }
 </style>

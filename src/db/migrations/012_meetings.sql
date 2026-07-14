@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Meetings / Protokolle (Phase 1)
+-- PATIO — Meetings / Protokolle (Phase 1)
 -- ============================================================
 -- Eigenstaendige Tabelle fuer Bauherrenmeetings, Baubesprechungen,
 -- Subunternehmer-Abstimmungen, Behoerden-Termine.

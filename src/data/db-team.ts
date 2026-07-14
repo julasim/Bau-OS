@@ -153,7 +153,7 @@ async function resolveCompanyId(db: ReturnType<typeof getDb>, name: string | nul
 
 /** Bulk-Lookup: gegeben eine Liste Email-Adressen, finde die zugehoerigen
  *  Team-Mitglieder. Used vom Microsoft-Sync um Outlook-Attendees auf
- *  Bau-OS-team_members zu mappen. Email-Vergleich case-insensitive +
+ *  PATIO-team_members zu mappen. Email-Vergleich case-insensitive +
  *  getrimmt, damit Schreibvarianten ("  user@x.at  " vs "User@X.at")
  *  noch matchen. Liefert eine Map fuer O(1)-Lookup im Caller. */
 export async function findMembersByEmails(emails: string[]): Promise<Map<string, { id: string; name: string }>> {

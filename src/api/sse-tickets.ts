@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — SSE One-Time-Tickets
+// PATIO — SSE One-Time-Tickets
 // Kurzlebige Einmal-Tickets fuer den SSE-Verbindungsaufbau.
 //
 // EventSource kann keine Custom-Header setzen, also muss das Credential

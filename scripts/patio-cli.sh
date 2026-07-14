@@ -1,13 +1,13 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# bau-os — CLI Management Tool
-# Wird nach Installation verfügbar als: bau-os
+# patio — CLI Management Tool
+# Wird nach Installation verfügbar als: patio
 # ─────────────────────────────────────────────────────────────────────────────
 
-INSTALL_DIR="/opt/bau-os"
-WORKSPACE_DIR="/opt/bau-os-workspace"
-SERVICE="bau-os"
-SERVICE_USER="bauos"
+INSTALL_DIR="/opt/patio"
+WORKSPACE_DIR="/opt/patio-workspace"
+SERVICE="patio"
+SERVICE_USER="patio"
 
 # Farben
 readonly GREEN='\033[0;32m'
@@ -38,7 +38,7 @@ print_logo() {
 
 need_root() {
   if [ "$EUID" -ne 0 ]; then
-    echo -e "${RED}  ✗${NC} Dieser Befehl benötigt root: sudo bau-os $*"
+    echo -e "${RED}  ✗${NC} Dieser Befehl benötigt root: sudo patio $*"
     exit 1
   fi
 }
@@ -132,7 +132,7 @@ cmd_check_update() {
   REMOTE=$(su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git rev-parse origin/main")
 
   if [ "$LOCAL" = "$REMOTE" ]; then
-    echo -e "  ${GREEN}✓${NC} Bau-OS ist auf dem neuesten Stand"
+    echo -e "  ${GREEN}✓${NC} PATIO ist auf dem neuesten Stand"
     echo -e "  ${DIM}  Version: ${LOCAL:0:7}${NC}"
     echo ""
     return 0
@@ -158,11 +158,11 @@ cmd_check_update() {
       bash "$INSTALL_DIR/scripts/update.sh"
     else
       echo ""
-      echo -e "  ${DIM}Update übersprungen. Manuell: sudo bau-os update${NC}"
+      echo -e "  ${DIM}Update übersprungen. Manuell: sudo patio update${NC}"
       echo ""
     fi
   else
-    echo -e "  ${DIM}Zum Installieren: sudo bau-os check-update${NC}"
+    echo -e "  ${DIM}Zum Installieren: sudo patio check-update${NC}"
     echo ""
   fi
 }
@@ -277,7 +277,7 @@ cmd_user() {
       ;;
     *)
       echo ""
-      echo -e "  ${BOLD}Verwendung:${NC}  bau-os user <befehl> [name]"
+      echo -e "  ${BOLD}Verwendung:${NC}  patio user <befehl> [name]"
       echo ""
       echo -e "    ${BOLD}add${NC} [name]      Neuen User anlegen    ${DIM}(sudo)${NC}"
       echo -e "    ${BOLD}list${NC}            Alle User auflisten"
@@ -289,7 +289,7 @@ cmd_user() {
 
 cmd_help() {
   echo ""
-  echo -e "  ${BOLD}Verwendung:${NC}  bau-os [befehl] [optionen]"
+  echo -e "  ${BOLD}Verwendung:${NC}  patio [befehl] [optionen]"
   echo ""
   echo -e "  ${CYAN}Befehle:${NC}"
   echo -e "    ${BOLD}status${NC}           Service-Status anzeigen"

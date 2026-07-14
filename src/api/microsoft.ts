@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Microsoft Graph OAuth-Helper (Phase 1)
+// PATIO — Microsoft Graph OAuth-Helper (Phase 1)
 // ============================================================
 // Reine Pure-Functions fuer den OAuth-Authorization-Code-Flow:
 //   1. buildAuthorizeUrl(state) → URL die User aufruft
@@ -34,7 +34,7 @@ export class MicrosoftAuthError extends Error {
 // ── Authorize URL ────────────────────────────────────────────────────────────
 
 /** Baut die URL die der User im Browser aufruft, um sich bei Microsoft
- *  anzumelden + Bau-OS Calendar-Zugriff zu erlauben.
+ *  anzumelden + PATIO Calendar-Zugriff zu erlauben.
  *  state: CSRF-Schutz + User-Anker (kurzes JWT vom Caller). */
 export function buildAuthorizeUrl(opts: { state: string; redirectUri: string }): string {
   const params = new URLSearchParams({

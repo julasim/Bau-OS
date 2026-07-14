@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 // ============================================================
-// Bau-OS — Vault → Datenbank Migration
+// PATIO — Vault → Datenbank Migration
 // Liest alle Daten aus dem Filesystem-Vault und importiert sie
 // in die PostgreSQL-Datenbank.
 //

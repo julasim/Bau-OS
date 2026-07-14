@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Projekt-Verknuepfungen
+-- PATIO — Projekt-Verknuepfungen
 -- ============================================================
 -- Zwei neue FK-Spalten auf projects:
 --   1) bauherr_id → team_members(id): Bauherr kann statt Freitext auch

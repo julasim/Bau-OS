@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Projekt-Bereich Tests (Phase 1 + Handler)
+// PATIO — Projekt-Bereich Tests (Phase 1 + Handler)
 // Prueft: Migration 004 existiert und enthaelt die erwarteten Spalten;
 // projekt_anlegen / projekt_aktualisieren / projekt_info schreiben /
 // lesen strukturierte Stammdaten korrekt (gegen gemockten Repo).

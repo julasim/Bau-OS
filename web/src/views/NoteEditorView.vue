@@ -55,10 +55,10 @@ async function save() {
         </h1>
       </div>
       <div class="flex" style="gap: 8px">
-        <button @click="preview = !preview" class="bauos-btn ghost">
+        <button @click="preview = !preview" class="patio-btn ghost">
           {{ preview ? "Bearbeiten" : "Vorschau" }}
         </button>
-        <button @click="save" :disabled="saving" class="bauos-btn solid">
+        <button @click="save" :disabled="saving" class="patio-btn solid">
           {{ saving ? "Speichert…" : "Speichern" }}
         </button>
       </div>

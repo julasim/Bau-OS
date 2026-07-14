@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — 2FA / TOTP Setup-Routes
+// PATIO — 2FA / TOTP Setup-Routes
 // ============================================================
 // Drei Endpunkte fuer den Setup-Flow:
 //   POST /auth/2fa/setup    → frischen Secret + QR-URI generieren

@@ -8,22 +8,22 @@ Die wichtigste Anlaufstelle für Logs:
 
 ```bash
 # Live-Logs
-sudo journalctl -u bau-os -f
+sudo journalctl -u patio -f
 
 # Letzte 100 Zeilen
-sudo journalctl -u bau-os -n 100
+sudo journalctl -u patio -n 100
 
 # Logs seit heute
-sudo journalctl -u bau-os --since today
+sudo journalctl -u patio --since today
 
 # Logs der letzten Stunde
-sudo journalctl -u bau-os --since "1 hour ago"
+sudo journalctl -u patio --since "1 hour ago"
 
 # Nur Fehler
-sudo journalctl -u bau-os -p err
+sudo journalctl -u patio -p err
 
 # Logs zwischen zwei Zeitpunkten
-sudo journalctl -u bau-os --since "2026-04-07 08:00" --until "2026-04-07 12:00"
+sudo journalctl -u patio --since "2026-04-07 08:00" --until "2026-04-07 12:00"
 ```
 
 ## /logs Befehl in Telegram
@@ -43,7 +43,7 @@ Du brauchst keinen SSH-Zugang für einen schnellen Blick auf die Logs. Schreibe 
 PATIO schreibt zusätzlich eine `bot.log` Datei:
 
 ```bash
-cat /home/bauos/bau-os/bot.log
+cat /home/patio/patio/bot.log
 ```
 
 ::: warning Auto-Trimming
@@ -87,10 +87,10 @@ free -h | grep Mem
 df -h /
 
 # Größe des Vaults
-du -sh /home/bauos/vault
+du -sh /home/patio/vault
 
 # Größe der Backups
-du -sh /home/bauos/backups
+du -sh /home/patio/backups
 
 # Größe der Ollama-Modelle
 du -sh /usr/share/ollama/.ollama/models
@@ -114,7 +114,7 @@ top -b -n 1 | head -20
 Erstelle ein Skript für einen schnellen Gesundheitscheck:
 
 ```bash
-nano /home/bauos/health-check.sh
+nano /home/patio/health-check.sh
 ```
 
 Inhalt:
@@ -128,7 +128,7 @@ echo ""
 
 # 1. Bot-Service
 echo -n "Bot-Service:     "
-if systemctl is-active --quiet bau-os; then
+if systemctl is-active --quiet patio; then
     echo "OK (läuft)"
 else
     echo "FEHLER (gestoppt!)"
@@ -174,7 +174,7 @@ fi
 
 # 6. Vault vorhanden
 echo -n "Vault:           "
-if [ -d "/home/bauos/vault/Agents/Main" ]; then
+if [ -d "/home/patio/vault/Agents/Main" ]; then
     echo "OK (vorhanden)"
 else
     echo "FEHLER (nicht gefunden!)"
@@ -185,7 +185,7 @@ echo "=== Ende ==="
 ```
 
 ```bash
-chmod +x /home/bauos/health-check.sh
+chmod +x /home/patio/health-check.sh
 ./health-check.sh
 ```
 
@@ -216,7 +216,7 @@ Nutze mcp_server_auflisten
 Oder in den Logs:
 
 ```bash
-sudo journalctl -u bau-os --since today | grep -i mcp
+sudo journalctl -u patio --since today | grep -i mcp
 ```
 
 Erwartete Log-Eintraege bei gesundem System:
@@ -226,7 +226,7 @@ Erwartete Log-Eintraege bei gesundem System:
 ```
 
 ::: tip Graceful Shutdown
-Bei `systemctl stop bau-os` werden alle MCP-Server sauber getrennt (`disconnectAll()`). Verwaiste MCP-Prozesse sind damit ausgeschlossen. Pruefen: `ps aux | grep mcp`
+Bei `systemctl stop patio` werden alle MCP-Server sauber getrennt (`disconnectAll()`). Verwaiste MCP-Prozesse sind damit ausgeschlossen. Pruefen: `ps aux | grep mcp`
 :::
 
 ## Automatischer Health Check (optional)
@@ -238,7 +238,7 @@ crontab -e
 ```
 
 ```cron
-0 * * * * /home/bauos/health-check.sh >> /home/bauos/health.log 2>&1
+0 * * * * /home/patio/health-check.sh >> /home/patio/health.log 2>&1
 ```
 
 ## Nächster Schritt

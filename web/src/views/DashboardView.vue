@@ -204,19 +204,19 @@ const statCards = computed(() => [
       </div>
       <!-- Quick-Actions: auf Mobile wrappen + Text unter Icon verstecken -->
       <div class="dash-actions">
-        <button class="bauos-btn ghost dash-action-btn" @click="router.push('/notes')" title="Notiz">
+        <button class="patio-btn ghost dash-action-btn" @click="router.push('/notes')" title="Notiz">
           <BIcon name="file" :size="14" /> <span class="dash-action-label">Notiz</span>
         </button>
-        <button class="bauos-btn ghost dash-action-btn" @click="router.push('/calendar')" title="Termin">
+        <button class="patio-btn ghost dash-action-btn" @click="router.push('/calendar')" title="Termin">
           <BIcon name="calendar" :size="14" /> <span class="dash-action-label">Termin</span>
         </button>
-        <button class="bauos-btn ghost dash-action-btn" @click="openPalette" title="Suche">
+        <button class="patio-btn ghost dash-action-btn" @click="openPalette" title="Suche">
           <BIcon name="search" :size="14" /> <span class="dash-action-label">Suche</span>
         </button>
-        <button class="bauos-btn ghost dash-action-btn" @click="router.push('/chat')" title="Neuer Chat">
+        <button class="patio-btn ghost dash-action-btn" @click="router.push('/chat')" title="Neuer Chat">
           <BIcon name="message" :size="14" /> <span class="dash-action-label">Neuer Chat</span>
         </button>
-        <button class="bauos-btn solid dash-action-btn" @click="router.push('/tasks')" title="Aufgabe">
+        <button class="patio-btn solid dash-action-btn" @click="router.push('/tasks')" title="Aufgabe">
           <BIcon name="plus" :size="14" :stroke-width="2" /> <span class="dash-action-label">Aufgabe</span>
         </button>
       </div>
@@ -258,7 +258,7 @@ const statCards = computed(() => [
         </div>
         <div v-if="openTasks.length === 0" class="flex items-center" style="gap: 10px; padding: 8px 0">
           <span style="font-size: 12px; color: var(--color-text-tertiary)">Keine offenen Aufgaben.</span>
-          <router-link to="/tasks" class="bauos-btn ghost sm" style="text-decoration: none; margin-left: auto">
+          <router-link to="/tasks" class="patio-btn ghost sm" style="text-decoration: none; margin-left: auto">
             <BIcon name="plus" :size="11" :stroke-width="2" /> Anlegen
           </router-link>
         </div>
@@ -384,7 +384,7 @@ const statCards = computed(() => [
       >
         <div class="empty-state-icon"><BIcon name="folder" :size="26" /></div>
         <div class="empty-state-text">Noch keine Projekte. Im Chat ("leg ein Projekt … an") oder direkt anlegen.</div>
-        <router-link to="/projects" class="bauos-btn solid sm" style="text-decoration: none">
+        <router-link to="/projects" class="patio-btn solid sm" style="text-decoration: none">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erstes Projekt anlegen
         </router-link>

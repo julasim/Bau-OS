@@ -131,7 +131,7 @@ export async function connectServer(name: string, config: McpServerConfig): Prom
   }
 
   try {
-    const client = new Client({ name: "bau-os", version: "1.0.0" });
+    const client = new Client({ name: "patio", version: "1.0.0" });
     const transport = new StdioClientTransport({
       command: config.command,
       args: config.args ?? [],

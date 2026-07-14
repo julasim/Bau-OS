@@ -869,7 +869,7 @@ async function submitRename() {
 function downloadMarkdown() {
   showActionMenu.value = false;
   const n = encodeURIComponent(projectName.value);
-  const token = localStorage.getItem("bau-os-token");
+  const token = localStorage.getItem("patio-token");
   // Browser-Download kann keine Auth-Header setzen — Token als Query-Param.
   const base = `/api/projects/${n}/export.md`;
   const href = token ? `${base}?token=${encodeURIComponent(token)}` : base;
@@ -1162,7 +1162,7 @@ async function deleteFile(entry: FileEntry) {
 }
 
 function downloadUrl(entry: FileEntry): string {
-  const token = localStorage.getItem("bau-os-token");
+  const token = localStorage.getItem("patio-token");
   const base = `/api/files/download?id=${encodeURIComponent(entry.id)}`;
   return token ? `${base}&token=${encodeURIComponent(token)}` : base;
 }
@@ -1211,7 +1211,7 @@ async function uploadFiles(fileList: FileList) {
   for (const f of fileList) formData.append("files", f);
 
   try {
-    const token = localStorage.getItem("bau-os-token");
+    const token = localStorage.getItem("patio-token");
     const res = await fetch("/api/files/upload", {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -1798,7 +1798,7 @@ async function newMeeting() {
 async function downloadDocx(url: string, fallbackFilename: string) {
   try {
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem("patio-token") ?? ""}` },
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: "Export fehlgeschlagen" }));
@@ -2461,10 +2461,10 @@ async function deleteMeeting() {
         </option>
       </select>
       <div class="flex items-center" style="gap: 6px; margin-top: 8px">
-        <button class="bauos-btn solid sm" :disabled="saving" @click="saveField('status')">
+        <button class="patio-btn solid sm" :disabled="saving" @click="saveField('status')">
           {{ saving ? "…" : "Speichern" }}
         </button>
-        <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
+        <button class="patio-btn ghost sm" @click="cancelEdit">Abbrechen</button>
         <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">
           {{ saveError }}
         </span>
@@ -2480,7 +2480,7 @@ async function deleteMeeting() {
       <div class="pm-popover" @click.stop>
         <div class="flex items-center justify-between" style="margin-bottom: 12px">
           <div style="font-size: 13px; font-weight: 600">Module für dieses Projekt</div>
-          <button @click="moduleSettingsOpen = false" class="bauos-btn ghost sm">×</button>
+          <button @click="moduleSettingsOpen = false" class="patio-btn ghost sm">×</button>
         </div>
         <p class="text-xs" style="color: var(--color-text-muted); margin: 0 0 12px">
           Tabs deaktivieren die für dieses Projekt nicht relevant sind. Die Daten bleiben erhalten — nur die UI-Anzeige
@@ -2506,13 +2506,13 @@ async function deleteMeeting() {
             v-if="moduleHasOverride"
             @click="resetProjectModulesToGlobal"
             :disabled="moduleBusy"
-            class="bauos-btn ghost sm"
+            class="patio-btn ghost sm"
             title="Override entfernen — globale Defaults gelten"
           >
             Auf Default zurücksetzen
           </button>
           <span v-else class="text-xs" style="color: var(--color-text-tertiary)"> Globale Defaults aktiv </span>
-          <button @click="moduleSettingsOpen = false" class="bauos-btn solid sm">Schließen</button>
+          <button @click="moduleSettingsOpen = false" class="patio-btn solid sm">Schließen</button>
         </div>
       </div>
     </div>
@@ -2570,10 +2570,10 @@ async function deleteMeeting() {
               style="resize: vertical; font-family: inherit; line-height: 1.5"
             ></textarea>
             <div class="flex items-center" style="gap: 6px; margin-top: 8px">
-              <button class="bauos-btn solid sm" :disabled="saving" @click="saveField('description')">
+              <button class="patio-btn solid sm" :disabled="saving" @click="saveField('description')">
                 {{ saving ? "…" : "Speichern" }}
               </button>
-              <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
+              <button class="patio-btn ghost sm" @click="cancelEdit">Abbrechen</button>
               <span v-if="saveError" style="font-size: 11px; color: var(--color-danger-text); margin-left: 4px">{{
                 saveError
               }}</span>
@@ -2900,7 +2900,7 @@ async function deleteMeeting() {
           <span class="font-mono" style="font-size: 12px; color: var(--color-text-muted)">
             {{ viewingNote }}
           </span>
-          <button @click="viewingNote = null" class="bauos-btn ghost">Schließen</button>
+          <button @click="viewingNote = null" class="patio-btn ghost">Schließen</button>
         </div>
         <div class="note-viewer">
           <MarkdownRenderer :content="noteContent" />
@@ -2927,7 +2927,7 @@ async function deleteMeeting() {
           <div class="empty-state-text">Noch keine Notizen für dieses Projekt.</div>
           <router-link
             :to="`/notes?project=${encodeURIComponent(projectName)}`"
-            class="bauos-btn solid sm"
+            class="patio-btn solid sm"
             style="text-decoration: none"
           >
             <BIcon name="plus" :size="11" :stroke-width="2" />
@@ -2956,7 +2956,7 @@ async function deleteMeeting() {
             placeholder="Zuständig…"
           />
         </div>
-        <button @click="addTask" class="bauos-btn solid">Hinzufügen</button>
+        <button @click="addTask" class="patio-btn solid">Hinzufügen</button>
       </div>
       <div
         v-if="tasks.filter((t) => t.status !== 'done').length > 0"
@@ -2989,7 +2989,7 @@ async function deleteMeeting() {
       <div v-else class="empty-state">
         <div class="empty-state-icon"><BIcon name="check" :size="26" /></div>
         <div class="empty-state-text">Noch keine offenen Aufgaben in diesem Projekt.</div>
-        <button class="bauos-btn solid sm" @click="focusNewTaskInput">
+        <button class="patio-btn solid sm" @click="focusNewTaskInput">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erste Aufgabe anlegen
         </button>
@@ -3019,7 +3019,7 @@ async function deleteMeeting() {
             placeholder="Teilnehmer…"
           />
         </div>
-        <button @click="addTermin" class="bauos-btn solid">Erstellen</button>
+        <button @click="addTermin" class="patio-btn solid">Erstellen</button>
       </div>
       <div
         v-if="termine.length > 0"
@@ -3043,7 +3043,7 @@ async function deleteMeeting() {
       <div v-else class="empty-state">
         <div class="empty-state-icon"><BIcon name="calendar" :size="26" /></div>
         <div class="empty-state-text">Noch keine Termine in diesem Projekt.</div>
-        <button class="bauos-btn solid sm" @click="focusNewTerminInput">
+        <button class="patio-btn solid sm" @click="focusNewTerminInput">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Ersten Termin anlegen
         </button>
@@ -3066,8 +3066,8 @@ async function deleteMeeting() {
             {{ viewingFile.name }}
           </span>
           <div class="flex items-center" style="gap: 8px">
-            <a :href="downloadUrl(viewingFile)" class="bauos-btn ghost sm" download>Download</a>
-            <button @click="viewingFile = null" class="bauos-btn ghost sm">Schließen</button>
+            <a :href="downloadUrl(viewingFile)" class="patio-btn ghost sm" download>Download</a>
+            <button @click="viewingFile = null" class="patio-btn ghost sm">Schließen</button>
           </div>
         </div>
         <div v-if="viewingFileIsMarkdown" class="note-viewer">
@@ -3086,7 +3086,7 @@ async function deleteMeeting() {
             <span v-if="uploadMsg" style="font-size: 11px; color: var(--color-success-text)">
               {{ uploadMsg }}
             </span>
-            <button type="button" class="bauos-btn solid sm" :disabled="uploading" @click="triggerFileUpload">
+            <button type="button" class="patio-btn solid sm" :disabled="uploading" @click="triggerFileUpload">
               <BIcon name="paperclip" :size="12" />
               <span style="margin-left: 4px">{{ uploading ? "Lädt…" : "Hochladen" }}</span>
             </button>
@@ -3173,11 +3173,11 @@ async function deleteMeeting() {
               <template v-if="m.projectId"> (aktuell: anderes Projekt)</template>
             </option>
           </select>
-          <button class="bauos-btn solid sm" :disabled="!assignMemberId || teamAssigning" @click="assignExisting">
+          <button class="patio-btn solid sm" :disabled="!assignMemberId || teamAssigning" @click="assignExisting">
             Zuordnen
           </button>
           <span style="color: var(--color-text-faint); font-size: 12px">oder</span>
-          <button class="bauos-btn ghost sm" @click="showNewMemberForm = true">
+          <button class="patio-btn ghost sm" @click="showNewMemberForm = true">
             <BIcon name="plus" :size="12" />
             <span style="margin-left: 4px">Neu anlegen</span>
           </button>
@@ -3202,14 +3202,14 @@ async function deleteMeeting() {
             @keyup.enter="createAndAssign"
           />
           <button
-            class="bauos-btn solid sm"
+            class="patio-btn solid sm"
             :disabled="!newMemberName.trim() || teamAssigning"
             @click="createAndAssign"
           >
             {{ teamAssigning ? "…" : "Anlegen + zuordnen" }}
           </button>
           <button
-            class="bauos-btn ghost sm"
+            class="patio-btn ghost sm"
             @click="
               showNewMemberForm = false;
               newMemberName = '';
@@ -3264,7 +3264,7 @@ async function deleteMeeting() {
       <div v-else>
         <!-- Action-Bar -->
         <div class="flex items-center" style="gap: 8px; margin-bottom: 14px; flex-wrap: wrap">
-          <button class="bauos-btn solid sm" @click="newBautagebuchToday">
+          <button class="patio-btn solid sm" @click="newBautagebuchToday">
             <BIcon name="plus" :size="11" />
             <span style="margin-left: 4px">Heute eintragen</span>
           </button>
@@ -3334,7 +3334,7 @@ async function deleteMeeting() {
               </span>
               <button
                 v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
-                class="bauos-btn ghost sm"
+                class="patio-btn ghost sm"
                 style="margin-left: auto"
                 @click="exportBautagebuchDocx(bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)!.id)"
                 title="Diesen Tag als Word herunterladen"
@@ -3344,7 +3344,7 @@ async function deleteMeeting() {
               </button>
               <button
                 v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
-                class="bauos-btn ghost sm"
+                class="patio-btn ghost sm"
                 @click="deleteBautagebuch"
               >
                 <BIcon name="trash" :size="11" />
@@ -3432,7 +3432,7 @@ async function deleteMeeting() {
 
             <!-- Speichern -->
             <div class="flex items-center" style="gap: 8px; margin-top: 14px">
-              <button class="bauos-btn solid sm" :disabled="bautagebuchSaving" @click="saveBautagebuch">
+              <button class="patio-btn solid sm" :disabled="bautagebuchSaving" @click="saveBautagebuch">
                 {{ bautagebuchSaving ? "…" : "Speichern" }}
               </button>
               <span v-if="bautagebuchError" style="font-size: 11px; color: var(--color-danger-text)">
@@ -3454,7 +3454,7 @@ async function deleteMeeting() {
       <div v-else>
         <!-- Action-Bar -->
         <div class="flex items-center" style="gap: 8px; margin-bottom: 14px; flex-wrap: wrap">
-          <button class="bauos-btn solid sm" @click="newMeeting">
+          <button class="patio-btn solid sm" @click="newMeeting">
             <BIcon name="plus" :size="11" />
             <span style="margin-left: 4px">Neues Meeting</span>
           </button>
@@ -3499,7 +3499,7 @@ async function deleteMeeting() {
               </h3>
               <button
                 v-if="meetingDraft.id"
-                class="bauos-btn ghost sm"
+                class="patio-btn ghost sm"
                 style="margin-left: auto"
                 @click="exportMeetingDocx(meetingDraft.id)"
                 title="Als Word-Datei herunterladen"
@@ -3507,11 +3507,11 @@ async function deleteMeeting() {
                 <BIcon name="download" :size="11" />
                 <span style="margin-left: 4px">Word</span>
               </button>
-              <button v-if="meetingDraft.id" class="bauos-btn ghost sm" @click="deleteMeeting">
+              <button v-if="meetingDraft.id" class="patio-btn ghost sm" @click="deleteMeeting">
                 <BIcon name="trash" :size="11" />
                 <span style="margin-left: 4px">Löschen</span>
               </button>
-              <button v-else class="bauos-btn ghost sm" style="margin-left: auto" @click="cancelMeetingEdit">
+              <button v-else class="patio-btn ghost sm" style="margin-left: auto" @click="cancelMeetingEdit">
                 Abbrechen
               </button>
             </div>
@@ -3644,7 +3644,7 @@ async function deleteMeeting() {
                   <!-- "Als Aufgabe anlegen" — wenn schon angelegt: Link statt Button -->
                   <button
                     v-if="!item.taskId"
-                    class="bauos-btn ghost sm"
+                    class="patio-btn ghost sm"
                     :disabled="!item.text.trim() || convertingActionIdx === idx"
                     @click="convertActionItemToTask(idx)"
                     title="Als Aufgabe anlegen"
@@ -3668,7 +3668,7 @@ async function deleteMeeting() {
                   placeholder="Neues To-Do…"
                   @keyup.enter="addActionItem"
                 />
-                <button class="bauos-btn ghost sm" @click="addActionItem">+ Hinzufügen</button>
+                <button class="patio-btn ghost sm" @click="addActionItem">+ Hinzufügen</button>
               </div>
               <p v-if="convertError" style="font-size: 11px; color: var(--color-danger-text); margin-top: 6px">
                 {{ convertError }}
@@ -3683,10 +3683,10 @@ async function deleteMeeting() {
 
             <!-- Speichern -->
             <div class="flex items-center" style="gap: 8px; margin-top: 14px">
-              <button class="bauos-btn solid sm" :disabled="meetingSaving" @click="saveMeeting">
+              <button class="patio-btn solid sm" :disabled="meetingSaving" @click="saveMeeting">
                 {{ meetingSaving ? "…" : "Speichern" }}
               </button>
-              <button class="bauos-btn ghost sm" @click="cancelMeetingEdit">Abbrechen</button>
+              <button class="patio-btn ghost sm" @click="cancelMeetingEdit">Abbrechen</button>
               <span v-if="meetingError" style="font-size: 11px; color: var(--color-danger-text)">
                 {{ meetingError }}
               </span>
@@ -3706,13 +3706,13 @@ async function deleteMeeting() {
       <div v-else>
         <!-- Action-Bar mit Total -->
         <div class="flex items-center" style="gap: 8px; margin-bottom: 14px; flex-wrap: wrap">
-          <button class="bauos-btn solid sm" @click="newTimeEntry">
+          <button class="patio-btn solid sm" @click="newTimeEntry">
             <BIcon name="plus" :size="11" />
             <span style="margin-left: 4px">Stunden eintragen</span>
           </button>
           <button
             v-if="timeEntries.length > 0"
-            class="bauos-btn ghost sm"
+            class="patio-btn ghost sm"
             @click="exportTimeEntriesDocx"
             title="Stundenzettel als Word herunterladen"
           >
@@ -3741,7 +3741,7 @@ async function deleteMeeting() {
         <div v-if="timeEntries.length === 0 && !timeDraft" class="empty-state" style="margin-top: 16px">
           <div class="empty-state-icon"><BIcon name="clock" :size="26" /></div>
           <div class="empty-state-text">Noch keine Stunden für dieses Projekt erfasst.</div>
-          <button class="bauos-btn solid sm" @click="newTimeEntry">
+          <button class="patio-btn solid sm" @click="newTimeEntry">
             <BIcon name="plus" :size="11" :stroke-width="2" />
             Erste Stunden eintragen
           </button>
@@ -3771,11 +3771,11 @@ async function deleteMeeting() {
               <h3 style="margin: 0; font-size: 16px; font-weight: 600">
                 {{ timeDraft.id ? "Eintrag bearbeiten" : "Neuer Stunden-Eintrag" }}
               </h3>
-              <button v-if="timeDraft.id" class="bauos-btn ghost sm" style="margin-left: auto" @click="deleteTimeEntry">
+              <button v-if="timeDraft.id" class="patio-btn ghost sm" style="margin-left: auto" @click="deleteTimeEntry">
                 <BIcon name="trash" :size="11" />
                 <span style="margin-left: 4px">Löschen</span>
               </button>
-              <button v-else class="bauos-btn ghost sm" style="margin-left: auto" @click="cancelTimeEdit">
+              <button v-else class="patio-btn ghost sm" style="margin-left: auto" @click="cancelTimeEdit">
                 Abbrechen
               </button>
             </div>
@@ -3883,10 +3883,10 @@ async function deleteMeeting() {
             </div>
 
             <div class="flex items-center" style="gap: 8px; margin-top: 14px">
-              <button class="bauos-btn solid sm" :disabled="timeSaving" @click="saveTimeEntry">
+              <button class="patio-btn solid sm" :disabled="timeSaving" @click="saveTimeEntry">
                 {{ timeSaving ? "…" : "Speichern" }}
               </button>
-              <button class="bauos-btn ghost sm" @click="cancelTimeEdit">Abbrechen</button>
+              <button class="patio-btn ghost sm" @click="cancelTimeEdit">Abbrechen</button>
               <span v-if="timeError" style="font-size: 11px; color: var(--color-danger-text)">
                 {{ timeError }}
               </span>
@@ -3935,7 +3935,7 @@ async function deleteMeeting() {
         </div>
       </div>
       <div v-if="fullActivityHasMore" class="flex" style="justify-content: center; margin-top: 12px">
-        <button class="bauos-btn ghost sm" :disabled="fullActivityLoading" @click="loadFullActivity(false)">
+        <button class="patio-btn ghost sm" :disabled="fullActivityLoading" @click="loadFullActivity(false)">
           {{ fullActivityLoading ? "Lädt…" : "Mehr laden" }}
         </button>
       </div>
@@ -3976,7 +3976,7 @@ async function deleteMeeting() {
             <template v-if="u.displayName"> ({{ u.username }})</template>
           </option>
         </select>
-        <button class="bauos-btn solid sm" :disabled="!accessAddUserId || accessSaving" @click="grantAccess">
+        <button class="patio-btn solid sm" :disabled="!accessAddUserId || accessSaving" @click="grantAccess">
           {{ accessSaving ? "…" : "Freigeben" }}
         </button>
         <span v-if="accessError" style="font-size: 11px; color: var(--color-danger-text)">
@@ -4044,9 +4044,9 @@ async function deleteMeeting() {
           {{ renameError }}
         </div>
         <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="bauos-btn ghost" @click="renameDialogOpen = false" :disabled="renaming">Abbrechen</button>
+          <button class="patio-btn ghost" @click="renameDialogOpen = false" :disabled="renaming">Abbrechen</button>
           <button
-            class="bauos-btn solid"
+            class="patio-btn solid"
             @click="submitRename"
             :disabled="!renameDraft.trim() || renameDraft.trim() === info?.name || renaming"
           >
@@ -4088,7 +4088,7 @@ async function deleteMeeting() {
 
         <div class="flex items-center justify-between" style="margin-top: 20px">
           <button
-            class="bauos-btn ghost"
+            class="patio-btn ghost"
             @click="
               setStatus('archiviert');
               deleteConfirmOpen = false;
@@ -4098,8 +4098,8 @@ async function deleteMeeting() {
             Stattdessen archivieren
           </button>
           <div class="flex items-center" style="gap: 8px">
-            <button class="bauos-btn ghost" @click="deleteConfirmOpen = false" :disabled="deleting">Abbrechen</button>
-            <button class="bauos-btn danger" @click="confirmDelete" :disabled="deleting">
+            <button class="patio-btn ghost" @click="deleteConfirmOpen = false" :disabled="deleting">Abbrechen</button>
+            <button class="patio-btn danger" @click="confirmDelete" :disabled="deleting">
               {{ deleting ? "Lösche…" : "Ja, löschen" }}
             </button>
           </div>
@@ -4522,13 +4522,13 @@ async function deleteMeeting() {
   font-size: 13px;
 }
 
-/* ── bauos-btn sm-Variant ───────────────────────────────── */
-.bauos-btn.sm {
+/* ── patio-btn sm-Variant ───────────────────────────────── */
+.patio-btn.sm {
   padding: 4px 10px;
   font-size: 11px;
 }
-.bauos-btn.sm.disabled,
-.bauos-btn.sm input:disabled + * {
+.patio-btn.sm.disabled,
+.patio-btn.sm input:disabled + * {
   opacity: 0.6;
   cursor: not-allowed;
 }
@@ -5347,15 +5347,15 @@ async function deleteMeeting() {
   box-shadow: 0 20px 50px rgba(0, 0, 0, 0.25);
 }
 
-.bauos-btn.danger {
+.patio-btn.danger {
   background: var(--color-danger-text, #dc2626);
   color: #fff;
   border: 1px solid transparent;
 }
-.bauos-btn.danger:hover {
+.patio-btn.danger:hover {
   filter: brightness(0.92);
 }
-.bauos-btn.danger:disabled {
+.patio-btn.danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

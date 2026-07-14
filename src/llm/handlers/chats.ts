@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Chat-Such-Tool
+// PATIO — Chat-Such-Tool
 // Ermoeglicht dem Agenten chat-uebergreifende Kontext-Suche. Wenn ein Nutzer
 // in Chat C auf etwas aus Chat A verweist ("der Termin den ich gestern angelegt
 // habe"), kann der Agent hier gezielt suchen ohne die komplette Historie

@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS — Standalone Docker Compose (Kunden-Installation)
+# PATIO — Standalone Docker Compose (Kunden-Installation)
 #
 # Enthält alle 4 Services inkl. Caddy für automatisches HTTPS.
 # Setzt voraus: CADDY_DOMAIN und CADDY_EMAIL in .env gesetzt.
@@ -10,22 +10,22 @@
 #          docker compose -f docker-compose.standalone.yml up -d
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: bau-os
+name: patio
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: bauos-postgres
+    container_name: patio-postgres
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-bauos}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bauos}
-      POSTGRES_DB: ${POSTGRES_DB:-bauos}
+      POSTGRES_USER: ${POSTGRES_USER:-patio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-patio}
+      POSTGRES_DB: ${POSTGRES_DB:-patio}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bauos} -d ${POSTGRES_DB:-bauos}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-patio} -d ${POSTGRES_DB:-patio}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,7 +35,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: bauos-ollama
+    container_name: patio-ollama
     restart: always
     volumes:
       - ollama_models:/root/.ollama
@@ -52,12 +52,12 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    image: bau-os-app:latest
-    container_name: bauos-app
+    image: patio-app:latest
+    container_name: patio-app
     restart: always
     env_file: ../.env
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-bauos}:${POSTGRES_PASSWORD:-bauos}@postgres:5432/${POSTGRES_DB:-bauos}
+      DATABASE_URL: postgres://${POSTGRES_USER:-patio}:${POSTGRES_PASSWORD:-patio}@postgres:5432/${POSTGRES_DB:-patio}
       OLLAMA_BASE_URL: http://ollama:11434/v1
       WORKSPACE_PATH: /workspace
     depends_on:
@@ -67,10 +67,10 @@ services:
         condition: service_healthy
     volumes:
       - ${WORKSPACE_HOST_DIR:-../workspace}:/workspace
-      - ../logs:/opt/bau-os/logs
-      - ../data:/opt/bau-os/data
-      - ../tools:/opt/bau-os/tools
-      - ../.chat_id:/opt/bau-os/.chat_id
+      - ../logs:/opt/patio/logs
+      - ../data:/opt/patio/data
+      - ../tools:/opt/patio/tools
+      - ../.chat_id:/opt/patio/.chat_id
     expose:
       - "3000"
     networks:
@@ -78,14 +78,14 @@ services:
 
   caddy:
     image: caddy:2-alpine
-    container_name: bauos-caddy
+    container_name: patio-caddy
     restart: always
     ports:
       - "80:80"
       - "443:443"
     environment:
       CADDY_DOMAIN: ${CADDY_DOMAIN}
-      CADDY_EMAIL: ${CADDY_EMAIL:-admin@bau-os.local}
+      CADDY_EMAIL: ${CADDY_EMAIL:-admin@patio.local}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS — Dateien (3-Pane File-Explorer, Bau-OS-Stil)
+// PATIO — Dateien (3-Pane File-Explorer, PATIO-Stil)
 // ============================================================
 // Layout (Spec aus design_handoff_files/README.md):
 //   ┌──────────── Toolbar (64px) ─────────────┐
@@ -490,7 +490,7 @@ watch(mode, () => {
 // ── Aktionen auf Files ───────────────────────────────────────────────────────
 function downloadUrl(node: FileNode): string {
   if (!node.id) return "#";
-  const token = localStorage.getItem("bau-os-token");
+  const token = localStorage.getItem("patio-token");
   const base = `/api/files/download?id=${encodeURIComponent(node.id)}`;
   return token ? `${base}&token=${encodeURIComponent(token)}` : base;
 }
@@ -646,7 +646,7 @@ async function uploadFiles(fileList: FileList) {
   for (const file of fileList) formData.append("files", file);
 
   try {
-    const token = localStorage.getItem("bau-os-token");
+    const token = localStorage.getItem("patio-token");
     const res = await fetch("/api/files/upload", {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : {},

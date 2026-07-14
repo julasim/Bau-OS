@@ -695,12 +695,12 @@ Liest eine Konfigurationsdatei eines Agenten (SOUL.md, BOOT.md, HEARTBEAT.md, TO
 
 ### `befehl_ausfuehren`
 
-Führt einen Shell-Befehl auf dem Server aus. Für: Systeminfo (`df -h`, `uptime`, `free -h`), Dateien (`ls`, `cat`, `wc`), Services (`systemctl status`), Netzwerk (`curl`, `ping`), Logs (`journalctl -u bau-os -n 50`). Befehle können mit `|` verkettet werden. Destruktive Befehle (`rm -rf`, `shutdown`, `reboot`) sind blockiert.
+Führt einen Shell-Befehl auf dem Server aus. Für: Systeminfo (`df -h`, `uptime`, `free -h`), Dateien (`ls`, `cat`, `wc`), Services (`systemctl status`), Netzwerk (`curl`, `ping`), Logs (`journalctl -u patio -n 50`). Befehle können mit `|` verkettet werden. Destruktive Befehle (`rm -rf`, `shutdown`, `reboot`) sind blockiert.
 
 | Parameter | Typ | Pflicht | Beschreibung |
 |---|---|---|---|
 | `befehl` | string | ✓ | Shell-Befehl (z.B. `df -h`, `ps aux \| grep node`) |
-| `verzeichnis` | string | – | Optionales Arbeitsverzeichnis (Standard: `/opt/bau-os`) |
+| `verzeichnis` | string | – | Optionales Arbeitsverzeichnis (Standard: `/opt/patio`) |
 | `timeout` | number | – | Timeout in Sekunden (Standard: 15, max: 60) |
 
 ---

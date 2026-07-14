@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Aufgaben & Termine: Team-Verknuepfung
+-- PATIO — Aufgaben & Termine: Team-Verknuepfung
 -- ============================================================
 -- Bisher waren tasks.assignee und termine.assignees reine TEXT-Felder —
 -- keine FK, keine zuverlaessige Suche "welche Aufgaben hat Polier X?".

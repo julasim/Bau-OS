@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Data Layer: Entity-Typen & Repository-Interfaces
+// PATIO — Data Layer: Entity-Typen & Repository-Interfaces
 // Gemeinsame Typen fuer Filesystem- und DB-Implementierungen.
 // ============================================================
 
@@ -56,7 +56,7 @@ export interface Termin {
   msEventId?: string | null;
   /** Welcher Outlook-Kalender (NULL = Default). */
   msCalendarId?: string | null;
-  /** Bau-OS-User der den MS-Event "besitzt" (UUID). */
+  /** PATIO-User der den MS-Event "besitzt" (UUID). */
   msOwnerUserId?: string | null;
   /** Microsoft-ETag fuer If-Match-Conditional-Updates. */
   msEtag?: string | null;
@@ -64,8 +64,8 @@ export interface Termin {
   msSyncStatus?: "pending" | "synced" | "conflict" | "error" | null;
   /** ISO-Timestamp letzter erfolgreicher Sync. */
   msLastSyncAt?: string | null;
-  /** 'bau-os' = von hier erzeugt; 'microsoft' = aus Outlook importiert. */
-  msSource?: "bau-os" | "microsoft" | null;
+  /** 'patio' = von hier erzeugt; 'microsoft' = aus Outlook importiert. */
+  msSource?: "patio" | "microsoft" | null;
 }
 
 export interface Note {
@@ -523,12 +523,12 @@ export interface TaskRepository {
 
 /** Input-Shape fuer das Importieren eines Outlook-Termins (Read-Sync).
  *  Die ms_*-Felder kommen direkt aus Microsoft Graph; der Rest sind
- *  bereits gemappte Bau-OS-Werte. msEventId+msOwnerUserId sind Pflicht
+ *  bereits gemappte PATIO-Werte. msEventId+msOwnerUserId sind Pflicht
  *  damit der nachfolgende Update-Match funktioniert.
  *
  *  assignees + assigneeIds (optional) tragen Outlook-Attendees in
- *  Bau-OS — Member-IDs fuer gemappte Team-Mitglieder, Freitext-Strings
- *  (Emails) fuer externe Teilnehmer ohne Bau-OS-Eintrag. */
+ *  PATIO — Member-IDs fuer gemappte Team-Mitglieder, Freitext-Strings
+ *  (Emails) fuer externe Teilnehmer ohne PATIO-Eintrag. */
 export interface TerminFromMsInput {
   text: string;
   datum: string;
@@ -575,7 +575,7 @@ export interface TerminRepository {
    *  500). Setzt ms_sync_status='error'. */
   markMsSyncError?(id: string): Promise<void>;
   /** Markiert einen Termin als bereit zum Push (ms_sync_status='pending',
-   *  ms_owner_user_id=ownerId, ms_source='bau-os'). Wird beim
+   *  ms_owner_user_id=ownerId, ms_source='patio'). Wird beim
    *  Save/Update aufgerufen wenn der Owner-User aktiven Sync hat. */
   markMsPending?(id: string, ownerUserId: string): Promise<void>;
   /** Loescht in MS und setzt die ms_*-Felder lokal zurueck (oder

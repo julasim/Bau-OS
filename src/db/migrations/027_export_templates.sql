@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Word-Export-Templates (Phase 6d)
+-- PATIO — Word-Export-Templates (Phase 6d)
 -- ============================================================
 -- Word-Dokumente (.docx) als Layout-Templates fuer Exports.
 -- Beim Export eines Meetings/Bautagebuch-Eintrags/Stundenzettels

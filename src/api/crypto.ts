@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Symmetrische Verschluesselung (Phase 6 Cleanup)
+// PATIO — Symmetrische Verschluesselung (Phase 6 Cleanup)
 // ============================================================
 // AES-256-GCM, Key abgeleitet aus JWT_SECRET via SHA-256. Verwendet fuer
 // Felder, die in der DB liegen aber niemand aus einem Backup direkt lesen

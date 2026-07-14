@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Tool-Whitelist fuer den System-Prompt
+// PATIO — Tool-Whitelist fuer den System-Prompt
 // Liefert eine kompakte, gruppierte Liste aller verfuegbaren
 // Tool-Namen + Kurzbeschreibungen, die direkt in den
 // System-Prompt eingeblendet wird. Damit kann das LLM keine

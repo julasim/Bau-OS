@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 // ============================================================
-// Bau-OS — Datenbank-Migrations CLI
+// PATIO — Datenbank-Migrations CLI
 // Aufruf: npm run db:migrate         (Migrations ausfuehren)
 //         npm run db:status          (Status anzeigen)
 // ============================================================
@@ -13,7 +13,7 @@ const command = process.argv[2] || "migrate";
 
 if (!DB_ENABLED) {
   console.error("❌ DATABASE_URL nicht gesetzt in .env");
-  console.error("   Setze z.B.: DATABASE_URL=postgres://bauos:password@localhost:5432/bauos");
+  console.error("   Setze z.B.: DATABASE_URL=postgres://patio:password@localhost:5432/patio");
   process.exit(1);
 }
 

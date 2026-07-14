@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Team-Member → User-Account Verknuepfung
+-- PATIO — Team-Member → User-Account Verknuepfung
 -- ============================================================
 -- Bisherige Architektur:
 --   - users:        Login-Konten (Admin / regulaerer User)

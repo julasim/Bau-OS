@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Projekt-Module-Konfiguration (Phase 6e)
+-- PATIO — Projekt-Module-Konfiguration (Phase 6e)
 -- ============================================================
 -- Globale Default-Auswahl welche Module/Tabs in Projekten zur
 -- Verfuegung stehen (Stammdaten, Notizen, Aufgaben, Termine, Files,

@@ -327,11 +327,11 @@ onMounted(async () => {
         <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">{{ projects.length }} Projekte</p>
       </div>
       <div class="flex items-center" style="gap: 8px">
-        <button @click="cycleViewMode" class="bauos-btn ghost">
+        <button @click="cycleViewMode" class="patio-btn ghost">
           <BIcon :name="viewModeIcon()" :size="14" />
           {{ viewModeLabel() }}
         </button>
-        <button @click="openCreateDialog" class="bauos-btn solid">
+        <button @click="openCreateDialog" class="patio-btn solid">
           <BIcon name="plus" :size="14" />
           <span style="margin-left: 4px">Neues Projekt</span>
         </button>
@@ -392,7 +392,7 @@ onMounted(async () => {
       <button
         v-if="anyFilterActive"
         @click="resetFilters"
-        class="bauos-btn ghost"
+        class="patio-btn ghost"
         style="padding: 4px 10px; font-size: 11px"
       >
         Filter zurücksetzen
@@ -516,7 +516,7 @@ onMounted(async () => {
         <div class="empty-state-text">
           {{ searchQuery ? "Keine Treffer." : "Noch keine Projekte." }}
         </div>
-        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="openCreateDialog">
+        <button v-if="!searchQuery" class="patio-btn solid sm" @click="openCreateDialog">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erstes Projekt anlegen
         </button>
@@ -675,7 +675,7 @@ onMounted(async () => {
           <div class="empty-state-text">
             {{ anyFilterActive ? "Keine Treffer." : "Noch keine Projekte." }}
           </div>
-          <button v-if="!anyFilterActive" class="bauos-btn solid sm" @click="openCreateDialog">
+          <button v-if="!anyFilterActive" class="patio-btn solid sm" @click="openCreateDialog">
             <BIcon name="plus" :size="11" :stroke-width="2" />
             Erstes Projekt anlegen
           </button>
@@ -784,8 +784,8 @@ onMounted(async () => {
             * Pflichtfeld — alle anderen Felder lassen sich später noch befüllen.
           </span>
           <div class="flex items-center" style="gap: 8px">
-            <button class="bauos-btn ghost" @click="closeCreateDialog" :disabled="createSaving">Abbrechen</button>
-            <button class="bauos-btn solid" @click="submitCreate" :disabled="!createForm.name.trim() || createSaving">
+            <button class="patio-btn ghost" @click="closeCreateDialog" :disabled="createSaving">Abbrechen</button>
+            <button class="patio-btn solid" @click="submitCreate" :disabled="!createForm.name.trim() || createSaving">
               {{ createSaving ? "Lege an…" : "Projekt anlegen" }}
             </button>
           </div>

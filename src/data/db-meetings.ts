@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Meetings-Repository (DB-Backend)
+// PATIO — Meetings-Repository (DB-Backend)
 // ============================================================
 // Migration 012 setzt die Tabelle, dieser Adapter implementiert
 // MeetingRepository.

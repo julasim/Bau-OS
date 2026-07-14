@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-const tmpDir = path.join(os.tmpdir(), "bau-os-exec-test-" + Date.now());
+const tmpDir = path.join(os.tmpdir(), "patio-exec-test-" + Date.now());
 beforeAll(() => {
   fs.mkdirSync(tmpDir, { recursive: true });
   process.env.VAULT_PATH = tmpDir;

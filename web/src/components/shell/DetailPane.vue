@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — Detail-Pane (1fr)
+// PATIO Workspace v2 — Detail-Pane (1fr)
 // ============================================================
 // Rechte Spalte (Bühne). Topbar mit Breadcrumb + Actions oben,
 // Body unten. Padding-Modus über `padding="default|tight|none"`.

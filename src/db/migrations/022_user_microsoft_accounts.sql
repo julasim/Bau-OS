@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Microsoft-Konto-Verknuepfung (Phase 1, OAuth)
+-- PATIO — Microsoft-Konto-Verknuepfung (Phase 1, OAuth)
 -- ============================================================
 -- Pro User EIN verknuepftes Microsoft-Konto fuer Outlook/Calendar-
 -- Integration. Tokens (access + refresh) liegen verschluesselt
@@ -11,7 +11,7 @@
 --     User geloescht wird, ist auch das MS-Pairing weg.
 --   - ms_user_id: Microsoft-User-ID (oid) aus dem ID-Token. Eindeutig
 --     je MS-Account, stabil ueber Refresh-Flows hinweg. UNIQUE damit
---     ein MS-Konto NICHT mit zwei Bau-OS-Konten verbunden werden kann.
+--     ein MS-Konto NICHT mit zwei PATIO-Konten verbunden werden kann.
 --   - ms_email + ms_display_name: Anzeige-Felder fuer "Verbunden mit X".
 --   - access_token_encrypted: AES-Encrypted, ~1h Lebensdauer.
 --   - refresh_token_encrypted: AES-Encrypted, ~90 Tage Lebensdauer
@@ -20,9 +20,9 @@
 --     Vor jedem Graph-Call pruefen wir ob noch >2 Min gueltig — sonst
 --     refresh.
 --   - calendar_id: User waehlt entweder den Default-Kalender ('default')
---     oder lass uns einen "Bau-OS"-Kalender anlegen (echte Calendar-ID).
+--     oder lass uns einen "PATIO"-Kalender anlegen (echte Calendar-ID).
 --     NULL = noch nicht konfiguriert.
---   - calendar_mode: 'default' | 'bau-os' — UI-Vorgabe, aktuell.
+--   - calendar_mode: 'default' | 'patio' — UI-Vorgabe, aktuell.
 --   - sync_enabled: Master-Schalter fuer den User. Default OFF damit
 --     der User aktiv "ja, syncen" sagen muss.
 --   - last_sync_at + last_sync_error: Diagnose-Felder fuer Sync-Worker
@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS user_microsoft_accounts (
   updated_at                    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Ein MS-Konto darf nur mit EINEM Bau-OS-User verbunden sein.
+-- Ein MS-Konto darf nur mit EINEM PATIO-User verbunden sein.
 CREATE UNIQUE INDEX IF NOT EXISTS uq_user_ms_accounts_ms_user_id
   ON user_microsoft_accounts(ms_user_id);
 

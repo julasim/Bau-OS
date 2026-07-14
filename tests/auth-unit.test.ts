@@ -113,7 +113,7 @@ describe("verifyToken — Audience-Whitelist", () => {
     const { verifyToken } = await import("../src/api/auth.js");
     const tokenWithAud = jwt.sign({ username: "test", role: "user" }, TEST_SECRET, {
       algorithm: "HS256",
-      audience: "bau-os",
+      audience: "patio",
     });
     expect(() => verifyToken(tokenWithAud)).toThrow();
   });

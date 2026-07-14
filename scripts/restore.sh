@@ -1,16 +1,16 @@
 #!/bin/bash
 # ============================================================
-# Bau-OS Restore — Tarball + DB-Dump zurueckspielen
+# PATIO Restore — Tarball + DB-Dump zurueckspielen
 # ============================================================
 #
 # Aufruf:
 #   sudo bash scripts/restore.sh \
-#     /opt/bau-os-backups/bau-os-backup-20260420-030000.tar.gz \
-#     /opt/bau-os-backups/bau-os-db-20260420-030000.sql.gz
+#     /opt/patio-backups/patio-backup-20260420-030000.tar.gz \
+#     /opt/patio-backups/patio-db-20260420-030000.sql.gz
 #
 # Schritt 1: Tarball entpacken (Vault + .env + data/ + tools/)
 # Schritt 2: Postgres-Dump in laufenden Container einspielen
-# Schritt 3: bau-os-app Container neu starten
+# Schritt 3: patio-app Container neu starten
 #
 # WICHTIGE REGELN:
 #   - Tarball + DB-Dump aus DEM SELBEN Tag verwenden. Sonst kann es zu
@@ -28,18 +28,18 @@ if [ $# -lt 1 ]; then
   echo ""
   echo "Beispiel:"
   echo "  sudo bash $0 \\"
-  echo "    /opt/bau-os-backups/bau-os-backup-20260420-030000.tar.gz \\"
-  echo "    /opt/bau-os-backups/bau-os-db-20260420-030000.sql.gz"
+  echo "    /opt/patio-backups/patio-backup-20260420-030000.tar.gz \\"
+  echo "    /opt/patio-backups/patio-db-20260420-030000.sql.gz"
   exit 1
 fi
 
 TARBALL="$1"
 DB_DUMP="${2:-}"
 
-INSTALL_DIR="${INSTALL_DIR:-/opt/bau-os}"
-VAULT_DIR="${VAULT_DIR:-/opt/bau-os-vault}"
-DB_CONTAINER="${DB_CONTAINER:-bauos-postgres}"
-APP_CONTAINER="${APP_CONTAINER:-bauos-app}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/patio}"
+VAULT_DIR="${VAULT_DIR:-/opt/patio-vault}"
+DB_CONTAINER="${DB_CONTAINER:-patio-postgres}"
+APP_CONTAINER="${APP_CONTAINER:-patio-app}"
 
 if [ ! -f "$TARBALL" ]; then
   echo "FEHLER: Backup-Tarball nicht gefunden: $TARBALL"
@@ -48,7 +48,7 @@ fi
 
 # DB-Dump-Auto-Detection: wenn nicht uebergeben, vom Tarball-Namen ableiten.
 if [ -z "$DB_DUMP" ]; then
-  GUESS="${TARBALL/bau-os-backup-/bau-os-db-}"
+  GUESS="${TARBALL/patio-backup-/patio-db-}"
   GUESS="${GUESS%.tar.gz}.sql.gz"
   if [ -f "$GUESS" ]; then
     DB_DUMP="$GUESS"
@@ -59,7 +59,7 @@ fi
 # ── Bestaetigung ────────────────────────────────────────────────────────────
 echo ""
 echo "============================================================"
-echo "Bau-OS Restore"
+echo "PATIO Restore"
 echo "============================================================"
 echo "Tarball:   $TARBALL"
 echo "DB-Dump:   ${DB_DUMP:-<keiner>}"
@@ -76,8 +76,8 @@ fi
 # ── Schritt 1: Tarball entpacken ────────────────────────────────────────────
 echo "[$(date)] Tarball entpacken..."
 # tar wurde mit "-C $(dirname $VAULT_DIR) basename" + "-C $INSTALL_DIR .env data/ tools/"
-# erstellt. Beim Restore landen die zwei Sets in / (root), damit /opt/bau-os/.env
-# und /opt/bau-os-vault wieder am richtigen Platz sind.
+# erstellt. Beim Restore landen die zwei Sets in / (root), damit /opt/patio/.env
+# und /opt/patio-vault wieder am richtigen Platz sind.
 tar -xzf "$TARBALL" -C / 2>&1 | tail -10
 
 # Permissions auf .env wieder absichern (sonst lesbar fuer alle).
@@ -94,8 +94,8 @@ if [ -n "$DB_DUMP" ]; then
 
   if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${DB_CONTAINER}$"; then
     echo "FEHLER: Postgres-Container '${DB_CONTAINER}' laeuft nicht."
-    echo "Erst Bau-OS hochfahren, dann Restore wiederholen:"
-    echo "  cd $INSTALL_DIR && docker compose up -d bauos-postgres"
+    echo "Erst PATIO hochfahren, dann Restore wiederholen:"
+    echo "  cd $INSTALL_DIR && docker compose up -d patio-postgres"
     exit 1
   fi
 
@@ -103,8 +103,8 @@ if [ -n "$DB_DUMP" ]; then
   # Der Dump wurde mit --clean --if-exists erstellt — DROP + CREATE ist
   # schon enthalten. Wir piepen ihn entpackt direkt in psql.
   if gunzip -c "$DB_DUMP" | docker exec -i "$DB_CONTAINER" psql \
-    -U "${POSTGRES_USER:-bauos}" \
-    -d "${POSTGRES_DB:-bauos}" \
+    -U "${POSTGRES_USER:-patio}" \
+    -d "${POSTGRES_DB:-patio}" \
     -v ON_ERROR_STOP=1 -q 2>&1 | tail -20; then
     echo "[$(date)] DB-Restore abgeschlossen"
   else

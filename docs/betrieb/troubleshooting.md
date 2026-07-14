@@ -7,14 +7,14 @@ Haeufige Probleme und Lösungen für PATIO im Produktivbetrieb.
 ### 1. Service prüfen
 
 ```bash
-sudo systemctl status bau-os
+sudo systemctl status patio
 ```
 
 Falls `inactive` oder `failed`:
 
 ```bash
-sudo journalctl -u bau-os -n 50 --no-pager
-sudo systemctl restart bau-os
+sudo journalctl -u patio -n 50 --no-pager
+sudo systemctl restart patio
 ```
 
 ### 2. Ollama prüfen
@@ -30,20 +30,20 @@ Falls Ollama nicht läuft:
 sudo systemctl restart ollama
 # Warten bis das Modell geladen ist (ca. 10-30 Sek.)
 sleep 10
-sudo systemctl restart bau-os
+sudo systemctl restart patio
 ```
 
 ### 3. Bot Token prüfen
 
 ```bash
-grep BOT_TOKEN /home/bauos/bau-os/.env
+grep BOT_TOKEN /home/patio/patio/.env
 ```
 
 ::: danger Token kompromittiert?
 Falls der Token oeffentlich wurde, erstelle sofort einen neuen bei @BotFather mit `/revoke` und aktualisiere die `.env`:
 ```bash
-nano /home/bauos/bau-os/.env
-sudo systemctl restart bau-os
+nano /home/patio/patio/.env
+sudo systemctl restart patio
 ```
 :::
 
@@ -83,9 +83,9 @@ ollama pull qwen2.5:3b
 `.env` anpassen:
 
 ```bash
-nano /home/bauos/bau-os/.env
+nano /home/patio/patio/.env
 # OLLAMA_MODEL=qwen2.5:3b
-sudo systemctl restart bau-os
+sudo systemctl restart patio
 ```
 
 ### Lösung 2: Swap hinzufuegen
@@ -123,9 +123,9 @@ Error: 409: Conflict: terminated by other getUpdates request
 ps aux | grep node
 
 # Doppelte Instanzen beenden
-sudo systemctl stop bau-os
+sudo systemctl stop patio
 pkill -f "node dist/index.js"
-sudo systemctl start bau-os
+sudo systemctl start patio
 ```
 
 ### Timeout-Fehler
@@ -153,7 +153,7 @@ echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
 
 ```bash
 # Node Modules komplett neu installieren
-cd /home/bauos/bau-os
+cd /home/patio/patio
 rm -rf node_modules package-lock.json
 npm install
 ```
@@ -174,11 +174,11 @@ sudo apt-get install -y nodejs
 
 ```bash
 # Eigentuemer prüfen
-ls -la /home/bauos/bau-os/
+ls -la /home/patio/patio/
 
 # Falls nötig, Eigentuemer korrigieren
-sudo chown -R bauos:bauos /home/bauos/bau-os
-sudo chown -R bauos:bauos /home/bauos/vault
+sudo chown -R patio:patio /home/patio/patio
+sudo chown -R patio:patio /home/patio/vault
 ```
 
 ---
@@ -190,7 +190,7 @@ Der Heartbeat (geplante Nachrichten) wird über die `HEARTBEAT.md` Datei konfigu
 ### 1. HEARTBEAT.md prüfen
 
 ```bash
-cat /home/bauos/vault/Agents/Main/HEARTBEAT.md
+cat /home/patio/vault/Agents/Main/HEARTBEAT.md
 ```
 
 ::: warning Cron-Zeile erforderlich
@@ -206,13 +206,13 @@ Ohne diese Zeile wird kein Heartbeat ausgefuehrt.
 Heartbeat-Änderungen werden erst nach einem Neustart wirksam:
 
 ```bash
-sudo systemctl restart bau-os
+sudo systemctl restart patio
 ```
 
 ### 3. Cronjob in den Logs prüfen
 
 ```bash
-sudo journalctl -u bau-os --since today | grep -i heartbeat
+sudo journalctl -u patio --since today | grep -i heartbeat
 ```
 
 ---
@@ -224,13 +224,13 @@ sudo journalctl -u bau-os --since today | grep -i heartbeat
 Die Persönlichkeit des Agenten ist in `SOUL.md` definiert:
 
 ```bash
-cat /home/bauos/vault/Agents/Main/SOUL.md
+cat /home/patio/vault/Agents/Main/SOUL.md
 ```
 
 Passe die Datei an, falls der Ton oder die Anweisungen nicht stimmen:
 
 ```bash
-nano /home/bauos/vault/Agents/Main/SOUL.md
+nano /home/patio/vault/Agents/Main/SOUL.md
 ```
 
 ::: tip Kein Neustart nötig
@@ -242,7 +242,7 @@ nano /home/bauos/vault/Agents/Main/SOUL.md
 Die Startanweisungen für jeden Chat:
 
 ```bash
-cat /home/bauos/vault/Agents/Main/BOOT.md
+cat /home/patio/vault/Agents/Main/BOOT.md
 ```
 
 ### Tages-Log zurücksetzen
@@ -264,10 +264,10 @@ Falls das Modell grundsaetzlich unpassende Antworten gibt:
 ollama pull llama3.1:8b
 
 # In .env ändern
-nano /home/bauos/bau-os/.env
+nano /home/patio/patio/.env
 # OLLAMA_MODEL=llama3.1:8b
 
-sudo systemctl restart bau-os
+sudo systemctl restart patio
 ```
 
 ---
@@ -279,11 +279,11 @@ sudo systemctl restart bau-os
 df -h /
 
 # Größte Verzeichnisse finden
-du -sh /home/bauos/* | sort -rh
+du -sh /home/patio/* | sort -rh
 
 # Alte Backups aufräumen
-ls -lh /home/bauos/backups/
-find /home/bauos/backups/ -name "vault-*.tar.gz" -mtime +30 -delete
+ls -lh /home/patio/backups/
+find /home/patio/backups/ -name "vault-*.tar.gz" -mtime +30 -delete
 
 # Alte Ollama-Modelle entfernen
 ollama list
@@ -304,7 +304,7 @@ Symptom: HTTP 429 "Zu viele Login-Versuche" bei der Web-API.
 **Loesung:** 15 Minuten warten, dann erneut versuchen. Alternativ den Bot neu starten (setzt den Zaehler zurueck):
 
 ```bash
-sudo systemctl restart bau-os
+sudo systemctl restart patio
 ```
 
 ---
@@ -318,10 +318,10 @@ Symptom: Agent meldet `Befehl "xyz" nicht erlaubt`.
 **Loesung:** Pruefen ob der Befehl in der Allowlist steht (`src/llm/executor.ts`). Falls ein zusaetzlicher Befehl benoetigt wird, diesen zur `ALLOWED_COMMANDS`-Liste hinzufuegen und neu builden:
 
 ```bash
-cd /home/bauos/bau-os
+cd /home/patio/patio
 nano src/llm/executor.ts    # Befehl zur ALLOWED_COMMANDS-Liste hinzufuegen
 npm run build
-sudo systemctl restart bau-os
+sudo systemctl restart patio
 ```
 
 ---
@@ -332,10 +332,10 @@ Symptom: MCP-Tools nicht verfuegbar oder Fehlermeldung "nicht verbunden".
 
 ```bash
 # MCP-Konfiguration pruefen
-cat /home/bauos/bau-os/mcp.json
+cat /home/patio/patio/mcp.json
 
 # Bot-Logs auf MCP-Fehler pruefen
-sudo journalctl -u bau-os --since today | grep -i mcp
+sudo journalctl -u patio --since today | grep -i mcp
 ```
 
 **Loesung:** MCP-Server in Telegram neu verbinden:
@@ -345,7 +345,7 @@ Nutze mcp_server_verbinden mit name="filesystem"
 ```
 
 ::: tip Automatischer Reconnect
-MCP-Server werden beim Bot-Start automatisch verbunden. Bei Problemen reicht oft ein Neustart: `sudo systemctl restart bau-os`
+MCP-Server werden beim Bot-Start automatisch verbunden. Bei Problemen reicht oft ein Neustart: `sudo systemctl restart patio`
 :::
 
 ---
@@ -452,13 +452,13 @@ Kopiere diesen Block und führe ihn auf dem Server aus:
 
 ```bash
 echo "=== Schnelldiagnose ==="
-echo "Bot:     $(systemctl is-active bau-os)"
+echo "Bot:     $(systemctl is-active patio)"
 echo "Ollama:  $(systemctl is-active ollama)"
 echo "Node:    $(node --version 2>/dev/null || echo 'FEHLT')"
 echo "RAM:     $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
 echo "Disk:    $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
 echo "Uptime:  $(uptime -p)"
-echo "Vault:   $(ls /home/bauos/vault/Agents/Main/IDENTITY.md 2>/dev/null && echo 'OK' || echo 'FEHLT')"
-echo "Fehler:  $(journalctl -u bau-os -p err --since '1 hour ago' --no-pager 2>/dev/null | wc -l) in letzter Stunde"
+echo "Vault:   $(ls /home/patio/vault/Agents/Main/IDENTITY.md 2>/dev/null && echo 'OK' || echo 'FEHLT')"
+echo "Fehler:  $(journalctl -u patio -p err --since '1 hour ago' --no-pager 2>/dev/null | wc -l) in letzter Stunde"
 echo "========================"
 ```

@@ -247,7 +247,7 @@ Das Embedding-Modell ist in das Datenbankschema eingebrannt — ein Wechsel erfo
 | `JWT_SECRET` | — | `JWT_SECRET` | Secret für JWT-Signierung. Aktiviert die Web-API |
 | `API_PORT` | `3000` | `API_PORT` | Port der Hono Web-API |
 | `API_ENABLED` | `false` | — | Automatisch `true` wenn `JWT_SECRET` gesetzt |
-| `APP_URL` | leer | `APP_URL` | Öffentliche Base-URL (z.B. `https://app.bau-os.at`). Leer = Host aus Request-Header |
+| `APP_URL` | leer | `APP_URL` | Öffentliche Base-URL (z.B. `https://app.patio.at`). Leer = Host aus Request-Header |
 | `JWT_SECRET_OK` | `false` | — | Automatisch `true` wenn `JWT_SECRET` mindestens 32 Zeichen lang ist |
 
 ### Rate-Limiting
@@ -301,7 +301,7 @@ Wird für den Versand von Login-Codes (2FA) per E-Mail benötigt. Ohne `SMTP_HOS
 | `SMTP_PORT` | `587` | `SMTP_PORT` | SMTP-Port (587 mit STARTTLS, 465 mit SSL) |
 | `SMTP_USER` | leer | `SMTP_USER` | SMTP-Benutzername |
 | `SMTP_PASS` | leer | `SMTP_PASS` | SMTP-Passwort |
-| `SMTP_FROM` | `PATIO <noreply@bau-os.local>` | `SMTP_FROM` | Absenderadresse |
+| `SMTP_FROM` | `PATIO <noreply@patio.local>` | `SMTP_FROM` | Absenderadresse |
 | `SMTP_SECURE` | `"auto"` | `SMTP_SECURE` | TLS-Modus: `"auto"`, `"true"` (SSL), `"false"` (STARTTLS) |
 | `SMTP_ENABLED` | `false` | — | Automatisch `true` wenn `SMTP_HOST` gesetzt |
 

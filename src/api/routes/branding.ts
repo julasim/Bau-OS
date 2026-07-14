@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Branding-Routes (Phase 6b)
+// PATIO — Branding-Routes (Phase 6b)
 // ============================================================
 // Endpoints fuer Logo-Upload und Stammdaten-Pflege:
 //

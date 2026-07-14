@@ -1,24 +1,24 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Kunden-Installer (Docker-basiert)
+# PATIO Kunden-Installer (Docker-basiert)
 #
 # Verwendung (einmaliger Befehl für den Kunden):
-#   curl -fsSL https://raw.githubusercontent.com/julasim/Bau-OS/main/bau-os/scripts/install-customer.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/julasim/patio/main/patio/scripts/install-customer.sh | bash
 #
 # Setzt voraus:
 #   - Ubuntu 22.04 / 24.04 LTS
 #   - Root-Zugriff (sudo)
 #   - Ports 80 + 443 offen (Firewall)
-#   - Domain-Eintrag bereits gesetzt (z.B. buero.bau-os.at → Server-IP)
+#   - Domain-Eintrag bereits gesetzt (z.B. buero.patio.at → Server-IP)
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
 
 export LANG=de_AT.UTF-8 LC_ALL=de_AT.UTF-8 LANGUAGE=de_AT.UTF-8
 
-readonly REPO_URL="https://github.com/julasim/Bau-OS.git"
-readonly INSTALL_DIR="/opt/bau-os"
-readonly WORKSPACE_DIR="/opt/bau-os-workspace"
+readonly REPO_URL="https://github.com/julasim/patio.git"
+readonly INSTALL_DIR="/opt/patio"
+readonly WORKSPACE_DIR="/opt/patio-workspace"
 
 # ── Farben ────────────────────────────────────────────────────────────────────
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'
@@ -70,10 +70,10 @@ echo -e "${BOLD}── Konfiguration${NC}"
 echo ""
 
 echo -e "  ${BOLD}Domain${NC}"
-info "Deine zugewiesene Bau-OS Domain (z.B. meinbuero.bau-os.at)"
+info "Deine zugewiesene PATIO Domain (z.B. meinbuero.patio.at)"
 info "Die Domain muss bereits auf diese Server-IP zeigen!"
 echo ""
-CADDY_DOMAIN=$(ask_required "Domain (z.B. meinbuero.bau-os.at)")
+CADDY_DOMAIN=$(ask_required "Domain (z.B. meinbuero.patio.at)")
 CADDY_EMAIL=$(ask_required "E-Mail für SSL-Zertifikat")
 echo ""
 
@@ -150,16 +150,16 @@ fi
 ok "Docker Compose $(docker compose version --short) bereit"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 3: Bau-OS klonen
+# SCHRITT 3: PATIO klonen
 # ═════════════════════════════════════════════════════════════════════════════
-step "Bau-OS herunterladen..."
+step "PATIO herunterladen..."
 if [ -d "$INSTALL_DIR/.git" ]; then
   warn "Bereits installiert — führe Update durch"
   git -C "$INSTALL_DIR" pull --quiet
 else
   git clone --quiet "$REPO_URL" "$INSTALL_DIR"
 fi
-ok "Bau-OS geladen"
+ok "PATIO geladen"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 4: Workspace + Daten-Verzeichnisse anlegen
@@ -207,7 +207,7 @@ step ".env konfigurieren..."
 cd "$INSTALL_DIR"
 
 cat > .env << ENVEOF
-# Bau-OS Konfiguration — generiert von install-customer.sh
+# PATIO Konfiguration — generiert von install-customer.sh
 # Domain + SSL
 CADDY_DOMAIN=${CADDY_DOMAIN}
 CADDY_EMAIL=${CADDY_EMAIL}
@@ -223,9 +223,9 @@ JWT_SECRET=${JWT_SECRET}
 API_PORT=3000
 
 # Datenbank
-POSTGRES_USER=bauos
+POSTGRES_USER=patio
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-POSTGRES_DB=bauos
+POSTGRES_DB=patio
 ENVEOF
 
 # LLM-Konfiguration
@@ -244,7 +244,7 @@ ok ".env erstellt"
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 7: Docker Stack starten
 # ═════════════════════════════════════════════════════════════════════════════
-step "Bau-OS starten (Docker)..."
+step "PATIO starten (Docker)..."
 cd "$INSTALL_DIR"
 
 # Standalone Compose (mit eingebautem Caddy)
@@ -261,25 +261,25 @@ sleep 10
 # Migration ausführen
 docker compose -f "$COMPOSE_FILE" exec -T app npm run db:migrate 2>/dev/null && ok "Datenbank migriert" || warn "Migration konnte nicht ausgeführt werden — beim nächsten Start automatisch"
 
-ok "Bau-OS läuft"
+ok "PATIO läuft"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 8: Update-Script installieren
 # ═════════════════════════════════════════════════════════════════════════════
 step "Update-Befehl einrichten..."
-cat > /usr/local/bin/bauos-update << 'UPDATEEOF'
+cat > /usr/local/bin/patio-update << 'UPDATEEOF'
 #!/bin/bash
-INSTALL_DIR="/opt/bau-os"
+INSTALL_DIR="/opt/patio"
 COMPOSE_FILE="$INSTALL_DIR/docker/docker-compose.standalone.yml"
-echo "▶ Bau-OS Update..."
+echo "▶ PATIO Update..."
 git -C "$INSTALL_DIR" pull
 docker compose -f "$COMPOSE_FILE" build app
 docker compose -f "$COMPOSE_FILE" up -d
 docker compose -f "$COMPOSE_FILE" exec -T app npm run db:migrate 2>/dev/null || true
 echo "✓ Update abgeschlossen"
 UPDATEEOF
-chmod +x /usr/local/bin/bauos-update
-ok "Update-Befehl: bauos-update"
+chmod +x /usr/local/bin/patio-update
+ok "Update-Befehl: patio-update"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # FERTIG
@@ -298,6 +298,6 @@ echo -e "  ${GREEN}▸${NC} SSL-Zertifikat wird automatisch von Let's Encrypt ge
 echo    "    Das kann beim ersten Aufruf 1-2 Minuten dauern."
 echo ""
 echo -e "  ${BOLD}Verwaltung:${NC}"
-echo    "    bauos-update              → Update einspielen"
+echo    "    patio-update              → Update einspielen"
 echo    "    docker compose -f $COMPOSE_FILE logs -f  → Logs"
 echo ""

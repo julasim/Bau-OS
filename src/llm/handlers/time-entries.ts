@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — LLM-Handler: Stundenerfassung
+// PATIO — LLM-Handler: Stundenerfassung
 // ============================================================
 // Zielgruppe: Architekturbuero / Buero in der Baubranche.
 // Wer benutzt das? Bauleiter / Sachbearbeiter im Buero, der retrospektiv

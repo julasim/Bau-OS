@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Datenbank-Modul Tests
+// PATIO — Datenbank-Modul Tests
 // Testet Config, Client-Guard und Migration-Logik
 // ============================================================
 

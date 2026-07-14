@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Export-Templates-Repository (Phase 6d)
+// PATIO — Export-Templates-Repository (Phase 6d)
 // ============================================================
 // CRUD fuer .docx-Templates die fuer Word-Exports verwendet werden.
 // Blob wird in der DB gespeichert (BYTEA) — Backup-sicher, kein

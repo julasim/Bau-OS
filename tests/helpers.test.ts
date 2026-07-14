@@ -4,7 +4,7 @@ import path from "path";
 import os from "os";
 
 // Wir testen die Funktionen direkt — muessen aber WORKSPACE_PATH setzen bevor der Import passiert
-const tmpDir = path.join(os.tmpdir(), "bau-os-test-" + Date.now());
+const tmpDir = path.join(os.tmpdir(), "patio-test-" + Date.now());
 
 beforeEach(() => {
   fs.mkdirSync(tmpDir, { recursive: true });
@@ -76,7 +76,7 @@ describe("safePath", () => {
 
   it("blockiert Symlinks", async () => {
     const { safePath } = await import("../src/workspace/helpers.js");
-    const target = path.join(os.tmpdir(), "bau-os-symlink-target-" + Date.now());
+    const target = path.join(os.tmpdir(), "patio-symlink-target-" + Date.now());
     const link = path.join(tmpDir, "evil-link");
 
     fs.writeFileSync(target, "secret", "utf-8");

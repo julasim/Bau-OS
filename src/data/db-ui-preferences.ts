@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — User-UI-Praeferenzen-Repository (Phase 6f)
+// PATIO — User-UI-Praeferenzen-Repository (Phase 6f)
 // ============================================================
 
 import { getDb } from "../db/client.js";

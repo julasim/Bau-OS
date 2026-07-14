@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — NoteDetail
+// PATIO Workspace v2 — NoteDetail
 // ============================================================
 // Rechte Spalte (DetailPane) der Notizen-Section. Zeigt Empty-State
 // wenn route.params.name fehlt, sonst Editor + Preview-Toggle.

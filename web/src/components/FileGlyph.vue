@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS — Datei-Glyphen (Bau-OS-Stil, flach, Mono-Stroke)
+// PATIO — Datei-Glyphen (PATIO-Stil, flach, Mono-Stroke)
 // ============================================================
 // Drei Groessen:
 //   - small: 14×16 (in Listen-Reihen, Spalten-Browser)
@@ -29,16 +29,18 @@ const props = withDefaults(
 
 const ext = computed<string>(() => {
   return (
-    {
-      pdf: "pdf",
-      dwg: "dwg",
-      image: "img",
-      doc: "doc",
-      csv: "csv",
-      archive: "gz",
-      code: "md",
-    } as Record<string, string>
-  )[props.kind] ?? "file";
+    (
+      {
+        pdf: "pdf",
+        dwg: "dwg",
+        image: "img",
+        doc: "doc",
+        csv: "csv",
+        archive: "gz",
+        code: "md",
+      } as Record<string, string>
+    )[props.kind] ?? "file"
+  );
 });
 
 const folderSize = computed(() => (props.size === "hero" ? 64 : props.size === "large" ? 36 : 16));
@@ -62,10 +64,7 @@ const folderSize = computed(() => (props.size === "hero" ? 64 : props.size === "
   </svg>
 
   <!-- File hero (56×68 + label) -->
-  <div
-    v-else-if="size === 'hero'"
-    style="display: flex; flex-direction: column; align-items: center; gap: 10px"
-  >
+  <div v-else-if="size === 'hero'" style="display: flex; flex-direction: column; align-items: center; gap: 10px">
     <svg
       width="56"
       height="68"
@@ -82,7 +81,7 @@ const folderSize = computed(() => (props.size === "hero" ? 64 : props.size === "
     <span
       style="
         font-size: 11px;
-        font-family: 'JetBrains Mono', monospace;
+        font-family: &quot;JetBrains Mono&quot;, monospace;
         color: var(--color-text-muted);
         letter-spacing: 0.12em;
         text-transform: uppercase;
@@ -93,10 +92,7 @@ const folderSize = computed(() => (props.size === "hero" ? 64 : props.size === "
   </div>
 
   <!-- File large (32×40 + label) -->
-  <div
-    v-else-if="size === 'large'"
-    style="display: flex; flex-direction: column; align-items: center; gap: 6px"
-  >
+  <div v-else-if="size === 'large'" style="display: flex; flex-direction: column; align-items: center; gap: 6px">
     <svg
       width="32"
       height="40"
@@ -113,7 +109,7 @@ const folderSize = computed(() => (props.size === "hero" ? 64 : props.size === "
     <span
       style="
         font-size: 9px;
-        font-family: 'JetBrains Mono', monospace;
+        font-family: &quot;JetBrains Mono&quot;, monospace;
         letter-spacing: 0.12em;
         text-transform: uppercase;
       "

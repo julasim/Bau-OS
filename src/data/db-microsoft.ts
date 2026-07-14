@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Microsoft-Account Repository (Migration 022)
+// PATIO — Microsoft-Account Repository (Migration 022)
 // ============================================================
 // CRUD-Operationen fuer user_microsoft_accounts. Tokens werden
 // transparent verschluesselt/entschluesselt via crypto.ts (gleicher
@@ -22,7 +22,7 @@ export interface MsAccountPublic {
   msDisplayName: string | null;
   scope: string | null;
   calendarId: string | null;
-  calendarMode: "default" | "bau-os";
+  calendarMode: "default" | "patio";
   syncEnabled: boolean;
   lastSyncAt: string | null;
   lastSyncError: string | null;
@@ -71,7 +71,7 @@ function rowToPublic(row: Record<string, unknown>): MsAccountPublic {
     msDisplayName: row.ms_display_name ? String(row.ms_display_name) : null,
     scope: row.scope ? String(row.scope) : null,
     calendarId: row.calendar_id ? String(row.calendar_id) : null,
-    calendarMode: (row.calendar_mode === "bau-os" ? "bau-os" : "default") as MsAccountPublic["calendarMode"],
+    calendarMode: (row.calendar_mode === "patio" ? "patio" : "default") as MsAccountPublic["calendarMode"],
     syncEnabled: row.sync_enabled === true,
     lastSyncAt:
       row.last_sync_at instanceof Date
@@ -182,7 +182,7 @@ export async function updateMsTokens(
 }
 
 /** User trennt MS-Verbindung. CASCADE auf user_microsoft_accounts loescht
- *  alles. Termine mit ms_event_id bleiben in Bau-OS — sie sind dann
+ *  alles. Termine mit ms_event_id bleiben in PATIO — sie sind dann
  *  einfach nicht mehr in MS gespiegelt. */
 export async function deleteMsAccount(userId: string): Promise<boolean> {
   if (!DB_ENABLED) return false;
@@ -194,7 +194,7 @@ export async function deleteMsAccount(userId: string): Promise<boolean> {
 /** User aendert Calendar-Mode oder Sync-Schalter. */
 export async function updateMsAccountSettings(
   userId: string,
-  patch: { calendarMode?: "default" | "bau-os"; syncEnabled?: boolean; calendarId?: string | null },
+  patch: { calendarMode?: "default" | "patio"; syncEnabled?: boolean; calendarId?: string | null },
 ): Promise<MsAccountPublic | null> {
   if (!DB_ENABLED) return null;
   const db = getDb();
@@ -219,7 +219,7 @@ export async function updateMsAccountSettings(
 /** Liste aller User mit aktivem Sync — der Cron iteriert die. Liefert genug
  *  Felder fuer den Sync-Worker, ohne Tokens (die laedt loadDecryptedTokens). */
 export async function listSyncEnabledUsers(): Promise<
-  Array<{ userId: string; calendarMode: "default" | "bau-os"; calendarId: string | null }>
+  Array<{ userId: string; calendarMode: "default" | "patio"; calendarId: string | null }>
 > {
   if (!DB_ENABLED) return [];
   const db = getDb();
@@ -230,7 +230,7 @@ export async function listSyncEnabledUsers(): Promise<
   `;
   return rows.map((r) => ({
     userId: String(r.user_id),
-    calendarMode: r.calendar_mode === "bau-os" ? "bau-os" : "default",
+    calendarMode: r.calendar_mode === "patio" ? "patio" : "default",
     calendarId: r.calendar_id ? String(r.calendar_id) : null,
   }));
 }
@@ -259,7 +259,7 @@ export async function markSyncError(userId: string, error: string): Promise<void
   `;
 }
 
-/** Persistiert die Calendar-ID nach Lazy-Create im 'bau-os'-Mode. */
+/** Persistiert die Calendar-ID nach Lazy-Create im 'patio'-Mode. */
 export async function setCalendarId(userId: string, calendarId: string): Promise<void> {
   if (!DB_ENABLED) return;
   const db = getDb();
@@ -276,7 +276,7 @@ export async function setCalendarId(userId: string, calendarId: string): Promise
 export async function findUserBySubscriptionId(subscriptionId: string): Promise<{
   userId: string;
   calendarId: string | null;
-  calendarMode: "default" | "bau-os";
+  calendarMode: "default" | "patio";
 } | null> {
   if (!DB_ENABLED) return null;
   const db = getDb();
@@ -290,7 +290,7 @@ export async function findUserBySubscriptionId(subscriptionId: string): Promise<
   return {
     userId: String(row.user_id),
     calendarId: row.calendar_id ? String(row.calendar_id) : null,
-    calendarMode: row.calendar_mode === "bau-os" ? "bau-os" : "default",
+    calendarMode: row.calendar_mode === "patio" ? "patio" : "default",
   };
 }
 
@@ -346,7 +346,7 @@ export async function listExpiringSubscriptions(
 // ── Multi-Calendar (Phase 5c) ────────────────────────────────────────────────
 //
 // Junction-Table user_microsoft_calendars (Migration 024) erlaubt es, dass
-// ein User mehrere Outlook-Kalender mit Bau-OS verbindet. Single-Calendar-
+// ein User mehrere Outlook-Kalender mit PATIO verbindet. Single-Calendar-
 // Felder auf user_microsoft_accounts (calendar_id, calendar_mode,
 // subscription_id) bleiben fuer Legacy-Kompatibilitaet bestehen, sind aber
 // nicht mehr Source-of-Truth.

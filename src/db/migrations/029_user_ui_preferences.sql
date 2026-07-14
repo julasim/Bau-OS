@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — User-UI-Praeferenzen (Phase 6f)
+-- PATIO — User-UI-Praeferenzen (Phase 6f)
 -- ============================================================
 -- Pro User gespeicherte UI-Einstellungen: Theme (Light/Dark/System),
 -- Akzentfarbe, Schriftgroesse, kompakte UI, Wochenstart, Datums-

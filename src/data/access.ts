@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Access-Layer fuer Multi-User-Scoping (Phase 4)
+// PATIO — Access-Layer fuer Multi-User-Scoping (Phase 4)
 // ============================================================
 // Zentrale Stelle fuer "wer darf was sehen". Repos rufen die Helper auf
 // und bauen ihre WHERE-Klauseln entsprechend, anstatt sich die Logik selbst

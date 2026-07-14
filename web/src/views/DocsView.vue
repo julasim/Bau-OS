@@ -22,42 +22,42 @@ const quickLinks: DocCard[] = [
     icon: "zap",
     title: "Schnellstart",
     desc: "In 10 Minuten einsatzbereit — Bot-Token, LLM, Workspace.",
-    href: "https://docs.bau-os.de/start/schnellstart",
+    href: "https://docs.patio.de/start/schnellstart",
     tag: "Start",
   },
   {
     icon: "layers",
     title: "Architektur",
     desc: "5-Schichten-Architektur, Datenfluss und Modulstruktur.",
-    href: "https://docs.bau-os.de/konzepte/architektur",
+    href: "https://docs.patio.de/konzepte/architektur",
     tag: "Konzept",
   },
   {
     icon: "list",
     title: "Tool-Referenz",
     desc: "Alle 56 Tools in 12 Kategorien mit Parametern und Beispielen.",
-    href: "https://docs.bau-os.de/referenz/tools",
+    href: "https://docs.patio.de/referenz/tools",
     tag: "Referenz",
   },
   {
     icon: "cpu",
     title: "Agenten",
     desc: "Agenten konfigurieren, spawnen und per Markdown steuern.",
-    href: "https://docs.bau-os.de/konzepte/agenten",
+    href: "https://docs.patio.de/konzepte/agenten",
     tag: "Konzept",
   },
   {
     icon: "settings",
     title: "Konfiguration",
     desc: "Alle .env-Variablen, Befehle und Modell-Optionen.",
-    href: "https://docs.bau-os.de/konfiguration/env",
+    href: "https://docs.patio.de/konfiguration/env",
     tag: "Referenz",
   },
   {
     icon: "lock",
     title: "DSGVO & Sicherheit",
     desc: "Datenschutz, TOMs, Isolations-Konzept und sichere Defaults.",
-    href: "https://docs.bau-os.de/sicherheit/dsgvo",
+    href: "https://docs.patio.de/sicherheit/dsgvo",
     tag: "Sicherheit",
   },
 ];
@@ -147,21 +147,14 @@ function openLink(href: string) {
     <!-- Header -->
     <div class="docs-header">
       <h1 class="docs-title">Dokumentation</h1>
-      <p class="docs-subtitle">
-        Referenzen, Konzepte und Tutorials zu Bau-OS.
-      </p>
+      <p class="docs-subtitle">Referenzen, Konzepte und Tutorials zu PATIO.</p>
     </div>
 
     <!-- Quick Links -->
     <section class="docs-section">
       <h2 class="settings-h3 mb-4">Dokumentation</h2>
       <div class="docs-grid">
-        <button
-          v-for="card in quickLinks"
-          :key="card.title"
-          class="docs-card"
-          @click="openLink(card.href)"
-        >
+        <button v-for="card in quickLinks" :key="card.title" class="docs-card" @click="openLink(card.href)">
           <div class="docs-card-top">
             <div class="docs-card-icon">
               <BIcon :name="card.icon" :size="16" />
@@ -181,11 +174,7 @@ function openLink(href: string) {
     <section class="docs-section">
       <h2 class="settings-h3 mb-4">Tutorials</h2>
       <div class="docs-tutorials">
-        <div
-          v-for="tut in tutorials"
-          :key="tut.title"
-          class="docs-tutorial-card"
-        >
+        <div v-for="tut in tutorials" :key="tut.title" class="docs-tutorial-card">
           <div class="docs-tutorial-head">
             <div class="docs-card-icon">
               <BIcon :name="tut.icon" :size="15" />
@@ -254,7 +243,9 @@ function openLink(href: string) {
   background: var(--color-bg);
   text-align: left;
   cursor: pointer;
-  transition: border-color 140ms ease, background 140ms ease;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
 }
 
 .docs-card:hover {

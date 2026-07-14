@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS — Pre-Push-Hook
+# PATIO — Pre-Push-Hook
 # ─────────────────────────────────────────────────────────────────────────────
 # Verhindert dass kaputter Code auf main/origin landet. Runs einmal pro
 # `git push`, nicht bei jedem Commit (nicht ueberlasten).
@@ -30,9 +30,9 @@ set -e
 # JSONValue-Constraints von postgres.js). build:all ist langsamer
 # (~10s vs. 3s) — wir nehmen die Zeit mit, das ist's wert.
 echo "▸ Pre-Push: Backend + Frontend Production-Build (npm run build:all)..."
-npm run build:all > /tmp/bauos-pre-push.log 2>&1 || {
+npm run build:all > /tmp/patio-pre-push.log 2>&1 || {
     echo "✗ Build-Fehler:"
-    tail -30 /tmp/bauos-pre-push.log
+    tail -30 /tmp/patio-pre-push.log
     exit 1
 }
 

@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Bot-Manager (Phase 6)
+// PATIO — Bot-Manager (Phase 6)
 // ============================================================
 // Verwaltet die Lebenszyklen aller per-User-Telegram-Bots:
 //   - Beim Start: alle aktivierten User-Bots aus der DB laden + spawnen

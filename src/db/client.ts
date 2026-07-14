@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — PostgreSQL Client (postgres.js)
+// PATIO — PostgreSQL Client (postgres.js)
 // Singleton Connection Pool mit Health-Check
 // ============================================================
 

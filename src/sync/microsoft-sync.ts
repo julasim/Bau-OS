@@ -1,14 +1,14 @@
 // ============================================================
-// Bau-OS — Microsoft Graph Calendar-Sync (Phase 2 + 3)
+// PATIO — Microsoft Graph Calendar-Sync (Phase 2 + 3)
 // ============================================================
-// Bidirektionaler Sync zwischen Bau-OS-Termine und Outlook-Calendar.
+// Bidirektionaler Sync zwischen PATIO-Termine und Outlook-Calendar.
 //
 // Read-Sync (pullFromOutlook):
-//   1. Calendar bestimmen (Default vs Bau-OS-Kalender, Lazy-Create).
+//   1. Calendar bestimmen (Default vs PATIO-Kalender, Lazy-Create).
 //   2. /me/[calendars/{id}/]events?$filter=lastModifiedDateTime gt
 //      ${last_sync_at - 5min} holen — overlap damit nichts verloren geht
 //      bei Cron-Skips. Bei erstem Lauf: -30 Tage bis +90 Tage Window.
-//   3. Pro Event: Mapping zu Bau-OS-Termin → terminRepo.upsertFromMs().
+//   3. Pro Event: Mapping zu PATIO-Termin → terminRepo.upsertFromMs().
 //      ms_event_id ist UNIQUE → Update statt Duplicate.
 //   4. last_sync_at = now() schreiben.
 //
@@ -88,29 +88,29 @@ const CAL_NAME_ALIASES = [PATIO_CAL_NAME, "Bau-OS"];
 
 // ── Helpers: Datum/Zeit-Mapping ──────────────────────────────────────────────
 //
-// WICHTIG: Bau-OS speichert datum kanonisch als "TT.MM.JJJJ" (siehe
+// WICHTIG: PATIO speichert datum kanonisch als "TT.MM.JJJJ" (siehe
 // normalizeDatum() in workspace/termine.ts). Microsoft Graph akzeptiert
 // AUSSCHLIESSLICH ISO-8601 ("YYYY-MM-DDTHH:mm:ss"). Alle Hin-/Rueck-
 // konvertierungen laufen ueber diese 2 Helper, damit nirgendwo ein
 // Format-Mismatch entsteht.
 
 /** "07.05.2026" → "2026-05-07". Akzeptiert auch schon ISO. */
-function bauosDatumToIso(datum: string): string {
+function patioDatumToIso(datum: string): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(datum)) return datum;
   const m = datum.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
   if (!m) throw new Error(`Unverstaendliches Datumsformat: "${datum}"`);
   return `${m[3]}-${m[2]}-${m[1]}`;
 }
 
-/** "2026-05-07" → "07.05.2026" — Bau-OS-kanonisch. */
-function isoToBauosDatum(iso: string): string {
+/** "2026-05-07" → "07.05.2026" — PATIO-kanonisch. */
+function isoToPatioDatum(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) throw new Error(`Unverstaendliches ISO-Datum: "${iso}"`);
   return `${m[3]}.${m[2]}.${m[1]}`;
 }
 
 /** "2026-05-05T14:00:00.0000000" → "2026-05-05" (ISO) → wird vom Aufrufer
- *  noch zu Bau-OS-Datum konvertiert. */
+ *  noch zu PATIO-Datum konvertiert. */
 function extractDate(dt: string): string {
   return dt.split("T")[0]!;
 }
@@ -121,11 +121,11 @@ function extractTime(dt: string): string {
   return t.slice(0, 5); // HH:MM
 }
 
-/** Bau-OS Termin → MS-Graph start/end dateTime. Konvertiert TT.MM.JJJJ
+/** PATIO Termin → MS-Graph start/end dateTime. Konvertiert TT.MM.JJJJ
  *  intern zu ISO und baut den korrekt formatierten dateTime-String.
  *  Fuer All-Day-Events: isAllDay=true + end-Datum ist Tag+1 (MS-Konvention). */
-function bauosToMsStart(termin: Termin): { start: MsEventDateTime; end: MsEventDateTime; isAllDay: boolean } {
-  const isoDatum = bauosDatumToIso(termin.datum);
+function patioToMsStart(termin: Termin): { start: MsEventDateTime; end: MsEventDateTime; isAllDay: boolean } {
+  const isoDatum = patioDatumToIso(termin.datum);
 
   // All-Day: kein uhrzeit gesetzt
   if (!termin.uhrzeit) {
@@ -159,11 +159,11 @@ function bauosToMsStart(termin: Termin): { start: MsEventDateTime; end: MsEventD
   };
 }
 
-/** Mapping Bau-OS Termin → MS-Graph-Body fuer POST/PATCH /me/events.
+/** Mapping PATIO Termin → MS-Graph-Body fuer POST/PATCH /me/events.
  *  Async weil wir die Email-Adressen der Team-Mitglieder aus der DB
  *  laden muessen (assigneeIds → email). */
 async function buildMsEventBody(termin: Termin): Promise<Record<string, unknown>> {
-  const { start, end, isAllDay } = bauosToMsStart(termin);
+  const { start, end, isAllDay } = patioToMsStart(termin);
   const body: Record<string, unknown> = {
     subject: termin.text,
     start,
@@ -239,7 +239,7 @@ export async function discoverCalendars(userId: string): Promise<UserCalendar[]>
   // Lazy-Create: wenn der User noch keinen PATIO-Kalender hat, legen
   // wir einen an. Das macht den ersten Push reibungslos: User connectet,
   // klickt "PATIO" als Default, und es funktioniert sofort. Alt-Name
-  // "Bau-OS" zaehlt mit — sonst wuerde fuer Bestands-User dupliziert.
+  // "PATIO" zaehlt mit — sonst wuerde fuer Bestands-User dupliziert.
   if (!calendars.some((c) => CAL_NAME_ALIASES.includes(c.name))) {
     const { data } = await graphFetch<MsCalendar>(userId, "/me/calendars", {
       method: "POST",
@@ -261,20 +261,20 @@ export async function discoverCalendars(userId: string): Promise<UserCalendar[]>
 
 /** Default-Push-Ziel: fuer neue PATIO-Termine ohne ms_event_id, in welchen
  *  Outlook-Kalender pushen wir? Bevorzugt einen mit display_name='PATIO'
- *  (oder dem Alt-Namen 'Bau-OS'), fallback auf den ersten enabled mit
+ *  (oder dem Alt-Namen 'PATIO'), fallback auf den ersten enabled mit
  *  direction in {'both','push-only'}. */
 async function pickPushCalendar(userId: string): Promise<UserCalendar | null> {
   const calendars = await listEnabledCalendars(userId);
   const writeable = calendars.filter((c) => c.direction === "both" || c.direction === "push-only");
   if (writeable.length === 0) return null;
-  // 1. exakter PATIO-Name (inkl. Alt-Name "Bau-OS" fuer Bestands-User)
+  // 1. exakter PATIO-Name (inkl. Alt-Name "PATIO" fuer Bestands-User)
   const patio = writeable.find((c) => c.displayName !== null && CAL_NAME_ALIASES.includes(c.displayName));
   if (patio) return patio;
   // 2. erster enabled writeable
   return writeable[0]!;
 }
 
-// ── Pull (Outlook → Bau-OS) ──────────────────────────────────────────────────
+// ── Pull (Outlook → PATIO) ──────────────────────────────────────────────────
 
 /** Pullt einen einzelnen Kalender. Wird vom Sync-Worker pro aktivem
  *  Junction-Eintrag aufgerufen. */
@@ -305,7 +305,7 @@ export async function pullCalendar(
     }
     for (const ev of events) {
       try {
-        await importMsEventToBauOs(userId, calendar.calendarId, ev);
+        await importMsEventToPatio(userId, calendar.calendarId, ev);
         pulled++;
       } catch (err) {
         errors++;
@@ -353,8 +353,8 @@ export async function pullFromOutlook(userId: string): Promise<{ pulled: number;
   return { pulled, errors };
 }
 
-/** Wandelt einen MS-Event in einen Bau-OS-Termin und upsert'd ihn. */
-async function importMsEventToBauOs(userId: string, calendarId: string, ev: MsEvent): Promise<void> {
+/** Wandelt einen MS-Event in einen PATIO-Termin und upsert'd ihn. */
+async function importMsEventToPatio(userId: string, calendarId: string, ev: MsEvent): Promise<void> {
   if (!terminRepo.upsertFromMs) {
     throw new Error("upsertFromMs nicht verfuegbar — DB-Mode erforderlich");
   }
@@ -367,10 +367,10 @@ async function importMsEventToBauOs(userId: string, calendarId: string, ev: MsEv
   // ETag aus @odata.etag — kommt im Format W/"datetime'2026-05-05T...'"
   const etag = ev["@odata.etag"] ?? null;
 
-  // ISO-Datum aus MS extrahieren und auf Bau-OS-Format (TT.MM.JJJJ) bringen,
+  // ISO-Datum aus MS extrahieren und auf PATIO-Format (TT.MM.JJJJ) bringen,
   // damit es konsistent mit allen anderen Termin-Quellen ist (Bot, UI, Vault).
   const isoDate = extractDate(ev.start.dateTime);
-  const datum = isoToBauosDatum(isoDate);
+  const datum = isoToPatioDatum(isoDate);
   const isAllDay = ev.isAllDay === true;
   const uhrzeit = isAllDay ? null : extractTime(ev.start.dateTime);
   const endzeit = isAllDay || !ev.end?.dateTime ? null : extractTime(ev.end.dateTime);
@@ -380,7 +380,7 @@ async function importMsEventToBauOs(userId: string, calendarId: string, ev: MsEv
   // Attendees → assigneeIds (gemappte Mitglieder) + assignees (Freitext fuer
   // unbekannte Emails). Der Owner-User wird nicht selbst als Attendee
   // einsortiert — er ist der Organisator.
-  const { assigneeIds, assignees } = await mapMsAttendeesToBauOs(ev.attendees);
+  const { assigneeIds, assignees } = await mapMsAttendeesToPatio(ev.attendees);
 
   await terminRepo.upsertFromMs({
     text,
@@ -397,10 +397,10 @@ async function importMsEventToBauOs(userId: string, calendarId: string, ev: MsEv
   });
 }
 
-/** Mapping MS-Attendees → Bau-OS assigneeIds + assignees-Freitext.
+/** Mapping MS-Attendees → PATIO assigneeIds + assignees-Freitext.
  *  Trennt gemappte Team-Mitglieder (assigneeIds) von externen Email-
  *  Adressen (assignees als Freitext). */
-export async function mapMsAttendeesToBauOs(
+export async function mapMsAttendeesToPatio(
   attendees: MsAttendee[] | undefined,
 ): Promise<{ assigneeIds: string[]; assignees: string[] }> {
   if (!Array.isArray(attendees) || attendees.length === 0) {
@@ -436,9 +436,9 @@ export async function mapMsAttendeesToBauOs(
   return { assigneeIds, assignees };
 }
 
-// ── Push (Bau-OS → Outlook) ──────────────────────────────────────────────────
+// ── Push (PATIO → Outlook) ──────────────────────────────────────────────────
 
-/** Pusht einen Bau-OS-Termin nach Outlook. Erstellt oder aktualisiert je
+/** Pusht einen PATIO-Termin nach Outlook. Erstellt oder aktualisiert je
  *  nach ob ms_event_id schon gesetzt ist. */
 export async function pushToOutlook(userId: string, terminId: string): Promise<void> {
   if (!DB_ENABLED) return;
@@ -532,7 +532,7 @@ export async function pushToOutlook(userId: string, terminId: string): Promise<v
 }
 
 /** Loescht den Outlook-Spiegel eines Termins. Wird vom Termin-Delete-Hook
- *  aufgerufen — Bau-OS-Termin ist zu dem Zeitpunkt schon weg, wir kriegen
+ *  aufgerufen — PATIO-Termin ist zu dem Zeitpunkt schon weg, wir kriegen
  *  msEventId/msCalendarId vom Caller. */
 export async function deleteFromOutlook(
   userId: string,

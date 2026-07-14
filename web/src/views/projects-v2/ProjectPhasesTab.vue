@@ -281,7 +281,7 @@ onMounted(() => void load());
     <template v-else>
       <!-- Action-Bar + Gesamtfortschritt -->
       <div class="ph-bar">
-        <button class="bauos-btn solid sm" @click="newPhase">
+        <button class="patio-btn solid sm" @click="newPhase">
           <BIcon name="plus" :size="11" />
           <span style="margin-left: 4px">Phase hinzufügen</span>
         </button>
@@ -316,7 +316,7 @@ onMounted(() => void load());
         <div v-if="phases.length === 0 && !draft" class="empty-state" style="margin-top: 16px">
           <div class="empty-state-icon"><BIcon name="timeline" :size="26" /></div>
           <div class="empty-state-text">Noch keine Leistungsphasen für dieses Projekt.</div>
-          <button class="bauos-btn solid sm" @click="newPhase">
+          <button class="patio-btn solid sm" @click="newPhase">
             <BIcon name="plus" :size="11" :stroke-width="2" />
             Erste Phase anlegen
           </button>
@@ -371,10 +371,10 @@ onMounted(() => void load());
           <div class="ph-editor" v-if="draft">
             <div class="ph-editor-head">
               <h3>{{ draft.id ? "Phase bearbeiten" : "Neue Phase" }}</h3>
-              <button v-if="draft.id" class="bauos-btn ghost sm" :disabled="busy" @click="remove">
+              <button v-if="draft.id" class="patio-btn ghost sm" :disabled="busy" @click="remove">
                 <BIcon name="trash" :size="11" /><span style="margin-left: 4px">Löschen</span>
               </button>
-              <button v-else class="bauos-btn ghost sm" :disabled="busy" @click="cancelEdit">Abbrechen</button>
+              <button v-else class="patio-btn ghost sm" :disabled="busy" @click="cancelEdit">Abbrechen</button>
             </div>
 
             <div class="ph-field">
@@ -457,7 +457,7 @@ onMounted(() => void load());
             </div>
 
             <div class="ph-editor-actions">
-              <button class="bauos-btn solid sm" :disabled="busy" @click="save">
+              <button class="patio-btn solid sm" :disabled="busy" @click="save">
                 <BIcon name="check" :size="11" /><span style="margin-left: 4px">{{
                   draft.id ? "Speichern" : "Anlegen"
                 }}</span>

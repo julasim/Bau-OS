@@ -122,7 +122,7 @@ function onNavClick() {
   >
     <!-- Logo / Branding (Phase 6g) — falls Logo gesetzt: anzeigen, sonst
          Fallback auf das schwarze "B"-Quadrat. Firmenname ueberschreibt
-         "Bau-OS" wenn vorhanden. -->
+         "PATIO" wenn vorhanden. -->
     <div class="flex items-center gap-2.5" style="padding: 16px 20px; border-bottom: 1px solid var(--color-border)">
       <img
         v-if="branding.logoUrl"
@@ -149,7 +149,7 @@ function onNavClick() {
         <div
           class="truncate"
           style="color: var(--color-text); font-size: 14px; font-weight: 600; line-height: 1.2"
-          :title="branding.companyName ?? 'Bau-OS'"
+          :title="branding.companyName ?? 'PATIO'"
         >
           {{ branding.companyName ?? "PATIO" }}
         </div>

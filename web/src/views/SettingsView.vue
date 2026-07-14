@@ -115,7 +115,7 @@ function cancelEmailChange() {
 interface MsAccount {
   msEmail: string;
   msDisplayName: string | null;
-  calendarMode: "default" | "bau-os";
+  calendarMode: "default" | "patio";
   syncEnabled: boolean;
   lastSyncAt: string | null;
   lastSyncError: string | null;
@@ -167,7 +167,7 @@ async function connectMicrosoft() {
     }
     // Auf postMessage vom Callback-Tab warten.
     const onMsg = async (ev: MessageEvent) => {
-      if (!ev.data || ev.data.type !== "bauos:ms-oauth") return;
+      if (!ev.data || ev.data.type !== "patio:ms-oauth") return;
       window.removeEventListener("message", onMsg);
       if (ev.data.kind === "success") {
         msMessage.value = { type: "ok", text: ev.data.message ?? "Microsoft-Konto verbunden." };
@@ -213,7 +213,7 @@ async function disconnectMicrosoft() {
   }
 }
 
-async function updateMsSettings(patch: { calendarMode?: "default" | "bau-os"; syncEnabled?: boolean }) {
+async function updateMsSettings(patch: { calendarMode?: "default" | "patio"; syncEnabled?: boolean }) {
   msBusy.value = true;
   try {
     await api.patch("/auth/microsoft/settings", patch);
@@ -642,7 +642,7 @@ async function uploadExportTemplate(event: Event) {
     if (exportTemplatesByKind.value.length === 0) fd.append("isDefault", "true");
     const res = await fetch("/api/export-templates", {
       method: "POST",
-      headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem("patio-token") ?? ""}` },
       body: fd,
     });
     if (!res.ok) {
@@ -690,7 +690,7 @@ function downloadExportOriginal(t: ExportTemplate) {
   void (async () => {
     try {
       const res = await fetch(`/api/export-templates/${t.id}/file`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem("patio-token") ?? ""}` },
       });
       if (!res.ok) throw new Error("Download fehlgeschlagen");
       const blob = await res.blob();
@@ -710,7 +710,7 @@ function testRenderExportTemplate(t: ExportTemplate) {
   void (async () => {
     try {
       const res = await fetch(`/api/export-templates/${t.id}/test`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem("patio-token") ?? ""}` },
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Test-Render fehlgeschlagen" }));
@@ -1051,7 +1051,7 @@ async function uploadLogoFile(file: File) {
     fd.append("logo", file);
     const res = await fetch("/api/branding/logo", {
       method: "POST",
-      headers: { Authorization: `Bearer ${localStorage.getItem("bau-os-token") ?? ""}` },
+      headers: { Authorization: `Bearer ${localStorage.getItem("patio-token") ?? ""}` },
       body: fd,
     });
     if (!res.ok) {
@@ -1273,7 +1273,7 @@ const SETTINGS_NAV: { id: SettingsSection; label: string; icon: string; group: s
   { id: "system", label: "System-Info", icon: "info", group: "System" },
 ];
 
-const SECTION_KEY = "bau-os-settings-section";
+const SECTION_KEY = "patio-settings-section";
 const activeSection = ref<SettingsSection>(
   ((): SettingsSection => {
     const stored = localStorage.getItem(SECTION_KEY) as SettingsSection | null;
@@ -1615,10 +1615,10 @@ onMounted(() => {
 
               <!-- Multi-Calendar-Liste (Phase 5c).
                User waehlt aus seinen Outlook-Kalendern beliebig viele aus
-               die mit Bau-OS gesyncet werden sollen. Pro aktiviertem
+               die mit PATIO gesyncet werden sollen. Pro aktiviertem
                Kalender legt das Backend eine eigene Webhook-Subscription
-               an. Default-Push-Ziel fuer neue Bau-OS-Termine ist der
-               Kalender mit Anzeigename "Bau-OS" (wird beim Connect
+               an. Default-Push-Ziel fuer neue PATIO-Termine ist der
+               Kalender mit Anzeigename "PATIO" (wird beim Connect
                automatisch erstellt). -->
               <div class="settings-row flex flex-col gap-2 px-0 py-2">
                 <div class="flex items-center justify-between">
@@ -1692,7 +1692,7 @@ onMounted(() => {
                 </div>
                 <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 4px">
                   Aktivierte Kalender werden bidirektional mit PATIO synchronisiert. Neue PATIO-Termine landen im
-                  Kalender „Bau-OS" (oder im ersten aktivierten falls keiner so heißt).
+                  Kalender „PATIO" (oder im ersten aktivierten falls keiner so heißt).
                 </div>
               </div>
 
@@ -1712,7 +1712,7 @@ onMounted(() => {
                 </div>
               </label>
 
-              <!-- Phase 4: Webhook-Status. Wenn aktiv, hat Bau-OS bei Microsoft
+              <!-- Phase 4: Webhook-Status. Wenn aktiv, hat PATIO bei Microsoft
                eine Subscription registriert und bekommt Push-Notifications
                sobald sich was im Outlook-Calendar aendert (<1s Latenz).
                Wenn nicht aktiv, laeuft das 5-min-Polling als Fallback. -->

@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Export-Templates-Routes (Phase 6d)
+// PATIO — Export-Templates-Routes (Phase 6d)
 // ============================================================
 // CRUD fuer .docx-Templates (Settings-UI) + die eigentlichen
 // Export-Endpoints die ein gerendertes .docx ausliefern.

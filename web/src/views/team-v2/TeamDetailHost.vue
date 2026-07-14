@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — TeamDetailHost
+// PATIO Workspace v2 — TeamDetailHost
 // ============================================================
 // Wrappt das bestehende TeamDetailView (1100+ Zeilen, schon gut
 // ausgebaut) im DetailPane-Slot. Bei /team ohne :id zeigt Empty-State.

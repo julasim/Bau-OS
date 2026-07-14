@@ -1,15 +1,15 @@
 const BASE = "/api";
 
 export function getToken(): string | null {
-  return localStorage.getItem("bau-os-token");
+  return localStorage.getItem("patio-token");
 }
 
 export function setToken(token: string): void {
-  localStorage.setItem("bau-os-token", token);
+  localStorage.setItem("patio-token", token);
 }
 
 export function clearToken(): void {
-  localStorage.removeItem("bau-os-token");
+  localStorage.removeItem("patio-token");
 }
 
 export function isAuthenticated(): boolean {

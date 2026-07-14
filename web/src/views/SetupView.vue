@@ -14,7 +14,7 @@ const error = ref("");
 const loading = ref(false);
 const checkingStatus = ref(true);
 
-const hostname = computed(() => (typeof window !== "undefined" ? window.location.host : "bau-os"));
+const hostname = computed(() => (typeof window !== "undefined" ? window.location.host : "patio"));
 
 const passwordTooShort = computed(() => password.value.length > 0 && password.value.length < 8);
 const passwordsMismatch = computed(() => passwordConfirm.value.length > 0 && password.value !== passwordConfirm.value);

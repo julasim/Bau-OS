@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Meeting-Routes
+// PATIO — Meeting-Routes
 // ============================================================
 // Meetings haengen am Projekt — Routing analog zum Bautagebuch:
 //   GET    /projects/:projectName/meetings           → Liste

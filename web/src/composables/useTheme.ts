@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Theme + UI-Praeferenzen (Phase 6f)
+// PATIO — Theme + UI-Praeferenzen (Phase 6f)
 // ============================================================
 // Globaler Singleton-Store fuer User-UI-Settings:
 //   - theme: "light" | "dark" | "system" (matchMedia-Watch)
@@ -20,7 +20,7 @@ import { ref, watch } from "vue";
 export type ThemeMode = "light" | "dark" | "system";
 export type FontSize = "small" | "medium" | "large";
 
-const STORAGE_KEY = "bau-os-ui-prefs";
+const STORAGE_KEY = "patio-ui-prefs";
 
 interface LocalPrefs {
   theme: ThemeMode;

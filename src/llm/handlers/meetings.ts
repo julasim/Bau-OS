@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — LLM-Handler: Meetings / Protokolle
+// PATIO — LLM-Handler: Meetings / Protokolle
 // ============================================================
 // Drei Tools fuer den Sitzungs-Workflow:
 //   - meeting_anlegen: Neues Meeting (typischerweise nach der Sitzung

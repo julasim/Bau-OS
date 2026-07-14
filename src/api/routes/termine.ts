@@ -212,13 +212,13 @@ termineRoutes.delete("/termine", async (c) => {
 
 // ── Konflikt-Auflösung (Phase 5b) ───────────────────────────────────────────
 //
-// Wenn ein Termin sowohl in Bau-OS als auch in Outlook geaendert wurde
+// Wenn ein Termin sowohl in PATIO als auch in Outlook geaendert wurde
 // und ein PATCH die ETag-Pruefung verletzt, setzt pushToOutlook den
 // ms_sync_status auf 'conflict'. Diese Endpoints liefern die zwei
 // Versionen + erlauben dem User die Wahl welche gewinnt.
 
 /** Holt den aktuellen Outlook-Stand fuer einen Termin in Konflikt.
- *  Gibt Bau-OS-Version + Microsoft-Version zurueck damit das Frontend
+ *  Gibt PATIO-Version + Microsoft-Version zurueck damit das Frontend
  *  einen Side-by-Side-Diff anzeigen kann. */
 termineRoutes.get("/termine/:id/conflict", async (c) => {
   const id = c.req.param("id");
@@ -277,13 +277,13 @@ termineRoutes.get("/termine/:id/conflict", async (c) => {
 });
 
 /** Loest einen Konflikt durch Auswahl einer Quelle.
- *   resolution = 'local'  → Bau-OS-Version gewinnt; ETag wird geloescht
+ *   resolution = 'local'  → PATIO-Version gewinnt; ETag wird geloescht
  *                            damit der nachfolgende Push ohne If-Match laeuft
  *                            und Outlook ueberschreibt.
  *   resolution = 'remote' → Outlook-Version gewinnt; wir holen den
  *                            aktuellen Outlook-Stand und upsert'n ihn.
  *   resolution = 'delete-local' → wenn Outlook geloescht wurde und User
- *                            zustimmt dass der Bau-OS-Termin auch weg soll. */
+ *                            zustimmt dass der PATIO-Termin auch weg soll. */
 termineRoutes.post("/termine/:id/resolve", async (c) => {
   const id = c.req.param("id");
   const body = await c.req
@@ -305,7 +305,7 @@ termineRoutes.post("/termine/:id/resolve", async (c) => {
   }
 
   if (body.resolution === "local") {
-    // Bau-OS gewinnt → ETag wegwerfen damit das nachfolgende PATCH ohne
+    // PATIO gewinnt → ETag wegwerfen damit das nachfolgende PATCH ohne
     // If-Match-Header laeuft (kein 412 mehr) + sync_status auf 'pending'
     // damit der Cron + sofortige triggerMsSync den Push starten.
     const { getDb } = await import("../../db/client.js");
@@ -326,7 +326,7 @@ termineRoutes.post("/termine/:id/resolve", async (c) => {
   // schneller: einzelnen Event direkt holen + upsertFromMs.
   try {
     const { graphFetch } = await import("../graph.js");
-    const { mapMsAttendeesToBauOs } = await import("../../sync/microsoft-sync.js");
+    const { mapMsAttendeesToPatio } = await import("../../sync/microsoft-sync.js");
     interface MsEv {
       id: string;
       subject?: string;
@@ -349,7 +349,7 @@ termineRoutes.post("/termine/:id/resolve", async (c) => {
     const isAllDay = ev.isAllDay === true;
     const uhrzeit = isAllDay ? null : ev.start.dateTime.split("T")[1]!.slice(0, 5);
     const endzeit = isAllDay || !ev.end?.dateTime ? null : ev.end.dateTime.split("T")[1]!.slice(0, 5);
-    const { assigneeIds, assignees } = await mapMsAttendeesToBauOs(ev.attendees);
+    const { assigneeIds, assignees } = await mapMsAttendeesToPatio(ev.attendees);
     await terminRepo.upsertFromMs({
       text: ev.subject?.trim() || "(Kein Titel)",
       datum,

@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Branding (Logo + Firmendaten) (Phase 6b)
+-- PATIO — Branding (Logo + Firmendaten) (Phase 6b)
 -- ============================================================
 -- Globale Branding-Konfiguration. Singleton-Pattern: genau eine
 -- Zeile mit id=1 (CHECK-Constraint), damit Settings einen festen

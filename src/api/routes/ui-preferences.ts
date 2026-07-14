@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — UI-Preferences-Routes (Phase 6f)
+// PATIO — UI-Preferences-Routes (Phase 6f)
 // ============================================================
 //   GET   /api/me/preferences   → aktuelle User-Praeferenzen
 //   PATCH /api/me/preferences   → Updaten (Deep-Merge)

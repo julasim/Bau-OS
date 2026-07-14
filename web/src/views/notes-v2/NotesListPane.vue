@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — NotesListPane
+// PATIO Workspace v2 — NotesListPane
 // ============================================================
 // Mittlere Spalte (320px) der Notizen-Section. Liste aller Notizen
 // mit Search + Sort. Klick auf Item → router.push("/notes/:name").

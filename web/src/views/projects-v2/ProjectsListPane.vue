@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — ProjectsListPane
+// PATIO Workspace v2 — ProjectsListPane
 // ============================================================
 // ListPane fuer Projekte. Tabs Aktiv/Alle, Filter+Search.
 // Klick → /projects/:name (Detail).

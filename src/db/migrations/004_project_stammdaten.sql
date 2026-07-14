@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Strukturierte Projekt-Stammdaten
+-- PATIO — Strukturierte Projekt-Stammdaten
 -- ============================================================
 -- Vorher lagen die Stammdaten als Textblock in projects.description
 -- ("Projektnummer: 2026-037\nBauherr: ...\n..."), was weder filterbar

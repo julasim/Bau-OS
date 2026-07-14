@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Semantische Suche (pgvector + Hybrid)
+// PATIO — Semantische Suche (pgvector + Hybrid)
 // Kombiniert Vektor-Aehnlichkeit mit Textsuche (pg_trgm)
 // fuer bestmoegliche Suchergebnisse.
 // ============================================================

@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — LLM User-Context (Phase 6)
+// PATIO — LLM User-Context (Phase 6)
 // ============================================================
 // AsyncLocalStorage-basierter Kontext fuer den User, in dessen Namen das
 // LLM gerade laeuft. Wird vom Bot-Wrapper bzw. von der /chat-API gesetzt

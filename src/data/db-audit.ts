@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Audit-Log Repository (Migration 018)
+// PATIO — Audit-Log Repository (Migration 018)
 // ============================================================
 // Append-only API: logEvent() schreibt einen Eintrag. listEvents()
 // fuer Admin-UI mit Filter (User, Event-Typ, Zeitraum). Es gibt

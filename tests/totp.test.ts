@@ -45,17 +45,17 @@ describe("TOTP", () => {
 
   describe("buildOtpAuthUri", () => {
     it("baut otpauth-URI mit allen Pflicht-Parametern", () => {
-      const uri = buildOtpAuthUri("ABCDEFGHIJ234567", "julius", "Bau-OS");
-      expect(uri).toMatch(/^otpauth:\/\/totp\/Bau-OS:julius\?/);
+      const uri = buildOtpAuthUri("ABCDEFGHIJ234567", "julius", "PATIO");
+      expect(uri).toMatch(/^otpauth:\/\/totp\/PATIO:julius\?/);
       expect(uri).toContain("secret=ABCDEFGHIJ234567");
-      expect(uri).toContain("issuer=Bau-OS");
+      expect(uri).toContain("issuer=PATIO");
       expect(uri).toContain("algorithm=SHA1");
       expect(uri).toContain("digits=6");
       expect(uri).toContain("period=30");
     });
 
     it("encodet Sonderzeichen im Account-Namen", () => {
-      const uri = buildOtpAuthUri("AAAA", "julius@sima.or.at", "Bau-OS");
+      const uri = buildOtpAuthUri("AAAA", "julius@sima.or.at", "PATIO");
       expect(uri).toContain("julius%40sima.or.at");
     });
   });

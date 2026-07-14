@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Initiales Datenbank-Schema
+-- PATIO — Initiales Datenbank-Schema
 -- Erstellt alle Kerntabellen fuer Phase 4
 -- ============================================================
 

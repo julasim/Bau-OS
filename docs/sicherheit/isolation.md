@@ -20,7 +20,7 @@ Jeder PATIO-Kunde erhält eine **vollständig getrennte Infrastruktur**. Es gibt
 │             │               │     │             │               │
 │  ┌──────────▼────────────┐  │     │  ┌──────────▼────────────┐  │
 │  │  Vault A              │  │     │  │  Vault B              │  │
-│  │  /home/bauos/vault/   │  │     │  │  /home/bauos/vault/   │  │
+│  │  /home/patio/vault/   │  │     │  │  /home/patio/vault/   │  │
 │  └───────────────────────┘  │     │  └───────────────────────┘  │
 │                             │     │                             │
 │  .env A                     │     │  .env B                     │
@@ -78,7 +78,7 @@ curl -fsSL https://raw.githubusercontent.com/.../install.sh | bash
 # 3. Kunden-spezifische .env konfigurieren
 cat > .env << EOF
 BOT_TOKEN=<kundenspezifischer-token>
-VAULT_PATH=/home/bauos/vault
+VAULT_PATH=/home/patio/vault
 OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=qwen2.5:7b
 EOF

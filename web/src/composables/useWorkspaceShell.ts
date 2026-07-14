@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS Workspace v2 — Shell-State (Phase 7c)
+// PATIO Workspace v2 — Shell-State (Phase 7c)
 // ============================================================
 // Globaler Singleton fuer Variant (Studio/Atelier), Density
 // (compact/cozy), Rail/List-Collapsed-States. Persistiert in
@@ -25,7 +25,7 @@ const DEFAULTS: ShellState = {
   listCollapsed: false,
 };
 
-const STORAGE_KEY = "bau-os-shell-v2";
+const STORAGE_KEY = "patio-shell-v2";
 
 function loadState(): ShellState {
   try {

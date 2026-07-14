@@ -187,11 +187,11 @@ useEvents(["note"], () => load());
         </p>
       </div>
       <div class="flex items-center" style="gap: 8px">
-        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="bauos-btn ghost">
+        <button @click="viewMode = viewMode === 'list' ? 'grid' : 'list'" class="patio-btn ghost">
           <BIcon :name="viewMode === 'list' ? 'grid' : 'list'" :size="14" />
           {{ viewMode === "list" ? "Kacheln" : "Liste" }}
         </button>
-        <button @click="openCreateDialog" class="bauos-btn solid">
+        <button @click="openCreateDialog" class="patio-btn solid">
           <BIcon name="plus" :size="14" :stroke-width="2" />
           {{ showCreate ? "Abbrechen" : "Neue Notiz" }}
         </button>
@@ -235,7 +235,7 @@ useEvents(["note"], () => load());
         class="form-input font-mono"
         style="resize: vertical; margin-bottom: 12px"
       />
-      <button @click="create" class="bauos-btn solid">Speichern</button>
+      <button @click="create" class="patio-btn solid">Speichern</button>
     </div>
 
     <!-- Search + Count -->
@@ -307,7 +307,7 @@ useEvents(["note"], () => load());
         <div class="empty-state-text">
           {{ searchQuery ? "Keine Treffer." : "Noch keine Notizen." }}
         </div>
-        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="openCreateDialog">
+        <button v-if="!searchQuery" class="patio-btn solid sm" @click="openCreateDialog">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erste Notiz anlegen
         </button>
@@ -391,7 +391,7 @@ useEvents(["note"], () => load());
         <div class="empty-state-text">
           {{ searchQuery ? "Keine Treffer." : "Noch keine Notizen." }}
         </div>
-        <button v-if="!searchQuery" class="bauos-btn solid sm" @click="openCreateDialog">
+        <button v-if="!searchQuery" class="patio-btn solid sm" @click="openCreateDialog">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erste Notiz anlegen
         </button>

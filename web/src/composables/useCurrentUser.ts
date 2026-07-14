@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Aktueller User (global singleton)
+// PATIO — Aktueller User (global singleton)
 // Einmalig /api/auth/me fragen, Ergebnis reaktiv teilen.
 // Fallbacks: displayName -> username -> "Benutzer".
 // Initialen: erste Buchstaben der ersten beiden Worte des Namens.
@@ -49,9 +49,7 @@ export function useCurrentUser() {
     void load();
   }
 
-  const displayName = computed(() =>
-    user.value?.displayName?.trim() || user.value?.username || "Benutzer",
-  );
+  const displayName = computed(() => user.value?.displayName?.trim() || user.value?.username || "Benutzer");
   const initials = computed(() => computeInitials(displayName.value));
   const role = computed(() => user.value?.role ?? "");
   const username = computed(() => user.value?.username ?? "");

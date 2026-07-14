@@ -166,7 +166,7 @@ export const IS_PRODUCTION = NODE_ENV === "production";
 // Default leer → Backend nimmt Host aus dem Request-Header (Reverse-Proxy
 // muss Host korrekt forwarden). Setzbar via Env, falls die App hinter
 // einem CDN sitzt oder die Public-URL anders ist als der Request-Host.
-//   Beispiel: APP_URL=https://app.bau-os.at
+//   Beispiel: APP_URL=https://app.patio.at
 export const APP_URL = process.env.APP_URL || "";
 
 // ── Microsoft Graph (Outlook-Calendar-Sync, Migration 022/023) ──────────────
@@ -198,7 +198,7 @@ export const SMTP_HOST = process.env.SMTP_HOST || "";
 export const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
 export const SMTP_USER = process.env.SMTP_USER || "";
 export const SMTP_PASS = process.env.SMTP_PASS || "";
-export const SMTP_FROM = process.env.SMTP_FROM || "PATIO <noreply@bau-os.local>";
+export const SMTP_FROM = process.env.SMTP_FROM || "PATIO <noreply@patio.local>";
 export const SMTP_SECURE = (process.env.SMTP_SECURE ?? "auto").toLowerCase();
 export const SMTP_ENABLED = !!SMTP_HOST;
 

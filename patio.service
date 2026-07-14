@@ -1,21 +1,21 @@
 [Unit]
-Description=Bau-OS KI-Assistent (Telegram Bot)
-Documentation=https://docs.bau-os.at
+Description=PATIO KI-Assistent (Telegram Bot)
+Documentation=https://docs.patio.at
 After=network.target ollama.service
 Wants=ollama.service
 
 [Service]
 Type=simple
-User=bauos
-WorkingDirectory=/opt/bau-os
-EnvironmentFile=/opt/bau-os/.env
+User=patio
+WorkingDirectory=/opt/patio
+EnvironmentFile=/opt/patio/.env
 Environment=LANG=de_AT.UTF-8 LC_ALL=de_AT.UTF-8
 ExecStart=/usr/bin/node dist/index.js
 Restart=always
 RestartSec=3
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=bau-os
+SyslogIdentifier=patio
 
 # Resource Limits
 MemoryMax=512M
@@ -27,7 +27,7 @@ TasksMax=64
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/opt/bau-os/logs /opt/bau-os/.chat_id /opt/bau-os-workspace /opt/bau-os/data /opt/bau-os/tools
+ReadWritePaths=/opt/patio/logs /opt/patio/.chat_id /opt/patio-workspace /opt/patio/data /opt/patio/tools
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true

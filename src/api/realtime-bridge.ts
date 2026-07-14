@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Supabase Realtime → Event Bus Bridge
+// PATIO — Supabase Realtime → Event Bus Bridge
 // Leitet PostgreSQL-Aenderungen (via Supabase Realtime) an den
 // internen Event-Bus weiter, damit SSE-Clients sie empfangen.
 // ============================================================

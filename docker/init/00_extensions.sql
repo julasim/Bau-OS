@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — PostgreSQL Extensions (wird bei erstem Start ausgefuehrt)
+-- PATIO — PostgreSQL Extensions (wird bei erstem Start ausgefuehrt)
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS vector;

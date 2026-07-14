@@ -1,7 +1,7 @@
 -- ============================================================
--- Bau-OS — Users-Tabelle aktivieren, is_protected, Pair-Tokens
+-- PATIO — Users-Tabelle aktivieren, is_protected, Pair-Tokens
 -- ============================================================
--- Bisher hat Bau-OS Auth aus users.json gelesen. Ab dieser Migration
+-- Bisher hat PATIO Auth aus users.json gelesen. Ab dieser Migration
 -- wird die users-Tabelle (existiert seit 001_init.sql) aktiv genutzt:
 --
 --   - Web-Setup-Wizard legt den Erst-Admin direkt in der DB an

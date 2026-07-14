@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /* ──────────────────────────────────────────────────────────────────────────
-   Bau-OS Design System
+   PATIO Design System
    Monochromatische Neutrale + ein waehlbarer Akzent. Quelle: Design-Handoff
    (components/Shell.jsx, components/Icons.jsx, views/*.jsx).
    Keine neuen Farben — alles aus diesen Tokens.
@@ -390,7 +390,7 @@ samp {
 a,
 button,
 aside,
-.transition-bauos {
+.transition-patio {
   transition:
     background-color 180ms ease,
     border-color 180ms ease,
@@ -471,7 +471,7 @@ html.dark .text-red-700 {
 
 /* ── Komponenten-Klassen ──────────────────────────────────────────────────── */
 
-.bauos-btn {
+.patio-btn {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -485,20 +485,20 @@ html.dark .text-red-700 {
   color: var(--color-text-secondary);
   transition: all 180ms ease;
 }
-.bauos-btn:disabled {
+.patio-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
-.bauos-btn.ghost:hover {
+.patio-btn.ghost:hover {
   background: var(--color-bg-subtle);
   color: var(--color-text);
 }
-.bauos-btn.solid {
+.patio-btn.solid {
   background: var(--color-primary);
   color: var(--color-bg);
   border-color: var(--color-primary);
 }
-.bauos-btn.solid:hover {
+.patio-btn.solid:hover {
   opacity: 0.9;
 }
 
@@ -554,19 +554,19 @@ html.dark .text-red-700 {
    Apple/Material Empfehlung: min 44x44px Touch-Target. Wir gehen
    konservativ auf 40px (ergonomisch ausreichend, ohne dass Layouts
    auseinanderbrechen). Gilt nur fuer <768px.
-   - .bauos-btn  → groessere Padding fuer min 40px Hoehe
+   - .patio-btn  → groessere Padding fuer min 40px Hoehe
    - .icon-btn   → 36x36 statt was kleineres
    - .row-action → 36x36
    - inputs      → 10-12px Padding statt 6-8 (ergibt ~42px Hoehe)
    - 16px Schrift verhindert iOS-Auto-Zoom beim Fokus
 */
 @media (max-width: 767.98px) {
-  .bauos-btn {
+  .patio-btn {
     padding: 10px 16px !important;
     font-size: 13px !important;
     min-height: 40px;
   }
-  .bauos-btn.sm {
+  .patio-btn.sm {
     padding: 8px 12px !important;
     min-height: 36px;
   }

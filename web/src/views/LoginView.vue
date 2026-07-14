@@ -46,7 +46,7 @@ const resetPasswordMismatch = computed(
 );
 
 // Hostname aus dem Browser uebernehmen — keine hardcoded Firma mehr.
-const hostname = computed(() => (typeof window !== "undefined" ? window.location.host : "bau-os"));
+const hostname = computed(() => (typeof window !== "undefined" ? window.location.host : "patio"));
 
 const setupEmailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(setupEmail.value.trim()));
 

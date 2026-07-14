@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Magic-Link-Login (Migration 021)
+-- PATIO — Magic-Link-Login (Migration 021)
 -- ============================================================
 -- Erweitert email_otp_tokens (Migration 020) um den Use-Case "magic-link".
 -- Statt 6-stelligem Code kommt ein klickbarer Anmelde-Link in der Email.

@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Data Layer Factory
+// PATIO — Data Layer Factory
 // Wählt automatisch: DB_ENABLED → PostgreSQL, sonst Filesystem.
 // Alle Consumer importieren von hier — nie direkt von fs-* oder db-*.
 // ============================================================

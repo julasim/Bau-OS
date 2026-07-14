@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Projekt-Module Routes (Phase 6e)
+// PATIO — Projekt-Module Routes (Phase 6e)
 // ============================================================
 //   GET   /api/project-modules         → globale Defaults
 //   PATCH /api/project-modules         → Defaults setzen

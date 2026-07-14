@@ -275,7 +275,7 @@ export const dbTermine: TerminRepository = {
       UPDATE termine SET
         ms_sync_status   = 'pending',
         ms_owner_user_id = COALESCE(ms_owner_user_id, ${ownerUserId}),
-        ms_source        = COALESCE(ms_source, 'bau-os')
+        ms_source        = COALESCE(ms_source, 'patio')
       WHERE id = ${id}
     `;
   },

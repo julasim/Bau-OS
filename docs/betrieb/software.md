@@ -3,7 +3,7 @@
 Node.js, Git und Ollama auf dem frischen Ubuntu-Server einrichten.
 
 ::: tip Voraussetzung
-Du bist als `bauos`-Benutzer per SSH eingeloggt. Falls nicht: `ssh bauos@DEINE_SERVER_IP`
+Du bist als `patio`-Benutzer per SSH eingeloggt. Falls nicht: `ssh patio@DEINE_SERVER_IP`
 :::
 
 ## 1. Node.js 20 LTS
@@ -137,12 +137,12 @@ sudo apt install postgresql-16
 sudo apt install postgresql-16-pgvector
 
 # Datenbank anlegen
-sudo -u postgres createuser bauos
-sudo -u postgres createdb -O bauos bauos
-sudo -u postgres psql -c "GRANT ALL ON DATABASE bauos TO bauos;"
+sudo -u postgres createuser patio
+sudo -u postgres createdb -O patio patio
+sudo -u postgres psql -c "GRANT ALL ON DATABASE patio TO patio;"
 
 # In .env eintragen:
-DATABASE_URL=postgresql://bauos:password@localhost:5432/bauos
+DATABASE_URL=postgresql://patio:password@localhost:5432/patio
 ```
 
 ### Option B — Supabase (managed, einfacher)

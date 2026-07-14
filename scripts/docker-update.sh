@@ -1,12 +1,12 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Docker Update
+# PATIO Docker Update
 # Pull + Rebuild + Restart — in einem Command.
 #
 # Verwendung:
-#   bash /opt/bau-os/scripts/docker-update.sh
+#   bash /opt/patio/scripts/docker-update.sh
 #   oder (via curl):
-#   curl -fsSL https://raw.githubusercontent.com/julasim/Bau-OS/main/scripts/docker-update.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/julasim/patio/main/scripts/docker-update.sh | bash
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -17,7 +17,7 @@ readonly RED='\033[0;31m'
 readonly CYAN='\033[0;36m'
 readonly NC='\033[0m'
 
-INSTALL_DIR="${BAUOS_DIR:-/opt/bau-os}"
+INSTALL_DIR="${PATIO_DIR:-/opt/patio}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Pruefungen
@@ -25,14 +25,14 @@ INSTALL_DIR="${BAUOS_DIR:-/opt/bau-os}"
 
 if [ ! -d "$INSTALL_DIR/.git" ]; then
   echo -e "${RED}✗ Kein Git-Repository in $INSTALL_DIR${NC}"
-  echo -e "  Setze BAUOS_DIR wenn die Installation anderswo liegt:"
-  echo -e "    ${CYAN}BAUOS_DIR=/pfad/zu/bau-os bash docker-update.sh${NC}"
+  echo -e "  Setze PATIO_DIR wenn die Installation anderswo liegt:"
+  echo -e "    ${CYAN}PATIO_DIR=/pfad/zu/patio bash docker-update.sh${NC}"
   exit 1
 fi
 
 if [ ! -f "$INSTALL_DIR/docker-compose.yml" ]; then
   echo -e "${RED}✗ Kein docker-compose.yml in $INSTALL_DIR — dieses Script ist fuer Docker-Installationen${NC}"
-  echo -e "  Fuer systemd-Installationen: ${CYAN}sudo bau-os update${NC}"
+  echo -e "  Fuer systemd-Installationen: ${CYAN}sudo patio update${NC}"
   exit 1
 fi
 
@@ -44,12 +44,12 @@ git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
 chmod +x "$INSTALL_DIR/scripts/docker-update.sh" 2>/dev/null || true
 
 # Beim ersten Lauf einen praktischen Alias ablegen (idempotent, silent bei Fehlschlag)
-if [ ! -L /usr/local/bin/bau-os-update ] && [ -w /usr/local/bin ] 2>/dev/null; then
-  ln -sf "$INSTALL_DIR/scripts/docker-update.sh" /usr/local/bin/bau-os-update 2>/dev/null || true
+if [ ! -L /usr/local/bin/patio-update ] && [ -w /usr/local/bin ] 2>/dev/null; then
+  ln -sf "$INSTALL_DIR/scripts/docker-update.sh" /usr/local/bin/patio-update 2>/dev/null || true
 fi
 
 echo -e "${CYAN}──────────────────────────────────────${NC}"
-echo -e "${CYAN}  Bau-OS Docker Update${NC}"
+echo -e "${CYAN}  PATIO Docker Update${NC}"
 echo -e "${CYAN}──────────────────────────────────────${NC}"
 echo ""
 

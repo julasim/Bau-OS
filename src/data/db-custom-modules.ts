@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Custom Project Modules Repo
+// PATIO — Custom Project Modules Repo
 // ============================================================
 // CRUD fuer nutzerdefinierte Projekt-Modul-Kategorien
 // (custom_project_modules). Diese ergaenzen die 9 built-in

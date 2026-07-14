@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS App-Container — nur Node.js + unser Code.
+# PATIO App-Container — nur Node.js + unser Code.
 # PostgreSQL, Ollama und Caddy laufen jeweils als separate Container
 # (offizielle Images — siehe docker-compose.yml).
 # ─────────────────────────────────────────────────────────────────────────────
@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /opt/bau-os
+WORKDIR /opt/patio
 
 # Dependencies zuerst (bessere Layer-Caches)
 COPY package*.json ./
@@ -32,8 +32,8 @@ RUN npm run build:all \
     && cp -r src/emails dist/emails \
     && npm prune --omit=dev
 
-RUN mkdir -p /opt/bau-os/logs /opt/bau-os/data /opt/bau-os/tools \
-    && chown -R node:node /opt/bau-os
+RUN mkdir -p /opt/patio/logs /opt/patio/data /opt/patio/tools \
+    && chown -R node:node /opt/patio
 
 USER node
 

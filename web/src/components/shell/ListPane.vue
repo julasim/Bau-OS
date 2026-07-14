@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — List-Pane (320px)
+// PATIO Workspace v2 — List-Pane (320px)
 // ============================================================
 // Mittlere Spalte des 3-Spalten-Shells. Kontextueller Index der
 // aktuellen Sektion: Liste, Tabs, Such-Input, Action-Slot.

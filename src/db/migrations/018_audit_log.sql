@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Audit-Log
+-- PATIO — Audit-Log
 -- ============================================================
 -- Pre-Production: nachvollziehen wer wann welche sicherheitsrelevante
 -- Aktion ausgefuehrt hat. Das ist:

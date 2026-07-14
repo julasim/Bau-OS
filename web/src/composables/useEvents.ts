@@ -34,7 +34,7 @@ export function useEvents(types: EventType[], onEvent: (event: DataEvent) => voi
   const MAX_RECONNECT_DELAY = 60_000;
 
   async function connect() {
-    const token = localStorage.getItem("bau-os-token");
+    const token = localStorage.getItem("patio-token");
     if (!token) return;
 
     // One-Time-Ticket holen — so bleibt das langlebige JWT aus der URL

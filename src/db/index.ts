@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Datenbank Barrel Export
+// PATIO — Datenbank Barrel Export
 // ============================================================
 
 // Direkter PostgreSQL Client (fuer Migrations, Queries, Transaktionen)

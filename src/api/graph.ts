@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Microsoft Graph HTTP-Wrapper (Phase 2/3)
+// PATIO — Microsoft Graph HTTP-Wrapper (Phase 2/3)
 // ============================================================
 // Single-point-of-truth fuer alle Graph-Calls. Kuemmert sich um:
 //   - Access-Token aus DB laden + transparent refreshen wenn abgelaufen

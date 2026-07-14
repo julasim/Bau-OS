@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Zwei-Faktor-Authentifizierung (TOTP, RFC 6238)
+-- PATIO — Zwei-Faktor-Authentifizierung (TOTP, RFC 6238)
 -- ============================================================
 -- Pre-Production-Hardening: zusaetzlich zu Username + Passwort
 -- kann jeder User einen TOTP-Authenticator (Google Authenticator,

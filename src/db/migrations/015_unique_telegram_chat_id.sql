@@ -1,7 +1,7 @@
 -- ============================================================
--- Bau-OS — UNIQUE-Constraint auf users.telegram_chat_id
+-- PATIO — UNIQUE-Constraint auf users.telegram_chat_id
 -- ============================================================
--- Bug-Report: zwei Bau-OS-User waren versehentlich an dieselbe
+-- Bug-Report: zwei PATIO-User waren versehentlich an dieselbe
 -- Telegram-Chat-ID gepaired (admin + Test 1 → 5606448807).
 -- Konsequenzen:
 --   - Notifications fuer Empfaenger A landen bei Telegram-Account B

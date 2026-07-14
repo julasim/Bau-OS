@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Vorlagen-Repository (Phase 6c)
+// PATIO — Vorlagen-Repository (Phase 6c)
 // ============================================================
 // CRUD fuer templates-Tabelle. Bietet zusaetzlich renderTemplate()
 // fuer Variable-Substitution: {{Projekt}}, {{Datum}}, {{Bauherr}},

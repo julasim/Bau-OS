@@ -70,7 +70,7 @@ import { APP_URL } from "../config.js";
 /** Bestimmt die Public-Base-URL fuer Links in Emails. APP_URL aus der
  *  Env hat Vorrang (z.B. wenn die App hinter CDN sitzt). Fallback: aus
  *  Request-Headern bauen. Caddy/Nginx muss Host + X-Forwarded-Proto
- *  korrekt forwarden — Bau-OS docker-compose macht das per Default. */
+ *  korrekt forwarden — PATIO docker-compose macht das per Default. */
 function publicBaseUrl(c: { req: { header(name: string): string | undefined } }): string {
   if (APP_URL) return APP_URL.replace(/\/$/, "");
   const proto = c.req.header("x-forwarded-proto") ?? "http";
@@ -168,7 +168,7 @@ app.use(
 // zusaetzlich engere Limits weiter unten.
 //
 // In-Memory Sliding-Window: pro IP ein Bucket mit Counter und resetAt.
-// Reicht fuer Single-Instance-Deployments (Bau-OS laeuft auf einer VM).
+// Reicht fuer Single-Instance-Deployments (PATIO laeuft auf einer VM).
 // Bei Multi-Instance muesste das auf Redis o.ae. wandern — aktuell nicht
 // relevant.
 const apiBuckets = new Map<string, { count: number; resetAt: number }>();

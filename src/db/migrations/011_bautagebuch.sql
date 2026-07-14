@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Bautagebuch (Phase 1)
+-- PATIO — Bautagebuch (Phase 1)
 -- ============================================================
 -- Klassisches Bau-Domain-Feature: ein Eintrag pro Projekt pro Tag mit
 -- Wetter, eingesetztem Personal/Maschinen, Taetigkeiten und besonderen

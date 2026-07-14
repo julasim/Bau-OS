@@ -10,7 +10,7 @@ Projektsteuerungsbüros** (Planung, Statik, Bauphysik, Projektsteuerung).
 
 > **Name:** PATIO = **P**lan · **A**rchitektur · **T**ermine · **I**ntelligenz
 > · **O**ffice — und zugleich der architektonische Begriff für den Innenhof.
-> Der Repo-Ordner heißt aus historischen Gründen noch `bau-os/`.
+> Früherer Projektname: `Bau-OS`.
 
 ## Was es kann
 
@@ -22,6 +22,12 @@ Projektsteuerungsbüros** (Planung, Statik, Bauphysik, Projektsteuerung).
   Action-Items, die per Klick zu Aufgaben werden — Export nach DOCX
 - **Bautagebuch** & **Stundenerfassung** als Büro-Doku-Werkzeuge
   (rechtskonform nach §26 AZG / BAG-Urteil v. 13.09.2022)
+- **Leistungsphasen & Gantt** — Projekt-Phasen (LPH) mit Abhängigkeiten,
+  Auto-Meilensteinen und Zeitleiste
+- **Honorar & Deckungsbeitrag** — Stundensätze, Honorar-Ökonomie je Projekt
+- **Rechnungen** — projektbezogene Rechnungsstellung mit ACL
+- **Portfolio-Cockpit** — projektübergreifende Übersicht mit echten
+  Fortschrittszahlen
 - **Team-Verwaltung** mit Companies, Kategorien, Kontakt-Log, vCard
 - **Dateien** mit Volltextsuche, Vorschau, Sharing — die digitale
   Projektakte

@@ -89,10 +89,10 @@ Da alle Daten als **Markdown-Dateien** im Vault liegen, reicht ein einfaches `rm
 
 ```bash
 # Einzelne Tabellen bereinigen:
-psql bauos -c "DELETE FROM notes; DELETE FROM tasks; DELETE FROM termine; DELETE FROM projects;"
+psql patio -c "DELETE FROM notes; DELETE FROM tasks; DELETE FROM termine; DELETE FROM projects;"
 
 # Oder: gesamte Datenbank löschen
-dropdb bauos
+dropdb patio
 ```
 
 ## Auftragsverarbeitung (AVV)

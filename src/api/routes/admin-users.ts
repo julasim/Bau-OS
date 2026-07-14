@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Admin-User-Verwaltung
+// PATIO — Admin-User-Verwaltung
 // Nur fuer admins. Erfordert authMiddleware + adminMiddleware.
 //
 // Schutzregeln:

@@ -210,7 +210,7 @@ const kanbanColumns = computed(() => [
           color: var(--color-text);
         "
       />
-      <button @click="create" class="bauos-btn solid">
+      <button @click="create" class="patio-btn solid">
         <BIcon name="plus" :size="14" :stroke-width="2" /> Hinzufügen
       </button>
     </div>
@@ -274,8 +274,8 @@ const kanbanColumns = computed(() => [
         <input v-model="editing.location" placeholder="z. B. Baustelle Wien" class="form-input" />
       </div>
       <div class="flex gap-2">
-        <button @click="save(editing!)" class="bauos-btn solid">Speichern</button>
-        <button @click="editing = null" class="bauos-btn ghost">Abbrechen</button>
+        <button @click="save(editing!)" class="patio-btn solid">Speichern</button>
+        <button @click="editing = null" class="patio-btn ghost">Abbrechen</button>
       </div>
     </div>
 
@@ -302,7 +302,7 @@ const kanbanColumns = computed(() => [
           <div class="empty-state-text">
             {{ filter === "all" ? "Noch keine Aufgaben." : "Keine Aufgaben in dieser Ansicht." }}
           </div>
-          <button v-if="filter === 'all'" class="bauos-btn solid sm" @click="focusQuickAdd">
+          <button v-if="filter === 'all'" class="patio-btn solid sm" @click="focusQuickAdd">
             <BIcon name="plus" :size="11" :stroke-width="2" />
             Erste Aufgabe anlegen
           </button>

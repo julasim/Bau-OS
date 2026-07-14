@@ -22,8 +22,8 @@ Keine Daten verlassen deinen Rechner. Erfordert mindestens 8 GB RAM für ein 7B-
 ollama pull qwen2.5:7b
 
 # 2. Projekt klonen
-git clone https://github.com/julasim/Bau-OS.git
-cd Bau-OS/bau-os
+git clone https://github.com/julasim/patio.git
+cd PATIO/patio
 npm install
 
 # 3. .env erstellen
@@ -51,8 +51,8 @@ Kein Ollama nötig. Anfragen gehen an die OpenAI API. Wenn `OPENAI_API_KEY` gese
 
 ```bash
 # 1. Projekt klonen
-git clone https://github.com/julasim/Bau-OS.git
-cd Bau-OS/bau-os
+git clone https://github.com/julasim/patio.git
+cd PATIO/patio
 npm install
 
 # 2. .env erstellen

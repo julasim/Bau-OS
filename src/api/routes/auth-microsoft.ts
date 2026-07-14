@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Microsoft Graph OAuth-Routes (Phase 1)
+// PATIO — Microsoft Graph OAuth-Routes (Phase 1)
 // ============================================================
 // Vier Endpoints fuer den OAuth-Flow + Status:
 //
@@ -248,15 +248,15 @@ authMicrosoftRoutes.patch("/auth/microsoft/settings", authMiddleware, async (c) 
   const userId = c.get("userId");
   if (!userId) return c.json({ error: "Nicht eingeloggt" }, 401);
 
-  let body: { calendarMode?: "default" | "bau-os"; syncEnabled?: boolean };
+  let body: { calendarMode?: "default" | "patio"; syncEnabled?: boolean };
   try {
     body = await c.req.json<typeof body>();
   } catch {
     return c.json({ error: "Ungueltiger Body" }, 400);
   }
 
-  if (body.calendarMode && !["default", "bau-os"].includes(body.calendarMode)) {
-    return c.json({ error: "calendarMode muss 'default' oder 'bau-os' sein" }, 400);
+  if (body.calendarMode && !["default", "patio"].includes(body.calendarMode)) {
+    return c.json({ error: "calendarMode muss 'default' oder 'patio' sein" }, 400);
   }
 
   const previous = await getMsAccount(userId);
@@ -439,7 +439,7 @@ function renderResultPage(kind: "success" | "error", message: string, returnTo?:
     // Wenn als Popup geoeffnet: dem opener mitteilen + nach 2s schliessen.
     if (window.opener && !window.opener.closed) {
       try {
-        window.opener.postMessage({ type: 'bauos:ms-oauth', kind: '${kind}', message: ${JSON.stringify(safeMsg)} }, '*');
+        window.opener.postMessage({ type: 'patio:ms-oauth', kind: '${kind}', message: ${JSON.stringify(safeMsg)} }, '*');
       } catch (e) { /* cross-origin */ }
       setTimeout(() => window.close(), 1500);
     }

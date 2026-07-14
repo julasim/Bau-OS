@@ -1,12 +1,12 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Docker Compose — 3-Service-Architektur (Edge-Proxy uebernimmt TLS)
+# PATIO Docker Compose — 3-Service-Architektur (Edge-Proxy uebernimmt TLS)
 #
 #   postgres  pgvector/pgvector:pg16  — DB + Vector-Extension
 #   ollama    ollama/ollama           — LLM-Runtime + Embeddings
-#   app       (Build aus Dockerfile)  — Bau-OS Telegram-Bot + WebUI + API
+#   app       (Build aus Dockerfile)  — PATIO Telegram-Bot + WebUI + API
 #
 # TLS + Reverse-Proxy: zentral via /opt/proxy (julasim/Proxy auf GitHub).
-# Bau-OS haengt sich ueber das externe Docker-Netzwerk `proxy` an den
+# PATIO haengt sich ueber das externe Docker-Netzwerk `proxy` an den
 # Edge-Caddy. Der Edge-Caddy kuemmert sich um Let's-Encrypt + Routing
 # fuer alle Apps die im proxy-Netzwerk sind.
 #
@@ -14,7 +14,7 @@
 #   cd /opt/proxy && docker compose up -d
 #   → legt das Docker-Netzwerk `proxy` an + startet edge-caddy auf 80/443.
 #
-# Start Bau-OS:
+# Start PATIO:
 #   docker compose up -d
 # Logs:
 #   docker compose logs -f
@@ -28,23 +28,23 @@
 #   (siehe Git-History vor dem Edge-Proxy-Umzug) und proxy-Network entfernen.
 # ─────────────────────────────────────────────────────────────────────────────
 
-name: bau-os
+name: patio
 
 services:
   postgres:
     image: pgvector/pgvector:pg16
-    container_name: bauos-postgres
+    container_name: patio-postgres
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-bauos}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bauos}
-      POSTGRES_DB: ${POSTGRES_DB:-bauos}
+      POSTGRES_USER: ${POSTGRES_USER:-patio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-patio}
+      POSTGRES_DB: ${POSTGRES_DB:-patio}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bauos} -d ${POSTGRES_DB:-bauos}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-patio} -d ${POSTGRES_DB:-patio}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -56,7 +56,7 @@ services:
 
   ollama:
     image: ollama/ollama:latest
-    container_name: bauos-ollama
+    container_name: patio-ollama
     restart: always
     volumes:
       - ollama_models:/root/.ollama
@@ -80,13 +80,13 @@ services:
 
   app:
     build: .
-    image: bau-os-app:latest
-    container_name: bauos-app
+    image: patio-app:latest
+    container_name: patio-app
     restart: always
     env_file: .env
     environment:
       # Service-zu-Service-URLs ueberschreiben alles aus .env.
-      DATABASE_URL: postgres://${POSTGRES_USER:-bauos}:${POSTGRES_PASSWORD:-bauos}@postgres:5432/${POSTGRES_DB:-bauos}
+      DATABASE_URL: postgres://${POSTGRES_USER:-patio}:${POSTGRES_PASSWORD:-patio}@postgres:5432/${POSTGRES_DB:-patio}
       OLLAMA_BASE_URL: http://ollama:11434/v1
       WORKSPACE_PATH: /workspace
     depends_on:
@@ -96,10 +96,10 @@ services:
         condition: service_healthy
     volumes:
       - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
-      - ./logs:/opt/bau-os/logs
-      - ./data:/opt/bau-os/data
-      - ./tools:/opt/bau-os/tools
-      - ./.chat_id:/opt/bau-os/.chat_id
+      - ./logs:/opt/patio/logs
+      - ./data:/opt/patio/data
+      - ./tools:/opt/patio/tools
+      - ./.chat_id:/opt/patio/.chat_id
     # Port 3000 nur container-intern — Edge-Caddy proxied via proxy-Netzwerk.
     expose:
       - "3000"
@@ -114,10 +114,10 @@ volumes:
 networks:
   # Externes Docker-Netzwerk vom zentralen Edge-Proxy (/opt/proxy).
   # Wird vom edge-caddy + jeder externen App geteilt. Muss VOR dem
-  # ersten Bau-OS-Start existieren — wird vom Edge-Proxy-Stack angelegt.
+  # ersten PATIO-Start existieren — wird vom Edge-Proxy-Stack angelegt.
   proxy:
     external: true
-  # Internes Bau-OS-Netzwerk fuer postgres + ollama + app.
+  # Internes PATIO-Netzwerk fuer postgres + ollama + app.
   # Compose erstellt das automatisch — Definition hier rein zur
   # Klarheit, damit alle Services explizit ein Netzwerk referenzieren.
   default:

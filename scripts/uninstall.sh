@@ -1,20 +1,20 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Deinstallation
-# Entfernt Bau-OS sauber vom System
+# PATIO Deinstallation
+# Entfernt PATIO sauber vom System
 #
 # Verwendung:
 #   sudo bash scripts/uninstall.sh
 #   oder (remote):
-#   curl -fsSL https://raw.githubusercontent.com/julasim/Bau-OS/main/scripts/uninstall.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/julasim/patio/main/scripts/uninstall.sh | sudo bash
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
 # ── Konfiguration (gleiche Defaults wie install.sh) ─────────
-INSTALL_DIR="/opt/bau-os"
-WORKSPACE_DIR="/opt/bau-os-workspace"
-SERVICE_USER="bauos"
-SERVICE_NAME="bau-os"
+INSTALL_DIR="/opt/patio"
+WORKSPACE_DIR="/opt/patio-workspace"
+SERVICE_USER="patio"
+SERVICE_NAME="patio"
 
 # ── Farben ───────────────────────────────────────────────────
 GREEN='\033[0;32m'
@@ -64,7 +64,7 @@ echo ""
 echo -e "${BOLD}Folgendes wird entfernt:${NC}"
 echo ""
 [ -f "/etc/systemd/system/$SERVICE_NAME.service" ] && info "systemd Service: $SERVICE_NAME"
-[ -f "/usr/local/bin/bau-os" ]                     && info "CLI Tool: /usr/local/bin/bau-os"
+[ -f "/usr/local/bin/patio" ]                     && info "CLI Tool: /usr/local/bin/patio"
 [ -d "$INSTALL_DIR" ]                               && info "Installation: $INSTALL_DIR"
 id "$SERVICE_USER" &>/dev/null 2>&1                 && info "Benutzer: $SERVICE_USER"
 echo ""
@@ -76,7 +76,7 @@ if [ -d "$WORKSPACE_DIR" ]; then
 fi
 
 # ── Bestaetigungen ───────────────────────────────────────────
-read -rp "  Bau-OS wirklich deinstallieren? [j/N]: " CONFIRM < /dev/tty
+read -rp "  PATIO wirklich deinstallieren? [j/N]: " CONFIRM < /dev/tty
 if [[ ! "$CONFIRM" =~ ^[jJ]$ ]]; then
   echo "Abgebrochen."; exit 0
 fi
@@ -110,8 +110,8 @@ fi
 # ═════════════════════════════════════════════════════════════
 # 2. CLI Tool entfernen
 # ═════════════════════════════════════════════════════════════
-if [ -f "/usr/local/bin/bau-os" ]; then
-  rm -f "/usr/local/bin/bau-os"
+if [ -f "/usr/local/bin/patio" ]; then
+  rm -f "/usr/local/bin/patio"
   ok "CLI Tool entfernt"
 fi
 
@@ -146,7 +146,7 @@ fi
 # ═════════════════════════════════════════════════════════════
 echo ""
 echo -e "${BOLD}════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  Bau-OS wurde deinstalliert.${NC}"
+echo -e "${GREEN}  PATIO wurde deinstalliert.${NC}"
 echo -e "${BOLD}════════════════════════════════════════════════════${NC}"
 echo ""
 info "Ollama und Node.js wurden NICHT entfernt."

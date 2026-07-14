@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Templates-Routes (Phase 6c)
+// PATIO — Templates-Routes (Phase 6c)
 // ============================================================
 // CRUD fuer Markdown-Vorlagen + render-Endpoint fuer Apply-Logik
 // in NotesView/MeetingsView.

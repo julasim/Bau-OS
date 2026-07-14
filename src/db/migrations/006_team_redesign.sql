@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Team-Redesign: Companies, M:N Projekt-Zuordnung,
+-- PATIO — Team-Redesign: Companies, M:N Projekt-Zuordnung,
 -- Member-Kategorien, Kontakt-Log
 -- ============================================================
 -- Die bisherige team_members-Tabelle hatte zwei gravierende Limitierungen:

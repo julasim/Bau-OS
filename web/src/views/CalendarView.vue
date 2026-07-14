@@ -15,7 +15,7 @@ interface Termin {
   assignees: string[];
   project?: string | null;
   // Microsoft-Graph-Sync (Phase 2/3) — fuer Outlook-Badge in der UI.
-  msSource?: "bau-os" | "microsoft" | null;
+  msSource?: "patio" | "microsoft" | null;
   msSyncStatus?: "pending" | "synced" | "conflict" | "error" | null;
 }
 
@@ -25,7 +25,7 @@ type ViewMode = "month" | "week" | "day" | "list";
 const termine = ref<Termin[]>([]);
 const team = ref<string[]>([]);
 
-const VIEW_KEY = "bau-os-calendar-view";
+const VIEW_KEY = "patio-calendar-view";
 // Auf Phone (<768px): Default auf "list" — Monats-/Wochengrid ist auf
 // 375px schlicht unbenutzbar (5px-Spalten, ueberlappende Events).
 // User kann via View-Switcher trotzdem auf Monat umschalten.
@@ -239,7 +239,7 @@ async function create() {
 }
 
 // Konflikt-Termine bekommen ein eigenes Dialog statt des normalen Edits.
-// Der User soll erst auflösen welche Version (Bau-OS / Outlook) gewinnt
+// Der User soll erst auflösen welche Version (PATIO / Outlook) gewinnt
 // bevor er weiter editiert — sonst riskieren wir einen Re-Konflikt
 // nach dem Speichern.
 const conflictTerminId = ref<string | null>(null);
@@ -318,7 +318,7 @@ const VIEWS: { id: ViewMode; label: string }[] = [
 // Zeigt mit welchem Microsoft-Status der Termin synchronisiert ist:
 //   - synced/microsoft  → blaues "O" (Outlook), Termin ist in beiden Systemen
 //   - pending           → oranges "O", wartet auf Push (5-min-Cron)
-//   - conflict          → rotes "O", Outlook + Bau-OS sind divergiert
+//   - conflict          → rotes "O", Outlook + PATIO sind divergiert
 //   - error             → graues "O", letzter Sync fehlgeschlagen
 //   - keine ms_*-Felder → kein Badge (lokaler Termin ohne MS-Verbindung)
 function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {

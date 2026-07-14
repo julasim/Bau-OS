@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Per-User Telegram-Bots
+-- PATIO — Per-User Telegram-Bots
 -- ============================================================
 -- Bisher: ein gemeinsamer BOT_TOKEN aus der env, alle User pairen ihre
 -- Chat-ID dazu (Phase 5).

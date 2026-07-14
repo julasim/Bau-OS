@@ -7,7 +7,7 @@ PATIO und Ollama-Modelle aktualisieren.
 ### Manuell
 
 ```bash
-cd /home/bauos/bau-os
+cd /home/patio/patio
 
 # Neuen Code holen
 git pull
@@ -19,10 +19,10 @@ npm install
 npm run build
 
 # Service neu starten
-sudo systemctl restart bau-os
+sudo systemctl restart patio
 
 # Prüfen ob alles läuft
-sudo systemctl status bau-os
+sudo systemctl status patio
 ```
 
 ### Update-Skript
@@ -30,7 +30,7 @@ sudo systemctl status bau-os
 Erstelle ein Skript für bequeme Updates:
 
 ```bash
-nano /home/bauos/update-bau-os.sh
+nano /home/patio/update-patio.sh
 ```
 
 Inhalt:
@@ -39,8 +39,8 @@ Inhalt:
 #!/bin/bash
 set -e
 
-APP_DIR="/home/bauos/bau-os"
-SERVICE="bau-os"
+APP_DIR="/home/patio/patio"
+SERVICE="patio"
 
 echo "=== PATIO Update ==="
 echo ""
@@ -70,13 +70,13 @@ echo "=== Update abgeschlossen ==="
 Ausführbar machen:
 
 ```bash
-chmod +x /home/bauos/update-bau-os.sh
+chmod +x /home/patio/update-patio.sh
 ```
 
 Ausführen:
 
 ```bash
-./update-bau-os.sh
+./update-patio.sh
 ```
 
 ::: tip Keine Datenverluste
@@ -108,7 +108,7 @@ Ein `npm run setup` ist **nur** nötig, wenn:
 ::: danger Setup überschreibt Agent-Dateien
 `npm run setup` erstellt die Agent-Dateien (`IDENTITY.md`, `SOUL.md`, etc.) neu. Wenn du sie bereits angepasst hast, gehen diese Änderungen verloren. Mache vorher ein Backup:
 ```bash
-cp -r /home/bauos/vault/Agents/Main/ /home/bauos/agents-backup-$(date +%Y%m%d)
+cp -r /home/patio/vault/Agents/Main/ /home/patio/agents-backup-$(date +%Y%m%d)
 ```
 :::
 
@@ -125,10 +125,10 @@ sudo apt-get install -y nodejs
 node --version
 
 # PATIO neu bauen
-cd /home/bauos/bau-os
+cd /home/patio/patio
 npm install
 npm run build
-sudo systemctl restart bau-os
+sudo systemctl restart patio
 ```
 
 ## System-Updates

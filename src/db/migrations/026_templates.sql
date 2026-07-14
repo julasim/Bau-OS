@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Vorlagen (Phase 6c)
+-- PATIO — Vorlagen (Phase 6c)
 -- ============================================================
 -- Markdown-Templates fuer Notizen, Meetings, Bautagebuch-Eintraege.
 -- Verwendung:

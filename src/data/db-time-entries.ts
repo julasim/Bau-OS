@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Stundenerfassung Repository (DB-Backend)
+// PATIO — Stundenerfassung Repository (DB-Backend)
 // ============================================================
 // Migration 014 setzt die Tabelle, dieser Adapter implementiert
 // TimeEntryRepository.

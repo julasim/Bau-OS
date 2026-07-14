@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Projekt-Module-Konfiguration (Phase 6e)
+// PATIO — Projekt-Module-Konfiguration (Phase 6e)
 // ============================================================
 // Singleton-Tabelle fuer globale Defaults + Per-Projekt-Override
 // in projects.modules_override (JSONB).

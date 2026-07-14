@@ -6,9 +6,9 @@ Sicherungsstrategie für PATIO. Das Wichtigste: **der Vault ist alles**.
 
 | Was | Pfad | Priorität | Inhalt |
 |---|---|---|---|
-| **Vault** | `/home/bauos/vault/` | Kritisch | Alle Daten: Notizen, Aufgaben, Termine, Agent-Config, Memory |
-| **.env** | `/home/bauos/bau-os/.env` | Hoch | Bot Token, Pfade, Modell-Konfiguration |
-| **Code** | `/home/bauos/bau-os/` | Niedrig | Kann jederzeit neu geklont werden |
+| **Vault** | `/home/patio/vault/` | Kritisch | Alle Daten: Notizen, Aufgaben, Termine, Agent-Config, Memory |
+| **.env** | `/home/patio/patio/.env` | Hoch | Bot Token, Pfade, Modell-Konfiguration |
+| **Code** | `/home/patio/patio/` | Niedrig | Kann jederzeit neu geklont werden |
 
 ::: tip Der Vault ist die einzige Wahrheit
 Alle Daten liegen als Markdown-Dateien im Vault. Agent-Persönlichkeit, Erinnerungen, Aufgaben, Notizen — alles ist dort. Wenn du den Vault hast, kannst du PATIO jederzeit auf einem neuen Server wiederherstellen.
@@ -20,16 +20,16 @@ Alle Daten liegen als Markdown-Dateien im Vault. Agent-Persönlichkeit, Erinneru
 
 ```bash
 # Lokales Backup auf dem Server
-cp -r /home/bauos/vault /home/bauos/vault-backup-$(date +%Y%m%d)
+cp -r /home/patio/vault /home/patio/vault-backup-$(date +%Y%m%d)
 
 # Oder per SCP auf deinen Rechner
-scp -r bauos@DEINE_SERVER_IP:/home/bauos/vault ./vault-backup-$(date +%Y%m%d)
+scp -r patio@DEINE_SERVER_IP:/home/patio/vault ./vault-backup-$(date +%Y%m%d)
 ```
 
 ### .env sichern
 
 ```bash
-scp bauos@DEINE_SERVER_IP:/home/bauos/bau-os/.env ./env-backup-$(date +%Y%m%d)
+scp patio@DEINE_SERVER_IP:/home/patio/patio/.env ./env-backup-$(date +%Y%m%d)
 ```
 
 ## Automatisches Backup (Cron)
@@ -37,7 +37,7 @@ scp bauos@DEINE_SERVER_IP:/home/bauos/bau-os/.env ./env-backup-$(date +%Y%m%d)
 Erstelle ein Backup-Skript:
 
 ```bash
-nano /home/bauos/backup.sh
+nano /home/patio/backup.sh
 ```
 
 Inhalt:
@@ -46,9 +46,9 @@ Inhalt:
 #!/bin/bash
 set -e
 
-VAULT_PATH="/home/bauos/vault"
-BACKUP_DIR="/home/bauos/backups"
-ENV_FILE="/home/bauos/bau-os/.env"
+VAULT_PATH="/home/patio/vault"
+BACKUP_DIR="/home/patio/backups"
+ENV_FILE="/home/patio/patio/.env"
 KEEP_DAYS=14
 
 # Backup-Verzeichnis erstellen
@@ -73,7 +73,7 @@ echo "[$(date)] Backup erstellt: vault-$DATE.tar.gz"
 Ausführbar machen:
 
 ```bash
-chmod +x /home/bauos/backup.sh
+chmod +x /home/patio/backup.sh
 ```
 
 ### Cronjob einrichten
@@ -85,7 +85,7 @@ crontab -e
 Fuege diese Zeile hinzu (täglich um 3:00 Uhr):
 
 ```cron
-0 3 * * * /home/bauos/backup.sh >> /home/bauos/backups/backup.log 2>&1
+0 3 * * * /home/patio/backup.sh >> /home/patio/backups/backup.log 2>&1
 ```
 
 Prüfen ob der Cronjob eingerichtet ist:
@@ -116,20 +116,20 @@ Snapshots sichern den gesamten Server-Zustand. Für regelmäßige Datensicherung
 
 ```bash
 # Aktuellen Vault sichern (zur Sicherheit)
-mv /home/bauos/vault /home/bauos/vault-old
+mv /home/patio/vault /home/patio/vault-old
 
 # Backup entpacken
-tar -xzf /home/bauos/backups/vault-20260407_0300.tar.gz -C /home/bauos/
+tar -xzf /home/patio/backups/vault-20260407_0300.tar.gz -C /home/patio/
 
 # Bot neu starten
-sudo systemctl restart bau-os
+sudo systemctl restart patio
 ```
 
 ### .env wiederherstellen
 
 ```bash
-cp /home/bauos/backups/env-20260407_0300.bak /home/bauos/bau-os/.env
-sudo systemctl restart bau-os
+cp /home/patio/backups/env-20260407_0300.bak /home/patio/patio/.env
+sudo systemctl restart patio
 ```
 
 ### Komplette Neuinstallation aus Backup
@@ -143,15 +143,15 @@ sudo systemctl restart bau-os
 
 ```bash
 # Auf dem neuen Server:
-scp dein-rechner:vault-backup.tar.gz /home/bauos/
-tar -xzf vault-backup.tar.gz -C /home/bauos/
-scp dein-rechner:env-backup.bak /home/bauos/bau-os/.env
-sudo systemctl start bau-os
+scp dein-rechner:vault-backup.tar.gz /home/patio/
+tar -xzf vault-backup.tar.gz -C /home/patio/
+scp dein-rechner:env-backup.bak /home/patio/patio/.env
+sudo systemctl start patio
 ```
 
 ## Backup-Checkliste
 
-- [ ] Backup-Skript unter `/home/bauos/backup.sh` erstellt
+- [ ] Backup-Skript unter `/home/patio/backup.sh` erstellt
 - [ ] Cronjob eingerichtet (täglich)
 - [ ] Erster Testlauf erfolgreich (`./backup.sh`)
 - [ ] `.env` separat gesichert

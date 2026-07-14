@@ -5,9 +5,10 @@
 > Innenhof). Alles Nutzer-Sichtbare (UI, Doku) sagt **PATIO**. Maker-Tag:
 > **„by Sima"** — kein Bezug zu „SIMA Architecture" o.ä.
 >
-> **Repo-Layout:** Aller Code lebt in `patio/`. **Alle `npm`-Befehle aus
-> `patio/` ausführen.** Nur `patio/` ist ein Git-Repo (Remote:
-> `github.com/julasim/Bau-OS`).
+> **Repo-Layout:** Der Code (`src/`, `web/`) liegt **direkt im Repo-Root**
+> (dieser Ordner; im Workspace unter `apps/patio/`). **Alle `npm`-Befehle aus
+> dem Repo-Root ausführen.** Remote: `github.com/julasim/patio`
+> (früher `Bau-OS`).
 
 ## Zielgruppe (WICHTIG)
 
@@ -32,13 +33,14 @@
 - **LLM:** OpenAI-SDK als Client — zeigt auf OpenAI (wenn `OPENAI_API_KEY`
   gesetzt) **oder** auf Ollama via OpenAI-kompatiblen Endpoint
   (`OLLAMA_BASE_URL`). **Produktiv aktuell: Ollama Cloud** (im
-  `bauos-ollama`-Container per `ollama signin` eingeloggt, Modell
-  `qwen3-coder:480b-cloud` — gut im Tool-Calling). Lokale Modelle (z.B.
+  `patio-ollama`-Container per `ollama signin` eingeloggt, starkes Cloud-Modell
+  — gut im Tool-Calling; `.env.example`-Default ist aktuell `kimi-k2.5:cloud`).
+  Lokale Modelle (z.B.
   `qwen2.5:7b`) gehen, sind auf kleiner Hardware aber zu langsam/schwach
   fürs agentic Tool-Calling.
 - **Frontend:** Vue 3 (Composition API) + Pinia + Vite + Tailwind v4 (`web/`).
-- **Deployment:** Docker Compose auf eigener VM unter `/opt/bau-os`.
-  Container: `bauos-app`, `bauos-postgres`, `bauos-ollama`. Davor ein
+- **Deployment:** Docker Compose auf eigener VM unter `/opt/patio`.
+  Container: `patio-app`, `patio-postgres`, `patio-ollama`. Davor ein
   **gemeinsamer Edge-Proxy** `edge-caddy` (externes Docker-Netz `proxy`,
   `external: true`) — terminiert TLS, routet per Domain, hält DB/Ollama im
   privaten Netz. SSE-Routes (`/api/chat`, `/api/events`) werden ungepuffert
@@ -47,12 +49,12 @@
 **Deploy/Update auf dem Server (der übliche Weg):**
 
 ```bash
-cd /opt/bau-os && git pull && docker compose build app && docker compose up -d app
+cd /opt/patio && git pull && docker compose build app && docker compose up -d app
 ```
 
 DB-Migrationen laufen beim Start automatisch (`DB_AUTO_MIGRATE`, default an).
 
-## Befehle (aus `patio/`)
+## Befehle (aus dem Repo-Root)
 
 ```bash
 npm run dev          # tsx watch src/index.ts (Bot + API)
@@ -95,10 +97,23 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   fsChat`); **nur Agent-Logs sind immer FS** (JSONL). Bautagebuch, Meetings,
   Time-Entries sind **DB-only**. Nie direkt aus `db-*`/`fs-*` importieren.
 - **Migrationen:** plain SQL in `src/db/migrations/`, `NNN_name.sql`,
-  forward-only, idempotent (`IF NOT EXISTS` / DO-Block-Guards). Aktuellste:
-  `035_project_phases.sql`. **Schema-Lektion:** Beim JOIN müssen Typen passen — `034` hat
-  `chat_messages.session_id` von TEXT auf UUID umgestellt (passend zu
-  `chat_sessions.id`), sonst `operator does not exist: text = uuid`.
+  forward-only, idempotent (`IF NOT EXISTS` / DO-Block-Guards). Runner
+  (`src/db/migrate.ts`) trackt per Dateiname in `_migrations` (keine
+  Prüfsumme), jede Migration in eigener Transaktion, Advisory-Lock gegen
+  parallele Starts. Aktuellste: `039_rename_calendar_enum.sql`. **Schema-Lektion:**
+  Beim JOIN müssen Typen passen — `034` hat `chat_messages.session_id` von TEXT
+  auf UUID umgestellt (passend zu `chat_sessions.id`), sonst
+  `operator does not exist: text = uuid`.
+- **Projektsteuerung (PM, Migrationen 035–038):** Leistungsphasen
+  (`035_project_phases`, Routes `phases.ts`, Repo `db-phases.ts`, Web
+  `projects-v2/ProjectPhasesTab.vue`) · **Gantt-Zeitleiste** mit
+  Phasen-Abhängigkeiten + Auto-Meilenstein (`038_phase_gantt`) · **Honorar-
+  Ökonomie**: Stundensatz + Deckungsbeitrag (`037_hourly_rate`,
+  `036_time_entry_phase`) · **Rechnungen** (Routes `invoices.ts`, Repo
+  `db-invoices.ts`, Web `projects-v2/ProjectInvoicesTab.vue`; ACL beachtet) ·
+  **Portfolio-Cockpit** (Routes `portfolio.ts`, Repo `db-portfolio.ts`, Web
+  `views/portfolio/`) mit echten Fortschrittszahlen. `039` benennt nur den
+  internen Kalender-Enum-Wert (`bau-os` → `patio`) um.
 - **Web-API + Frontend:** Hono in `src/api/server.ts` (Port `API_PORT`,
   default 3000), JWT-Auth (`authMiddleware` setzt `userId`/`userRole`/
   `dbUser`). Routes in `src/api/routes/` spiegeln die Tool-Fläche. Vue-SPA

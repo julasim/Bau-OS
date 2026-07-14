@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Migration 033: Chat-Sessions in DB + Sharing
+-- PATIO — Migration 033: Chat-Sessions in DB + Sharing
 -- ============================================================
 
 -- A) user_id auf chat_sessions (bisher nur im FS-Chat gespeichert)

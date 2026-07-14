@@ -1,8 +1,8 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Update Script
+# PATIO Update Script
 # Verwendung: sudo bash scripts/update.sh
-#             oder direkt auf dem Server: sudo bash /opt/bau-os/scripts/update.sh
+#             oder direkt auf dem Server: sudo bash /opt/patio/scripts/update.sh
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -14,7 +14,7 @@ readonly RED='\033[0;31m'
 readonly CYAN='\033[0;36m'
 readonly NC='\033[0m'
 
-INSTALL_DIR="${1:-/opt/bau-os}"
+INSTALL_DIR="${1:-/opt/patio}"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Prüfungen
@@ -31,7 +31,7 @@ cd "$INSTALL_DIR"
 git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
 
 echo -e "${CYAN}──────────────────────────────────────${NC}"
-echo -e "${CYAN}  Bau-OS Update${NC}"
+echo -e "${CYAN}  PATIO Update${NC}"
 echo -e "${CYAN}──────────────────────────────────────${NC}"
 echo ""
 
@@ -128,19 +128,19 @@ mkdir -p "$INSTALL_DIR/tools"
 # 9. CLI aktualisieren (falls vorhanden)
 # ─────────────────────────────────────────────────────────────────────────────
 
-if [ -f "$INSTALL_DIR/scripts/bau-os-cli.sh" ]; then
-  cp "$INSTALL_DIR/scripts/bau-os-cli.sh" /usr/local/bin/bau-os 2>/dev/null || true
-  chmod +x /usr/local/bin/bau-os 2>/dev/null || true
+if [ -f "$INSTALL_DIR/scripts/patio-cli.sh" ]; then
+  cp "$INSTALL_DIR/scripts/patio-cli.sh" /usr/local/bin/patio 2>/dev/null || true
+  chmod +x /usr/local/bin/patio 2>/dev/null || true
 
   # Pfade im CLI anpassen (falls nicht Standard)
-  if [ "$INSTALL_DIR" != "/opt/bau-os" ]; then
-    sed -i "s|INSTALL_DIR=\"/opt/bau-os\"|INSTALL_DIR=\"$INSTALL_DIR\"|" /usr/local/bin/bau-os 2>/dev/null || true
+  if [ "$INSTALL_DIR" != "/opt/patio" ]; then
+    sed -i "s|INSTALL_DIR=\"/opt/patio\"|INSTALL_DIR=\"$INSTALL_DIR\"|" /usr/local/bin/patio 2>/dev/null || true
   fi
   # Workspace-Pfad aus .env lesen und im CLI setzen
   if [ -f "$INSTALL_DIR/.env" ]; then
     WS_PATH=$(grep -oP '^WORKSPACE_PATH=\K.*' "$INSTALL_DIR/.env" 2>/dev/null || grep -oP '^VAULT_PATH=\K.*' "$INSTALL_DIR/.env" 2>/dev/null || true)
-    if [ -n "$WS_PATH" ] && [ "$WS_PATH" != "/opt/bau-os-workspace" ]; then
-      sed -i "s|WORKSPACE_DIR=\"/opt/bau-os-workspace\"|WORKSPACE_DIR=\"$WS_PATH\"|" /usr/local/bin/bau-os 2>/dev/null || true
+    if [ -n "$WS_PATH" ] && [ "$WS_PATH" != "/opt/patio-workspace" ]; then
+      sed -i "s|WORKSPACE_DIR=\"/opt/patio-workspace\"|WORKSPACE_DIR=\"$WS_PATH\"|" /usr/local/bin/patio 2>/dev/null || true
     fi
   fi
 fi
@@ -149,15 +149,15 @@ fi
 # 10. systemd Service aktualisieren
 # ─────────────────────────────────────────────────────────────────────────────
 
-if [ -f "$INSTALL_DIR/bau-os.service" ] && [ -f "/etc/systemd/system/bau-os.service" ]; then
-  CURRENT_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/bau-os.service 2>/dev/null || echo "bauos")
-  WS_PATH=${WS_PATH:-/opt/bau-os-workspace}
+if [ -f "$INSTALL_DIR/patio.service" ] && [ -f "/etc/systemd/system/patio.service" ]; then
+  CURRENT_USER=$(grep -oP '^User=\K.*' /etc/systemd/system/patio.service 2>/dev/null || echo "patio")
+  WS_PATH=${WS_PATH:-/opt/patio-workspace}
 
   sed \
-    "s|/opt/bau-os-workspace|$WS_PATH|g; \
-     s|/opt/bau-os|$INSTALL_DIR|g; \
-     s|User=bauos|User=$CURRENT_USER|g" \
-    "$INSTALL_DIR/bau-os.service" > /etc/systemd/system/bau-os.service
+    "s|/opt/patio-workspace|$WS_PATH|g; \
+     s|/opt/patio|$INSTALL_DIR|g; \
+     s|User=patio|User=$CURRENT_USER|g" \
+    "$INSTALL_DIR/patio.service" > /etc/systemd/system/patio.service
 
   systemctl daemon-reload
 fi
@@ -167,11 +167,11 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 
 echo -e "  ${GREEN}▶ Service neustarten ...${NC}"
-systemctl restart bau-os 2>/dev/null || true
+systemctl restart patio 2>/dev/null || true
 
 # Warten bis Service läuft
 for i in $(seq 1 10); do
-  if systemctl is-active --quiet bau-os 2>/dev/null; then
+  if systemctl is-active --quiet patio 2>/dev/null; then
     break
   fi
   sleep 1
@@ -180,13 +180,13 @@ done
 echo ""
 echo -e "${CYAN}──────────────────────────────────────${NC}"
 
-if systemctl is-active --quiet bau-os 2>/dev/null; then
+if systemctl is-active --quiet patio 2>/dev/null; then
   echo -e "  ${GREEN}✓ Update erfolgreich!${NC}"
   echo -e "  ${YELLOW}${OLD_COMMIT}${NC} → ${GREEN}${NEW_COMMIT}${NC} — ${NEW_MSG}"
 else
   echo -e "  ${RED}✗ Service startet nicht!${NC}"
   echo ""
-  journalctl -u bau-os -n 15 --no-pager
+  journalctl -u patio -n 15 --no-pager
 fi
 
 echo -e "${CYAN}──────────────────────────────────────${NC}"

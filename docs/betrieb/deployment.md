@@ -11,8 +11,8 @@ sudo bash scripts/install.sh
 Der Installer fragt interaktiv nach:
 1. **Telegram Bot Token**
 2. **LLM-Modus**: Cloud (kimi-k2.5, qwen3, gemma4) oder Lokal (qwen2.5:7b, llama3.1:8b)
-3. **Installationsverzeichnis** (Standard: `/opt/bau-os`)
-4. **Workspace-Verzeichnis** (Standard: `/opt/bau-os-workspace`)
+3. **Installationsverzeichnis** (Standard: `/opt/patio`)
+4. **Workspace-Verzeichnis** (Standard: `/opt/patio-workspace`)
 5. **Web-Admin Benutzername**
 6. **Web-Admin Passwort**
 7. **API-Port** (Standard: 3000)
@@ -20,22 +20,22 @@ Der Installer fragt interaktiv nach:
 Was automatisch eingerichtet wird:
 - Node.js 20 LTS
 - Ollama + Modell-Download (im Lokal-Modus)
-- systemd-Service `bau-os` (Autostart, Restart bei Fehler)
-- CLI-Tool `/usr/local/bin/bau-os`
+- systemd-Service `patio` (Autostart, Restart bei Fehler)
+- CLI-Tool `/usr/local/bin/patio`
 - `.env` und `data/users.json`
 
-### bau-os CLI
+### patio CLI
 
 Nach der Installation steht ein interaktives CLI zur Verfügung:
 
 ```bash
-bau-os              # Interaktives Menü
-bau-os status       # Service-Status
-bau-os logs         # Letzte Logs
-bau-os logs live    # Logs live verfolgen
-sudo bau-os restart # Bot neu starten
-sudo bau-os update  # Updates einspielen
-sudo bau-os user add  # Web-Benutzer anlegen
+patio              # Interaktives Menü
+patio status       # Service-Status
+patio logs         # Letzte Logs
+patio logs live    # Logs live verfolgen
+sudo patio restart # Bot neu starten
+sudo patio update  # Updates einspielen
+sudo patio user add  # Web-Benutzer anlegen
 ```
 
 ---
@@ -47,16 +47,16 @@ Falls du die Installation Schritt für Schritt selbst durchführen möchtest.
 ### 1. Repository klonen
 
 ```bash
-cd /home/bauos
-git clone https://github.com/your-org/bau-os.git
-cd bau-os
+cd /home/patio
+git clone https://github.com/your-org/patio.git
+cd patio
 ```
 
 ::: tip Privates Repository?
 Falls das Repo privat ist, nutze SCP statt Git:
 ```bash
 # Auf deinem lokalen Rechner:
-scp -r ./bau-os bauos@DEINE_SERVER_IP:/home/bauos/
+scp -r ./patio patio@DEINE_SERVER_IP:/home/patio/
 ```
 Oder richte einen SSH Deploy Key ein:
 ```bash
@@ -70,7 +70,7 @@ cat ~/.ssh/id_ed25519.pub
 ### 2. Dependencies installieren
 
 ```bash
-cd /home/bauos/bau-os
+cd /home/patio/patio
 npm install
 ```
 
@@ -93,7 +93,7 @@ Der interaktive Installer fragt nach:
 | Eingabe | Beispielwert | Beschreibung |
 |---|---|---|
 | **BOT_TOKEN** | `7123456:AAH...` | Telegram Bot Token von @BotFather |
-| **VAULT_PATH** | `/home/bauos/vault` | Pfad zum Obsidian Vault (wird erstellt) |
+| **VAULT_PATH** | `/home/patio/vault` | Pfad zum Obsidian Vault (wird erstellt) |
 | **OLLAMA_BASE_URL** | `http://localhost:11434/v1` | Ollama API Endpunkt |
 | **OLLAMA_MODEL** | `qwen2.5:7b` | Das Modell, das Ollama nutzen soll |
 
@@ -113,7 +113,7 @@ Erwartete Ausgabe:
 
 ```env
 BOT_TOKEN=7123456:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-VAULT_PATH=/home/bauos/vault
+VAULT_PATH=/home/patio/vault
 OLLAMA_BASE_URL=http://localhost:11434/v1
 OLLAMA_MODEL=qwen2.5:7b
 ```
@@ -121,7 +121,7 @@ OLLAMA_MODEL=qwen2.5:7b
 #### Workspace-Dateien
 
 ```bash
-ls /home/bauos/vault/Agents/Main/
+ls /home/patio/vault/Agents/Main/
 ```
 
 Erwartete Ausgabe:
@@ -158,8 +158,8 @@ Stoppe den Bot mit `Ctrl+C`.
 Nach dem erfolgreichen Start sieht die Struktur so aus:
 
 ```
-/home/bauos/
-├── bau-os/              ← Anwendungs-Code
+/home/patio/
+├── patio/              ← Anwendungs-Code
 │   ├── dist/            ← Kompilierter Code
 │   ├── src/             ← TypeScript Quellcode
 │   ├── .env             ← Konfiguration

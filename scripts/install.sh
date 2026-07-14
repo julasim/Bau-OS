@@ -1,10 +1,10 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Installations-Script
+# PATIO Installations-Script
 # Getestet auf: Ubuntu 24.04 LTS
 #
 # Verwendung:
-#   curl -fsSL https://raw.githubusercontent.com/julasim/Bau-OS/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/julasim/patio/main/scripts/install.sh | bash
 #   oder:
 #   chmod +x scripts/install.sh && sudo bash scripts/install.sh
 # ─────────────────────────────────────────────────────────────────────────────
@@ -19,10 +19,10 @@ export LANGUAGE=de_AT.UTF-8
 # ─────────────────────────────────────────────────────────────────────────────
 # Konfiguration
 # ─────────────────────────────────────────────────────────────────────────────
-readonly INSTALL_DIR_DEFAULT="/opt/bau-os"
-readonly WORKSPACE_DIR_DEFAULT="/opt/bau-os-workspace"
-readonly SERVICE_USER="bauos"
-readonly REPO_URL="https://github.com/julasim/Bau-OS.git"
+readonly INSTALL_DIR_DEFAULT="/opt/patio"
+readonly WORKSPACE_DIR_DEFAULT="/opt/patio-workspace"
+readonly SERVICE_USER="patio"
+readonly REPO_URL="https://github.com/julasim/patio.git"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Farben & Formatierung
@@ -172,9 +172,9 @@ fi
 # Hauptprogramm
 # ─────────────────────────────────────────────────────────────────────────────
 print_logo
-print_header "Bau-OS Installation"
+print_header "PATIO Installation"
 
-echo "Dieses Script installiert Bau-OS vollautomatisch auf Ubuntu 24.04."
+echo "Dieses Script installiert PATIO vollautomatisch auf Ubuntu 24.04."
 echo "Du wirst nach wenigen Werten gefragt."
 echo ""
 
@@ -306,9 +306,9 @@ sleep 3
 ok "Ollama Service gestartet"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 5: Bau-OS klonen und bauen (VOR useradd — verhindert skel-Konflikt)
+# SCHRITT 5: PATIO klonen und bauen (VOR useradd — verhindert skel-Konflikt)
 # ═════════════════════════════════════════════════════════════════════════════
-step "Bau-OS installieren..."
+step "PATIO installieren..."
 if [ -d "$INSTALL_DIR/.git" ]; then
   warn "Verzeichnis existiert bereits — führe Update durch"
   cd "$INSTALL_DIR"
@@ -332,7 +332,7 @@ fi
 npm install --loglevel=error
 npm run build:all
 npm prune --omit=dev --loglevel=error
-ok "Bau-OS gebaut (Backend + Web-Oberfläche)"
+ok "PATIO gebaut (Backend + Web-Oberfläche)"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 6: Service-Benutzer (NACH git clone — kein -m Flag)
@@ -374,7 +374,7 @@ if [ "$LLM_MODE" = "cloud" ]; then
     read -r < /dev/tty
   }
 
-  # ollama signin als Service-User ausführen (Token muss für bauos zugänglich sein)
+  # ollama signin als Service-User ausführen (Token muss für patio zugänglich sein)
   _do_ollama_signin
 
   # Verbindung verifizieren
@@ -494,7 +494,7 @@ if [ -f "$INSTALL_DIR/.env" ]; then
   fi
 else
   cat > "$INSTALL_DIR/.env" << 'ENVHEADER'
-# Bau-OS Konfiguration (generiert von install.sh)
+# PATIO Konfiguration (generiert von install.sh)
 ENVHEADER
   cat >> "$INSTALL_DIR/.env" << ENVEOF
 BOT_TOKEN=$BOT_TOKEN
@@ -513,16 +513,16 @@ chmod 600 "$INSTALL_DIR/.env"
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 11: CLI-Tool installieren
 # ═════════════════════════════════════════════════════════════════════════════
-step "bau-os CLI installieren..."
-cp "$INSTALL_DIR/scripts/bau-os-cli.sh" /usr/local/bin/bau-os
-chmod +x /usr/local/bin/bau-os
+step "patio CLI installieren..."
+cp "$INSTALL_DIR/scripts/patio-cli.sh" /usr/local/bin/patio
+chmod +x /usr/local/bin/patio
 
 # Pfade im CLI auf tatsächliche Installationspfade anpassen
-sed -i "s|INSTALL_DIR=\"/opt/bau-os\"|INSTALL_DIR=\"$INSTALL_DIR\"|" /usr/local/bin/bau-os
-sed -i "s|WORKSPACE_DIR=\"/opt/bau-os-workspace\"|WORKSPACE_DIR=\"$WORKSPACE_DIR\"|" /usr/local/bin/bau-os
-sed -i "s|SERVICE_USER=\"bauos\"|SERVICE_USER=\"$SERVICE_USER\"|" /usr/local/bin/bau-os
+sed -i "s|INSTALL_DIR=\"/opt/patio\"|INSTALL_DIR=\"$INSTALL_DIR\"|" /usr/local/bin/patio
+sed -i "s|WORKSPACE_DIR=\"/opt/patio-workspace\"|WORKSPACE_DIR=\"$WORKSPACE_DIR\"|" /usr/local/bin/patio
+sed -i "s|SERVICE_USER=\"patio\"|SERVICE_USER=\"$SERVICE_USER\"|" /usr/local/bin/patio
 
-ok "CLI verfügbar: 'bau-os' oder 'sudo bau-os'"
+ok "CLI verfügbar: 'patio' oder 'sudo patio'"
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 12: systemd Service
@@ -531,26 +531,26 @@ step "systemd Service installieren..."
 
 # Pfade in der Service-Datei anpassen (Workspace-Pfad ZUERST, da er den kürzeren enthält)
 sed \
-  "s|/opt/bau-os-workspace|$WORKSPACE_DIR|g; \
-   s|/opt/bau-os|$INSTALL_DIR|g; \
-   s|User=bauos|User=$SERVICE_USER|g" \
-  "$INSTALL_DIR/bau-os.service" > /etc/systemd/system/bau-os.service
+  "s|/opt/patio-workspace|$WORKSPACE_DIR|g; \
+   s|/opt/patio|$INSTALL_DIR|g; \
+   s|User=patio|User=$SERVICE_USER|g" \
+  "$INSTALL_DIR/patio.service" > /etc/systemd/system/patio.service
 
 systemctl daemon-reload
-systemctl enable bau-os --quiet 2>/dev/null || true
+systemctl enable patio --quiet 2>/dev/null || true
 
 # Eventuell laufenden Service stoppen vor Neustart
-systemctl stop bau-os 2>/dev/null || true
-systemctl start bau-os
+systemctl stop patio 2>/dev/null || true
+systemctl start patio
 
 # Aktiv warten statt festes sleep (max 15 Sekunden)
-if wait_for_service "bau-os"; then
-  ok "Bau-OS Service läuft"
+if wait_for_service "patio"; then
+  ok "PATIO Service läuft"
 else
   echo ""
   warn "Service konnte nicht gestartet werden. Logs:"
   echo ""
-  journalctl -u bau-os -n 20 --no-pager
+  journalctl -u patio -n 20 --no-pager
   echo ""
   err "Installation fehlgeschlagen. Siehe Logs oben."
 fi
@@ -568,11 +568,11 @@ echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>:${API_POR
 echo    "    Login: ${WEB_USER} / (dein gewähltes Passwort)"
 echo ""
 echo -e "  ${BOLD}CLI-Befehle:${NC}"
-echo    "    bau-os                   → Interaktives Menü"
-echo    "    bau-os status            → Status"
-echo    "    bau-os logs              → Logs anzeigen"
-echo    "    bau-os logs live         → Live-Logs"
-echo    "    sudo bau-os restart      → Neustart"
-echo    "    sudo bau-os update       → Update einspielen"
-echo    "    sudo bau-os user add     → Neuen Web-User anlegen"
+echo    "    patio                   → Interaktives Menü"
+echo    "    patio status            → Status"
+echo    "    patio logs              → Logs anzeigen"
+echo    "    patio logs live         → Live-Logs"
+echo    "    sudo patio restart      → Neustart"
+echo    "    sudo patio update       → Update einspielen"
+echo    "    sudo patio user add     → Neuen Web-User anlegen"
 echo ""

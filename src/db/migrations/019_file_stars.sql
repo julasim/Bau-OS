@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — File-Starring (Markiert)
+-- PATIO — File-Starring (Markiert)
 -- ============================================================
 -- Pro User kann jede Datei "markiert" werden (Star). Dient als
 -- persoenliche Favoriten-Liste in der Datei-View ("Markiert"-

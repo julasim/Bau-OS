@@ -1,16 +1,16 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS — Konflikt-Auflösungs-Dialog (Phase 5b)
+// PATIO — Konflikt-Auflösungs-Dialog (Phase 5b)
 // ============================================================
-// Wenn ein Termin sowohl in Bau-OS als auch in Outlook geändert
+// Wenn ein Termin sowohl in PATIO als auch in Outlook geändert
 // wurde, lehnt Microsoft das PATCH mit ETag-Mismatch ab und der
 // Termin landet in ms_sync_status='conflict'. Dieser Dialog zeigt
 // beide Versionen Side-by-Side und lässt den User wählen welche
 // gewinnt.
 //
 // Edge-Case: Outlook hat den Event gelöscht. Dann ist remote=null
-// und wir bieten nur "Bau-OS-Version behalten + neu in Outlook
-// anlegen" oder "Bau-OS-Termin auch löschen" an.
+// und wir bieten nur "PATIO-Version behalten + neu in Outlook
+// anlegen" oder "PATIO-Termin auch löschen" an.
 // ============================================================
 
 import { ref, computed, onMounted } from "vue";

@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Microsoft Graph Webhook-Receiver (Phase 4)
+// PATIO — Microsoft Graph Webhook-Receiver (Phase 4)
 // ============================================================
 // Empfaengt Push-Notifications von Microsoft Graph fuer Calendar-
 // Events. Zwei Request-Typen:
@@ -65,7 +65,7 @@ interface MsEventResource {
 }
 
 // ── Datum-Mapping (dupliziert aus microsoft-sync.ts wegen circular-import) ──
-function isoToBauosDatum(iso: string): string {
+function isoToPatioDatum(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!m) throw new Error(`Unverstaendliches ISO-Datum: "${iso}"`);
   return `${m[3]}.${m[2]}.${m[1]}`;
@@ -174,7 +174,7 @@ async function handleEventCreatedOrUpdated(userId: string, eventId: string, cale
 
   const isoDate = ev.start.dateTime.split("T")[0]!;
   const isAllDay = ev.isAllDay === true;
-  const datum = isoToBauosDatum(isoDate);
+  const datum = isoToPatioDatum(isoDate);
   const uhrzeit = isAllDay ? null : extractTime(ev.start.dateTime);
   const endzeit = isAllDay || !ev.end?.dateTime ? null : extractTime(ev.end.dateTime);
   const location = ev.location?.displayName?.trim() || null;
@@ -182,8 +182,8 @@ async function handleEventCreatedOrUpdated(userId: string, eventId: string, cale
 
   // Attendees → assigneeIds + assignees, gleicher Helper wie im Cron-Pull
   // (DRY — Single-Source-of-Truth fuers MS-Attendee-Mapping).
-  const { mapMsAttendeesToBauOs } = await import("../../sync/microsoft-sync.js");
-  const { assigneeIds, assignees } = await mapMsAttendeesToBauOs(ev.attendees);
+  const { mapMsAttendeesToPatio } = await import("../../sync/microsoft-sync.js");
+  const { assigneeIds, assignees } = await mapMsAttendeesToPatio(ev.attendees);
 
   await terminRepo.upsertFromMs({
     text,
@@ -212,7 +212,7 @@ async function handleEventDeleted(userId: string, eventId: string): Promise<void
   if (!local) return;
 
   // Nur loeschen wenn der Termin auch wirklich aus MS kam — wenn er von
-  // Bau-OS kommt aber aus Versehen nochmal als 'deleted' gemeldet wird,
+  // PATIO kommt aber aus Versehen nochmal als 'deleted' gemeldet wird,
   // wuerden wir lokale Daten wegwerfen. Sicher: die Outlook-Loeschung
   // ist die Quelle der Wahrheit fuer ms_source='microsoft'-Termine.
   await terminRepo.delete(local.id);

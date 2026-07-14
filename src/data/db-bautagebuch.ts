@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Bautagebuch-Repository (DB-Backend)
+// PATIO — Bautagebuch-Repository (DB-Backend)
 // ============================================================
 // Migration 011 setzt die Tabelle, dieser Adapter implementiert das
 // BautagebuchRepository-Interface aus types.ts.

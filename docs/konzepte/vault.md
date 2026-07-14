@@ -16,7 +16,7 @@ Wenn `DATABASE_URL` in `.env` gesetzt ist, schaltet PATIO auf PostgreSQL um. Das
 # Filesystem-Modus (Standard — keine Zeile nötig)
 
 # Datenbank-Modus (PostgreSQL)
-DATABASE_URL=postgresql://user:pass@localhost:5432/bauos
+DATABASE_URL=postgresql://user:pass@localhost:5432/patio
 ```
 
 ## Workspace-Struktur (Filesystem-Modus)
@@ -62,7 +62,7 @@ Alle Markdown-Dateien im Agent-Ordner sind zur Laufzeit editierbar — kein Neus
 ## Datenbank-Modus
 
 ```env
-DATABASE_URL=postgresql://user:pass@localhost:5432/bauos
+DATABASE_URL=postgresql://user:pass@localhost:5432/patio
 ```
 
 Sobald `DATABASE_URL` gesetzt ist:

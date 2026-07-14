@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Email-basierte 2FA (Pflicht)
+-- PATIO — Email-basierte 2FA (Pflicht)
 -- ============================================================
 -- Loest die TOTP-2FA aus Migration 017 ab. Begruendung: Email ist
 -- niedrigschwelliger fuer Architekturbueros — kein Authenticator-App-

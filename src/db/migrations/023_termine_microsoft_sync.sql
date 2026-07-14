@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — termine.ms_* fuer Outlook-Sync (Phase 1, Schema-Vorbereitung)
+-- PATIO — termine.ms_* fuer Outlook-Sync (Phase 1, Schema-Vorbereitung)
 -- ============================================================
 -- Tracking-Spalten damit jeder Termin weiss, ob/wo er in Microsoft
 -- Graph existiert. Spalten werden in Phase 2 (Read-Sync) und Phase 3
@@ -8,10 +8,10 @@
 --
 -- Spalten:
 --   - ms_event_id: Microsoft Graph Event-ID. NULL = Termin existiert
---     nur in Bau-OS, noch nicht (oder nicht mehr) in Outlook.
+--     nur in PATIO, noch nicht (oder nicht mehr) in Outlook.
 --   - ms_calendar_id: in welchem MS-Kalender der Event liegt (Default
---     vs Bau-OS-Kalender).
---   - ms_owner_user_id: welcher Bau-OS-User "besitzt" den MS-Termin.
+--     vs PATIO-Kalender).
+--   - ms_owner_user_id: welcher PATIO-User "besitzt" den MS-Termin.
 --     Wichtig fuer Multi-User-Termine: nur der Eigentuemer schreibt
 --     Updates zu MS, andere User sehen den Termin via ihre eigene
 --     MS-Sync-Verbindung.
@@ -19,10 +19,10 @@
 --     Conflict-Detection beim Update (Phase 3).
 --   - ms_sync_status: 'pending' = wartet auf Push zu MS,
 --                     'synced'  = aktuell, in beiden Systemen identisch,
---                     'conflict'= MS und Bau-OS divergieren (Phase 4),
+--                     'conflict'= MS und PATIO divergieren (Phase 4),
 --                     'error'   = letzter Sync-Versuch fehlgeschlagen.
 --   - ms_last_sync_at: Zeitstempel letzter erfolgreicher Sync.
---   - ms_source: 'bau-os' = von Bau-OS erzeugt → wir pushen nach MS,
+--   - ms_source: 'patio' = von PATIO erzeugt → wir pushen nach MS,
 --                'microsoft' = aus MS importiert → MS ist die Quelle.
 --                NULL = noch nicht synchronisiert.
 -- ============================================================
@@ -38,7 +38,7 @@ ALTER TABLE termine ADD COLUMN IF NOT EXISTS ms_last_sync_at TIMESTAMPTZ;
 ALTER TABLE termine ADD COLUMN IF NOT EXISTS ms_source       TEXT
   CHECK (ms_source IN ('bau-os', 'microsoft'));
 
--- Index fuer "alle Bau-OS-Termine die noch nicht zu MS gepusht wurden"
+-- Index fuer "alle PATIO-Termine die noch nicht zu MS gepusht wurden"
 -- (Phase 3 Sync-Worker).
 CREATE INDEX IF NOT EXISTS idx_termine_ms_pending
   ON termine(ms_owner_user_id) WHERE ms_sync_status = 'pending';

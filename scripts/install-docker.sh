@@ -1,10 +1,10 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS Docker-Installations-Script
-# Installiert Bau-OS als Docker-Compose-Stack (postgres + ollama + app + caddy)
+# PATIO Docker-Installations-Script
+# Installiert PATIO als Docker-Compose-Stack (postgres + ollama + app + caddy)
 #
 # Verwendung:
-#   curl -fsSL https://raw.githubusercontent.com/julasim/Bau-OS/main/scripts/install-docker.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/julasim/patio/main/scripts/install-docker.sh | bash
 #   oder:
 #   bash scripts/install-docker.sh
 # ─────────────────────────────────────────────────────────────────────────────
@@ -18,9 +18,9 @@ export LANGUAGE=de_AT.UTF-8
 # ─────────────────────────────────────────────────────────────────────────────
 # Konfiguration
 # ─────────────────────────────────────────────────────────────────────────────
-readonly INSTALL_DIR_DEFAULT="/opt/bau-os"
-readonly WORKSPACE_DIR_DEFAULT="/opt/bau-os-workspace"
-readonly REPO_URL="https://github.com/julasim/Bau-OS.git"
+readonly INSTALL_DIR_DEFAULT="/opt/patio"
+readonly WORKSPACE_DIR_DEFAULT="/opt/patio-workspace"
+readonly REPO_URL="https://github.com/julasim/patio.git"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Farben & Formatierung
@@ -162,10 +162,10 @@ check_docker() {
 # Hauptprogramm
 # ─────────────────────────────────────────────────────────────────────────────
 print_logo
-print_header "Bau-OS Installation (Docker)"
+print_header "PATIO Installation (Docker)"
 
-echo "Dieses Script installiert Bau-OS als Docker-Compose-Stack."
-echo "4 Services: postgres (pgvector), ollama, app (Bau-OS), caddy (Reverse-Proxy + HTTPS)."
+echo "Dieses Script installiert PATIO als Docker-Compose-Stack."
+echo "4 Services: postgres (pgvector), ollama, app (PATIO), caddy (Reverse-Proxy + HTTPS)."
 echo ""
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -257,7 +257,7 @@ fi
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 3: Repo klonen
 # ═════════════════════════════════════════════════════════════════════════════
-step "Bau-OS Repository klonen..."
+step "PATIO Repository klonen..."
 if [ -d "$INSTALL_DIR/.git" ]; then
   warn "Verzeichnis existiert bereits — führe Update durch"
   cd "$INSTALL_DIR"
@@ -293,7 +293,7 @@ dc() {
 # SCHRITT 5: Docker-Image bauen
 # ═════════════════════════════════════════════════════════════════════════════
 step "Docker-Images vorbereiten..."
-info "4 Services: postgres (pgvector), ollama, app (Bau-OS), caddy."
+info "4 Services: postgres (pgvector), ollama, app (PATIO), caddy."
 info "Offizielle Images werden gezogen, nur 'app' lokal gebaut."
 echo ""
 
@@ -301,7 +301,7 @@ echo ""
 JWT_SECRET=$(openssl rand -hex 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 16)
 cat > "$INSTALL_DIR/.env" << ENVEOF
-# Bau-OS Konfiguration (generiert von install-docker.sh)
+# PATIO Konfiguration (generiert von install-docker.sh)
 BOT_TOKEN=$BOT_TOKEN
 WORKSPACE_PATH=/workspace
 WORKSPACE_HOST_DIR=$WORKSPACE_DIR
@@ -312,16 +312,16 @@ JWT_SECRET=$JWT_SECRET
 # DATABASE_URL wird von docker-compose.yml automatisch aus diesen
 # drei Variablen zusammengesetzt (siehe services.app.environment).
 # Nur relevant wenn du die App mal OHNE Docker laufen laesst — dann
-# musst du DATABASE_URL=postgres://bauos:<PW>@localhost:5432/bauos
+# musst du DATABASE_URL=postgres://patio:<PW>@localhost:5432/patio
 # zusaetzlich setzen.
-POSTGRES_USER=bauos
+POSTGRES_USER=patio
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
-POSTGRES_DB=bauos
+POSTGRES_DB=patio
 
 # Caddy Reverse-Proxy — Domain leer = nur HTTP auf Port 80
 # Sobald eine Domain gesetzt ist, holt Caddy automatisch ein Let's
 # Encrypt Zertifikat (Port 80 + 443 muessen vom Internet erreichbar sein).
-# Beispiel: CADDY_DOMAIN=bauos.meine-firma.at
+# Beispiel: CADDY_DOMAIN=patio.meine-firma.at
 CADDY_DOMAIN=
 CADDY_EMAIL=admin@example.com
 
@@ -344,14 +344,14 @@ step "Web-Admin einrichten..."
 
 # Sicherstellen dass das App-Image existiert — sonst schlaegt docker run
 # mit einer irrefuehrenden "image not found" Meldung fehl
-if ! docker image inspect bau-os-app:latest >/dev/null 2>&1; then
-  err "Image bau-os-app:latest nicht gefunden. Build fehlgeschlagen? Pruefe: docker compose build app"
+if ! docker image inspect patio-app:latest >/dev/null 2>&1; then
+  err "Image patio-app:latest nicht gefunden. Build fehlgeschlagen? Pruefe: docker compose build app"
 fi
 
 # Passwort via gebautem Image hashen
 # < /dev/null verhindert dass docker stdin vom Script (curl|bash) frisst
 set +e
-BCRYPT_OUTPUT=$(docker run --rm bau-os-app:latest \
+BCRYPT_OUTPUT=$(docker run --rm patio-app:latest \
   node -e "require('bcrypt').hash(process.argv[1],10).then(h=>console.log(h)).catch(e=>{console.error('ERR:'+e.message);process.exit(1)})" \
   "$WEB_PASS" < /dev/null 2>&1)
 BCRYPT_CODE=$?
@@ -396,13 +396,13 @@ dc up -d < /dev/null || err "Container konnten nicht gestartet werden. Siehe Feh
 # Timeout 180s: Postgres-Init + Extensions + Migrations + App-Start + Caddy-Start
 # koennen beim allerersten Boot auf langsamen VPS zusammen ueber eine Minute dauern.
 echo ""
-info "Warte auf Bau-OS... (erster Start kann bis zu 3 Minuten dauern —"
+info "Warte auf PATIO... (erster Start kann bis zu 3 Minuten dauern —"
 info "Postgres init, Migrations, Ollama-Start, Caddy binden)"
 HTTP_PORT_CHECK="${HTTP_PORT:-80}"
 for i in $(seq 1 180); do
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${HTTP_PORT_CHECK}/" 2>/dev/null || echo "000")
   if [ "$HTTP_CODE" != "000" ]; then
-    ok "Bau-OS läuft (HTTP $HTTP_CODE via Caddy, nach ${i}s)"
+    ok "PATIO läuft (HTTP $HTTP_CODE via Caddy, nach ${i}s)"
     break
   fi
   # Alle 30s ein Lebenszeichen ausgeben, damit der User sieht dass noch gewartet wird
@@ -472,12 +472,12 @@ if ! dc exec -T ollama ollama pull nomic-embed-text < /dev/null; then
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
-# bau-os-update Shortcut installieren
+# patio-update Shortcut installieren
 # ═════════════════════════════════════════════════════════════════════════════
 if [ -f "$INSTALL_DIR/scripts/docker-update.sh" ]; then
   # Exec-Bit auf das Zielskript (git unter Windows/OneDrive verliert es oefter)
   chmod +x "$INSTALL_DIR/scripts/docker-update.sh" 2>/dev/null || true
-  ln -sf "$INSTALL_DIR/scripts/docker-update.sh" /usr/local/bin/bau-os-update 2>/dev/null || true
+  ln -sf "$INSTALL_DIR/scripts/docker-update.sh" /usr/local/bin/patio-update 2>/dev/null || true
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -505,14 +505,14 @@ echo -e "    In .env: ${BOLD}HTTP_PORT=8080${NC} + ${BOLD}HTTPS_PORT=8443${NC}, 
 echo -e "    ${GREEN}ufw allow 8080/tcp && docker compose up -d caddy${NC}"
 echo ""
 echo -e "  ${BOLD}Update:${NC}"
-echo -e "    ${GREEN}bau-os-update${NC}                  → Pull + Rebuild + Restart"
+echo -e "    ${GREEN}patio-update${NC}                  → Pull + Rebuild + Restart"
 echo ""
 echo -e "  ${BOLD}Docker-Befehle${NC} (in $INSTALL_DIR):"
 echo    "    docker compose logs -f                    → alle Logs"
-echo    "    docker compose logs -f app                → nur Bau-OS"
+echo    "    docker compose logs -f app                → nur PATIO"
 echo    "    docker compose logs -f ollama             → nur LLM"
-echo    "    docker compose restart app                → Bau-OS neu starten"
+echo    "    docker compose restart app                → PATIO neu starten"
 echo    "    docker compose down                       → alles stoppen"
-echo    "    docker compose exec app bash              → Shell in Bau-OS"
+echo    "    docker compose exec app bash              → Shell in PATIO"
 echo    "    docker compose exec ollama ollama list    → Modelle auflisten"
 echo ""

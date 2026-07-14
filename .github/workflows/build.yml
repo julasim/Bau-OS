@@ -1,5 +1,5 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS — CI Build & Test
+# PATIO — CI Build & Test
 # ─────────────────────────────────────────────────────────────────────────────
 # Letzte Verteidigungslinie: laeuft auf jeden Push und PR. Faengt Fehler die
 # der Pre-Push-Hook lokal nicht gefangen hat (--no-verify, fremde Maschine,

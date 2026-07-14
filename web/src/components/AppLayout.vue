@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // ============================================================
-// Bau-OS Workspace v2 — App-Shell (Phase 7c)
+// PATIO Workspace v2 — App-Shell (Phase 7c)
 // ============================================================
 // Drei-Spalten-Layout (NavRail 56px + ListPane 320px + Detail 1fr).
 // Routing via vue-router Named-Views:

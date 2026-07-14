@@ -94,7 +94,7 @@ async function search() {
         @keyup.enter="search"
         style="flex: 1; border: none; outline: none; background: transparent; font-size: 14px; color: var(--color-text)"
       />
-      <button @click="search" :disabled="loading" class="bauos-btn solid" style="padding: 4px 12px; font-size: 12px">
+      <button @click="search" :disabled="loading" class="patio-btn solid" style="padding: 4px 12px; font-size: 12px">
         {{ loading ? "…" : "Suchen" }}
       </button>
     </div>

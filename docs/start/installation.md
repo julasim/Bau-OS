@@ -30,8 +30,8 @@ Der Installer fragt interaktiv nach:
 
 1. **Telegram Bot Token** — von @BotFather
 2. **LLM-Modus** — Cloud (Ollama Cloud: kimi-k2.5, gemma4, qwen3 etc.) oder Lokal (qwen2.5:7b, llama3.1:8b etc.)
-3. **Installationsverzeichnis** — Standard: `/opt/bau-os`
-4. **Workspace-Verzeichnis** — Standard: `/opt/bau-os-workspace`
+3. **Installationsverzeichnis** — Standard: `/opt/patio`
+4. **Workspace-Verzeichnis** — Standard: `/opt/patio-workspace`
 5. **Web-Admin Benutzername** — für die Web-Oberfläche (Standard: `admin`)
 6. **Web-Admin Passwort**
 7. **API-Port** — Standard: `3000`
@@ -41,23 +41,23 @@ Was der Installer automatisch einrichtet:
 - Systempakete aktualisieren (apt-get update/upgrade)
 - Node.js 20 LTS (via nodesource)
 - Ollama + gewähltes Modell (lokal oder Cloud-Login)
-- Service-Benutzer `bauos` anlegen
+- Service-Benutzer `patio` anlegen
 - Verzeichnisse + Berechtigungen setzen
 - Web-Admin-User in `data/users.json` (Passwort bcrypt-gehasht)
 - JWT-Secret generieren + `.env` mit allen Werten befüllen
-- CLI-Tool `/usr/local/bin/bau-os` installieren
-- systemd-Service `bau-os` (autostart bei Reboot) aktivieren und starten
+- CLI-Tool `/usr/local/bin/patio` installieren
+- systemd-Service `patio` (autostart bei Reboot) aktivieren und starten
 
 ### CLI nach Installation
 
 ```bash
-bau-os                   # Interaktives Menü
-bau-os status            # Status anzeigen
-bau-os logs              # Letzte Logs
-bau-os logs live         # Live-Logs (tail -f)
-sudo bau-os restart      # Service neu starten
-sudo bau-os update       # Update aus Git einspielen
-sudo bau-os user add     # Neuen Web-User anlegen
+patio                   # Interaktives Menü
+patio status            # Status anzeigen
+patio logs              # Letzte Logs
+patio logs live         # Live-Logs (tail -f)
+sudo patio restart      # Service neu starten
+sudo patio update       # Update aus Git einspielen
+sudo patio user add     # Neuen Web-User anlegen
 ```
 
 ---
@@ -147,7 +147,7 @@ curl http://localhost:11434/v1/models
 1. Öffne Telegram und suche **@BotFather**
 2. Schreibe `/newbot`
 3. Wähle einen Namen (z.B. "PATIO Assistent")
-4. Wähle einen Username (z.B. "bauos_assistent_bot")
+4. Wähle einen Username (z.B. "patio_assistent_bot")
 5. Kopiere den **Bot Token** — du brauchst ihn gleich
 
 ::: tip Tipp
@@ -157,8 +157,8 @@ Deaktiviere "Group Privacy" mit `/setprivacy` → Disabled, falls der Bot in Gru
 ## Manuell: PATIO installieren
 
 ```bash
-git clone https://github.com/julasim/Bau-OS.git
-cd Bau-OS/bau-os
+git clone https://github.com/julasim/patio.git
+cd PATIO/patio
 npm install
 ```
 

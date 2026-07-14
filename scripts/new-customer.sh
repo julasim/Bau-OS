@@ -1,14 +1,14 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Bau-OS — Neuen Kunden onboarden (SIMA-Seite)
+# PATIO — Neuen Kunden onboarden (SIMA-Seite)
 #
 # Erstellt einen DNS-A-Record via Cloudflare API und gibt dem Kunden
 # den fertigen Installations-Befehl.
 #
 # Voraussetzungen:
 #   - Cloudflare API Token mit "Zone:DNS:Edit" Berechtigung
-#   - CLOUDFLARE_TOKEN in ~/.bauos-admin oder als Umgebungsvariable
-#   - CLOUDFLARE_ZONE_ID der Zone (z.B. bau-os.at)
+#   - CLOUDFLARE_TOKEN in ~/.patio-admin oder als Umgebungsvariable
+#   - CLOUDFLARE_ZONE_ID der Zone (z.B. patio.at)
 #   - curl + jq installiert
 #
 # Verwendung:
@@ -19,8 +19,8 @@
 set -e
 
 # ── Konfiguration ─────────────────────────────────────────────────────────────
-readonly BASE_DOMAIN="bau-os.at"          # Deine Domain — hier anpassen
-readonly ADMIN_CONFIG="$HOME/.bauos-admin"
+readonly BASE_DOMAIN="patio.at"          # Deine Domain — hier anpassen
+readonly ADMIN_CONFIG="$HOME/.patio-admin"
 
 # Farben
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'
@@ -150,7 +150,7 @@ echo -e "  ${BOLD}Zugewiesene Domain:${NC} https://${FULL_DOMAIN}"
 echo ""
 echo -e "  ${BOLD}Installations-Befehl (auf dem Server als root ausführen):${NC}"
 echo ""
-echo -e "  ${GREEN}curl -fsSL https://raw.githubusercontent.com/julasim/Bau-OS/main/bau-os/scripts/install-customer.sh | sudo bash${NC}"
+echo -e "  ${GREEN}curl -fsSL https://raw.githubusercontent.com/julasim/patio/main/patio/scripts/install-customer.sh | sudo bash${NC}"
 echo ""
 echo -e "  ${BOLD}Hinweis für den Kunden:${NC}"
 echo    "    - Ubuntu 22.04 oder 24.04 LTS wird vorausgesetzt"

@@ -1,6 +1,6 @@
 # Dateistruktur
 
-Vollständige Referenz aller Module im `src/`-Verzeichnis. Alle TypeScript-Dateien liegen unter `bau-os/src/`.
+Vollständige Referenz aller Module im `src/`-Verzeichnis. Alle TypeScript-Dateien liegen unter `patio/src/`.
 
 ## Übersicht
 

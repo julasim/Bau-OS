@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Event Bus
+// PATIO — Event Bus
 // Typisierter In-Memory Event-Emitter fuer Live-Updates.
 // SSE-Clients registrieren sich hier, Data-Layer emittiert hier.
 // ============================================================

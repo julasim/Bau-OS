@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Projekt Budget-Felder
+-- PATIO — Projekt Budget-Felder
 -- ============================================================
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS budget NUMERIC(15,2);
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS budget_used NUMERIC(15,2);

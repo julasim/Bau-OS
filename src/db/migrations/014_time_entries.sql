@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Stundenerfassung (Phase 1)
+-- PATIO — Stundenerfassung (Phase 1)
 -- ============================================================
 -- Pflicht-Feature in vielen Laendern: in Oesterreich §26 AZG
 -- (Arbeitszeitaufzeichnungs-Pflicht), in Deutschland nach BAG-

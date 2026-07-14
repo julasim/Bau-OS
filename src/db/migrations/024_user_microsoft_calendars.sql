@@ -1,13 +1,13 @@
 -- ============================================================
--- Bau-OS — Multi-Calendar-Support fuer Microsoft Graph (Phase 5c)
+-- PATIO — Multi-Calendar-Support fuer Microsoft Graph (Phase 5c)
 -- ============================================================
 -- Bisher: pro User EIN Outlook-Kalender (calendar_id +
 -- calendar_mode auf user_microsoft_accounts). Neu: M:N — der User
 -- waehlt aus seinen Outlook-Kalendern beliebig viele aus, jeder
 -- bekommt seine eigene Webhook-Subscription.
 --
--- Use-Case: ein User hat in Outlook "Privat", "Bau-OS-Projekte" und
--- "Architektenkammer" — er will alle drei in Bau-OS sehen, aber
+-- Use-Case: ein User hat in Outlook "Privat", "PATIO-Projekte" und
+-- "Architektenkammer" — er will alle drei in PATIO sehen, aber
 -- nicht den Privat-Kalender. Mit dieser Junction-Table aktiviert er
 -- per Checkbox welche.
 --
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS user_microsoft_calendars (
   user_id                  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   calendar_id              TEXT NOT NULL,
   display_name             TEXT,
-  -- 'true' = User will diesen Kalender mit Bau-OS syncen, Subscription
+  -- 'true' = User will diesen Kalender mit PATIO syncen, Subscription
   -- ist aktiv. 'false' = pausiert (keine Subscription, keine Sync-Calls,
   -- aber Eintrag bleibt damit wir die User-Auswahl nicht verlieren).
   enabled                  BOOLEAN NOT NULL DEFAULT true,

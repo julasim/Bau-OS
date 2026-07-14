@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — User-Settings-Route
+// PATIO — User-Settings-Route
 // Profil, Passwort aendern, LLM-Runtime, Praeferenzen.
 // Einstellungen, die keine grossen Systemauswirkungen haben.
 // ============================================================

@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Microsoft Graph Subscriptions (Phase 4 + 5c)
+// PATIO — Microsoft Graph Subscriptions (Phase 4 + 5c)
 // ============================================================
 // Statt 5-min-Polling abonnieren wir bei Microsoft Graph Push-
 // Notifications fuer den Outlook-Calendar. Bei jeder Aenderung

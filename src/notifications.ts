@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Notifications via Telegram
+// PATIO — Notifications via Telegram
 // ============================================================
 // Schickt Telegram-DMs an User wenn:
 //   - sie zu einem Projekt hinzugefuegt werden

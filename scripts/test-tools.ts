@@ -1,5 +1,5 @@
 /**
- * Bau-OS Tool & API Test Runner
+ * PATIO Tool & API Test Runner
  * Startet nur die API (ohne Telegram Bot) und testet alle Endpunkte + Tools.
  */
 import "dotenv/config";

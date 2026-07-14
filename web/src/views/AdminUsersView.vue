@@ -395,7 +395,7 @@ function formatDate(iso?: string) {
         <h1 style="font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em">Nutzer</h1>
         <p style="font-size: 13px; color: var(--color-text-muted); margin-top: 4px">{{ users.length }} Konten</p>
       </div>
-      <button @click="openCreate" class="bauos-btn solid">
+      <button @click="openCreate" class="patio-btn solid">
         <BIcon name="plus" :size="14" />
         <span style="margin-left: 4px">Neuer Nutzer</span>
       </button>
@@ -637,8 +637,8 @@ function formatDate(iso?: string) {
           {{ createError }}
         </p>
         <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="bauos-btn ghost" @click="showCreateDialog = false" :disabled="createSaving">Abbrechen</button>
-          <button class="bauos-btn solid" :disabled="!createCanSubmit" @click="submitCreate">
+          <button class="patio-btn ghost" @click="showCreateDialog = false" :disabled="createSaving">Abbrechen</button>
+          <button class="patio-btn solid" :disabled="!createCanSubmit" @click="submitCreate">
             {{ createSaving ? "Lege an…" : "Anlegen" }}
           </button>
         </div>
@@ -680,11 +680,11 @@ function formatDate(iso?: string) {
           {{ passwordError }}
         </p>
         <div class="flex items-center justify-end" style="gap: 8px; margin-top: 16px">
-          <button class="bauos-btn ghost" @click="showPasswordDialog = false" :disabled="passwordSaving">
+          <button class="patio-btn ghost" @click="showPasswordDialog = false" :disabled="passwordSaving">
             Abbrechen
           </button>
           <button
-            class="bauos-btn solid"
+            class="patio-btn solid"
             :disabled="passwordValue.length < 8 || passwordSaving"
             @click="submitPasswordReset"
           >
@@ -727,7 +727,7 @@ function formatDate(iso?: string) {
                   :href="pairBotLink ?? '#'"
                   target="_blank"
                   rel="noopener"
-                  class="bauos-btn solid sm"
+                  class="patio-btn solid sm"
                   style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none"
                 >
                   <BIcon name="message" :size="11" />
@@ -751,7 +751,7 @@ function formatDate(iso?: string) {
             <div class="pair-step-body">
               <div class="pair-cmd-box">
                 <code class="pair-cmd">{{ pairCommand }}</code>
-                <button class="bauos-btn ghost sm" @click="copyPairCommand" title="Befehl kopieren">Kopieren</button>
+                <button class="patio-btn ghost sm" @click="copyPairCommand" title="Befehl kopieren">Kopieren</button>
               </div>
               <div
                 v-if="copyMessage"
@@ -773,7 +773,7 @@ function formatDate(iso?: string) {
               {{ pairCountdown }}
             </span>
             <button
-              class="bauos-btn ghost sm"
+              class="patio-btn ghost sm"
               @click="copyToken"
               :title="'Nur Code kopieren'"
               style="margin-left: auto"
@@ -784,7 +784,7 @@ function formatDate(iso?: string) {
         </template>
 
         <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="bauos-btn solid" @click="closePairDialog">Schließen</button>
+          <button class="patio-btn solid" @click="closePairDialog">Schließen</button>
         </div>
       </div>
     </div>
@@ -861,7 +861,7 @@ function formatDate(iso?: string) {
             :class="{ 'bot-input-invalid': botTokenInput.length > 0 && !botTokenValid }"
           />
           <button
-            class="bauos-btn solid"
+            class="patio-btn solid"
             :disabled="botDialogSaving || !botTokenValid"
             :style="{ opacity: botDialogSaving || !botTokenValid ? 0.5 : 1 }"
             @click="saveBotToken"
@@ -899,14 +899,14 @@ function formatDate(iso?: string) {
         <div class="flex items-center justify-between" style="gap: 8px; margin-top: 20px">
           <button
             v-if="botStatus?.hasToken"
-            class="bauos-btn ghost"
+            class="patio-btn ghost"
             :disabled="botDialogSaving"
             @click="removeBotToken"
           >
             Bot entfernen
           </button>
           <span v-else></span>
-          <button class="bauos-btn solid" @click="closeBotTokenDialog">Schließen</button>
+          <button class="patio-btn solid" @click="closeBotTokenDialog">Schließen</button>
         </div>
       </div>
     </div>
@@ -1065,7 +1065,7 @@ function formatDate(iso?: string) {
   border-color: var(--color-primary);
 }
 
-.bauos-btn.sm {
+.patio-btn.sm {
   padding: 4px 10px;
   font-size: 11px;
 }

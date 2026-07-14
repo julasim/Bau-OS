@@ -1,5 +1,5 @@
 -- ============================================================
--- Bau-OS — Projekt-ACL & File-Sharing
+-- PATIO — Projekt-ACL & File-Sharing
 -- ============================================================
 -- Macht Mehrbenutzer-Betrieb mit per-Projekt-Zugriff moeglich.
 --

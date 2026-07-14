@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Custom Template Variables Repo
+// PATIO — Custom Template Variables Repo
 // ============================================================
 // CRUD fuer nutzerdefinierte Platzhalter (custom_template_variables).
 // Diese ergaenzen die built-in {{Projekt}}, {{Datum}}, {{Firma}}

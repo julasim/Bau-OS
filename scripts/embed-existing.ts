@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 // ============================================================
-// Bau-OS — Batch-Embedding CLI
+// PATIO — Batch-Embedding CLI
 // Generiert Embeddings fuer alle Notizen/Dateien in der DB
 // die noch keinen Vektor haben.
 //
@@ -31,7 +31,7 @@ try {
     process.exit(1);
   }
 
-  console.log("\n🧠 Bau-OS Embedding-Pipeline");
+  console.log("\n🧠 PATIO Embedding-Pipeline");
   console.log(`   Modell:     ${EMBEDDING_MODEL}`);
   console.log(`   Dimensionen: ${EMBEDDING_DIMENSIONS}`);
 

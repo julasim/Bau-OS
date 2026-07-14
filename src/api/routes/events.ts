@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — SSE (Server-Sent Events) Route
+// PATIO — SSE (Server-Sent Events) Route
 // Clients verbinden sich per EventSource und erhalten
 // Live-Updates bei Daten-Aenderungen.
 //

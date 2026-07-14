@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Datenbank-Migrations-Runner
+// PATIO — Datenbank-Migrations-Runner
 // Liest SQL-Dateien aus src/db/migrations/ und fuehrt sie aus.
 // Tracking ueber _migrations Tabelle (idempotent).
 // ============================================================

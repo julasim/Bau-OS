@@ -1,10 +1,10 @@
 // ============================================================
-// Bau-OS — Clipboard-Utility
+// PATIO — Clipboard-Utility
 // ============================================================
 // Wraps navigator.clipboard mit einem Fallback fuer Setups, in denen
 // die moderne API nicht verfuegbar ist:
 //   - HTTP-Verbindungen (kein "secure context" → navigator.clipboard
-//     ist undefined). Beispiel: lokales Bau-OS via http://IP:8080
+//     ist undefined). Beispiel: lokales PATIO via http://IP:8080
 //     ohne TLS.
 //   - Aeltere Browser ohne Clipboard-API.
 //   - User hat Permission verweigert.

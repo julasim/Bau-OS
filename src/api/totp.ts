@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — TOTP (RFC 6238) ohne externe Dependency
+// PATIO — TOTP (RFC 6238) ohne externe Dependency
 // ============================================================
 // Eigene Implementierung statt einer der grossen TOTP-Bibliotheken,
 // weil die Spec klein ist und wir keine zusaetzliche Supply-Chain-

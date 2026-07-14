@@ -607,10 +607,10 @@ onUnmounted(() => {
                 autofocus
               />
               <div class="flex" style="gap: 6px; margin-top: 6px">
-                <button class="bauos-btn solid sm" :disabled="saving" @click="saveField(f.key)">
+                <button class="patio-btn solid sm" :disabled="saving" @click="saveField(f.key)">
                   {{ saving ? "…" : "Speichern" }}
                 </button>
-                <button class="bauos-btn ghost sm" @click="cancelEdit">Abbrechen</button>
+                <button class="patio-btn ghost sm" @click="cancelEdit">Abbrechen</button>
               </div>
             </div>
             <button v-else class="stamm-value" @click="startEdit(f.key)">
@@ -660,7 +660,7 @@ onUnmounted(() => {
         <p style="font-size: 12px; color: var(--color-text-muted); margin: 0 0 10px 0; line-height: 1.4">
           <template v-if="!member.userId">
             <strong>Diese Person bekommt keine Telegram-Benachrichtigung</strong> bei Aufgaben, Terminen oder Meetings,
-            die ihr zugewiesen werden — weil kein Bau-OS-Konto verknüpft ist. Verlinke unten ein bestehendes Konto, oder
+            die ihr zugewiesen werden — weil kein PATIO-Konto verknüpft ist. Verlinke unten ein bestehendes Konto, oder
             lege im Admin-Bereich einen neuen User an (gleicher Name → automatische Verknüpfung).
           </template>
           <template v-else>
@@ -735,7 +735,7 @@ onUnmounted(() => {
             style="max-width: 220px; flex: 0 1 220px"
             @keyup.enter="assignProject"
           />
-          <button class="bauos-btn solid sm" :disabled="!assignProjectId || assigning" @click="assignProject">
+          <button class="patio-btn solid sm" :disabled="!assignProjectId || assigning" @click="assignProject">
             {{ assigning ? "…" : "Zuordnen" }}
           </button>
           <span v-if="assignError" style="font-size: 11px; color: var(--color-danger-text)">
@@ -850,7 +850,7 @@ onUnmounted(() => {
             style="flex: 1; resize: vertical; font-family: inherit; line-height: 1.5"
             @keyup.ctrl.enter="addLogEntry"
           ></textarea>
-          <button class="bauos-btn solid sm" :disabled="!newLogText.trim() || logSaving" @click="addLogEntry">
+          <button class="patio-btn solid sm" :disabled="!newLogText.trim() || logSaving" @click="addLogEntry">
             {{ logSaving ? "…" : "Hinzufügen" }}
           </button>
         </div>
@@ -895,9 +895,9 @@ onUnmounted(() => {
           {{ renameError }}
         </div>
         <div class="flex justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="bauos-btn ghost" @click="renameDialogOpen = false" :disabled="renaming">Abbrechen</button>
+          <button class="patio-btn ghost" @click="renameDialogOpen = false" :disabled="renaming">Abbrechen</button>
           <button
-            class="bauos-btn solid"
+            class="patio-btn solid"
             :disabled="!renameDraft.trim() || renameDraft.trim() === member?.name || renaming"
             @click="submitRename"
           >
@@ -938,8 +938,8 @@ onUnmounted(() => {
           dieser Person verlieren die Zuordnung (bleiben aber erhalten).
         </p>
         <div class="flex justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="bauos-btn ghost" @click="deleteConfirmOpen = false" :disabled="deleting">Abbrechen</button>
-          <button class="bauos-btn danger" @click="confirmDelete" :disabled="deleting">
+          <button class="patio-btn ghost" @click="deleteConfirmOpen = false" :disabled="deleting">Abbrechen</button>
+          <button class="patio-btn danger" @click="confirmDelete" :disabled="deleting">
             {{ deleting ? "Lösche…" : "Ja, löschen" }}
           </button>
         </div>
@@ -1285,19 +1285,19 @@ onUnmounted(() => {
   margin: 4px 2px;
 }
 
-.bauos-btn.sm {
+.patio-btn.sm {
   padding: 4px 10px;
   font-size: 11px;
 }
-.bauos-btn.danger {
+.patio-btn.danger {
   background: var(--color-danger-text, #dc2626);
   color: #fff;
   border: 1px solid transparent;
 }
-.bauos-btn.danger:hover {
+.patio-btn.danger:hover {
   filter: brightness(0.92);
 }
-.bauos-btn.danger:disabled {
+.patio-btn.danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

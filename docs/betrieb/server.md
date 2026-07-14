@@ -15,7 +15,7 @@ Schritt-für-Schritt-Anleitung: Hetzner VPS aufsetzen und absichern.
 | **Typ** | Shared vCPU → **CPX21** (3 vCPU, 8 GB, 80 GB) |
 | **Netzwerk** | Standard (Public IPv4 + IPv6) |
 | **SSH Key** | Deinen oeffentlichen Key hinzufuegen |
-| **Name** | z.B. `bau-os-kunde1` |
+| **Name** | z.B. `patio-kunde1` |
 
 4. Klicke **"Erstellen & Kaufen"**
 5. Notiere dir die **IP-Adresse**
@@ -64,29 +64,29 @@ dpkg-reconfigure -plow unattended-upgrades
 
 ```bash
 # Benutzer erstellen
-adduser bauos
+adduser patio
 
 # Sudo-Rechte vergeben
-usermod -aG sudo bauos
+usermod -aG sudo patio
 
 # SSH Key für den neuen Benutzer kopieren
-mkdir -p /home/bauos/.ssh
-cp /root/.ssh/authorized_keys /home/bauos/.ssh/
-chown -R bauos:bauos /home/bauos/.ssh
-chmod 700 /home/bauos/.ssh
-chmod 600 /home/bauos/.ssh/authorized_keys
+mkdir -p /home/patio/.ssh
+cp /root/.ssh/authorized_keys /home/patio/.ssh/
+chown -R patio:patio /home/patio/.ssh
+chmod 700 /home/patio/.ssh
+chmod 600 /home/patio/.ssh/authorized_keys
 ```
 
 Teste den Login in einem **neuen Terminal**:
 
 ```bash
-ssh bauos@DEINE_SERVER_IP
+ssh patio@DEINE_SERVER_IP
 ```
 
 ## 6. SSH absichern
 
 ::: danger Erst testen, dann sperren
-Stelle sicher, dass der Login als `bauos` funktioniert, bevor du den Root-Login deaktivierst!
+Stelle sicher, dass der Login als `patio` funktioniert, bevor du den Root-Login deaktivierst!
 :::
 
 ```bash
@@ -137,7 +137,7 @@ Nach diesen Schritten hast du:
 
 - [x] Einen VPS mit Ubuntu 24.04 LTS
 - [x] Firewall: nur SSH offen
-- [x] Einen `bauos`-Benutzer mit SSH-Key-Login
+- [x] Einen `patio`-Benutzer mit SSH-Key-Login
 - [x] Root-Login und Passwort-Login deaktiviert
 - [x] (Optional) 2 GB Swap für zusätzlichen Spielraum
 

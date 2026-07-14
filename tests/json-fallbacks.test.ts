@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
-const tmpDir = path.join(os.tmpdir(), "bau-os-json-test-" + Date.now());
+const tmpDir = path.join(os.tmpdir(), "patio-json-test-" + Date.now());
 
 beforeEach(() => {
   fs.mkdirSync(tmpDir, { recursive: true });

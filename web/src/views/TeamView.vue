@@ -215,11 +215,11 @@ onMounted(async () => {
         </p>
       </div>
       <div class="flex items-center" style="gap: 8px">
-        <button @click="viewMode = viewMode === 'grid' ? 'list' : 'grid'" class="bauos-btn ghost">
+        <button @click="viewMode = viewMode === 'grid' ? 'list' : 'grid'" class="patio-btn ghost">
           <BIcon :name="viewMode === 'grid' ? 'list' : 'grid'" :size="14" />
           {{ viewMode === "grid" ? "Liste" : "Kacheln" }}
         </button>
-        <button @click="openCreateDialog" class="bauos-btn solid">
+        <button @click="openCreateDialog" class="patio-btn solid">
           <BIcon name="plus" :size="14" />
           <span style="margin-left: 4px">Neue Person</span>
         </button>
@@ -273,7 +273,7 @@ onMounted(async () => {
       <button
         v-if="anyFilterActive"
         @click="resetFilters"
-        class="bauos-btn ghost"
+        class="patio-btn ghost"
         style="padding: 4px 10px; font-size: 11px"
       >
         Filter zurücksetzen
@@ -484,8 +484,8 @@ onMounted(async () => {
             * Pflichtfeld — Rest im Detail nachtragbar.
           </span>
           <div class="flex items-center" style="gap: 8px">
-            <button class="bauos-btn ghost" @click="closeCreateDialog" :disabled="createSaving">Abbrechen</button>
-            <button class="bauos-btn solid" @click="submitCreate" :disabled="!createForm.name.trim() || createSaving">
+            <button class="patio-btn ghost" @click="closeCreateDialog" :disabled="createSaving">Abbrechen</button>
+            <button class="patio-btn solid" @click="submitCreate" :disabled="!createForm.name.trim() || createSaving">
               {{ createSaving ? "…" : "Anlegen" }}
             </button>
           </div>

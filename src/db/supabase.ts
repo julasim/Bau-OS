@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Supabase JS Client
+// PATIO — Supabase JS Client
 // Fuer Realtime Subscriptions, Storage und Supabase Auth.
 // Direktes SQL laeuft ueber client.ts (postgres.js).
 // ============================================================

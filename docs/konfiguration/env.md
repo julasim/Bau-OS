@@ -88,7 +88,7 @@ OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
 Aktiviert den PostgreSQL-Modus. Ohne diese Variable läuft PATIO im reinen Filesystem-Modus.
 
 ```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/bauos
+DATABASE_URL=postgresql://user:password@localhost:5432/patio
 ```
 
 Beim Start wird automatisch geprüft ob die DB erreichbar ist. Wenn nicht, beendet sich der Prozess mit Exit-Code 1.
@@ -165,7 +165,7 @@ Wenn nicht gesetzt, ist die Web-API vollständig deaktiviert.
 ```bash
 # === Pflicht ===
 BOT_TOKEN=7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-WORKSPACE_PATH=/home/bauos/vault
+WORKSPACE_PATH=/home/patio/vault
 
 # === LLM — OpenAI (empfohlen) ===
 OPENAI_API_KEY=sk-...
@@ -177,13 +177,13 @@ OPENAI_API_KEY=sk-...
 # OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
 
 # === Datenbank (optional) ===
-DATABASE_URL=postgresql://bauos:password@localhost:5432/bauos
+DATABASE_URL=postgresql://patio:password@localhost:5432/patio
 # DB_AUTO_MIGRATE=true
 
 # === Web-API (optional) ===
 JWT_SECRET=abc123...
 API_PORT=3000
-CORS_ORIGINS=https://bauos.example.com
+CORS_ORIGINS=https://patio.example.com
 
 # === Sicherheit ===
 ALLOWED_CHAT_IDS=123456789

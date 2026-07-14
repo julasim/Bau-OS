@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Word-Export-Render-Pipeline (Phase 6d)
+// PATIO — Word-Export-Render-Pipeline (Phase 6d)
 // ============================================================
 // Lädt ein .docx-Template aus der DB, ersetzt {Tag}-Platzhalter
 // mit Daten und gibt das Ergebnis als Buffer zurueck.

@@ -1,5 +1,5 @@
 // ============================================================
-// Bau-OS — Branding-Repository (Phase 6b)
+// PATIO — Branding-Repository (Phase 6b)
 // ============================================================
 // CRUD fuer org_branding (Singleton-Tabelle). Logo wird als BYTEA
 // gespeichert; getBranding liefert NIE den Blob (haette in JSON-
