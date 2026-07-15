@@ -15,6 +15,7 @@ describe.skipIf(!HAS_DB)("API — files ACL-Durchsetzung", () => {
   let fx: AclFixture;
   let fileRepo: FileRepo;
   let fileId = "";
+  let bFileId = ""; // B's EIGENE Datei an B's Projekt (fuer Confinement)
 
   beforeAll(async () => {
     fx = await setupAclFixture("file");
@@ -29,13 +30,25 @@ describe.skipIf(!HAS_DB)("API — files ACL-Durchsetzung", () => {
       uploadedById: fx.a.id, // → uploaded_by = A
     });
     fileId = entry.id;
+    // B legt eine EIGENE Datei an SEINEM Projekt an (uploaded_by = B).
+    const bEntry = await fileRepo!.save({
+      filename: "b-eigen.txt",
+      filepath: "b-eigen.txt",
+      filesize: 8,
+      mimeType: "text/plain",
+      project: fx.projectBName, // → project_id = fx.projectBId
+      blob: Buffer.from("b-datei"),
+      uploadedById: fx.b.id, // → uploaded_by = B
+    });
+    bFileId = bEntry.id;
   });
 
   afterAll(async () => {
     if (!HAS_DB) return;
     // files.project_id ist ON DELETE SET NULL → das Projekt-Cleanup entfernt
-    // die Datei nicht mit. Explizit loeschen, sonst bleibt eine Waise liegen.
+    // die Dateien nicht mit. Beide explizit loeschen, sonst bleiben Waisen liegen.
     if (fileId) await fileRepo!.delete(fileId);
+    if (bFileId) await fileRepo!.delete(bFileId);
     await fx.cleanup();
   });
 
@@ -82,5 +95,26 @@ describe.skipIf(!HAS_DB)("API — files ACL-Durchsetzung", () => {
 
   it("Download ohne Token → 401", async () => {
     expect((await fx.app.request(`/api/files/download?id=${fileId}`)).status).toBe(401);
+  });
+
+  // ── Confinement (IDOR-Kern) ─────────────────────────────────────────────
+  // B ist teil-berechtigt (sieht sein Projekt) und Uploader seiner eigenen
+  // Datei. Er darf die EIGENE ziehen/lesen, aber A's bleibt gesperrt. Ein
+  // pauschaler ACL-Check faellt hier durch: "alles verweigern" laesst 200
+  // scheitern, "hat irgendein Projekt -> darf alles" laesst A's Download auf
+  // 200 durchgehen (siehe bestehender 403-Test).
+  it("Confinement: B laedt EIGENE Datei → 200 + attachment", async () => {
+    const own = await fx.app.request(`/api/files/download?id=${bFileId}`, { headers: authHeader(fx.b.token) });
+    expect(own.status).toBe(200);
+    expect(own.headers.get("content-disposition")).toContain("attachment");
+  });
+
+  it("Confinement: B liest EIGENE Datei → 200", async () => {
+    const own = await fx.app.request(`/api/files/read?id=${bFileId}`, { headers: authHeader(fx.b.token) });
+    expect(own.status).toBe(200);
+  });
+
+  it("Confinement: B laedt A's Datei → 403 (fremde Ressource gesperrt)", async () => {
+    expect((await download(fx.b.token)).status).toBe(403);
   });
 });

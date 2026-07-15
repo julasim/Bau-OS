@@ -69,4 +69,15 @@ describe.skipIf(!HAS_DB)("API — Auth-/Admin-Middleware", () => {
     const res = await fx.app.request("/api/admin/users", { headers: authHeader(staleAdmin) });
     expect(res.status).toBe(403);
   });
+
+  it("Admin-Token fuer geloeschtes/nicht-existentes Konto → 401 (kein 7-Tage-Restzugriff)", async () => {
+    const { createToken } = await import("../src/api/auth.js");
+    // Gueltig signiertes Admin-JWT fuer einen User, den es weder in der DB noch
+    // in users.json (mehr) gibt — z.B. ein geloeschtes Admin-Konto, dessen Token
+    // noch bis zu 7 Tage laeuft. Ohne den dbUser===null-Guard wuerde die
+    // JWT-Rolle greifen und der Geist behielte Admin-Zugriff. Jetzt: 401.
+    const ghost = createToken(`ghost-${Date.now()}`, "admin", "00000000-0000-0000-0000-000000000000");
+    const res = await fx.app.request("/api/admin/users", { headers: authHeader(ghost) });
+    expect(res.status).toBe(401);
+  });
 });

@@ -10,15 +10,23 @@ describe.skipIf(!HAS_DB)("API — invoices ACL-Durchsetzung (geldrelevant)", () 
   let fx: AclFixture;
   let invoiceRepo: InvoiceRepo;
   let invoiceId = "";
+  let bInvoiceId = ""; // B's EIGENE Rechnung an B's Projekt (fuer Confinement)
   let encName = "";
+  let encBName = "";
 
   beforeAll(async () => {
     fx = await setupAclFixture("inv");
     ({ invoiceRepo } = await import("../src/data/index.js"));
     encName = encodeURIComponent(fx.projectName);
+    encBName = encodeURIComponent(fx.projectBName);
     const inv = await invoiceRepo!.create(fx.projectId, { betrag: 1000, nummer: `R-${Date.now()}` });
     if (typeof inv === "string") throw new Error(`invoice-Setup fehlgeschlagen: ${inv}`);
     invoiceId = inv.id;
+    // B legt eine EIGENE Rechnung an SEINEM Projekt an (cascadet beim Projekt-
+    // Cleanup weg, project_id NOT NULL ON DELETE CASCADE).
+    const bInv = await invoiceRepo!.create(fx.projectBId, { betrag: 500, nummer: `R-B-${Date.now()}` });
+    if (typeof bInv === "string") throw new Error(`B-invoice-Setup fehlgeschlagen: ${bInv}`);
+    bInvoiceId = bInv.id;
   });
 
   afterAll(async () => {
@@ -67,5 +75,34 @@ describe.skipIf(!HAS_DB)("API — invoices ACL-Durchsetzung (geldrelevant)", () 
 
   it("ohne Token → 401", async () => {
     expect((await fx.app.request(`/api/projects/${encName}/invoices`)).status).toBe(401);
+  });
+
+  // ── Confinement (IDOR-Kern) ─────────────────────────────────────────────
+  // B ist teil-berechtigt (sieht sein Projekt). Er darf seine EIGENE Rechnung
+  // aendern und sein Projekt listen, aber A's Rechnung bleibt gesperrt. Ein
+  // pauschaler ACL-Check faellt hier durch: "alles verweigern" laesst 200
+  // scheitern, "hat irgendein Projekt -> darf alles" laesst A's PUT auf 200
+  // durchgehen (siehe bestehender 403-Test).
+  it("Confinement: B listet EIGENES Projekt (projectBName) → 200", async () => {
+    const own = await fx.app.request(`/api/projects/${encBName}/invoices`, { headers: authHeader(fx.b.token) });
+    expect(own.status).toBe(200);
+  });
+
+  it("Confinement: B aendert EIGENE Rechnung (PUT) → 200", async () => {
+    const res = await fx.app.request(`/api/invoices/${bInvoiceId}`, {
+      method: "PUT",
+      headers: jsonHeader(fx.b.token),
+      body: JSON.stringify({ betrag: 750 }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("Confinement: B aendert A's Rechnung (PUT) → 403 (fremde Ressource gesperrt)", async () => {
+    const res = await fx.app.request(`/api/invoices/${invoiceId}`, {
+      method: "PUT",
+      headers: jsonHeader(fx.b.token),
+      body: JSON.stringify({ betrag: 9999 }),
+    });
+    expect(res.status).toBe(403);
   });
 });

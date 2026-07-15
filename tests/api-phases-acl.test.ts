@@ -12,15 +12,23 @@ describe.skipIf(!HAS_DB)("API — phases ACL-Durchsetzung (honorarrelevant)", ()
   let fx: AclFixture;
   let phaseRepo: PhaseRepo;
   let phaseId = "";
+  let bPhaseId = ""; // B's EIGENE Phase an B's Projekt (fuer Confinement)
   let encName = "";
+  let encBName = "";
 
   beforeAll(async () => {
     fx = await setupAclFixture("phase");
     ({ phaseRepo } = await import("../src/data/index.js"));
     encName = encodeURIComponent(fx.projectName);
+    encBName = encodeURIComponent(fx.projectBName);
     const phase = await phaseRepo!.create(fx.projectId, { name: "LP2 Vorentwurf", feeShare: 7 });
     if (typeof phase === "string") throw new Error(`phase-Setup fehlgeschlagen: ${phase}`);
     phaseId = phase.id;
+    // B legt eine EIGENE Phase an SEINEM Projekt an (cascadet beim Projekt-
+    // Cleanup weg, project_id NOT NULL ON DELETE CASCADE).
+    const bPhase = await phaseRepo!.create(fx.projectBId, { name: "LP1 Grundlagen", feeShare: 3 });
+    if (typeof bPhase === "string") throw new Error(`B-phase-Setup fehlgeschlagen: ${bPhase}`);
+    bPhaseId = bPhase.id;
   });
 
   afterAll(async () => {
@@ -78,5 +86,34 @@ describe.skipIf(!HAS_DB)("API — phases ACL-Durchsetzung (honorarrelevant)", ()
 
   it("ohne Token → 401", async () => {
     expect((await fx.app.request(`/api/projects/${encName}/phases`)).status).toBe(401);
+  });
+
+  // ── Confinement (IDOR-Kern) ─────────────────────────────────────────────
+  // B ist teil-berechtigt (sieht sein Projekt). Er darf seine EIGENE Phase
+  // aendern und sein Projekt listen, aber A's Phase bleibt gesperrt. Ein
+  // pauschaler ACL-Check faellt hier durch: "alles verweigern" laesst 200
+  // scheitern, "hat irgendein Projekt -> darf alles" laesst A's PUT auf 200
+  // durchgehen (siehe bestehender 403-Test).
+  it("Confinement: B listet EIGENES Projekt (projectBName) → 200", async () => {
+    const res = await fx.app.request(`/api/projects/${encBName}/phases`, { headers: authHeader(fx.b.token) });
+    expect(res.status).toBe(200);
+  });
+
+  it("Confinement: B aendert EIGENE Phase (PUT) → 200", async () => {
+    const res = await fx.app.request(`/api/phases/${bPhaseId}`, {
+      method: "PUT",
+      headers: jsonHeader(fx.b.token),
+      body: JSON.stringify({ name: "LP1 Grundlagen (überarbeitet)", feeShare: 4 }),
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("Confinement: B aendert A's Phase (PUT) → 403 (fremde Ressource gesperrt)", async () => {
+    const res = await fx.app.request(`/api/phases/${phaseId}`, {
+      method: "PUT",
+      headers: jsonHeader(fx.b.token),
+      body: JSON.stringify({ name: "gehackt", feeShare: 99 }),
+    });
+    expect(res.status).toBe(403);
   });
 });

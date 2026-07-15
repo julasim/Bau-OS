@@ -27,11 +27,17 @@ export interface FixtureUser {
 
 export interface AclFixture {
   app: App;
-  a: FixtureUser; // Ersteller, hat Projektzugriff
-  b: FixtureUser; // Fremder, kein Projektzugriff
+  a: FixtureUser; // Ersteller, hat Projektzugriff auf projectId
+  b: FixtureUser; // teil-berechtigt: sieht projectBId, NICHT projectId
   admin: FixtureUser; // Admin, sieht alles
   projectId: string;
   projectName: string;
+  /** Zweites Projekt, das B gehoert (createdById = B). Macht B teil-berechtigt:
+   *  B sieht sein eigenes Projekt, aber nicht A's. Damit greift der eigentliche
+   *  IDOR-/Confinement-Test — B hat eine nicht-leere Sichtbarkeit, statt dass
+   *  jeder ACL-Check fuer B trivial false ist. */
+  projectBId: string;
+  projectBName: string;
   cleanup(): Promise<void>;
 }
 
@@ -46,6 +52,7 @@ export async function setupAclFixture(prefix: string): Promise<AclFixture> {
   const suffix = Date.now();
   const uname = (r: string) => `${prefix}-${r}-${suffix}`;
   const projectName = `${prefix}-proj-${suffix}`;
+  const projectBName = `${prefix}-bproj-${suffix}`;
 
   const mk = async (r: string, role: "admin" | "user"): Promise<FixtureUser> => {
     const u = await createDbUser({ username: uname(r), password: "test-pw-123", role });
@@ -63,6 +70,16 @@ export async function setupAclFixture(prefix: string): Promise<AclFixture> {
   if (!info?.id) throw new Error("Projekt-Setup fehlgeschlagen");
   const projectId = info.id;
 
+  // Zweites Projekt B zuweisen (createdById = B) — B wird dadurch teil-
+  // berechtigt: nicht-leere Sichtbarkeit (sein Projekt), aber weiterhin kein
+  // Zugriff auf A's Projekt. Ohne das waere listVisibleProjectIds(B) = [] und
+  // jeder ACL-Check fuer B trivial false — ein kaputter Check "hat irgendein
+  // Projekt -> darf alles" bliebe unentdeckt.
+  await projectRepo.create(projectBName, {}, b.id);
+  const infoB = await projectRepo.getInfo(projectBName);
+  if (!infoB?.id) throw new Error("Projekt-B-Setup fehlgeschlagen");
+  const projectBId = infoB.id;
+
   return {
     app,
     a,
@@ -70,9 +87,15 @@ export async function setupAclFixture(prefix: string): Promise<AclFixture> {
     admin,
     projectId,
     projectName,
+    projectBId,
+    projectBName,
     async cleanup() {
       const db = getDb();
+      // Beide Projekte explizit per id loeschen (cascadet abhaengige Zeilen mit
+      // project_id NOT NULL ON DELETE CASCADE weg: time_entries, project_invoices,
+      // project_phases). Der LIKE-Cleanup deckt danach die Users ab.
       await db`DELETE FROM projects WHERE id = ${projectId}`;
+      await db`DELETE FROM projects WHERE id = ${projectBId}`;
       await db`DELETE FROM users WHERE username LIKE ${prefix + "-%-" + suffix}`;
     },
   };
