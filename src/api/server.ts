@@ -131,7 +131,9 @@ import { uiPreferencesRoutes } from "./routes/ui-preferences.js";
 // Pfad, falls die Email-2FA gar nicht zugestellt werden kann (manueller
 // Re-Enable durch Admin via direktem DB-Patch).
 
-const app = new Hono<AppEnv>();
+// Exportiert fuer Integrationstests (Hono `app.request()` gegen die echte
+// Middleware-/Routen-Kette). `startApi()` startet den HTTP-Server separat.
+export const app = new Hono<AppEnv>();
 
 // ── Health-Check (ohne Auth, ohne Rate-Limit) ────────────────────────────────
 // Liveness-Probe fuer Reverse-Proxy / Uptime-Monitoring. Liefert minimale
