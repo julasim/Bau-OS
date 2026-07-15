@@ -13,7 +13,7 @@
 import "dotenv/config";
 import { createBot } from "./bot.js";
 import { startHeartbeat } from "./heartbeat.js";
-import { logInfo, logError } from "./logger.js";
+import { logInfo, logError, flushLogsSync } from "./logger.js";
 import { Bot } from "grammy";
 import { DB_ENABLED, DB_AUTO_MIGRATE } from "./config.js";
 
@@ -174,6 +174,12 @@ async function shutdown(signal: string): Promise<void> {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+
+// INF-13: beim Prozess-Ende die noch nicht async geschriebenen Log-Zeilen
+// synchron rausschreiben. Feuert bei JEDEM Exit-Pfad (shutdown, process.exit
+// aus den Fatal-Handlern, DB-Init-Fehler) — sonst gingen die letzten Logs,
+// gerade die Fatal-Meldungen, verloren.
+process.on("exit", flushLogsSync);
 
 // Prozess-Level-Fehlerhandler: eine unbehandelte Promise-Rejection oder Exception
 // (z.B. ein fehlgeschlagener Bot-Init) darf den Dienst nicht STILL runterreissen.

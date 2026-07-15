@@ -2,6 +2,17 @@ import fs from "fs";
 import path from "path";
 import { LOG_FILE, MAX_LOG_LINES, TIMEZONE, LOG_JSONL_MAX_BYTES, LOG_JSONL_KEEP_FILES } from "./config.js";
 
+// ── INF-13: non-blocking Logging ─────────────────────────────────────────────
+//
+// console.* schreibt sofort nach stdout/stderr — das ist die primaere
+// Observability im Container (Docker/journald sammeln es). Die Datei-Persistenz
+// (bot.log fuer readRecentLogs + bot.jsonl maschinenlesbar) laeuft ueber eine
+// SERIALISIERTE Async-Queue: kein fs.*Sync mehr im Hot-Path, der Event-Loop
+// blockiert nicht mehr bei jedem Log-Aufruf. Ein einziger Consumer arbeitet die
+// Queue der Reihe nach ab — das garantiert Log-Reihenfolge und verhindert Races
+// zwischen Append, Trim und Rotation. Bei Prozess-Ende wird der Rest synchron
+// geflusht (flushLogsSync), damit die letzten Zeilen nicht verloren gehen.
+
 let lineCount = -1; // -1 = noch nicht initialisiert
 
 // ── Structured Log Format ────────────────────────────────────────────────────
@@ -22,90 +33,107 @@ function humanTimestamp(): string {
   return new Date().toLocaleString("de-AT", { timeZone: TIMEZONE });
 }
 
-// ── File I/O ─────────────────────────────────────────────────────────────────
+const jsonlPath = LOG_FILE.replace(/\.log$/, ".jsonl");
+
+// ── Async Write-Queue ─────────────────────────────────────────────────────────
+
+/** Ein Queue-Eintrag: eine human-lesbare Zeile (bot.log) und/oder eine
+ *  JSONL-Zeile (bot.jsonl). Beide OHNE abschliessendes "\n" — das setzt der
+ *  Writer. */
+interface LogJob {
+  human?: string;
+  jsonl?: string;
+}
+
+const queue: LogJob[] = [];
+let draining = false;
 
 function ensureLogDir(): void {
   const dir = path.dirname(LOG_FILE);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-function initLineCount(): void {
+/** Zeilenzahl der bot.log einmalig ermitteln (fuer das Trim-Limit). */
+async function initLineCount(): Promise<void> {
   if (lineCount >= 0) return;
   try {
-    if (fs.existsSync(LOG_FILE)) {
-      lineCount = fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean).length;
-    } else {
-      lineCount = 0;
-    }
+    const content = await fs.promises.readFile(LOG_FILE, "utf-8");
+    lineCount = content.split("\n").filter(Boolean).length;
   } catch {
     lineCount = 0;
   }
 }
 
-function append(line: string): void {
-  ensureLogDir();
-  initLineCount();
-  fs.appendFileSync(LOG_FILE, line + "\n", "utf-8");
-  lineCount++;
-  if (lineCount > MAX_LOG_LINES) trimLog();
+/** Serieller Consumer. Laeuft immer nur EINMAL (draining-Flag) und arbeitet die
+ *  Queue leer; kommen waehrenddessen neue Jobs, haengt er einen weiteren Lauf an.
+ *  Fire-and-forget aufgerufen (void) — der Aufrufer wartet nie. */
+async function drain(): Promise<void> {
+  if (draining) return;
+  draining = true;
+  try {
+    ensureLogDir();
+    await initLineCount();
+    while (queue.length > 0) {
+      const job = queue.shift()!;
+      if (job.human !== undefined) {
+        await fs.promises.appendFile(LOG_FILE, job.human + "\n", "utf-8");
+        lineCount++;
+        if (lineCount > MAX_LOG_LINES) await trimLog();
+      }
+      if (job.jsonl !== undefined) {
+        if (jsonlAppendsSinceCheck >= JSONL_CHECK_EVERY) {
+          jsonlAppendsSinceCheck = 0;
+          await rotateJsonlIfNeeded();
+        } else {
+          jsonlAppendsSinceCheck++;
+        }
+        await fs.promises.appendFile(jsonlPath, job.jsonl + "\n", "utf-8");
+      }
+    }
+  } catch {
+    /* Datei-Logging ist best-effort — ein Schreibfehler darf nie fatal sein. */
+  } finally {
+    draining = false;
+    if (queue.length > 0) void drain();
+  }
 }
 
-function trimLog(): void {
+function enqueue(job: LogJob): void {
+  queue.push(job);
+  void drain();
+}
+
+async function trimLog(): Promise<void> {
   try {
-    const content = fs.readFileSync(LOG_FILE, "utf-8");
+    const content = await fs.promises.readFile(LOG_FILE, "utf-8");
     const lines = content.split("\n").filter(Boolean);
     const trimmed = lines.slice(-MAX_LOG_LINES);
-    fs.writeFileSync(LOG_FILE, trimmed.join("\n") + "\n", "utf-8");
+    await fs.promises.writeFile(LOG_FILE, trimmed.join("\n") + "\n", "utf-8");
     lineCount = trimmed.length;
   } catch {
     /* Fehler beim Trimmen ist nicht kritisch */
   }
 }
 
-// ── JSONL-Log (maschinenlesbar) ──────────────────────────────────────────────
+// ── JSONL-Rotation (groessenbasiert) ──────────────────────────────────────────
+// Teure stat()-Calls werden auf einen pro JSONL_CHECK_EVERY Appends begrenzt.
 
-const jsonlPath = LOG_FILE.replace(/\.log$/, ".jsonl");
-
-/** Rotiert bot.jsonl groessenbasiert: bot.jsonl → .1, .1 → .2, ...,
- *  aelteste wird geloescht. Wird vor jedem Append gepruef-/aufgerufen,
- *  aber teure stat()-Calls werden auf einen pro 500 Append-Operationen
- *  begrenzt — sonst kostet jeder Log-Aufruf einen Syscall.
- *  In-Memory-Counter fuer den Fast-Path. */
 let jsonlAppendsSinceCheck = 0;
 const JSONL_CHECK_EVERY = 500;
 
-function rotateJsonlIfNeeded(): void {
+async function rotateJsonlIfNeeded(): Promise<void> {
   try {
-    if (!fs.existsSync(jsonlPath)) return;
-    const size = fs.statSync(jsonlPath).size;
-    if (size < LOG_JSONL_MAX_BYTES) return;
+    const st = await fs.promises.stat(jsonlPath).catch(() => null);
+    if (!st || st.size < LOG_JSONL_MAX_BYTES) return;
 
     // Aelteste loeschen (falls vorhanden), dann durchschieben.
-    const oldest = `${jsonlPath}.${LOG_JSONL_KEEP_FILES}`;
-    if (fs.existsSync(oldest)) fs.unlinkSync(oldest);
+    await fs.promises.rm(`${jsonlPath}.${LOG_JSONL_KEEP_FILES}`, { force: true });
     for (let i = LOG_JSONL_KEEP_FILES - 1; i >= 1; i--) {
-      const src = `${jsonlPath}.${i}`;
-      const dst = `${jsonlPath}.${i + 1}`;
-      if (fs.existsSync(src)) fs.renameSync(src, dst);
+      await fs.promises.rename(`${jsonlPath}.${i}`, `${jsonlPath}.${i + 1}`).catch(() => {});
     }
-    fs.renameSync(jsonlPath, `${jsonlPath}.1`);
+    await fs.promises.rename(jsonlPath, `${jsonlPath}.1`).catch(() => {});
   } catch {
     /* Rotation-Fehler darf den Logging-Pfad nicht killen */
-  }
-}
-
-function appendJsonl(entry: LogEntry): void {
-  try {
-    ensureLogDir();
-    if (jsonlAppendsSinceCheck >= JSONL_CHECK_EVERY) {
-      jsonlAppendsSinceCheck = 0;
-      rotateJsonlIfNeeded();
-    } else {
-      jsonlAppendsSinceCheck++;
-    }
-    fs.appendFileSync(jsonlPath, JSON.stringify(entry) + "\n", "utf-8");
-  } catch {
-    /* JSONL-Fehler ist nicht kritisch */
   }
 }
 
@@ -114,33 +142,69 @@ function appendJsonl(entry: LogEntry): void {
 export function logInfo(msg: string, ctx?: string): void {
   const humanLine = `[${humanTimestamp()}] INFO  ${ctx ? `[${ctx}] ` : ""}${msg}`;
   console.log(humanLine);
-  append(humanLine);
-  appendJsonl({ ts: isoNow(), level: "info", ctx, msg });
+  enqueue({ human: humanLine, jsonl: JSON.stringify({ ts: isoNow(), level: "info", ctx, msg } satisfies LogEntry) });
 }
 
 export function logWarn(msg: string, ctx?: string): void {
   const humanLine = `[${humanTimestamp()}] WARN  ${ctx ? `[${ctx}] ` : ""}${msg}`;
   console.warn(humanLine);
-  append(humanLine);
-  appendJsonl({ ts: isoNow(), level: "warn", ctx, msg });
+  enqueue({ human: humanLine, jsonl: JSON.stringify({ ts: isoNow(), level: "warn", ctx, msg } satisfies LogEntry) });
 }
 
 export function logError(context: string, err: unknown): void {
   const errMsg = err instanceof Error ? err.message : String(err);
   const humanLine = `[${humanTimestamp()}] ERROR [${context}] ${errMsg}`;
   console.error(humanLine);
-  append(humanLine);
-  appendJsonl({
-    ts: isoNow(),
-    level: "error",
-    ctx: context,
-    msg: errMsg,
-    err: err instanceof Error ? err.stack : undefined,
+  enqueue({
+    human: humanLine,
+    jsonl: JSON.stringify({
+      ts: isoNow(),
+      level: "error",
+      ctx: context,
+      msg: errMsg,
+      err: err instanceof Error ? err.stack : undefined,
+    } satisfies LogEntry),
   });
 }
 
 export function readRecentLogs(n = 20): string {
-  if (!fs.existsSync(LOG_FILE)) return "Keine Logs vorhanden.";
-  const lines = fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean);
+  // Bereits geschriebene Zeilen …
+  let lines: string[] = [];
+  try {
+    if (fs.existsSync(LOG_FILE)) {
+      lines = fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean);
+    }
+  } catch {
+    /* ignore */
+  }
+  // … plus noch nicht geflushte Zeilen aus der Queue, damit /logs auch die
+  // allerletzten Eintraege zeigt.
+  for (const job of queue) {
+    if (job.human !== undefined) lines.push(job.human);
+  }
+  if (lines.length === 0) return "Keine Logs vorhanden.";
   return lines.slice(-n).join("\n") || "Keine Logs vorhanden.";
+}
+
+/** Synchroner Notfall-Flush bei Prozess-Ende: der Async-Consumer kommt beim
+ *  Exit nicht mehr durch, also schreiben wir die Rest-Queue direkt raus.
+ *  In index.ts an process.on("exit"/SIGINT/SIGTERM) haengen. */
+export function flushLogsSync(): void {
+  if (queue.length === 0) return;
+  try {
+    ensureLogDir();
+    const humanRest = queue
+      .map((j) => j.human)
+      .filter((l): l is string => l !== undefined)
+      .join("\n");
+    const jsonlRest = queue
+      .map((j) => j.jsonl)
+      .filter((l): l is string => l !== undefined)
+      .join("\n");
+    if (humanRest) fs.appendFileSync(LOG_FILE, humanRest + "\n", "utf-8");
+    if (jsonlRest) fs.appendFileSync(jsonlPath, jsonlRest + "\n", "utf-8");
+    queue.length = 0;
+  } catch {
+    /* letzter Rettungsversuch — Fehler hier ignorieren */
+  }
 }
