@@ -606,6 +606,11 @@ export interface ProjectRepository {
    *  ("all" = kein Filter, Array = nur diese IDs). Phase-4-Scoping. */
   list(visibleIds?: string[] | "all"): Promise<string[]>;
   getInfo(name: string): Promise<Project | null>;
+  /** Wie getInfo, aber fuer alle sichtbaren Projekte in EINER Query (PERF-1:
+   *  ersetzt das N+1 aus list()+getInfo() je Name in GET /projects). Ergebnis
+   *  ist identisch zu list(visibleIds).map(getInfo), sortiert nach Name.
+   *  Optional — der FS-Mode faellt auf den alten Pfad zurueck. */
+  listInfos?(visibleIds?: string[] | "all"): Promise<Project[]>;
   listNotes(name: string): Promise<string[]>;
   readNote(project: string, noteName: string): Promise<string | null>;
   /** Direkte Unter-Projekte (nicht rekursiv). Optional — fs-projects gibt

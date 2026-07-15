@@ -47,6 +47,11 @@ function normalizePatchValue(v: unknown): string | null | undefined {
 // Alle Projekte — Phase 4 scoped: Admin sieht alles, User nur user_projects.
 projectsRoutes.get("/projects", async (c) => {
   const visible = await getVisibleProjectIds(userCtx(c));
+  // PERF-1: eine Aggregat-Query statt N+1 (frueher list() + getInfo() je Name).
+  // Der FS-Mode kennt listInfos nicht → alter Pfad als Fallback.
+  if (projectRepo.listInfos) {
+    return c.json(await projectRepo.listInfos(visible));
+  }
   const names = await projectRepo.list(visible);
   const projects = (await Promise.all(names.map((name) => projectRepo.getInfo(name)))).filter(Boolean);
   return c.json(projects);
