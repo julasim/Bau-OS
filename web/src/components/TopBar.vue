@@ -13,7 +13,6 @@ const { isDark, toggle: toggleTheme } = useTheme();
 // Mapping Route-Name → lesbarer Titel (Breadcrumb + window.title).
 const titles: Record<string, string> = {
   dashboard: "Dashboard",
-  chat: "Chat",
   tasks: "Aufgaben",
   calendar: "Kalender",
   projects: "Projekte",
@@ -24,8 +23,6 @@ const titles: Record<string, string> = {
   "note-editor": "Notiz",
   files: "Dateien",
   search: "Suche",
-  agents: "Agenten",
-  "agent-editor": "Agent",
   settings: "Einstellungen",
   login: "Anmelden",
 };

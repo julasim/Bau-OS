@@ -32,7 +32,6 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/portfolio", label: "Portfolio", icon: "kanban" },
   { to: "/notes", label: "Notizen", icon: "pencil" },
   { to: "/files", label: "Dateien", icon: "file" },
-  { to: "/chat", label: "Chat & Agenten", icon: "message" },
   { to: "/team", label: "Team", icon: "users" },
 ];
 
@@ -158,13 +157,6 @@ onMounted(() => void loadBranding());
         >
           <BIcon :name="it.icon" :size="16" />
           <span>{{ it.label }}</span>
-        </button>
-      </div>
-      <div class="pt-nav-section">
-        <span class="pt-nav-label">SYSTEM</span>
-        <button class="pt-nav-item" @click="go('/chat')" title="Telegram-Agent">
-          <BIcon name="message" :size="16" />
-          <span>Telegram-Agent</span>
         </button>
       </div>
     </template>

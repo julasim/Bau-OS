@@ -94,32 +94,9 @@ const CAL_NAME_ALIASES = [PATIO_CAL_NAME, "Bau-OS"];
 // konvertierungen laufen ueber diese 2 Helper, damit nirgendwo ein
 // Format-Mismatch entsteht.
 
-/** "07.05.2026" → "2026-05-07". Akzeptiert auch schon ISO. */
-function patioDatumToIso(datum: string): string {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(datum)) return datum;
-  const m = datum.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-  if (!m) throw new Error(`Unverstaendliches Datumsformat: "${datum}"`);
-  return `${m[3]}-${m[2]}-${m[1]}`;
-}
-
-/** "2026-05-07" → "07.05.2026" — PATIO-kanonisch. */
-function isoToPatioDatum(iso: string): string {
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) throw new Error(`Unverstaendliches ISO-Datum: "${iso}"`);
-  return `${m[3]}.${m[2]}.${m[1]}`;
-}
-
-/** "2026-05-05T14:00:00.0000000" → "2026-05-05" (ISO) → wird vom Aufrufer
- *  noch zu PATIO-Datum konvertiert. */
-function extractDate(dt: string): string {
-  return dt.split("T")[0]!;
-}
-
-/** "2026-05-05T14:00:00.0000000" → "14:00" — mit Sekunden-Schnitt. */
-function extractTime(dt: string): string {
-  const t = dt.split("T")[1] ?? "";
-  return t.slice(0, 5); // HH:MM
-}
+// Datums-Mapping ausgelagert nach ms-date-utils.ts (geteilt mit webhooks-microsoft,
+// bricht den frueheren Circular-Import).
+import { patioDatumToIso, isoToPatioDatum, extractDate, extractTime } from "./ms-date-utils.js";
 
 /** PATIO Termin → MS-Graph start/end dateTime. Konvertiert TT.MM.JJJJ
  *  intern zu ISO und baut den korrekt formatierten dateTime-String.

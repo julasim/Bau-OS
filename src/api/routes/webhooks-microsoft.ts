@@ -64,15 +64,8 @@ interface MsEventResource {
   "@odata.etag"?: string;
 }
 
-// ── Datum-Mapping (dupliziert aus microsoft-sync.ts wegen circular-import) ──
-function isoToPatioDatum(iso: string): string {
-  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) throw new Error(`Unverstaendliches ISO-Datum: "${iso}"`);
-  return `${m[3]}.${m[2]}.${m[1]}`;
-}
-function extractTime(dt: string): string {
-  return (dt.split("T")[1] ?? "").slice(0, 5);
-}
+// Datums-Mapping aus dem geteilten util-Modul (frueher hier dupliziert).
+import { isoToPatioDatum, extractTime } from "../../sync/ms-date-utils.js";
 
 // ── Webhook-Endpoint ─────────────────────────────────────────────────────────
 

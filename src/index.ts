@@ -177,3 +177,16 @@ async function shutdown(signal: string): Promise<void> {
 
 process.on("SIGTERM", () => shutdown("SIGTERM"));
 process.on("SIGINT", () => shutdown("SIGINT"));
+
+// Prozess-Level-Fehlerhandler: eine unbehandelte Promise-Rejection oder Exception
+// (z.B. ein fehlgeschlagener Bot-Init) darf den Dienst nicht STILL runterreissen.
+// Ursache mit Stack loggen, dann kontrolliert beenden — restart:always (Compose)
+// faehrt den Prozess sauber wieder hoch. Kein Weiterlaufen in undefiniertem Zustand.
+process.on("unhandledRejection", (reason) => {
+  logError("[FATAL] Unhandled Promise Rejection — Prozess wird beendet", reason);
+  process.exit(1);
+});
+process.on("uncaughtException", (err) => {
+  logError("[FATAL] Uncaught Exception — Prozess wird beendet", err);
+  process.exit(1);
+});

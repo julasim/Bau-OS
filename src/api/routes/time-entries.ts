@@ -101,8 +101,12 @@ timeEntriesRoutes.get("/time-entries/:id", async (c) => {
   const entry = await timeEntryRepo!.get(id);
   if (!entry) return c.json({ error: "Eintrag nicht gefunden" }, 404);
   const ctx = userCtx(c);
-  if (ctx.role !== "admin" && entry.projectName) {
-    if (!(await canSeeProjectByName(ctx, entry.projectName))) {
+  if (ctx.role !== "admin") {
+    // Kein Skip bei fehlendem Projektnamen (z.B. verwaistes/geloeschtes Projekt):
+    // Zugriff nur fuer den Ersteller ODER wer das Projekt per ACL sehen darf.
+    const owns = !!entry.createdById && entry.createdById === ctx.userId;
+    const canSee = !!entry.projectName && (await canSeeProjectByName(ctx, entry.projectName));
+    if (!owns && !canSee) {
       return c.json({ error: "Kein Zugriff" }, 403);
     }
   }
@@ -115,8 +119,12 @@ timeEntriesRoutes.patch("/time-entries/:id", async (c) => {
   const entry = await timeEntryRepo!.get(id);
   if (!entry) return c.json({ error: "Eintrag nicht gefunden" }, 404);
   const ctx = userCtx(c);
-  if (ctx.role !== "admin" && entry.projectName) {
-    if (!(await canSeeProjectByName(ctx, entry.projectName))) {
+  if (ctx.role !== "admin") {
+    // Kein Skip bei fehlendem Projektnamen (z.B. verwaistes/geloeschtes Projekt):
+    // Zugriff nur fuer den Ersteller ODER wer das Projekt per ACL sehen darf.
+    const owns = !!entry.createdById && entry.createdById === ctx.userId;
+    const canSee = !!entry.projectName && (await canSeeProjectByName(ctx, entry.projectName));
+    if (!owns && !canSee) {
       return c.json({ error: "Kein Zugriff" }, 403);
     }
   }
@@ -139,8 +147,12 @@ timeEntriesRoutes.delete("/time-entries/:id", async (c) => {
   const entry = await timeEntryRepo!.get(id);
   if (!entry) return c.json({ ok: false }, 404);
   const ctx = userCtx(c);
-  if (ctx.role !== "admin" && entry.projectName) {
-    if (!(await canSeeProjectByName(ctx, entry.projectName))) {
+  if (ctx.role !== "admin") {
+    // Kein Skip bei fehlendem Projektnamen (z.B. verwaistes/geloeschtes Projekt):
+    // Zugriff nur fuer den Ersteller ODER wer das Projekt per ACL sehen darf.
+    const owns = !!entry.createdById && entry.createdById === ctx.userId;
+    const canSee = !!entry.projectName && (await canSeeProjectByName(ctx, entry.projectName));
+    if (!owns && !canSee) {
       return c.json({ error: "Kein Zugriff" }, 403);
     }
   }

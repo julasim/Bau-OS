@@ -38,11 +38,6 @@ watch(
 const hasListPane = computed(() => {
   return route.matched.some((r) => r.components && Object.prototype.hasOwnProperty.call(r.components, "listpane"));
 });
-
-/** ChatView hat ein eigenes Sidebar-Layout (260px Liste links). Sie
- *  braucht keinen Wrapper mit padding/overflow:auto — sonst doppelt
- *  Scroll-Container. Wir rendern sie direkt ins Grid. */
-const isChatRoute = computed(() => route.name === "chat");
 </script>
 
 <template>
@@ -64,10 +59,8 @@ const isChatRoute = computed(() => route.name === "chat");
     <div v-if="railMobileOpen" class="mobile-nav-backdrop" @click="closeRailMobile"></div>
     <NavRail />
     <router-view name="listpane" v-if="hasListPane" />
-    <!-- Chat: rendert sich selbst auf volle Hoehe ohne Wrapper. -->
-    <router-view v-if="isChatRoute" />
     <!-- Migrated v2-Views: rendern <DetailPane> selbst. -->
-    <router-view v-else-if="hasListPane" />
+    <router-view v-if="hasListPane" />
     <!-- Legacy Full-Width-Views: brauchen Wrapper mit overflow + min-h-0,
          damit ihre eigenen Inhalte scrollen statt clipped zu werden. -->
     <main v-else class="legacy-detail">

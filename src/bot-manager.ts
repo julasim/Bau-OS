@@ -27,6 +27,13 @@ interface BotEntry {
 const bots = new Map<string, BotEntry>();
 let started = false;
 
+// INF-5: Auto-Respawn abgestuerzter Bots mit Exponential-Backoff.
+const RESTART_MAX_ATTEMPTS = 5;
+const RESTART_BASE_MS = 5_000;
+const RESTART_MAX_MS = 600_000; // 10 min Cap
+const restartAttempts = new Map<string, number>();
+const stopping = new Set<string>(); // bewusst gestoppte Bots -> kein Respawn
+
 /** Default-Bot aus Env BOT_TOKEN. Wird von index.ts beim Boot per
  *  setDefaultBot() registriert und vom Notifications-Modul als Fallback
  *  benutzt, wenn ein User keinen eigenen Bot hat. */
@@ -131,23 +138,55 @@ async function spawnBot(user: DbUser): Promise<void> {
     const running = bot.start({ drop_pending_updates: true }).catch((err) => {
       logError(`[BotManager] Bot fuer ${user.username} ist abgestuerzt`, err);
       bots.delete(user.id);
+      scheduleRespawn(user);
     });
     bots.set(user.id, { user, bot, running, username });
+    restartAttempts.delete(user.id); // erfolgreicher Start -> Zaehler zuruecksetzen
     logInfo(`[BotManager] Bot fuer "${user.username}" gestartet (@${username ?? "?"})`);
   } catch (err) {
     logError(`[BotManager] Konnte Bot fuer "${user.username}" nicht starten`, err);
   }
 }
 
+/** INF-5: Startet einen abgestuerzten Bot mit Exponential-Backoff neu. Kein
+ *  Respawn, wenn der Bot bewusst gestoppt wurde (stopping-Flag) oder die
+ *  Max-Versuche erreicht sind — dann bleibt er aus, bis ein refresh() (z.B.
+ *  Token-Aenderung) ihn erneut spawnt. */
+function scheduleRespawn(user: DbUser): void {
+  if (stopping.has(user.id)) return; // bewusst gestoppt
+  const attempt = (restartAttempts.get(user.id) ?? 0) + 1;
+  if (attempt > RESTART_MAX_ATTEMPTS) {
+    restartAttempts.delete(user.id);
+    logError(
+      `[BotManager] Bot fuer "${user.username}" nach ${RESTART_MAX_ATTEMPTS} Versuchen aufgegeben — erst naechster refresh() startet ihn erneut.`,
+      new Error("Max-Respawn-Versuche erreicht"),
+    );
+    return;
+  }
+  restartAttempts.set(user.id, attempt);
+  const delay = Math.min(RESTART_BASE_MS * 2 ** (attempt - 1), RESTART_MAX_MS);
+  logInfo(
+    `[BotManager] Bot fuer "${user.username}" Respawn ${attempt}/${RESTART_MAX_ATTEMPTS} in ${Math.round(delay / 1000)}s`,
+  );
+  const timer = setTimeout(() => {
+    if (stopping.has(user.id) || bots.has(user.id)) return; // inzwischen gestoppt/wieder da
+    void spawnBot(user);
+  }, delay);
+  timer.unref?.(); // Respawn-Timer soll den Prozess-Shutdown nicht blockieren
+}
+
 async function stopBot(userId: string): Promise<void> {
   const entry = bots.get(userId);
   if (!entry) return;
+  stopping.add(userId); // verhindert Auto-Respawn durch den .catch
   try {
     await entry.bot.stop();
   } catch (err) {
     logError(`[BotManager] Fehler beim Stoppen des Bots fuer "${entry.user.username}"`, err);
   }
   bots.delete(userId);
+  restartAttempts.delete(userId);
+  stopping.delete(userId);
   logInfo(`[BotManager] Bot fuer "${entry.user.username}" gestoppt`);
 }
 

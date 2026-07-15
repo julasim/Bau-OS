@@ -104,7 +104,6 @@ import { notesRoutes } from "./routes/notes.js";
 import { tasksRoutes } from "./routes/tasks.js";
 import { termineRoutes } from "./routes/termine.js";
 import { projectsRoutes } from "./routes/projects.js";
-import { agentsRoutes } from "./routes/agents.js";
 import { searchRoutes } from "./routes/search.js";
 import { filesRoutes } from "./routes/files.js";
 import { teamRoutes } from "./routes/team.js";
@@ -116,7 +115,6 @@ import { phasesRoutes } from "./routes/phases.js";
 import { invoicesRoutes } from "./routes/invoices.js";
 import { portfolioRoutes } from "./routes/portfolio.js";
 import { eventsRoutes } from "./routes/events.js";
-import { chatRoutes } from "./routes/chat.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { agentLogsRoutes } from "./routes/agent-logs.js";
 import { adminUsersRoutes } from "./routes/admin-users.js";
@@ -152,6 +150,27 @@ app.get("/api/health", (c) => {
 const allowedOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split(",").map((s) => s.trim()) : undefined;
 
 app.use("*", secureHeaders());
+
+// SEC-5: Content-Security-Policy. Bewusst im REPORT-ONLY-Modus — meldet
+// Verstoesse (Browser-Console), blockiert aber nichts, damit die SPA nicht
+// bricht. Nach Beobachtung auf enforce umstellen: Header-Name in
+// "Content-Security-Policy" aendern. style-src braucht 'unsafe-inline'
+// (Vue-Scoped-Styles); Scripts laufen als gebuendelte Chunks (kein inline).
+const CSP_POLICY = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+app.use("*", async (c, next) => {
+  c.header("Content-Security-Policy-Report-Only", CSP_POLICY);
+  await next();
+});
 
 app.use(
   "/api/*",
@@ -946,7 +965,6 @@ app.route("/api", notesRoutes);
 app.route("/api", tasksRoutes);
 app.route("/api", termineRoutes);
 app.route("/api", projectsRoutes);
-app.route("/api", agentsRoutes);
 app.route("/api", searchRoutes);
 app.route("/api", filesRoutes);
 app.route("/api", teamRoutes);
@@ -959,7 +977,6 @@ app.route("/api", invoicesRoutes);
 app.route("/api", portfolioRoutes);
 app.route("/api", adminUsersRoutes);
 app.route("/api", eventsRoutes);
-app.route("/api", chatRoutes);
 app.route("/api", settingsRoutes);
 app.route("/api", agentLogsRoutes);
 app.route("/api", brandingRoutes);
