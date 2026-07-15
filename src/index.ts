@@ -13,9 +13,9 @@
 import "dotenv/config";
 import { createBot } from "./bot.js";
 import { startHeartbeat } from "./heartbeat.js";
-import { logInfo, logError, flushLogsSync } from "./logger.js";
+import { logInfo, logWarn, logError, flushLogsSync } from "./logger.js";
 import { Bot } from "grammy";
-import { DB_ENABLED, DB_AUTO_MIGRATE } from "./config.js";
+import { DB_ENABLED, DB_AUTO_MIGRATE, ENCRYPTION_KEY_SET } from "./config.js";
 
 const token = process.env.BOT_TOKEN;
 const workspacePath = process.env.WORKSPACE_PATH ?? process.env.VAULT_PATH;
@@ -95,6 +95,17 @@ await initMcp();
 
 bot.start();
 logInfo("PATIO gestartet");
+
+// SEC-4: Hinweis, wenn die Feld-Verschluesselung noch am JWT_SECRET haengt.
+// Kein harter Abbruch — der Rueckfall funktioniert, ist aber nicht das Ziel.
+if (DB_ENABLED && !ENCRYPTION_KEY_SET) {
+  logWarn(
+    IS_PRODUCTION
+      ? "ENCRYPTION_KEY nicht gesetzt — Feld-Verschluesselung nutzt JWT_SECRET als Rueckfall. Eigenen Key setzen + `npm run db:reencrypt` laufen (docs/sec-4-crypto-migration.md)."
+      : "ENCRYPTION_KEY nicht gesetzt — Dev nutzt JWT_SECRET-Rueckfall fuer die Feld-Verschluesselung.",
+    "SEC-4",
+  );
+}
 
 // Heartbeat NACH bot.start() starten — bot.api.sendMessage() braucht eine aktive Verbindung
 startHeartbeat(async (chatId, text) => {

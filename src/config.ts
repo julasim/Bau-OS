@@ -159,6 +159,14 @@ export const API_ENABLED = !!JWT_SECRET;
 // Production-Hardening: schwache JWT-Secrets ablehnen (mind. 32 Zeichen).
 // Im Dev-Modus nur warnen, damit der lokale Schnellstart funktioniert.
 export const JWT_SECRET_OK = JWT_SECRET.length >= 32;
+// SEC-4: Eigener Schluessel fuer die Feld-Verschluesselung (Telegram-Bot-Token,
+// TOTP-Secret, Microsoft-OAuth-Token), getrennt vom JWT_SECRET. So reisst eine
+// JWT_SECRET-Rotation die verschluesselten Felder nicht mehr mit. Solange nicht
+// gesetzt, faellt crypto.ts auf JWT_SECRET zurueck (Migrationsphase) — index.ts
+// warnt beim Start. Prod sollte einen eigenen setzen (>=32 Zeichen).
+export const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || "";
+export const ENCRYPTION_KEY_SET = ENCRYPTION_KEY.length > 0;
+export const ENCRYPTION_KEY_OK = ENCRYPTION_KEY.length >= 32;
 export const NODE_ENV = process.env.NODE_ENV || "development";
 export const IS_PRODUCTION = NODE_ENV === "production";
 
