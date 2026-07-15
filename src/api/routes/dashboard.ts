@@ -77,13 +77,11 @@ dashboardRoutes.get("/dashboard/db-status", async (c) => {
     return c.json({ enabled: false, mode: "filesystem" });
   }
   try {
-    const [{ checkDbHealth, checkPgVector, migrationStatus }, { getPoolStats }, embeddingsMod, { SUPABASE_ENABLED }] =
-      await Promise.all([
-        import("../../db/index.js"),
-        import("../../db/client.js"),
-        import("../../db/embeddings.js"),
-        import("../../config.js"),
-      ]);
+    const [{ checkDbHealth, checkPgVector, migrationStatus }, { getPoolStats }, embeddingsMod] = await Promise.all([
+      import("../../db/index.js"),
+      import("../../db/client.js"),
+      import("../../db/embeddings.js"),
+    ]);
     const healthy = await checkDbHealth();
     const hasVector = healthy ? await checkPgVector() : false;
     const migrations = healthy ? await migrationStatus() : [];
@@ -102,17 +100,6 @@ dashboardRoutes.get("/dashboard/db-status", async (c) => {
         ? embeddingsMod.embeddingStats()
         : Promise.resolve({ notes: { total: 0, embedded: 0 }, files: { total: 0, embedded: 0 } }),
     ]);
-
-    // Supabase Realtime-Bridge-Status (nur wenn SUPABASE konfiguriert)
-    let bridge: unknown = { enabled: false };
-    if (SUPABASE_ENABLED) {
-      try {
-        const { getRealtimeBridgeStatus } = await import("../realtime-bridge.js");
-        bridge = { enabled: true, ...getRealtimeBridgeStatus() };
-      } catch {
-        bridge = { enabled: true, active: false, startedAt: null, tables: 0, lastError: "Bridge-Status n/a" };
-      }
-    }
 
     return c.json({
       enabled: true,
@@ -134,7 +121,6 @@ dashboardRoutes.get("/dashboard/db-status", async (c) => {
           (coverage.files.total === 0 || coverage.files.embedded === coverage.files.total),
       },
       pool: poolStats,
-      realtime: bridge,
     });
   } catch (err) {
     return c.json({

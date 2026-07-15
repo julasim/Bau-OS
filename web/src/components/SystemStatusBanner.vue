@@ -20,7 +20,6 @@ interface DbStatus {
     notes: { total: number; embedded: number };
     files: { total: number; embedded: number };
   };
-  realtime?: { enabled?: boolean; active?: boolean; lastError?: string | null };
   error?: string;
 }
 
@@ -134,15 +133,6 @@ const banner = computed<{ key: string; level: "warn" | "error"; text: string } |
       text: `Semantische Suche unvollständig: ${parts.join(
         ", ",
       )} haben kein Embedding. Diese Inhalte werden von der Dateisuche im Chat NICHT gefunden. Klick rechts auf „Neu indexieren" um die fehlenden Embeddings zu erzeugen.`,
-    };
-  }
-
-  // Realtime-Bridge down (nur wenn Supabase konfiguriert)
-  if (s.realtime && s.realtime.enabled && s.realtime.active === false) {
-    return {
-      key: "realtime-down",
-      level: "warn",
-      text: `Realtime-Bridge inaktiv${s.realtime.lastError ? ` (${s.realtime.lastError})` : ""} — Live-Updates in anderen Tabs verzögert.`,
     };
   }
 

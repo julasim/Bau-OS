@@ -135,9 +135,6 @@ if (API_ENABLED) {
   }
   const { startApi } = await import("./api/server.js");
   startApi();
-  // Supabase Realtime Bridge starten (wenn verfuegbar)
-  const { startRealtimeBridge } = await import("./api/realtime-bridge.js");
-  await startRealtimeBridge();
 } else {
   logInfo("[API] Web-API deaktiviert (JWT_SECRET nicht gesetzt)");
 }

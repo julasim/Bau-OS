@@ -202,19 +202,13 @@ export const SMTP_FROM = process.env.SMTP_FROM || "PATIO <noreply@patio.local>";
 export const SMTP_SECURE = (process.env.SMTP_SECURE ?? "auto").toLowerCase();
 export const SMTP_ENABLED = !!SMTP_HOST;
 
-// ── Datenbank (Supabase / PostgreSQL) ────────────────────────────────────────
+// ── Datenbank (PostgreSQL) ───────────────────────────────────────────────────
 export const DATABASE_URL = process.env.DATABASE_URL || "";
 export const DB_ENABLED = !!DATABASE_URL;
 // Auto-Migrate beim Start. Default ON (Entwickler-freundlich), fuer Produktion
 // mit Deploy-Pipelines per DB_AUTO_MIGRATE=false abschalten und Migrations
 // explizit ueber "npm run migrate" fahren.
 export const DB_AUTO_MIGRATE = (process.env.DB_AUTO_MIGRATE ?? "true").toLowerCase() !== "false";
-
-// ── Supabase Client ──────────────────────────────────────────────────────────
-export const SUPABASE_URL = process.env.SUPABASE_URL || "";
-export const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || "";
-export const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || "";
-export const SUPABASE_ENABLED = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 // ── Embeddings ───────────────────────────────────────────────────────────────
 const _defaultEmbeddingModel = OPENAI_ENABLED ? "text-embedding-3-small" : "nomic-embed-text";

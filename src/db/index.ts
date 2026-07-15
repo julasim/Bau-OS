@@ -6,9 +6,6 @@
 export { getDb, checkDbHealth, checkPgVector, getPoolStats, closeDb, withRetry } from "./client.js";
 export { runMigrations, migrationStatus } from "./migrate.js";
 
-// Supabase JS Client (fuer Realtime, Storage, Auth)
-export { getSupabase, getSupabaseAnon, subscribeToTable, checkSupabaseHealth } from "./supabase.js";
-
 // Embeddings & Semantische Suche
 export {
   generateEmbedding,

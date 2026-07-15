@@ -97,8 +97,15 @@ function rowToPublic(row: Record<string, unknown>): MsAccountPublic {
 export async function getMsAccount(userId: string): Promise<MsAccountPublic | null> {
   if (!DB_ENABLED) return null;
   const db = getDb();
+  // Explizite Spalten (INFO-1): laedt NICHT die verschluesselten Token-Spalten
+  // (access_token_encrypted/refresh_token_encrypted) — die public-Shape braucht
+  // sie nie. Muss alle von rowToPublic gelesenen Felder abdecken.
   const [row] = await db`
-    SELECT * FROM user_microsoft_accounts WHERE user_id = ${userId} LIMIT 1
+    SELECT user_id, ms_user_id, ms_email, ms_display_name, scope,
+           calendar_id, calendar_mode, sync_enabled,
+           last_sync_at, last_sync_error, access_token_expires_at,
+           subscription_id, subscription_expires_at, created_at, updated_at
+      FROM user_microsoft_accounts WHERE user_id = ${userId} LIMIT 1
   `;
   return row ? rowToPublic(row) : null;
 }
@@ -198,7 +205,10 @@ export async function updateMsAccountSettings(
 ): Promise<MsAccountPublic | null> {
   if (!DB_ENABLED) return null;
   const db = getDb();
-  const [current] = await db`SELECT * FROM user_microsoft_accounts WHERE user_id = ${userId}`;
+  const [current] = await db`
+    SELECT calendar_mode, sync_enabled, calendar_id
+      FROM user_microsoft_accounts WHERE user_id = ${userId}
+  `;
   if (!current) return null;
   const calendarMode = "calendarMode" in patch ? patch.calendarMode : current.calendar_mode;
   const syncEnabled = "syncEnabled" in patch ? patch.syncEnabled : current.sync_enabled;
@@ -394,7 +404,10 @@ export async function listUserCalendars(userId: string): Promise<UserCalendar[]>
   if (!DB_ENABLED) return [];
   const db = getDb();
   const rows = await db`
-    SELECT * FROM user_microsoft_calendars WHERE user_id = ${userId}
+    SELECT user_id, calendar_id, display_name, enabled, direction,
+           subscription_id, subscription_expires_at,
+           last_sync_at, last_sync_error, added_at
+      FROM user_microsoft_calendars WHERE user_id = ${userId}
     ORDER BY display_name NULLS LAST, calendar_id
   `;
   return rows.map((r) => rowToCalendar(r));
@@ -405,7 +418,10 @@ export async function listEnabledCalendars(userId: string): Promise<UserCalendar
   if (!DB_ENABLED) return [];
   const db = getDb();
   const rows = await db`
-    SELECT * FROM user_microsoft_calendars
+    SELECT user_id, calendar_id, display_name, enabled, direction,
+           subscription_id, subscription_expires_at,
+           last_sync_at, last_sync_error, added_at
+      FROM user_microsoft_calendars
      WHERE user_id = ${userId} AND enabled = true
     ORDER BY added_at
   `;
@@ -427,7 +443,7 @@ export async function upsertUserCalendar(input: {
 
   // Existiert schon? Dann selektives Update — sonst Insert.
   const [existing] = await db`
-    SELECT * FROM user_microsoft_calendars
+    SELECT display_name, enabled, direction FROM user_microsoft_calendars
     WHERE user_id = ${input.userId} AND calendar_id = ${input.calendarId}
   `;
   if (existing) {

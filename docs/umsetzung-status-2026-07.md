@@ -14,6 +14,13 @@
 - **DEAD-3:** verwaiste Scripts (`test-tools.ts`, `fix_umlauts.py`) → `_archive/scripts/`.
 - **DEAD-2:** Datums-Helfer-Duplikat aufgelöst → neues `src/sync/ms-date-utils.ts`
   (geteilt von `microsoft-sync.ts` + `webhooks-microsoft.ts`, Circular-Import gebrochen).
+- **INF-11:** Supabase-Subsystem (dormant, `SUPABASE_ENABLED` faktisch immer false) →
+  `_archive/supabase/` (JS-Client, Realtime-Bridge, Self-Hosted-Setup-Skript + Compose-Stub,
+  README für Wiedereinbau). Verdrahtung in `config.ts` / `db/index.ts` / `index.ts` /
+  `dashboard.ts` (db-status ohne `realtime`-Feld) / `SystemStatusBanner.vue` entfernt; Dep
+  `@supabase/supabase-js` deinstalliert (−10 Pakete). `tsc` + 282 Tests grün, keine
+  Rest-Referenzen in `src/`/`web/src/`. (Frontend-Änderung rein subtraktiv; volle
+  `vue-tsc`/`build:all`-Verifikation steht in WSL aus.)
 
 **Sicherheit**
 - **SEC-1:** `npm audit fix` (+ nodemailer→9, **Runtime-Smoke verifiziert**). 9→3 Vulns;
@@ -31,6 +38,10 @@
 - **INF-5:** Bot-Respawn mit Exponential-Backoff (`bot-manager.ts`).
 - **INF-9:** Lint-Step in CI (`build.yml`).
 - **INF-10:** ungenutzte Deps entfernt (`qrcode`, `@types/qrcode`, `angular-expressions`).
+- **INFO-1:** `SELECT *` → explizite Spaltenlisten in `db-microsoft.ts` (5 Stellen;
+  `getMsAccount` lädt keine verschlüsselten Token-Spalten mehr in den Speicher). Spalten
+  exakt aus den Row-Mappern (`rowToPublic`/`rowToCalendar`) abgeleitet. `tsc` + Tests grün;
+  SQL-Verhalten gegen echte DB noch in WSL zu bestätigen (kein Postgres auf Windows).
 
 **Bewusst nicht geändert (mit Begründung)**
 - **INF-1** Healthcheck: kein Bug (im Testlauf widerlegt).
@@ -51,9 +62,11 @@
   auch den CI-`vue-tsc`-Step). Löst zugleich die esbuild-Vulns.
 
 **P2**
-- **SEC-7** `/pair` Attempt-Limit · **PERF-1** N+1 `GET /projects` (Aggregat-Query wie
-  `db-portfolio.ts`) · **PERF-2** `web/src/utils/format.ts` · **INF-11** Supabase → `_archive/supabase/` ·
-  **INF-13** Logger async/stdout · **INFO-1** `SELECT *` in `db-microsoft.ts`.
+- **SEC-7** `/pair` Attempt-Limit (Angriffspfad ist **Telegram** `/pair <token>` in `bot.ts`,
+  nicht HTTP — Limit gehört pro Chat-ID in den Bot-Handler, mit DB/Bot-Kontext in WSL) ·
+  **PERF-1** N+1 `GET /projects` (Aggregat-Query wie `db-portfolio.ts`) ·
+  **PERF-2** `web/src/utils/format.ts` · **INF-13** Logger async/stdout (Vorsicht:
+  `readRecentLogs` + JSONL-Rotation + Flush-bei-`process.exit` hängen dran).
 - **TEST-3** verifizieren (Rate-Limit-Codes aufschlüsseln).
 - **gitleaks** `.gitleaksignore` (`tests/totp.test.ts:50`) + gitleaks in CI.
 
@@ -89,5 +102,10 @@ Fix-Verifikation gegen echte DB Windows-Änderungen nach `~/patio` syncen (rsync
 
 ## Commit-Status
 **Committet + gepusht:** `844c8a5` auf `origin/main` (35 Dateien: Archiv-Renames,
-Fixes, Doku, Dockerfile/CI/.nvmrc). `.claude/` außen vor. Dieses Statusdokument wurde
-danach als Doku-Nachtrag aktualisiert. Working Tree sonst sauber.
+Fixes, Doku, Dockerfile/CI/.nvmrc), danach `db36eb5` (Doku-Nachtrag).
+
+**Uncommitted im Working Tree (Session 2026-07-15, noch nicht committet):** INF-11
+(Supabase-Archivierung inkl. `git mv` nach `_archive/supabase/`, entfernte Verdrahtung,
+`package.json`/`package-lock.json` ohne `@supabase/supabase-js`) + INFO-1
+(`db-microsoft.ts` explizite Spalten) + dieses Statusdokument. `tsc` + `npm test`
+(282/282) grün. **Commit/Push erst auf Julius' Anweisung.**
