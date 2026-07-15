@@ -99,9 +99,11 @@ Fix-Verifikation gegen echte DB Windows-Änderungen nach `~/patio` syncen (rsync
    grün sind. Danach 0 Vulns.
 3. **INF-6 Test-Suite** — Auth/ACL + Rechnungen + der **SEC-2-IDOR-Repro** (verwaistes
    Projekt) via Hono `app.request()` gegen `patio-test-db`.
-4. **Rest:** SEC-3b (Magic-Byte), PERF-1 (N+1), INF-11 (Supabase archivieren), INF-13
-   (Logger), INFO-1 (SELECT \*), SEC-7 (/pair), **TEST-3 verifizieren** (429 vs 401
-   aufschlüsseln — vermutlich kein Bug).
+4. **Rest:** PERF-1 (N+1 — gegen echte DB: altes vs. neues Ergebnis auf Fixtures identisch,
+   Vorbild `db-portfolio.ts`), PERF-2 (`format.ts` — mit funktionierendem `vue-tsc`), INF-13
+   (Logger — mit laufendem Prozess/`docker logs`), SEC-7 (/pair-Attempt-Limit im Bot-Handler),
+   **TEST-3 verifizieren** (429 vs 401 aufschlüsseln — vermutlich kein Bug).
+   *(SEC-3b, INF-11, INFO-1 sind bereits erledigt — siehe unten.)*
 5. **SEC-4 (Crypto)** separat, mit VPS-Deploy-Koordination (zweistufig).
 6. **VPS-Runbook:** Offsite-Backup (restic), Monitoring (Uptime-Kuma), LLM-Fallback.
 
@@ -109,8 +111,11 @@ Fix-Verifikation gegen echte DB Windows-Änderungen nach `~/patio` syncen (rsync
 **Committet + gepusht:** `844c8a5` auf `origin/main` (35 Dateien: Archiv-Renames,
 Fixes, Doku, Dockerfile/CI/.nvmrc), danach `db36eb5` (Doku-Nachtrag).
 
-**Uncommitted im Working Tree (Session 2026-07-15, noch nicht committet):** INF-11
-(Supabase-Archivierung inkl. `git mv` nach `_archive/supabase/`, entfernte Verdrahtung,
-`package.json`/`package-lock.json` ohne `@supabase/supabase-js`) + INFO-1
-(`db-microsoft.ts` explizite Spalten) + dieses Statusdokument. `tsc` + `npm test`
-(282/282) grün. **Commit/Push erst auf Julius' Anweisung.**
+**Committet, NICHT gepusht (Session 2026-07-15):**
+- `a3f7c5e` — INF-11 (Supabase → `_archive/supabase/`, Dep raus) + INFO-1
+  (`db-microsoft.ts` explizite Spalten).
+- `7fbff06` — SEC-3b (Magic-Byte-Upload-Validierung `file-type` + 9 Unit-Tests).
+
+`tsc` + `npm test` (291/291) grün. **Push erst auf Julius' Anweisung** (Server zieht
+`main` per `git pull`). SEC-3b/INFO-1 sollten in WSL zusätzlich gegen echte DB laufen
+(Upload-Flow bzw. SQL-Spalten), bevor produktiv.
