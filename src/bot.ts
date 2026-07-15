@@ -110,6 +110,15 @@ function startTyping(ctx: { replyWithChatAction: (action: "typing") => Promise<u
  * In beiden Faellen wird processMessage in runWithUserCtx() eingebettet,
  * damit Tool-Handler den User-Kontext via getCurrentUserCtx() lesen koennen.
  */
+// SEC-7: Brute-Force-Schutz fuer /pair. Pro Chat-ID nur begrenzt viele
+// Fehlversuche je Zeitfenster — verhindert automatisiertes Durchprobieren von
+// Pair-Codes (8 Zeichen sind zwar ein riesiger Raum, aber Defense-in-Depth) und
+// haelt das Audit-Log frei von Spam. In-Memory, modulweit (eine Chat-ID redet
+// mit genau einem Bot; ueberlebt Bot-Respawns). Erfolg resettet den Zaehler.
+const pairAttempts = new Map<string, { count: number; resetAt: number }>();
+const PAIR_MAX_ATTEMPTS = 5;
+const PAIR_WINDOW_MS = 15 * 60 * 1000;
+
 export function createBot(token: string, ownerUser?: DbUser | null): Bot {
   const bot = new Bot(token);
 
@@ -184,8 +193,27 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       await ctx.reply("Pairing benoetigt DB-Modus.");
       return;
     }
-    const result = await redeemPairToken(arg.toUpperCase(), String(ctx.chat.id));
+    const chatId = String(ctx.chat.id);
+    // SEC-7: Rate-Limit VOR dem Redeem pruefen.
+    const now = Date.now();
+    const attempt = pairAttempts.get(chatId);
+    if (attempt && now < attempt.resetAt && attempt.count >= PAIR_MAX_ATTEMPTS) {
+      const mins = Math.ceil((attempt.resetAt - now) / 60000);
+      await ctx.reply(`Zu viele fehlgeschlagene Pairing-Versuche. Bitte in ~${mins} Minuten erneut versuchen.`);
+      return;
+    }
+    const result = await redeemPairToken(arg.toUpperCase(), chatId);
     if (!result.ok) {
+      // Nur echte Fehlversuche (geratene/abgelaufene Codes) zaehlen fuer den
+      // Brute-Force-Zaehler. "chat-id-taken" bedeutet, der Code war GUELTIG —
+      // das ist ein legitimer Konflikt, kein Rate-Szenario, und darf den User
+      // nicht aussperren.
+      if (result.reason === "token-invalid") {
+        pairAttempts.set(chatId, {
+          count: (attempt && now < attempt.resetAt ? attempt.count : 0) + 1,
+          resetAt: now + PAIR_WINDOW_MS,
+        });
+      }
       // Audit-Eintrag: Pair-Versuch fehlgeschlagen. Telegram-Chat-ID und
       // Versuchstoken-Praefix in den Details, damit Admins bei Verdacht
       // auf Brute-Force-Versuche etwas zum Querlesen haben.
@@ -210,6 +238,7 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
       return;
     }
     const user = result.user;
+    pairAttempts.delete(chatId); // SEC-7: erfolgreiches Pairing raeumt den Zaehler
     const { logEvent } = await import("./data/db-audit.js");
     void logEvent({
       event: "pair.success",
