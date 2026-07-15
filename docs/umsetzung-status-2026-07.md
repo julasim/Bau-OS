@@ -91,8 +91,14 @@ In-Memory-Rate-Limit-Modell · LLM-Whitelist als Prompt-Guardrail · JWT-7d.
 Semgrep (SAST) · Trivy (Image) · Playwright-E2E.
 
 ## Testumgebung
-Ubuntu-24.04 (WSL), Node 24, `patio-test-db` (pgvector, restart-policy). Für die
-Fix-Verifikation gegen echte DB Windows-Änderungen nach `~/patio` syncen (rsync/git).
+**PATIO-Testbasis = WSL `Ubuntu-24.04`** (Node 24, `patio-test-db` = pgvector,
+restart-policy). Für die Fix-Verifikation gegen echte DB Windows-Änderungen nach
+`~/patio` syncen (rsync/git).
+
+> ⚠️ **Nicht verwechseln:** WSL `Ubuntu-22.04` gehört **RAG-OS** (Container
+> `rag-api`/`rag-postgres`/`rag-qdrant`/`rag-ollama`, Ordner `/root/rag-os`) und läuft
+> ggf. parallel. **Für PATIO nie anfassen/abschalten.** Wenn beide Distros laufen, steigt
+> der RAM — ggf. `~/.wslconfig` mit `memory=`-Deckel setzen (RAG-Ollama braucht Reserve).
 
 ## Erster Schritt beim Wiederaufnehmen (neue Session)
 1. **Testumgebung hochfahren:** WSL `Ubuntu-24.04`, Container `patio-test-db` (kommt via
@@ -113,14 +119,20 @@ Fix-Verifikation gegen echte DB Windows-Änderungen nach `~/patio` syncen (rsync
 6. **VPS-Runbook:** Offsite-Backup (restic), Monitoring (Uptime-Kuma), LLM-Fallback.
 
 ## Commit-Status
-**Committet + gepusht:** `844c8a5` auf `origin/main` (35 Dateien: Archiv-Renames,
-Fixes, Doku, Dockerfile/CI/.nvmrc), danach `db36eb5` (Doku-Nachtrag).
-
-**Committet, NICHT gepusht (Session 2026-07-15):**
-- `a3f7c5e` — INF-11 (Supabase → `_archive/supabase/`, Dep raus) + INFO-1
+**Committet + gepusht auf `origin/main`, CI (Build & Test) grün** — Stand `b9c4e94`:
+- `844c8a5` — Web-LLM + Legacy archiviert, P0/P1-Fixes (Vorsession).
+- `db36eb5` — Doku-Nachtrag (Vorsession).
+- `a3f7c5e` — **INF-11** (Supabase → `_archive/supabase/`, Dep raus) + **INFO-1**
   (`db-microsoft.ts` explizite Spalten).
-- `7fbff06` — SEC-3b (Magic-Byte-Upload-Validierung `file-type` + 9 Unit-Tests).
+- `7fbff06` — **SEC-3b** (Magic-Byte-Upload-Validierung `file-type` + 9 Unit-Tests).
+- `6f1f2ba` — Doku-Nachtrag.
+- `b9c4e94` — **TEST-1** (CI-`vue-tsc` repariert: `vue-tsc@3.3.7` gepinnt + Script
+  `typecheck:web`, CI-Step umgestellt). **Damit ist die CI wieder grün.**
 
-`tsc` + `npm test` (291/291) grün. **Push erst auf Julius' Anweisung** (Server zieht
-`main` per `git pull`). SEC-3b/INFO-1 sollten in WSL zusätzlich gegen echte DB laufen
-(Upload-Flow bzw. SQL-Spalten), bevor produktiv.
+`tsc` + `typecheck:web` + `lint` + `npm test` (291/291) lokal grün, CI bestätigt grün.
+Deploy noch **nicht** ausgelöst (bleibt manueller `git pull` am Server). SEC-3b/INFO-1
+sollten in WSL zusätzlich gegen echte DB laufen (Upload-Flow bzw. SQL-Spalten), bevor produktiv.
+
+**Aufräumung (Session 2026-07-15):** Alte Claude-Worktrees unter `.claude/worktrees/`
+(inkl. node_modules) gelöscht; `@supabase/supabase-js` deinstalliert; `vue-tsc` als
+devDep ergänzt.
