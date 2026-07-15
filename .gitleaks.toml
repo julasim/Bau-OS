@@ -1,0 +1,21 @@
+# PATIO — gitleaks Secret-Scan-Konfiguration
+#
+# Erbt die eingebauten Default-Regeln (useDefault) und ergaenzt eine Allowlist
+# fuer das bekannte Dummy-TOTP-Seed aus dem Test-Fixture. Das Seed
+# (ABCDEFGHIJ234567) ist ein oeffentlicher Base32-Platzhalter ohne jeden
+# Produktionswert; es steht in tests/totp.test.ts und wird — zitiert — im
+# Testreport (docs/testreport-2026-07.md) erwaehnt. Kein echtes Secret.
+#
+# Verifiziert mit gitleaks 8.30.1: ohne diese Allowlist meldet der Scan genau
+# diese 2 Fundstellen als "generic-api-key"; mit ihr sind es 0.
+
+title = "PATIO gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Dummy-TOTP-Seed aus dem Test-Fixture (kein echtes Secret)"
+regexes = [
+  '''ABCDEFGHIJ234567''',
+]

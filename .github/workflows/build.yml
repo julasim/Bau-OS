@@ -41,6 +41,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # volle Git-History fuer den gitleaks-Scan
+
+      # Secret-Scan der Git-History VOR npm ci (node_modules ist gitignored,
+      # wird also nie mitgescannt). .gitleaks.toml erbt die Default-Regeln und
+      # allowlistet nur das bekannte Dummy-TOTP-Seed. Findet gitleaks etwas
+      # Neues -> exit != 0 -> CI rot. Lokal mit 8.30.1 verifiziert: 0 Findings.
+      - name: Gitleaks (Secret-Scan)
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz | tar xz gitleaks
+          ./gitleaks detect --source . --config .gitleaks.toml --no-banner --redact
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
