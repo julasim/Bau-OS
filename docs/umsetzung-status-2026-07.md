@@ -44,6 +44,12 @@
 - **INF-5:** Bot-Respawn mit Exponential-Backoff (`bot-manager.ts`).
 - **INF-9:** Lint-Step in CI (`build.yml`).
 - **INF-10:** ungenutzte Deps entfernt (`qrcode`, `@types/qrcode`, `angular-expressions`).
+- **TEST-1 (CI vue-tsc rot):** `vue-tsc@3.3.7` als **devDependency gepinnt** + neues Script
+  `typecheck:web`; CI-Step (`build.yml`) von `npx vue-tsc` → `npm run typecheck:web`. Ursache:
+  ungepinntes `npx vue-tsc` zog in CI die neueste vue-tsc samt neuerer TS-Peer statt des
+  Projekt-TS 6.0.2 → `ERR_PACKAGE_PATH_NOT_EXPORTED`. Jetzt deterministisch. Lokal alle
+  CI-Steps grün (`build:all`, `typecheck:web`, `lint`, 291 Tests); finaler Beweis = CI-Run
+  nach Push.
 - **INFO-1:** `SELECT *` → explizite Spaltenlisten in `db-microsoft.ts` (5 Stellen;
   `getMsAccount` lädt keine verschlüsselten Token-Spalten mehr in den Speicher). Spalten
   exakt aus den Row-Mappern (`rowToPublic`/`rowToCalendar`) abgeleitet. `tsc` + Tests grün;
@@ -62,9 +68,8 @@
 - **SEC-4** Crypto-Härtung (eigener `ENCRYPTION_KEY` + Re-Encrypt-Skript + Legacy-Plaintext
   raus) — **zweistufiges VPS-Deploy**.
 - **INF-6** Test-Grundstock (Auth/ACL + Rechnungen + SEC-2-Repro) via Hono `app.request()`.
-- **INF-8 / TEST-1** Vite 5→8 **und** `vue-tsc`+`typescript` als devDeps pinnen
-  (Frontend-Typecheck läuft in sauberer Umgebung aktuell nicht — TS-6-Inkompat; betrifft
-  auch den CI-`vue-tsc`-Step). Löst zugleich die esbuild-Vulns.
+- **INF-8** Vite 5→8 (löst die 3 esbuild/Dev-Vulns) — Major-Bump, in WSL mit vollem
+  `build:all` verifizieren. *(Der Toolchain-Bruch TEST-1 ist separat gelöst — siehe unten.)*
 
 **P2**
 - **SEC-7** `/pair` Attempt-Limit (Angriffspfad ist **Telegram** `/pair <token>` in `bot.ts`,
