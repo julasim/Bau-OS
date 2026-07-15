@@ -71,7 +71,23 @@ Semgrep (SAST) · Trivy (Image) · Playwright-E2E.
 Ubuntu-24.04 (WSL), Node 24, `patio-test-db` (pgvector, restart-policy). Für die
 Fix-Verifikation gegen echte DB Windows-Änderungen nach `~/patio` syncen (rsync/git).
 
+## Erster Schritt beim Wiederaufnehmen (neue Session)
+1. **Testumgebung hochfahren:** WSL `Ubuntu-24.04`, Container `patio-test-db` (kommt via
+   restart-policy hoch), `~/patio` per `git pull` auf `main` (≥ `844c8a5`) bringen, `npm ci`.
+   WSL fährt idle herunter → ggf. Keepalive.
+2. **INF-8 (Vite 5→8) zuerst** — löst die 3 esbuild/Dev-Vulns UND den vue-tsc-Toolchain-
+   Bruch (TEST-1). In der Testumgebung eine kompatible Kombi finden
+   (Vite/@vitejs/plugin-vue/vitest/vue-tsc/typescript), bis `build:all` **und** `vue-tsc`
+   grün sind. Danach 0 Vulns.
+3. **INF-6 Test-Suite** — Auth/ACL + Rechnungen + der **SEC-2-IDOR-Repro** (verwaistes
+   Projekt) via Hono `app.request()` gegen `patio-test-db`.
+4. **Rest:** SEC-3b (Magic-Byte), PERF-1 (N+1), INF-11 (Supabase archivieren), INF-13
+   (Logger), INFO-1 (SELECT \*), SEC-7 (/pair), **TEST-3 verifizieren** (429 vs 401
+   aufschlüsseln — vermutlich kein Bug).
+5. **SEC-4 (Crypto)** separat, mit VPS-Deploy-Koordination (zweistufig).
+6. **VPS-Runbook:** Offsite-Backup (restic), Monitoring (Uptime-Kuma), LLM-Fallback.
+
 ## Commit-Status
-**Nichts committet.** Working Tree: Renames (Archiv), modifizierte Quellen, neue
-Doku/Config (`.nvmrc`, Dockerfile, CI). `.claude/` außen vor. Vor Commit: `tsc` + `test`
-(aktuell grün).
+**Committet + gepusht:** `844c8a5` auf `origin/main` (35 Dateien: Archiv-Renames,
+Fixes, Doku, Dockerfile/CI/.nvmrc). `.claude/` außen vor. Dieses Statusdokument wurde
+danach als Doku-Nachtrag aktualisiert. Working Tree sonst sauber.
