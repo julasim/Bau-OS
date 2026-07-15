@@ -17,3 +17,6 @@ docker/.env
 
 # Testdaten mit erfundenen Projekten/Personen (nicht ins Repo)
 test-uploads/
+
+# graphify-Code-Graph (generiertes Analyse-Artefakt, ~9 MB, lokal regenerierbar)
+graphify-out/
