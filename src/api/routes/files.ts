@@ -7,6 +7,7 @@ import { readFile, listFolder } from "../../workspace/index.js";
 import { fileRepo, projectRepo } from "../../data/index.js";
 import { getDb } from "../../db/client.js";
 import { emit } from "../events.js";
+import { validateUpload } from "../file-validation.js";
 import type { AppEnv } from "../server.js";
 
 export const filesRoutes = new Hono<AppEnv>();
@@ -67,28 +68,15 @@ async function isFileOwnerOrAdmin(c: Context<AppEnv>, fileId: string): Promise<b
   return uploadedBy === userId;
 }
 
-const ALLOWED_EXTENSIONS = new Set([
-  "pdf",
-  "docx",
-  "doc",
-  "xlsx",
-  "xls",
-  "csv",
-  "txt",
-  "md",
-  "png",
-  "jpg",
-  "jpeg",
-  "gif",
-  "webp",
-  "zip",
-  "json",
-  "xml",
-]);
-
-function isAllowedFile(filename: string): boolean {
-  const ext = filename.split(".").pop()?.toLowerCase() ?? "";
-  return ALLOWED_EXTENSIONS.has(ext);
+/** Baut die 415-Antwort fuer eine fehlgeschlagene Upload-Validierung.
+ *  extension → Endung nicht erlaubt; content-mismatch → Inhalt (Magic
+ *  Bytes) passt nicht zur Endung (getarnter Upload, SEC-3b). */
+function uploadRejection(c: Context<AppEnv>, reason: "extension" | "content-mismatch", filename: string) {
+  const msg =
+    reason === "extension"
+      ? `Dateityp nicht erlaubt: "${filename.split(".").pop()}"`
+      : `Dateiinhalt passt nicht zur Endung: "${filename}"`;
+  return c.json({ error: msg }, 415);
 }
 
 // Path-Traversal-Schutz
@@ -342,11 +330,11 @@ filesRoutes.post("/files/upload", async (c) => {
       if (file.size > MAX_UPLOAD_BYTES) {
         return c.json({ error: `Datei "${file.name}" ist zu groß (max ${MAX_UPLOAD_MB} MB)` }, 413);
       }
-      if (!isAllowedFile(file.name)) {
-        return c.json({ error: `Dateityp nicht erlaubt: "${file.name.split(".").pop()}"` }, 415);
-      }
       const safeName = file.name.replace(/[<>:"|?*]/g, "_");
       const buffer = Buffer.from(await file.arrayBuffer());
+      // SEC-3b: Endung + Magic Bytes pruefen (getarnte Uploads abweisen).
+      const check = await validateUpload(buffer, file.name);
+      if (!check.ok) return uploadRejection(c, check.reason, file.name);
 
       // Text aus Buffer extrahieren (kein Temp-File noetig)
       let contentText: string | undefined;
@@ -395,13 +383,13 @@ filesRoutes.post("/files/upload", async (c) => {
     if (file.size > MAX_UPLOAD_BYTES) {
       return c.json({ error: `Datei "${file.name}" ist zu groß (max ${MAX_UPLOAD_MB} MB)` }, 413);
     }
-    if (!isAllowedFile(file.name)) {
-      return c.json({ error: `Dateityp nicht erlaubt: "${file.name.split(".").pop()}"` }, 415);
-    }
     const safeName = file.name.replace(/[<>:"|?*]/g, "_");
     const destPath = path.join(destDir, safeName);
     if (!destPath.startsWith(WORKSPACE_PATH + path.sep) && destPath !== WORKSPACE_PATH) continue;
     const buffer = Buffer.from(await file.arrayBuffer());
+    // SEC-3b: Endung + Magic Bytes pruefen (getarnte Uploads abweisen).
+    const check = await validateUpload(buffer, file.name);
+    if (!check.ok) return uploadRejection(c, check.reason, file.name);
     fs.writeFileSync(destPath, buffer);
     const relativePath = targetDir ? `${targetDir}/${safeName}` : safeName;
     saved.push(relativePath);

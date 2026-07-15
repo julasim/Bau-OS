@@ -29,6 +29,12 @@
 - **SEC-3a (Download):** war bereits erfüllt (attachment + nosniff).
 - **SEC-5 (CSP):** als **Report-Only** gesetzt (`server.ts`) — bricht nichts; nach
   Browser-Beobachtung auf enforce umstellen.
+- **SEC-3b (Upload Magic-Byte):** neues Modul `src/api/file-validation.ts` (`validateUpload`
+  via `file-type` v22) — Endung **und** Magic Bytes müssen passen, getarnte Uploads (HTML/SVG
+  als `.png`, PDF als `.txt`) → 415. Text-Formate ohne Signatur werden anhand der Endung
+  erlaubt (kein Fehlalarm). In beide Upload-Pfade (`files.ts`, DB + Legacy-FS) eingehängt;
+  Extension-Whitelist dorthin zentralisiert. **9 neue Unit-Tests** decken die Tarnungs-Fälle
+  ab. `tsc` + 291 Tests grün.
 
 **Infrastruktur**
 - **INF-2:** Prozess-Fehlerhandler (`unhandledRejection`/`uncaughtException`) in `index.ts`
@@ -53,7 +59,6 @@
 ## ⏳ OFFEN
 
 **P1 (größere Brocken)**
-- **SEC-3b** Upload Magic-Byte-Validierung (`file-type` + `files.ts`).
 - **SEC-4** Crypto-Härtung (eigener `ENCRYPTION_KEY` + Re-Encrypt-Skript + Legacy-Plaintext
   raus) — **zweistufiges VPS-Deploy**.
 - **INF-6** Test-Grundstock (Auth/ACL + Rechnungen + SEC-2-Repro) via Hono `app.request()`.
