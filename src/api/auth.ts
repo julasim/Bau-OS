@@ -672,6 +672,9 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   c.set("user", payload);
 
   let dbUser: DbUser | null = null;
+  // Rolle fuer den Legacy-JSON-Fallback (User existiert nur in users.json,
+  // noch nicht in die DB importiert).
+  let jsonRole: string | null = null;
   if (DB_ENABLED) {
     // sub ist erst seit Phase 1 gesetzt — alte JWTs ohne sub fallen sauber
     // auf username-Lookup zurueck. Ohne diesen Guard wuerde postgres.js
@@ -686,6 +689,17 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
       c.set("userId", dbUser.id);
       c.set("dbUser", dbUser);
     } else {
+      // Kein DB-User trotz DB-Modus. Nur ein noch nicht importierter Legacy-
+      // JSON-User darf ueber den JSON-Fallback weiter rein. Ein Token, das auf
+      // ein NICHT (mehr) existentes Konto zeigt (geloeschter/umbenannter
+      // DB-User, dessen JWT aber noch bis zu 7 Tage gueltig ist), wird
+      // abgewiesen — sonst behielte es seine JWT-Rolle und ein geloeschter
+      // Admin haette weiter Admin-Zugriff.
+      const jsonUser = payload.username ? findUser(payload.username) : undefined;
+      if (!jsonUser) {
+        return c.json({ error: "Konto nicht mehr vorhanden" }, 401);
+      }
+      jsonRole = jsonUser.role;
       c.set("userId", null);
       c.set("dbUser", null);
     }
@@ -694,10 +708,11 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
     c.set("dbUser", null);
   }
 
-  // In DB-Mode: immer die aktuelle Rolle aus DB nehmen (nicht aus JWT).
-  // Sonst behaelt ein altes Admin-Token bis zu 7 Tage lang Admin-Zugriff
-  // nach einem Downgrade.
-  const userRole = DB_ENABLED && dbUser ? dbUser.role : payload.role === "admin" ? "admin" : "user";
+  // In DB-Mode: immer die aktuelle Rolle aus DB nehmen (bzw. aus users.json
+  // fuer noch nicht importierte Legacy-Konten), nie aus dem JWT. Sonst behaelt
+  // ein altes Admin-Token bis zu 7 Tage lang Admin-Zugriff nach einem Downgrade.
+  const effectiveRole = DB_ENABLED ? (dbUser ? dbUser.role : jsonRole) : payload.role;
+  const userRole = effectiveRole === "admin" ? "admin" : "user";
   c.set("userRole", userRole);
 
   await next();

@@ -15,7 +15,7 @@ import { createBot } from "./bot.js";
 import { startHeartbeat } from "./heartbeat.js";
 import { logInfo, logWarn, logError, flushLogsSync } from "./logger.js";
 import { Bot } from "grammy";
-import { DB_ENABLED, DB_AUTO_MIGRATE, ENCRYPTION_KEY_SET } from "./config.js";
+import { DB_ENABLED, DB_AUTO_MIGRATE, ENCRYPTION_KEY_SET, ENCRYPTION_KEY_OK } from "./config.js";
 
 const token = process.env.BOT_TOKEN;
 const workspacePath = process.env.WORKSPACE_PATH ?? process.env.VAULT_PATH;
@@ -105,6 +105,13 @@ if (DB_ENABLED && !ENCRYPTION_KEY_SET) {
       : "ENCRYPTION_KEY nicht gesetzt — Dev nutzt JWT_SECRET-Rueckfall fuer die Feld-Verschluesselung.",
     "SEC-4",
   );
+}
+
+// SEC-4: ENCRYPTION_KEY ist zwar gesetzt, aber zu kurz. Bisher lief so ein
+// schwacher Schluessel still durch (ENCRYPTION_KEY_OK war toter Code). Nur
+// warnen — kein harter Abbruch, damit der Deploy nicht blockiert.
+if (DB_ENABLED && ENCRYPTION_KEY_SET && !ENCRYPTION_KEY_OK) {
+  logWarn("ENCRYPTION_KEY ist zu kurz (<32 Zeichen) — schwacher Schluessel, bitte >=32 Zeichen setzen.", "SEC-4");
 }
 
 // Heartbeat NACH bot.start() starten — bot.api.sendMessage() braucht eine aktive Verbindung

@@ -55,6 +55,7 @@ let total = 0;
 let migrated = 0;
 let skipped = 0;
 let failed = 0;
+let overtaken = 0; // zwischenzeitlich von der App geaendert — nicht ueberschrieben
 
 for (const f of FIELDS) {
   let rows: Array<{ id: unknown; val: unknown }>;
@@ -83,8 +84,28 @@ for (const f of FIELDS) {
       continue;
     }
     const reenc = encryptString(plain);
+    // Defensive Guard: encryptString gibt bei falsy Input null zurueck. Ein
+    // null hier duerfte nach dem decrypt/needsReencrypt-Pfad nicht auftreten,
+    // aber niemals null in die Spalte schreiben — das waere Datenverlust.
+    if (reenc === null) {
+      failed++;
+      console.warn(`  ❗ ${f.table}.${f.col} ${f.idCol}=${row.id}: Re-Encryption ergab null — uebersprungen (nichts geschrieben).`);
+      continue;
+    }
     if (!DRY) {
-      await db`UPDATE ${db(f.table)} SET ${db(f.col)} = ${reenc} WHERE ${db(f.idCol)} = ${row.id}`;
+      // Lost-Update-Schutz: nur schreiben, wenn der Alt-Wert unveraendert ist.
+      // Hat die App den Wert zwischenzeitlich geaendert, trifft die WHERE-Klausel
+      // keine Zeile (count === 0) — dann nichts ueberschreiben, sondern als
+      // "geueberholt" zaehlen (kein Fehler).
+      const result = await db`
+        UPDATE ${db(f.table)} SET ${db(f.col)} = ${reenc}
+         WHERE ${db(f.idCol)} = ${row.id} AND ${db(f.col)} = ${val}
+      `;
+      if (result.count === 0) {
+        overtaken++;
+        console.warn(`  ⏭  ${f.table}.${f.col} ${f.idCol}=${row.id}: zwischenzeitlich geaendert — uebersprungen (geueberholt).`);
+        continue;
+      }
     }
     migrated++;
     console.log(`  ${DRY ? "[dry] " : "✓ "}${f.table}.${f.col} ${f.idCol}=${row.id} umgeschluesselt.`);
@@ -92,7 +113,7 @@ for (const f of FIELDS) {
 }
 
 console.log(
-  `\nFertig. gesamt=${total} umgeschluesselt=${migrated} schon-ok=${skipped} fehlgeschlagen=${failed}` +
+  `\nFertig. gesamt=${total} umgeschluesselt=${migrated} schon-ok=${skipped} geueberholt=${overtaken} fehlgeschlagen=${failed}` +
     (DRY ? "  (DRY-RUN, nichts geschrieben)" : ""),
 );
 

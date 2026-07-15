@@ -197,6 +197,15 @@ export function createBot(token: string, ownerUser?: DbUser | null): Bot {
     // SEC-7: Rate-Limit VOR dem Redeem pruefen.
     const now = Date.now();
     const attempt = pairAttempts.get(chatId);
+    // SEC-7: opportunistischer GC-Sweep (Muster wie apiBuckets in api/server.ts).
+    // Ohne das raeumt nur erfolgreiches Pairing per delete auf — abgelaufene
+    // Eintraege blieben liegen und die Map wuechse unbegrenzt. In ~1% der
+    // Aufrufe die Map durchgehen und abgelaufene Fenster entfernen.
+    if (Math.random() < 0.01) {
+      for (const [k, v] of pairAttempts) {
+        if (now >= v.resetAt) pairAttempts.delete(k);
+      }
+    }
     if (attempt && now < attempt.resetAt && attempt.count >= PAIR_MAX_ATTEMPTS) {
       const mins = Math.ceil((attempt.resetAt - now) / 60000);
       await ctx.reply(`Zu viele fehlgeschlagene Pairing-Versuche. Bitte in ~${mins} Minuten erneut versuchen.`);
