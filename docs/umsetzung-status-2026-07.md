@@ -4,8 +4,8 @@
 > `origin/main` gepusht (Stand `41f0aee`, CI grün). **Verifiziert grün:** `tsc` ✓,
 > `typecheck:web` ✓, `build:all` ✓, `docs:build` ✓, `npm test` **344 in WSL gegen
 > echte DB** (298 auf Windows, DB-Tests skippen) ✓.
-> Referenzen: [`audit-2026-07.md`](audit-2026-07.md), [`testreport-2026-07.md`](testreport-2026-07.md),
-> Plan: `~/.claude/plans/swift-purring-hejlsberg.md`.
+> Plan: `~/.claude/plans/swift-purring-hejlsberg.md`. (Audit + Testreport der Runde
+> liegen in der Git-History.)
 >
 > **Noch NICHT deployt** — Julius deployt, wenn der ganze Plan eingearbeitet ist
 > (jetzt gegeben). Deploy: `cd /opt/patio && git pull && docker compose build app
