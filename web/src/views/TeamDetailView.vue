@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateShort } from "../utils/format";
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
@@ -351,7 +352,7 @@ function formatLogTime(iso: string): string {
   if (diffHrs < 24) return `vor ${diffHrs} Std`;
   const diffDays = Math.floor(diffHrs / 24);
   if (diffDays < 7) return `vor ${diffDays} Tg`;
-  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return formatDateShort(d);
 }
 
 // ── Rename ───────────────────────────────────────────────

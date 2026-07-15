@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatEUR } from "../../utils/format";
 // ============================================================
 // PATIO — Portfolio-Cockpit (Leitungssicht)
 // ============================================================
@@ -47,7 +48,7 @@ const counts = computed(() => ({
 
 function money(n: number | null): string {
   if (n === null || n === undefined) return "—";
-  return n.toLocaleString("de-AT", { maximumFractionDigits: 0 }) + " €";
+  return formatEUR(n);
 }
 
 function daysUntil(iso: string | null): number | null {

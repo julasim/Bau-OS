@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate, formatNumber } from "../utils/format";
 import { ref, onMounted, computed, watch } from "vue";
 import { api } from "../api";
 import { useConfirm } from "../composables/useConfirm";
@@ -2624,7 +2625,7 @@ onMounted(() => {
                   </div>
                   <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 2px">
                     {{ t.filename }} · {{ formatBytes(t.sizeBytes) }} · hochgeladen am
-                    {{ new Date(t.uploadedAt).toLocaleDateString("de-AT") }}
+                    {{ formatDate(t.uploadedAt) }}
                   </div>
                 </div>
                 <div class="flex items-center" style="gap: 6px; flex-wrap: wrap">
@@ -2839,7 +2840,7 @@ onMounted(() => {
               </div>
               <div class="settings-row flex items-center justify-between px-4 py-2.5">
                 <span class="settings-label">Auto-Kompaktieren ab</span>
-                <span class="settings-value">{{ data.system.compactThreshold.toLocaleString() }} Zeichen</span>
+                <span class="settings-value">{{ formatNumber(data.system.compactThreshold) }} Zeichen</span>
               </div>
             </div>
           </section>

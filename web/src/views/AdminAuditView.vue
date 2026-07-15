@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatTimestamp } from "../utils/format";
 import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
@@ -87,15 +88,7 @@ onMounted(load);
 
 function formatTs(iso: string): string {
   try {
-    const d = new Date(iso);
-    return d.toLocaleString("de-DE", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
+    return formatTimestamp(iso);
   } catch {
     return iso;
   }

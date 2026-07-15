@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from "../utils/format";
 // ============================================================
 // PATIO — Dateien (3-Pane File-Explorer, PATIO-Stil)
 // ============================================================
@@ -705,13 +706,7 @@ function humanDate(iso: string): string {
   if (diffH < 24) return `vor ${diffH} Std`;
   const diffD = Math.floor(diffH / 24);
   if (diffD < 7) return `vor ${diffD} Tg`;
-  return d.toLocaleString("de-AT", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return formatDateTime(d);
 }
 
 function extLabel(kind: FileKind): string {

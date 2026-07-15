@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatWeekdayFull, formatWeekdayShort } from "../utils/format";
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
@@ -65,14 +66,7 @@ const stats = computed(() => ({
 // Reaktive Zeit-Werte: werden bei visibilitychange aktualisiert, damit
 // Begrüßung und Datumsfilter nach langem Inaktiv-Tab korrekt bleiben.
 const today = ref(new Date().toISOString().slice(0, 10));
-const todayDE = ref(
-  new Date().toLocaleDateString("de-AT", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }),
-);
+const todayDE = ref(formatWeekdayFull(new Date()));
 const hour = ref(new Date().getHours());
 const greeting = computed(() =>
   hour.value < 5 ? "Gute Nacht" : hour.value < 11 ? "Guten Morgen" : hour.value < 18 ? "Guten Tag" : "Guten Abend",
@@ -115,7 +109,7 @@ function formatDate(d: string) {
 function terminWeekday(datum: string): string {
   const iso = datum.includes(".") ? datum.split(".").reverse().join("-") : datum;
   const d = new Date(iso + "T00:00:00");
-  return d.toLocaleDateString("de-AT", { weekday: "short" });
+  return formatWeekdayShort(d);
 }
 
 function terminDay(datum: string): string {
@@ -130,12 +124,7 @@ function openPalette() {
 function refreshTime() {
   const now = new Date();
   today.value = now.toISOString().slice(0, 10);
-  todayDE.value = now.toLocaleDateString("de-AT", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  todayDE.value = formatWeekdayFull(now);
   hour.value = now.getHours();
 }
 

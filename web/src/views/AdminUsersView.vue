@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate as fmtDate } from "../utils/format";
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
@@ -382,7 +383,7 @@ function initials(name: string): string {
 }
 function formatDate(iso?: string) {
   if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return fmtDate(iso);
 }
 </script>
 

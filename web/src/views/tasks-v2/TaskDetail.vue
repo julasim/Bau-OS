@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDateTime } from "../../utils/format";
 // ============================================================
 // PATIO — TaskDetail
 // ============================================================
@@ -310,12 +311,12 @@ loadAux();
         <div class="ap-panel-body">
           <dl class="task-history">
             <dt>Erstellt</dt>
-            <dd>{{ new Date(task.createdAt).toLocaleString("de-AT") }}</dd>
+            <dd>{{ formatDateTime(task.createdAt) }}</dd>
             <dt>Geändert</dt>
-            <dd>{{ new Date(task.updatedAt).toLocaleString("de-AT") }}</dd>
+            <dd>{{ formatDateTime(task.updatedAt) }}</dd>
             <template v-if="task.completedAt">
               <dt>Erledigt</dt>
-              <dd>{{ new Date(task.completedAt).toLocaleString("de-AT") }}</dd>
+              <dd>{{ formatDateTime(task.completedAt) }}</dd>
             </template>
           </dl>
         </div>

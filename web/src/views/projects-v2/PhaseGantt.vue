@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatMonthShort } from "../../utils/format";
 // ── Phasen-Gantt / Zeitleiste ────────────────────────────────────────────
 // Stellt die Leistungsphasen auf einer Zeitachse dar: Soll-Balken (Umriss)
 // und Ist-Balken (gefuellt), Meilenstein-Raute am Soll-Ende, sowie
@@ -124,7 +125,7 @@ const ticks = computed(() => {
     if (day >= r.min) {
       out.push({
         left: ((day - r.min) / (r.max - r.min)) * 100,
-        label: d.toLocaleDateString("de-AT", { month: "short", year: "2-digit" }),
+        label: formatMonthShort(d),
       });
     }
     d.setUTCMonth(d.getUTCMonth() + 1);

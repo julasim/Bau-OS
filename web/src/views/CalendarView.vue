@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatWeekdayDayMonth, formatMonthLong, formatWeekdayFull } from "../utils/format";
 import { ref, computed, onMounted, watch } from "vue";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
@@ -92,15 +93,11 @@ function termineForDate(iso: string): Termin[] {
 
 function formatDateLong(d: string): string {
   const iso = toDisplayISO(d);
-  return new Date(iso + "T00:00:00").toLocaleDateString("de-AT", {
-    weekday: "short",
-    day: "numeric",
-    month: "long",
-  });
+  return formatWeekdayDayMonth(iso);
 }
 
 // ── Monats-Grid ──────────────────────────────────────────────────────────────
-const monthTitle = computed(() => current.value.toLocaleDateString("de-AT", { month: "long", year: "numeric" }));
+const monthTitle = computed(() => formatMonthLong(current.value));
 
 const monthDays = computed(() => {
   const y = current.value.getFullYear();
@@ -156,14 +153,7 @@ const weekDays = computed(() => {
 });
 
 // ── Tages-Ansicht ───────────────────────────────────────────────────────────
-const dayTitle = computed(() =>
-  current.value.toLocaleDateString("de-AT", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }),
-);
+const dayTitle = computed(() => formatWeekdayFull(current.value));
 const dayISO = computed(() => toISO(current.value));
 
 // ── Listen-Ansicht ──────────────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDayMonth } from "../../utils/format";
 // ============================================================
 // PATIO Workspace v2 — NotesListPane
 // ============================================================
@@ -80,7 +81,7 @@ function relativeTime(iso: string): string {
   if (h < 24) return `${h}h`;
   const d = Math.floor(h / 24);
   if (d < 7) return `${d}d`;
-  return new Date(iso).toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit" });
+  return formatDayMonth(iso);
 }
 
 onMounted(load);

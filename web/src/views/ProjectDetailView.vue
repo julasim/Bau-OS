@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatDate, formatDateShort } from "../utils/format";
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
@@ -1267,7 +1268,7 @@ function formatSize(bytes: number) {
 function formatFileDate(iso: string) {
   if (!iso) return "–";
   const d = new Date(iso);
-  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return formatDate(d);
 }
 
 const viewingFileIsMarkdown = computed(() =>
@@ -1465,7 +1466,7 @@ function activityTime(iso?: string): string {
   if (diffHrs < 24) return `vor ${diffHrs} Std`;
   const diffDays = Math.floor(diffHrs / 24);
   if (diffDays < 7) return `vor ${diffDays} Tg`;
-  return d.toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  return formatDateShort(d);
 }
 
 // ── Quick-Add (Uebersicht) ───────────────────────────────

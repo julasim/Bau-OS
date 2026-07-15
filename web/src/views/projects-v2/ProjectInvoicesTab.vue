@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { formatEUR } from "../../utils/format";
 // ── Rechnungs-Tab (Teilrechnungen + Honorarsicht) ────────────────────────
 // Zeigt die Honorar-Bilanz je Projekt (aus /finance) und verwaltet die
 // Teilrechnungen (CRUD). Optionale Zuordnung jeder Rechnung zu einer
@@ -77,7 +78,7 @@ const offenGesamt = computed(() => {
 
 function money(n: number | null | undefined): string {
   if (n === null || n === undefined) return "—";
-  return n.toLocaleString("de-AT", { maximumFractionDigits: 0 }) + " €";
+  return formatEUR(n);
 }
 
 async function load() {
