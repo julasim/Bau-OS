@@ -38,6 +38,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@types/node": "^25.5.2",
     "@types/node-cron": "^3.0.11",
+    "angular-expressions": "^1.5.5",
     "bcrypt": "^6.0.0",
     "docx": "^9.6.1",
     "docxtemplater": "^3.68.6",
