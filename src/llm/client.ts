@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import {
   OLLAMA_BASE_URL,
   OPENAI_API_KEY,
+  OPENAI_BASE_URL,
   OPENAI_ENABLED,
   DEFAULT_MODEL,
   FAST_MODEL,
@@ -11,9 +12,11 @@ import {
   setRuntimeMainModel,
 } from "../config.js";
 
-// OpenAI direkt wenn OPENAI_API_KEY gesetzt, sonst Ollama-kompatibel
+// OpenAI direkt wenn OPENAI_API_KEY gesetzt, sonst Ollama-kompatibel.
+// OPENAI_BASE_URL erlaubt einen Drittanbieter (Groq/OpenRouter) am
+// OpenAI-Pfad — LLM-Provider-Fallback ueber die .env (siehe docs/vps-runbook).
 export const client = OPENAI_ENABLED
-  ? new OpenAI({ apiKey: OPENAI_API_KEY })
+  ? new OpenAI({ apiKey: OPENAI_API_KEY, ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}) })
   : new OpenAI({ baseURL: OLLAMA_BASE_URL, apiKey: "ollama" });
 
 // Wahrheit liegt in config.ts (getRuntimeMainModel). Wir spiegeln nur

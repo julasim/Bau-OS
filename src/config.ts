@@ -4,6 +4,10 @@ import path from "path";
 // ── LLM ──────────────────────────────────────────────────────────────────────
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
 export const OPENAI_ENABLED = !!OPENAI_API_KEY;
+// Optionaler baseURL-Override, um OPENAI_API_KEY gegen einen OpenAI-kompatiblen
+// Drittanbieter (Groq, OpenRouter) statt api.openai.com zu richten —
+// LLM-Provider-Fallback rein ueber die .env. Leer = OpenAI direkt.
+export const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || "";
 
 // Falls OPENAI_API_KEY gesetzt: direkt OpenAI, sonst Ollama
 export const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1";
