@@ -3,7 +3,6 @@ import { formatWeekdayDayMonth, formatMonthLong, formatWeekdayFull } from "../ut
 import { ref, computed, onMounted, watch } from "vue";
 import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
-import ConflictDialog from "../components/ConflictDialog.vue";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface Termin {
@@ -15,9 +14,6 @@ interface Termin {
   location: string | null;
   assignees: string[];
   project?: string | null;
-  // Microsoft-Graph-Sync (Phase 2/3) — fuer Outlook-Badge in der UI.
-  msSource?: "patio" | "microsoft" | null;
-  msSyncStatus?: "pending" | "synced" | "conflict" | "error" | null;
 }
 
 type ViewMode = "month" | "week" | "day" | "list";
@@ -228,25 +224,9 @@ async function create() {
   }
 }
 
-// Konflikt-Termine bekommen ein eigenes Dialog statt des normalen Edits.
-// Der User soll erst auflösen welche Version (PATIO / Outlook) gewinnt
-// bevor er weiter editiert — sonst riskieren wir einen Re-Konflikt
-// nach dem Speichern.
-const conflictTerminId = ref<string | null>(null);
-
 function edit(t: Termin) {
-  if (t.msSyncStatus === "conflict") {
-    conflictTerminId.value = t.id;
-    return;
-  }
   showCreate.value = false;
   editing.value = { ...t, assignees: [...t.assignees] };
-}
-
-async function onConflictResolved() {
-  conflictTerminId.value = null;
-  await load();
-  flash("success", "Konflikt aufgelöst");
 }
 
 async function save(t: Termin) {
@@ -303,31 +283,6 @@ const VIEWS: { id: ViewMode; label: string }[] = [
   { id: "day", label: "Tag" },
   { id: "list", label: "Liste" },
 ];
-
-// ── Outlook-Badge ───────────────────────────────────────────────────────────
-// Zeigt mit welchem Microsoft-Status der Termin synchronisiert ist:
-//   - synced/microsoft  → blaues "O" (Outlook), Termin ist in beiden Systemen
-//   - pending           → oranges "O", wartet auf Push (5-min-Cron)
-//   - conflict          → rotes "O", Outlook + PATIO sind divergiert
-//   - error             → graues "O", letzter Sync fehlgeschlagen
-//   - keine ms_*-Felder → kein Badge (lokaler Termin ohne MS-Verbindung)
-function msBadgeFor(t: Termin): { show: boolean; cls: string; title: string } {
-  if (!t.msSource && !t.msSyncStatus) return { show: false, cls: "", title: "" };
-  if (t.msSyncStatus === "conflict") {
-    return { show: true, cls: "ms-badge ms-badge-conflict", title: "Konflikt mit Outlook — bitte prüfen" };
-  }
-  if (t.msSyncStatus === "error") {
-    return { show: true, cls: "ms-badge ms-badge-error", title: "Sync mit Outlook fehlgeschlagen" };
-  }
-  if (t.msSyncStatus === "pending") {
-    return { show: true, cls: "ms-badge ms-badge-pending", title: "Wartet auf Outlook-Sync" };
-  }
-  // synced (oder NULL bei Migration-only) → blau
-  if (t.msSource === "microsoft") {
-    return { show: true, cls: "ms-badge", title: "Aus Outlook importiert" };
-  }
-  return { show: true, cls: "ms-badge", title: "Mit Outlook synchronisiert" };
-}
 
 // ── Agenda-Filter ────────────────────────────────────────────────────────────
 // In Monatsansicht: Klick auf Tag filtert die Agenda auf diesen Tag.
@@ -593,7 +548,6 @@ function agendaDayNum(iso: string): string {
             >
               <span v-if="t.uhrzeit" class="ap-chip-time">{{ t.uhrzeit }}</span>
               <span class="ap-chip-text">{{ t.text }}</span>
-              <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
             </button>
             <div v-if="termineForDate(day.iso).length > 3" class="ap-chip-more">
               +{{ termineForDate(day.iso).length - 3 }}
@@ -627,7 +581,6 @@ function agendaDayNum(iso: string): string {
             <div class="ap-termin-body">
               <button @click="edit(t)" class="ap-termin-title" type="button">
                 {{ t.text }}
-                <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
               </button>
               <div class="ap-termin-meta">
                 <span v-if="t.uhrzeit" class="font-mono">{{ t.uhrzeit }}{{ t.endzeit ? ` – ${t.endzeit}` : "" }}</span>
@@ -697,7 +650,6 @@ function agendaDayNum(iso: string): string {
             >
               <span v-if="t.uhrzeit" class="ap-chip-time">{{ t.uhrzeit }}</span>
               <span class="ap-chip-text">{{ t.text }}</span>
-              <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
             </button>
           </div>
         </div>
@@ -724,13 +676,6 @@ function agendaDayNum(iso: string): string {
               <span class="ap-event-time font-mono"> {{ t.uhrzeit }}{{ t.endzeit ? ` – ${t.endzeit}` : "" }} </span>
               <span class="ap-event-title">{{ t.text }}</span>
               <span v-if="t.location" class="ap-event-loc">· {{ t.location }}</span>
-              <span
-                v-if="msBadgeFor(t).show"
-                :class="msBadgeFor(t).cls"
-                :title="msBadgeFor(t).title"
-                style="margin-left: auto; flex-shrink: 0"
-                >O</span
-              >
             </button>
           </div>
         </div>
@@ -747,13 +692,6 @@ function agendaDayNum(iso: string): string {
           >
             <span class="ap-event-title">{{ t.text }}</span>
             <span v-if="t.location" class="ap-event-loc">· {{ t.location }}</span>
-            <span
-              v-if="msBadgeFor(t).show"
-              :class="msBadgeFor(t).cls"
-              :title="msBadgeFor(t).title"
-              style="margin-left: auto; flex-shrink: 0"
-              >O</span
-            >
           </button>
         </div>
       </div>
@@ -772,7 +710,6 @@ function agendaDayNum(iso: string): string {
               <div class="ap-list-body">
                 <div class="ap-list-title">
                   <span>{{ t.text }}</span>
-                  <span v-if="msBadgeFor(t).show" :class="msBadgeFor(t).cls" :title="msBadgeFor(t).title">O</span>
                 </div>
                 <div class="ap-list-meta">
                   <span v-if="t.endzeit" class="font-mono">bis {{ t.endzeit }}</span>
@@ -786,15 +723,6 @@ function agendaDayNum(iso: string): string {
         </div>
       </div>
     </div>
-
-    <!-- Konflikt-Auflösungs-Dialog (Phase 5b). Wird von edit() aufgerufen
-         wenn der Termin ms_sync_status='conflict' hat. -->
-    <ConflictDialog
-      v-if="conflictTerminId"
-      :termin-id="conflictTerminId"
-      @close="conflictTerminId = null"
-      @resolved="onConflictResolved"
-    />
   </div>
 </template>
 
@@ -1111,34 +1039,6 @@ function agendaDayNum(iso: string): string {
   color: var(--fg-subtle, var(--color-text-tertiary));
   font-family: var(--font-mono, monospace);
   padding-left: 2px;
-}
-
-/* ── Outlook-Sync-Badges ────────────────────────────────────────────────────── */
-.ms-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  background: #0078d4;
-  color: #fff;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  letter-spacing: -0.5px;
-  user-select: none;
-}
-.ms-badge-pending {
-  background: #f59e0b;
-}
-.ms-badge-conflict {
-  background: #dc2626;
-}
-.ms-badge-error {
-  background: #6b7280;
 }
 
 /* ── Agenda (right column in month view) ───────────────────────────────────── */

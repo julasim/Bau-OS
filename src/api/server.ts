@@ -117,8 +117,6 @@ import { portfolioRoutes } from "./routes/portfolio.js";
 import { eventsRoutes } from "./routes/events.js";
 import { settingsRoutes } from "./routes/settings.js";
 import { adminUsersRoutes } from "./routes/admin-users.js";
-import { authMicrosoftRoutes } from "./routes/auth-microsoft.js";
-import { webhooksMicrosoftRoutes } from "./routes/webhooks-microsoft.js";
 import { brandingRoutes, publicBrandingRoutes } from "./routes/branding.js";
 import { templatesRoutes } from "./routes/templates.js";
 import { exportTemplatesRoutes } from "./routes/export-templates.js";
@@ -904,20 +902,6 @@ app.post("/api/setup/admin", async (c) => {
   return c.json({ token, username: admin.username, role: admin.role, id: admin.id }, 201);
 });
 
-// ── Microsoft-OAuth-Routes VOR der globalen authMiddleware ──────────────────
-// Der Callback (/api/auth/microsoft/callback) muss public sein — Microsoft
-// schickt einen anonymen Browser dorthin (ohne JWT-Header). Die Schutz-
-// mechanik des Callbacks ist der state-JWT (audience='ms-oauth'), nicht das
-// reguläre Auth-Token. Die anderen 4 Routes (status, connect, disconnect,
-// settings) setzen ihre eigene authMiddleware inline — siehe auth-microsoft.ts.
-app.route("/api", authMicrosoftRoutes);
-
-// ── Microsoft-Webhook-Receiver VOR der globalen authMiddleware ──────────────
-// Microsoft Graph schickt Notifications anonym (ohne Auth-Header). Die
-// Sicherheit kommt aus dem clientState-HMAC, nicht aus JWT — siehe
-// routes/webhooks-microsoft.ts. Endpoint: POST /api/webhooks/microsoft
-app.route("/api", webhooksMicrosoftRoutes);
-
 // ── Branding-Logo PUBLIC ────────────────────────────────────────────────────
 // GET /api/branding/logo liefert das Firmen-Logo als image/* aus. Public
 // damit <img>-Tags ohne Auth-Header laden (Login-Page, PDF-Generator,
@@ -984,8 +968,6 @@ app.route("/api", templatesRoutes);
 app.route("/api", exportTemplatesRoutes);
 app.route("/api", projectModulesRoutes);
 app.route("/api", uiPreferencesRoutes);
-// authMicrosoftRoutes wird oben VOR der globalen authMiddleware registriert,
-// damit /callback public bleibt — siehe Kommentar bei Zeile ~696.
 // app.route("/api", auth2faRoutes); — siehe Kommentar oben
 
 // ── Statische Dateien (Vue SPA in Production) ────────────────────────────────

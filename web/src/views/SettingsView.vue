@@ -16,16 +16,11 @@ interface SettingsState {
 interface SettingsResponse {
   profile: { username: string; role: string; createdAt: string; email?: string | null };
   settings: SettingsState;
-  runtime: { currentModel: string; fastMode: boolean; dbEnabled: boolean };
+  runtime: { dbEnabled: boolean };
   system: {
-    defaultModel: string;
-    fastModel: string;
-    subagentModel: string;
-    ollamaBaseUrl: string;
     language: string;
     locale: string;
     timezone: string;
-    compactThreshold: number;
   };
 }
 
@@ -33,7 +28,6 @@ const data = ref<SettingsResponse | null>(null);
 const loading = ref(true);
 const savingSettings = ref(false);
 const savingPassword = ref(false);
-const savingModel = ref(false);
 const message = ref<{ type: "success" | "error"; text: string } | null>(null);
 
 const projects = ref<{ name: string }[]>([]);
@@ -47,8 +41,6 @@ const chatSearchMode = ref(false);
 const oldPassword = ref("");
 const newPassword = ref("");
 const confirmPassword = ref("");
-
-const modelInput = ref("");
 
 // ── Email ───────────────────────────────────────────────────────────────────
 // Pflicht-Feld fuer 2FA-Login (Migration 020). Anzeige im Profil + "Aendern"-
@@ -108,218 +100,6 @@ function cancelEmailChange() {
   emailHint.value = null;
 }
 
-// ── Microsoft-Konto (Phase 1: OAuth-Verbindung) ─────────────────────────────
-// Status-Polling beim Mount + nach jeder Verbinden/Trennen-Aktion.
-// Connect-Button oeffnet die MS-Authorize-URL als Popup —
-// Backend-Callback macht Token-Storage, postMessage zurueck an opener,
-// dieser triggert ein Status-Reload.
-interface MsAccount {
-  msEmail: string;
-  msDisplayName: string | null;
-  calendarMode: "default" | "patio";
-  syncEnabled: boolean;
-  lastSyncAt: string | null;
-  lastSyncError: string | null;
-  accessTokenValid: boolean;
-  /** Phase 4: Webhook-Subscription aktiv? Bedeutet Instant-Sync (<1s
-   *  Latenz) statt 5-min-Polling. */
-  webhookActive?: boolean;
-  subscriptionExpiresAt?: string | null;
-}
-interface MsStatus {
-  connected: boolean;
-  available: boolean;
-  reason?: string;
-  account?: MsAccount;
-}
-
-const msStatus = ref<MsStatus>({ connected: false, available: false });
-const msBusy = ref(false);
-const msMessage = ref<{ type: "ok" | "err"; text: string } | null>(null);
-
-async function loadMsStatus() {
-  try {
-    msStatus.value = await api.get<MsStatus>("/auth/microsoft/status");
-    if (msStatus.value.connected) {
-      await loadMsCalendars();
-    } else {
-      msCalendars.value = [];
-    }
-  } catch {
-    msStatus.value = { connected: false, available: false };
-    msCalendars.value = [];
-  }
-}
-
-async function connectMicrosoft() {
-  msBusy.value = true;
-  msMessage.value = null;
-  try {
-    const res = await api.post<{ url: string }>("/auth/microsoft/connect", {
-      returnTo: "/settings",
-    });
-    const popup = window.open(res.url, "ms-oauth", "width=520,height=720");
-    if (!popup) {
-      msMessage.value = {
-        type: "err",
-        text: "Popup wurde blockiert. Bitte Popup-Blocker für diese Seite deaktivieren.",
-      };
-      return;
-    }
-    // Auf postMessage vom Callback-Tab warten.
-    const onMsg = async (ev: MessageEvent) => {
-      if (!ev.data || ev.data.type !== "patio:ms-oauth") return;
-      window.removeEventListener("message", onMsg);
-      if (ev.data.kind === "success") {
-        msMessage.value = { type: "ok", text: ev.data.message ?? "Microsoft-Konto verbunden." };
-        await loadMsStatus();
-      } else {
-        msMessage.value = { type: "err", text: ev.data.message ?? "Verbindung fehlgeschlagen." };
-      }
-    };
-    window.addEventListener("message", onMsg);
-    // Failsafe: Popup geschlossen ohne Anmeldung → nach 1.5s Status pollen.
-    const poll = setInterval(async () => {
-      if (popup.closed) {
-        clearInterval(poll);
-        window.removeEventListener("message", onMsg);
-        await loadMsStatus();
-      }
-    }, 1500);
-  } catch (e) {
-    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Verbinden fehlgeschlagen" };
-  } finally {
-    msBusy.value = false;
-  }
-}
-
-async function disconnectMicrosoft() {
-  if (
-    !(await confirm({
-      message: "Microsoft-Verbindung wirklich trennen? Synchronisierte Termine bleiben in PATIO erhalten.",
-      confirmDanger: true,
-    }))
-  )
-    return;
-  msBusy.value = true;
-  msMessage.value = null;
-  try {
-    await api.delete("/auth/microsoft/disconnect");
-    msMessage.value = { type: "ok", text: "Verbindung getrennt." };
-    await loadMsStatus();
-  } catch (e) {
-    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Trennen fehlgeschlagen" };
-  } finally {
-    msBusy.value = false;
-  }
-}
-
-async function updateMsSettings(patch: { calendarMode?: "default" | "patio"; syncEnabled?: boolean }) {
-  msBusy.value = true;
-  try {
-    await api.patch("/auth/microsoft/settings", patch);
-    await loadMsStatus();
-    // Master-Toggle erfordert ggf. neue Calendar-Liste (z.B. wenn Subs
-    // gerade angelegt werden — dann zeigt webhookActive sonst nicht).
-    await loadMsCalendars();
-  } catch (e) {
-    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Update fehlgeschlagen" };
-  } finally {
-    msBusy.value = false;
-  }
-}
-
-// ── Multi-Calendar (Phase 5c) ───────────────────────────────────────────────
-
-interface MsUserCalendar {
-  userId: string;
-  calendarId: string;
-  displayName: string | null;
-  enabled: boolean;
-  direction: "both" | "pull-only" | "push-only";
-  subscriptionId: string | null;
-  subscriptionExpiresAt: string | null;
-  lastSyncAt: string | null;
-  lastSyncError: string | null;
-  addedAt: string;
-}
-
-const msCalendars = ref<MsUserCalendar[]>([]);
-const msCalendarsBusy = ref(false);
-
-async function loadMsCalendars() {
-  if (!msStatus.value.connected) {
-    msCalendars.value = [];
-    return;
-  }
-  try {
-    const res = await api.get<{ calendars: MsUserCalendar[] }>("/auth/microsoft/calendars");
-    msCalendars.value = res.calendars ?? [];
-  } catch {
-    msCalendars.value = [];
-  }
-}
-
-async function refreshMsCalendars() {
-  msCalendarsBusy.value = true;
-  msMessage.value = null;
-  try {
-    const res = await api.post<{ calendars: MsUserCalendar[] }>("/auth/microsoft/calendars/refresh", {});
-    msCalendars.value = res.calendars ?? [];
-    msMessage.value = { type: "ok", text: "Kalender-Liste aktualisiert." };
-  } catch (e) {
-    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Refresh fehlgeschlagen" };
-  } finally {
-    msCalendarsBusy.value = false;
-  }
-}
-
-async function toggleMsCalendar(cal: MsUserCalendar, enabled: boolean) {
-  msCalendarsBusy.value = true;
-  msMessage.value = null;
-  try {
-    await api.patch(`/auth/microsoft/calendars/${encodeURIComponent(cal.calendarId)}`, { enabled });
-    await loadMsCalendars();
-    await loadMsStatus();
-  } catch (e) {
-    msMessage.value = { type: "err", text: e instanceof Error ? e.message : "Toggle fehlgeschlagen" };
-  } finally {
-    msCalendarsBusy.value = false;
-  }
-}
-
-// Hinweis: Die Telegram-Bot-Verwaltung wurde aus den User-Settings
-// entfernt — Admin verwaltet Bot-Token und Pairing zentral via
-// /admin/users (Bot-Token-Dialog + Pair-Dialog). Self-Service-Endpoint
-// /me/telegram-bot bleibt im Backend erhalten als Recovery-Pfad, wird
-// aber im UI nicht mehr exponiert.
-
-// ── Lokale Modelle (eigenes Ollama) ──────────────────────────────────────────
-// Schnellauswahl fuer lokal per `ollama pull` installierte Modelle. Laufen
-// vollstaendig auf der eigenen Maschine — keine Cloud, keine Kosten pro Token.
-const LOCAL_MODELS: { id: string; label: string; desc: string }[] = [
-  { id: "qwen2.5:7b", label: "qwen2.5 7B", desc: "Standard-Modell, guter Allrounder" },
-  { id: "qwen2.5:14b", label: "qwen2.5 14B", desc: "Staerker, braucht mehr RAM/VRAM" },
-  { id: "llama3.1:8b", label: "llama3.1 8B", desc: "Meta, solide bei Tools" },
-  { id: "mistral:7b", label: "mistral 7B", desc: "Schnell, sparsam" },
-  { id: "gemma2:9b", label: "gemma2 9B", desc: "Google, gut bei Sprache" },
-];
-
-// ── Cloud-Modelle (Ollama Cloud / Turbo) ─────────────────────────────────────
-// Schnellauswahl fuer Ollama-gehostete Cloud-Modelle. Klick setzt den Input
-// und laesst den User mit "Setzen" bestaetigen.
-const CLOUD_MODELS: { id: string; label: string; desc: string }[] = [
-  { id: "gpt-oss:20b-cloud", label: "gpt-oss 20B", desc: "OpenAI Open-Weight, schnell & guenstig" },
-  { id: "gpt-oss:120b-cloud", label: "gpt-oss 120B", desc: "OpenAI Open-Weight, starkes Reasoning" },
-  { id: "qwen3-coder:480b-cloud", label: "qwen3-coder 480B", desc: "Coder-Spezialist, Top bei Tools" },
-  { id: "deepseek-v3.1:671b-cloud", label: "deepseek-v3.1 671B", desc: "Top Allrounder, sehr stark bei Reasoning" },
-  { id: "kimi-k2:1t-cloud", label: "kimi-k2 1T", desc: "Agentic, lange Kontexte, 1 Billion Params" },
-];
-
-function pickModel(id: string) {
-  modelInput.value = id;
-}
-
 const dirty = computed(() => {
   if (!data.value) return false;
   const s = data.value.settings;
@@ -351,7 +131,6 @@ async function loadAll() {
     notificationsEnabled.value = res.settings.notificationsEnabled ?? true;
     defaultProject.value = res.settings.defaultProject ?? null;
     chatSearchMode.value = res.settings.chatSearchMode ?? false;
-    modelInput.value = res.runtime.currentModel;
   } catch (e) {
     flash("error", e instanceof Error ? e.message : "Laden fehlgeschlagen");
   } finally {
@@ -407,36 +186,6 @@ async function changePassword() {
     flash("error", e instanceof Error ? e.message : "Passwort-Aenderung fehlgeschlagen");
   } finally {
     savingPassword.value = false;
-  }
-}
-
-async function applyModel() {
-  if (!modelInput.value.trim()) return;
-  savingModel.value = true;
-  try {
-    const res = await api.post<{ ok: boolean; currentModel: string }>("/settings/model", {
-      model: modelInput.value.trim(),
-    });
-    if (data.value) data.value.runtime.currentModel = res.currentModel;
-    flash("success", `Modell gesetzt: ${res.currentModel}`);
-  } catch (e) {
-    flash("error", e instanceof Error ? e.message : "Modell konnte nicht gesetzt werden");
-  } finally {
-    savingModel.value = false;
-  }
-}
-
-async function toggleFast() {
-  try {
-    const res = await api.post<{ ok: boolean; fastMode: boolean; currentModel: string }>("/settings/fast", {});
-    if (data.value) {
-      data.value.runtime.fastMode = res.fastMode;
-      data.value.runtime.currentModel = res.currentModel;
-    }
-    modelInput.value = res.currentModel;
-    flash("success", `Fast-Mode ${res.fastMode ? "aktiviert" : "deaktiviert"}`);
-  } catch (e) {
-    flash("error", e instanceof Error ? e.message : "Fast-Mode konnte nicht umgeschaltet werden");
   }
 }
 
@@ -1252,7 +1001,6 @@ async function deleteCustomModule(m: CustomProjectModule) {
 type SettingsSection =
   | "profil"
   | "email"
-  | "microsoft"
   | "praeferenzen"
   | "branding"
   | "vorlagen"
@@ -1263,7 +1011,6 @@ type SettingsSection =
 const SETTINGS_NAV: { id: SettingsSection; label: string; icon: string; group: string }[] = [
   { id: "profil", label: "Profil & Sicherheit", icon: "user", group: "Konto" },
   { id: "email", label: "Email & 2FA", icon: "mail", group: "Konto" },
-  { id: "microsoft", label: "Microsoft Outlook", icon: "calendar", group: "Konto" },
   { id: "praeferenzen", label: "Präferenzen", icon: "sliders", group: "System" },
   { id: "branding", label: "Branding", icon: "image", group: "Vorlagen" },
   { id: "vorlagen", label: "Vorlagen", icon: "file-text", group: "Vorlagen" },
@@ -1297,7 +1044,6 @@ const settingsNavGroups = computed(() => {
 
 onMounted(() => {
   void loadAll();
-  void loadMsStatus();
   void loadBranding();
   void loadTemplates();
   void loadTemplateVariables();
@@ -1536,246 +1282,6 @@ onMounted(() => {
           </section>
         </template>
 
-        <!-- ── Microsoft-Konto (Outlook-Calendar) ─────────────────────── -->
-        <template v-if="activeSection === 'microsoft'">
-          <section>
-            <h3 class="settings-h3 mb-3">
-              Microsoft-Konto
-              <span
-                class="ml-2 text-xs px-2 py-0.5 rounded-full"
-                :style="
-                  !msStatus.available
-                    ? 'background:#f4f4f5; color:#52525b'
-                    : msStatus.connected
-                      ? 'background:#dcfce7; color:#166534'
-                      : 'background:#fef3c7; color:#92400e'
-                "
-              >
-                {{ !msStatus.available ? "Nicht konfiguriert" : msStatus.connected ? "Verbunden" : "Nicht verbunden" }}
-              </span>
-            </h3>
-
-            <!-- Backend ist nicht konfiguriert -->
-            <div v-if="!msStatus.available" class="settings-card p-4">
-              <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
-                Microsoft-Integration ist auf diesem Server nicht aktiviert.
-                <span v-if="msStatus.reason">{{ msStatus.reason }}</span>
-                <span v-else
-                  >Admin muss <code class="font-mono">MS_CLIENT_ID</code>,
-                  <code class="font-mono">MS_CLIENT_SECRET</code> und <code class="font-mono">MS_TENANT_ID</code> in der
-                  <code class="font-mono">.env</code> setzen.</span
-                >
-              </p>
-            </div>
-
-            <!-- Nicht verbunden — Connect-Button -->
-            <div v-else-if="!msStatus.connected" class="settings-card p-4">
-              <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
-                Verbinde dein Microsoft-Konto, um Outlook-Kalender mit PATIO zu synchronisieren. Termine landen in
-                deinem Outlook und Outlook-Termine erscheinen in PATIO.
-              </p>
-              <div v-if="msMessage" class="ms-message" :class="msMessage.type === 'ok' ? 'ms-msg-ok' : 'ms-msg-err'">
-                {{ msMessage.text }}
-              </div>
-              <div class="flex justify-end" style="margin-top: 12px">
-                <button
-                  @click="connectMicrosoft"
-                  :disabled="msBusy"
-                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition flex items-center gap-2"
-                  :style="{ opacity: msBusy ? 0.5 : 1 }"
-                >
-                  <!-- Microsoft-Logo: vier Quadrate als CSS -->
-                  <span class="ms-logo-mini">
-                    <span style="background: #f25022"></span>
-                    <span style="background: #7fba00"></span>
-                    <span style="background: #00a4ef"></span>
-                    <span style="background: #ffb900"></span>
-                  </span>
-                  {{ msBusy ? "..." : "Mit Microsoft verbinden" }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Verbunden — Anzeige + Settings + Trennen -->
-            <div v-else class="settings-card p-4 space-y-3">
-              <div class="settings-row flex items-center justify-between px-0 py-1">
-                <span class="text-sm settings-label">Verbunden mit</span>
-                <span class="text-sm font-mono settings-value">
-                  {{ msStatus.account?.msEmail }}
-                </span>
-              </div>
-              <div
-                v-if="msStatus.account?.msDisplayName"
-                class="settings-row flex items-center justify-between px-0 py-1"
-              >
-                <span class="text-sm settings-label">Name</span>
-                <span class="text-sm settings-value">{{ msStatus.account.msDisplayName }}</span>
-              </div>
-
-              <!-- Multi-Calendar-Liste (Phase 5c).
-               User waehlt aus seinen Outlook-Kalendern beliebig viele aus
-               die mit PATIO gesyncet werden sollen. Pro aktiviertem
-               Kalender legt das Backend eine eigene Webhook-Subscription
-               an. Default-Push-Ziel fuer neue PATIO-Termine ist der
-               Kalender mit Anzeigename "PATIO" (wird beim Connect
-               automatisch erstellt). -->
-              <div class="settings-row flex flex-col gap-2 px-0 py-2">
-                <div class="flex items-center justify-between">
-                  <label class="text-sm settings-label">Outlook-Kalender</label>
-                  <button
-                    @click="refreshMsCalendars"
-                    :disabled="msCalendarsBusy"
-                    class="text-xs"
-                    style="
-                      padding: 4px 10px;
-                      border-radius: 4px;
-                      background: transparent;
-                      border: 1px solid var(--color-border);
-                      cursor: pointer;
-                    "
-                  >
-                    {{ msCalendarsBusy ? "..." : "Aus Outlook neu laden" }}
-                  </button>
-                </div>
-                <div
-                  v-if="msCalendars.length === 0"
-                  class="text-xs"
-                  style="
-                    color: var(--color-text-muted);
-                    padding: 12px;
-                    background: var(--color-bg-subtle);
-                    border: 1px dashed var(--color-border);
-                    border-radius: 6px;
-                  "
-                >
-                  Keine Kalender geladen. Klick „Aus Outlook neu laden".
-                </div>
-                <div v-else class="flex flex-col" style="gap: 4px">
-                  <label
-                    v-for="cal in msCalendars"
-                    :key="cal.calendarId"
-                    class="flex items-center gap-3"
-                    style="
-                      cursor: pointer;
-                      padding: 8px 10px;
-                      border-radius: 6px;
-                      border: 1px solid var(--color-border-subtle);
-                      background: var(--color-bg-subtle);
-                    "
-                  >
-                    <input
-                      type="checkbox"
-                      :checked="cal.enabled"
-                      :disabled="msCalendarsBusy"
-                      @change="toggleMsCalendar(cal, ($event.target as HTMLInputElement).checked)"
-                    />
-                    <div style="flex: 1; min-width: 0">
-                      <div class="text-sm" style="font-weight: 500">
-                        {{ cal.displayName || cal.calendarId }}
-                      </div>
-                      <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 2px">
-                        <span v-if="cal.enabled && cal.subscriptionId">Instant-Sync · </span>
-                        <span v-else-if="cal.enabled">Polling · </span>
-                        <span v-if="cal.lastSyncAt">letzter Sync: {{ cal.lastSyncAt }}</span>
-                        <span v-else>noch nicht synchronisiert</span>
-                      </div>
-                      <div
-                        v-if="cal.lastSyncError"
-                        class="text-xs ms-msg-err"
-                        style="margin-top: 4px; padding: 4px 6px; border-radius: 4px"
-                      >
-                        Fehler: {{ cal.lastSyncError }}
-                      </div>
-                    </div>
-                  </label>
-                </div>
-                <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 4px">
-                  Aktivierte Kalender werden bidirektional mit PATIO synchronisiert. Neue PATIO-Termine landen im
-                  Kalender „PATIO" (oder im ersten aktivierten falls keiner so heißt).
-                </div>
-              </div>
-
-              <!-- Sync-Schalter -->
-              <label class="settings-row flex items-center gap-3 px-0 py-2" style="cursor: pointer">
-                <input
-                  type="checkbox"
-                  :checked="msStatus.account?.syncEnabled"
-                  :disabled="msBusy"
-                  @change="updateMsSettings({ syncEnabled: ($event.target as HTMLInputElement).checked })"
-                />
-                <div style="flex: 1">
-                  <div class="text-sm">Sync aktiv</div>
-                  <div class="text-xs" style="color: var(--color-text-muted); margin-top: 2px">
-                    Wenn aktiviert: PATIO-Termine werden in Outlook angelegt und Outlook-Termine in PATIO importiert.
-                  </div>
-                </div>
-              </label>
-
-              <!-- Phase 4: Webhook-Status. Wenn aktiv, hat PATIO bei Microsoft
-               eine Subscription registriert und bekommt Push-Notifications
-               sobald sich was im Outlook-Calendar aendert (<1s Latenz).
-               Wenn nicht aktiv, laeuft das 5-min-Polling als Fallback. -->
-              <div
-                v-if="msStatus.account?.syncEnabled"
-                class="flex items-center"
-                style="
-                  gap: 8px;
-                  padding: 8px 10px;
-                  border-radius: 6px;
-                  background: var(--color-bg-subtle);
-                  border: 1px solid var(--color-border-subtle);
-                "
-              >
-                <span
-                  :style="{
-                    width: '8px',
-                    height: '8px',
-                    borderRadius: '50%',
-                    background: msStatus.account.webhookActive ? '#16a34a' : '#f59e0b',
-                    flexShrink: 0,
-                  }"
-                ></span>
-                <div class="text-xs" style="flex: 1">
-                  <span v-if="msStatus.account.webhookActive">
-                    <strong>Instant-Sync aktiv</strong> — Aenderungen in Outlook erscheinen sofort in PATIO.
-                  </span>
-                  <span v-else>
-                    <strong>Polling-Modus</strong> — Sync alle 5 Minuten. Webhook-Subscription wird beim naechsten Lauf
-                    eingerichtet.
-                  </span>
-                </div>
-              </div>
-
-              <div v-if="msStatus.account?.lastSyncAt" class="text-xs" style="color: var(--color-text-tertiary)">
-                Letzte Synchronisation: {{ msStatus.account.lastSyncAt }}
-              </div>
-              <div
-                v-if="msStatus.account?.lastSyncError"
-                class="text-xs ms-msg-err"
-                style="padding: 8px 10px; border-radius: 6px"
-              >
-                Letzter Sync-Fehler: {{ msStatus.account.lastSyncError }}
-              </div>
-
-              <div v-if="msMessage" class="ms-message" :class="msMessage.type === 'ok' ? 'ms-msg-ok' : 'ms-msg-err'">
-                {{ msMessage.text }}
-              </div>
-
-              <div class="flex justify-end" style="margin-top: 12px">
-                <button
-                  @click="disconnectMicrosoft"
-                  :disabled="msBusy"
-                  class="px-4 py-1.5 text-sm rounded"
-                  style="background: transparent; border: 1px solid #dc2626; color: #dc2626"
-                >
-                  Verbindung trennen
-                </button>
-              </div>
-            </div>
-          </section>
-        </template>
-
-        <!-- ── Praeferenzen ───────────────────────────────────────────── -->
         <template v-if="activeSection === 'praeferenzen'">
           <section>
             <h3 class="settings-h3 mb-3">Erscheinungsbild</h3>
@@ -2677,7 +2183,7 @@ onMounted(() => {
                     color: data.runtime.dbEnabled ? 'var(--color-text-secondary)' : 'var(--color-text-tertiary)',
                   }"
                 >
-                  {{ data.runtime.dbEnabled ? "Aktiv (PostgreSQL + pgvector)" : "Nicht aktiv (Dateisystem-Fallback)" }}
+                  {{ data.runtime.dbEnabled ? "Aktiv (PostgreSQL)" : "Nicht aktiv (Dateisystem-Fallback)" }}
                 </span>
               </div>
               <div class="settings-row flex items-center justify-between px-4 py-2.5">
@@ -2687,14 +2193,6 @@ onMounted(() => {
               <div class="settings-row flex items-center justify-between px-4 py-2.5">
                 <span class="settings-label">Zeitzone</span>
                 <span class="settings-value">{{ data.system.timezone }}</span>
-              </div>
-              <div class="settings-row flex items-center justify-between px-4 py-2.5">
-                <span class="settings-label">Ollama-URL</span>
-                <span class="settings-value font-mono text-xs">{{ data.system.ollamaBaseUrl }}</span>
-              </div>
-              <div class="settings-row flex items-center justify-between px-4 py-2.5">
-                <span class="settings-label">Auto-Kompaktieren ab</span>
-                <span class="settings-value">{{ formatNumber(data.system.compactThreshold) }} Zeichen</span>
               </div>
             </div>
           </section>

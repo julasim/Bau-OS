@@ -35,9 +35,14 @@
 > `../../PATIO-Umbau-Firmenserver.md` (dessen Zeile 24 ist überholt — Basis ist
 > **dieses** Projekt, nicht `apps/patio-app-lokal`).
 
-**AP0 erledigt:** Telegram-Bot, LLM-/Agenten-Laufzeit, MCP-Client, Embeddings
-und die DuckDuckGo-Websuche sind entfernt (~9.400 Zeilen). Der Einstiegspunkt
-`src/index.ts` ist nicht mehr bot-, sondern API-zentriert.
+**AP0 erledigt:** Telegram-Bot, LLM-/Agenten-Laufzeit, MCP-Client, Embeddings,
+die DuckDuckGo-Websuche und der **Outlook-Abgleich** sind entfernt (~14.000
+Zeilen). Der Einstiegspunkt `src/index.ts` ist nicht mehr bot-, sondern
+API-zentriert.
+
+> Die Migrationen `022`–`024` (Microsoft-Tabellen und die `ms_*`-Spalten an
+> `termine`) bleiben vorerst stehen — forward-only, und ein `DROP` wäre
+> unumkehrbar. Sie werden mit dem Schema-Paket abgeräumt.
 
 **Was als Nächstes ansteht** (Reihenfolge aus dem Plan): Server aufsetzen ·
 Volltextsuche auf `tsvector` heben · Schema ergänzen · Konfliktschutz (`rev`) ·
@@ -101,8 +106,7 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 ## Architektur-Kern
 
 - **Entry:** `src/index.ts` — lädt `.env` → DB-Healthcheck + Auto-Migrate →
-  Hono-API. Support-Module: `maintenance.ts` (Cron), `sync/` (Microsoft Graph /
-  Outlook — fliegt im Zuge des Firmenserver-Umbaus).
+  Hono-API. Einziges Support-Modul: `maintenance.ts` (Audit-Retention-Cron).
 - **Data-Layer:** `src/data/index.ts` ist die **einzige** Import-Fläche.
   Repos sind hybrid `dbRepo` (Postgres) / `fsRepo` (Markdown), Auswahl per
   `DB_ENABLED`; die `fs-*`-Hälfte entfällt mit dem Firmenserver-Umbau.

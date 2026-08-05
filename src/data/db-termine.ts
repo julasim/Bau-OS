@@ -2,7 +2,7 @@
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { validateDatum, validateUhrzeit, normalizeDatum } from "../workspace/termine.js";
-import type { Termin, TerminRepository, TerminFromMsInput } from "./types.js";
+import type { Termin, TerminRepository } from "./types.js";
 
 function rowToTermin(row: Record<string, unknown>): Termin {
   const assigneeIds = Array.isArray(row.assignee_ids) ? (row.assignee_ids as string[]).map(String) : [];
@@ -28,19 +28,6 @@ function rowToTermin(row: Record<string, unknown>): Termin {
     phaseId: row.phase_id ? String(row.phase_id) : null,
     isMilestone: row.is_milestone === true,
     createdAt: String(row.created_at),
-    // ── Microsoft-Graph-Sync ──────────────────────────────
-    msEventId: row.ms_event_id ? String(row.ms_event_id) : null,
-    msCalendarId: row.ms_calendar_id ? String(row.ms_calendar_id) : null,
-    msOwnerUserId: row.ms_owner_user_id ? String(row.ms_owner_user_id) : null,
-    msEtag: row.ms_etag ? String(row.ms_etag) : null,
-    msSyncStatus: (row.ms_sync_status as Termin["msSyncStatus"]) ?? null,
-    msLastSyncAt:
-      row.ms_last_sync_at instanceof Date
-        ? row.ms_last_sync_at.toISOString()
-        : row.ms_last_sync_at
-          ? String(row.ms_last_sync_at)
-          : null,
-    msSource: (row.ms_source as Termin["msSource"]) ?? null,
   };
 }
 
@@ -169,127 +156,5 @@ export const dbTermine: TerminRepository = {
       WHERE id::text = ${textOrId} OR text LIKE ${"%" + textOrId + "%"}
     `;
     return result.count > 0;
-  },
-
-  // ── Microsoft-Graph-Sync ─────────────────────────────────────
-
-  async getByMsEventId(msEventId) {
-    const db = getDb();
-    const rows = await db.unsafe(`${TERMIN_SELECT} WHERE t.ms_event_id = $1 LIMIT 1`, [msEventId]);
-    return rows[0] ? rowToTermin(rows[0] as Record<string, unknown>) : null;
-  },
-
-  async upsertFromMs(input: TerminFromMsInput): Promise<Termin> {
-    const db = getDb();
-
-    // Manueller Upsert: ON CONFLICT (ms_event_id) wuerde an dem partial
-    // UNIQUE-Index "uq_termine_ms_event_id ... WHERE ms_event_id IS NOT NULL"
-    // (Migration 023) scheitern — PostgreSQL kann partial-Index-Inference
-    // nur, wenn der index_predicate exakt repliziert wird. Statt das fragil
-    // zu replizieren machen wir SELECT-then-INSERT-or-UPDATE in einer
-    // Transaktion. Race-condition-frei, weil wir innerhalb einer Single-
-    // Connection-Transaktion arbeiten + UNIQUE-Index uns vor parallelen
-    // Inserts schuetzt (zweiter Insert wuerde 23505 werfen → wir koennten
-    // bei Bedarf retryen, aber bei MS-Sync ist nur ein Worker pro User aktiv).
-    const now = new Date().toISOString();
-
-    const [existing] = await db`
-      SELECT id FROM termine WHERE ms_event_id = ${input.msEventId} LIMIT 1
-    `;
-
-    const assignees = Array.isArray(input.assignees) ? input.assignees : [];
-    const assigneeIds = Array.isArray(input.assigneeIds) ? input.assigneeIds : [];
-
-    let resultId: string;
-    if (existing) {
-      resultId = String(existing.id);
-      await db`
-        UPDATE termine SET
-          text             = ${input.text},
-          datum            = ${input.datum},
-          uhrzeit          = ${input.uhrzeit},
-          endzeit          = ${input.endzeit},
-          location         = ${input.location},
-          assignees        = ${assignees},
-          assignee_ids     = ${assigneeIds},
-          ms_calendar_id   = ${input.msCalendarId},
-          ms_etag          = ${input.msEtag},
-          ms_sync_status   = 'synced',
-          ms_last_sync_at  = ${now}
-        WHERE id = ${resultId}
-      `;
-    } else {
-      resultId = crypto.randomUUID();
-      await db`
-        INSERT INTO termine (
-          id, text, datum, uhrzeit, endzeit, location, assignees, assignee_ids, created_at,
-          ms_event_id, ms_calendar_id, ms_owner_user_id, ms_etag,
-          ms_sync_status, ms_last_sync_at, ms_source
-        ) VALUES (
-          ${resultId}, ${input.text}, ${input.datum}, ${input.uhrzeit}, ${input.endzeit}, ${input.location},
-          ${assignees}, ${assigneeIds}, ${now},
-          ${input.msEventId}, ${input.msCalendarId}, ${input.msOwnerUserId}, ${input.msEtag},
-          'synced', ${now}, 'microsoft'
-        )
-      `;
-    }
-    const result = await this.get(resultId);
-    if (!result) throw new Error("Termin nach upsertFromMs nicht lesbar");
-    return result;
-  },
-
-  async listPendingForUser(userId): Promise<Termin[]> {
-    const db = getDb();
-    const rows = await db.unsafe(
-      `${TERMIN_SELECT} WHERE t.ms_sync_status = 'pending' AND t.ms_owner_user_id = $1 ORDER BY t.datum, t.uhrzeit`,
-      [userId],
-    );
-    return rows.map((r) => rowToTermin(r as Record<string, unknown>));
-  },
-
-  async markMsSynced(id, patch): Promise<void> {
-    const db = getDb();
-    await db`
-      UPDATE termine SET
-        ms_event_id     = ${patch.msEventId},
-        ms_calendar_id  = ${patch.msCalendarId},
-        ms_etag         = ${patch.msEtag},
-        ms_sync_status  = 'synced',
-        ms_last_sync_at = now()
-      WHERE id = ${id}
-    `;
-  },
-
-  async markMsSyncError(id): Promise<void> {
-    const db = getDb();
-    await db`UPDATE termine SET ms_sync_status = 'error' WHERE id = ${id}`;
-  },
-
-  async markMsPending(id, ownerUserId): Promise<void> {
-    const db = getDb();
-    // Nur als pending markieren wenn der Termin noch nicht aus MS kam
-    // (sonst koennten wir einen Outlook-Event von uns ueberschreiben).
-    // Existing 'synced' MS-Termine werden auch wieder pending gesetzt
-    // (lokale Aenderung an einem Outlook-Event → push back).
-    await db`
-      UPDATE termine SET
-        ms_sync_status   = 'pending',
-        ms_owner_user_id = COALESCE(ms_owner_user_id, ${ownerUserId}),
-        ms_source        = COALESCE(ms_source, 'patio')
-      WHERE id = ${id}
-    `;
-  },
-
-  async clearMsLink(id): Promise<void> {
-    const db = getDb();
-    await db`
-      UPDATE termine SET
-        ms_event_id     = NULL,
-        ms_calendar_id  = NULL,
-        ms_etag         = NULL,
-        ms_sync_status  = NULL,
-        ms_last_sync_at = NULL
-      WHERE id = ${id}
-    `;
   },
 };
