@@ -35,10 +35,20 @@
 > `../../PATIO-Umbau-Firmenserver.md` (dessen Zeile 24 ist überholt — Basis ist
 > **dieses** Projekt, nicht `apps/patio-app-lokal`).
 
-**AP0 erledigt:** Telegram-Bot, LLM-/Agenten-Laufzeit, MCP-Client, Embeddings,
-die DuckDuckGo-Websuche und der **Outlook-Abgleich** sind entfernt (~14.000
-Zeilen). Der Einstiegspunkt `src/index.ts` ist nicht mehr bot-, sondern
-API-zentriert.
+**AP0 abgeschlossen.** Entfernt: Telegram-Bot, LLM-/Agenten-Laufzeit,
+MCP-Client, Embeddings, DuckDuckGo-Websuche, Outlook-Abgleich und die
+Filesystem-Repos — rund **16.000 Zeilen**. Der Einstiegspunkt `src/index.ts`
+ist nicht mehr bot-, sondern API-zentriert.
+
+**Es gibt keinen Dateisystem-Modus mehr.** Der Dienst laeuft genau einmal und
+immer gegen PostgreSQL; alle Repos sind non-nullable, die 503-Guards in den
+Routen sind weg. Von `src/workspace/` bleibt nur der echte Dateizugriff
+(1.774 → 286 Zeilen) — Dokumente liegen weiterhin als Dateien.
+
+**Zwei Reste warten bewusst auf AP7 (Anmeldung):** der JSON-Konten-Fallback in
+`src/api/auth.ts` (34 `DB_ENABLED`-Stellen) und `src/api/email.ts`. Beide
+haengen am Login — sie jetzt anzufassen hiesse, denselben Code zweimal
+umzubauen.
 
 > Die Migrationen `022`–`024` (Microsoft-Tabellen und die `ms_*`-Spalten an
 > `termine`) bleiben vorerst stehen — forward-only, und ein `DROP` wäre
@@ -80,7 +90,7 @@ npm run build        # tsc → dist/ (kopiert emails/ und db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 178)
+npm test             # vitest run (alle Tests, 172)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -107,11 +117,9 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 
 - **Entry:** `src/index.ts` — lädt `.env` → DB-Healthcheck + Auto-Migrate →
   Hono-API. Einziges Support-Modul: `maintenance.ts` (Audit-Retention-Cron).
-- **Data-Layer:** `src/data/index.ts` ist die **einzige** Import-Fläche.
-  Repos sind hybrid `dbRepo` (Postgres) / `fsRepo` (Markdown), Auswahl per
-  `DB_ENABLED`; die `fs-*`-Hälfte entfällt mit dem Firmenserver-Umbau.
-  Bautagebuch, Meetings, Time-Entries und die Suche sind **DB-only**. Nie
-  direkt aus `db-*`/`fs-*` importieren.
+- **Data-Layer:** `src/data/index.ts` ist die **einzige** Import-Fläche — nie
+  direkt aus `db-*` importieren. Alle Repos sind Postgres und non-nullable;
+  einen Filesystem-Fallback gibt es nicht mehr.
 - **Volltextsuche:** `src/data/db-search.ts` — sucht über Notizen, Aufgaben,
   Projekte und Dateien und **filtert nach sichtbaren Projekten** (die alte
   Suche tat das nicht). Sucht derzeit per `ILIKE`; der Umbau auf `tsvector`

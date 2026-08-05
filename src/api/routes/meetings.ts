@@ -28,15 +28,6 @@ function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" }
   return { userId: c.var.userId, role: c.var.userRole };
 }
 
-// Guard: blockiert alle Meeting-Endpoints im FS-Mode (kein Repo).
-const dbGuard = async (c: { json: (o: unknown, s?: number) => Response }, next: () => Promise<void>) => {
-  if (!meetingRepo) return c.json({ error: "Meetings erfordern DB-Modus" }, 503);
-  await next();
-};
-meetingsRoutes.use("/projects/:projectName/meetings", dbGuard);
-meetingsRoutes.use("/projects/:projectName/meetings/*", dbGuard);
-meetingsRoutes.use("/meetings/*", dbGuard);
-
 // Hilfsfunktion: Projekt-ID aus dem Pfad-Param + ACL.
 async function resolveProject(c: {
   req: { param: (k: string) => string };
@@ -59,7 +50,7 @@ meetingsRoutes.get("/projects/:projectName/meetings", async (c) => {
   if ("error" in proj) return proj.error;
   const limitRaw = c.req.query("limit");
   const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 50, 1), 200) : 50;
-  const meetings = await meetingRepo!.list(proj.id, limit);
+  const meetings = await meetingRepo.list(proj.id, limit);
   return c.json(meetings);
 });
 
@@ -73,7 +64,7 @@ meetingsRoutes.post("/projects/:projectName/meetings", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  const result = await meetingRepo!.create(proj.id, body, c.var.userId);
+  const result = await meetingRepo.create(proj.id, body, c.var.userId);
   if (typeof result === "string") return c.json({ error: result }, 400);
   emit({ type: "meeting", action: "created", id: result.id, project: proj.name });
   return c.json(result, 201);
@@ -82,7 +73,7 @@ meetingsRoutes.post("/projects/:projectName/meetings", async (c) => {
 // ── Einzeln ───────────────────────────────────────────────────
 meetingsRoutes.get("/meetings/:id", async (c) => {
   const id = c.req.param("id");
-  const meeting = await meetingRepo!.get(id);
+  const meeting = await meetingRepo.get(id);
   if (!meeting) return c.json({ error: "Meeting nicht gefunden" }, 404);
   // ACL ueber Projekt-Name aus dem Join.
   const ctx = userCtx(c);
@@ -97,7 +88,7 @@ meetingsRoutes.get("/meetings/:id", async (c) => {
 // ── Aktualisieren ────────────────────────────────────────────
 meetingsRoutes.patch("/meetings/:id", async (c) => {
   const id = c.req.param("id");
-  const meeting = await meetingRepo!.get(id);
+  const meeting = await meetingRepo.get(id);
   if (!meeting) return c.json({ error: "Meeting nicht gefunden" }, 404);
   const ctx = userCtx(c);
   if (ctx.role !== "admin" && meeting.projectName) {
@@ -112,7 +103,7 @@ meetingsRoutes.patch("/meetings/:id", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  const result = await meetingRepo!.update(id, body);
+  const result = await meetingRepo.update(id, body);
   if (typeof result === "string") return c.json({ error: result }, 400);
   if (!result) return c.json({ error: "Meeting nicht gefunden" }, 404);
   emit({ type: "meeting", action: "updated", id, project: meeting.projectName ?? null });
@@ -122,7 +113,7 @@ meetingsRoutes.patch("/meetings/:id", async (c) => {
 // ── Loeschen ─────────────────────────────────────────────────
 meetingsRoutes.delete("/meetings/:id", async (c) => {
   const id = c.req.param("id");
-  const meeting = await meetingRepo!.get(id);
+  const meeting = await meetingRepo.get(id);
   if (!meeting) return c.json({ ok: false }, 404);
   const ctx = userCtx(c);
   if (ctx.role !== "admin" && meeting.projectName) {
@@ -130,7 +121,7 @@ meetingsRoutes.delete("/meetings/:id", async (c) => {
       return c.json({ error: "Kein Zugriff" }, 403);
     }
   }
-  const ok = await meetingRepo!.delete(id);
+  const ok = await meetingRepo.delete(id);
   if (ok) emit({ type: "meeting", action: "deleted", id, project: meeting.projectName ?? null });
   return c.json({ ok });
 });
@@ -140,6 +131,6 @@ meetingsRoutes.get("/meetings/recent", async (c) => {
   const limitRaw = c.req.query("limit");
   const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 20, 1), 100) : 20;
   const visible = await getVisibleProjectIds(userCtx(c));
-  const meetings = await meetingRepo!.listRecent(visible, limit);
+  const meetings = await meetingRepo.listRecent(visible, limit);
   return c.json(meetings);
 });

@@ -59,12 +59,10 @@ export const HISTORY_LOAD_LIMIT = 10; // Gesprächseinträge die beim Start gela
 
 // ── Workspace ────────────────────────────────────────────────────────────────
 export const WORKSPACE_PATH = (process.env.WORKSPACE_PATH ?? process.env.VAULT_PATH)!;
-export const WORKSPACE_INBOX = "Inbox";
+// Altbestand aus der Bot-Aera: diese Ordner werden im Dateibrowser
+// ausgeblendet, falls sie in einem gewachsenen Workspace noch herumliegen.
 export const WORKSPACE_AGENTS_DIR = "Agents";
 export const WORKSPACE_LOGS_DIR = "MEMORY_LOGS";
-export const agentsPath = () => path.join(WORKSPACE_PATH, WORKSPACE_AGENTS_DIR);
-export const agentPath = (name: string) => path.join(agentsPath(), name);
-export const logsPath = (name: string) => path.join(agentPath(name), WORKSPACE_LOGS_DIR);
 
 // ── System ────────────────────────────────────────────────────────────────────
 export const TIMEZONE = "Europe/Vienna";

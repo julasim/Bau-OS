@@ -16,8 +16,6 @@ searchRoutes.get("/search", async (c) => {
   const q = c.req.query("q");
   if (!q) return c.json({ error: "Suchbegriff erforderlich (?q=...)" }, 400);
 
-  if (!searchRepo) return c.json({ error: "Suche erfordert eine Datenbank" }, 503);
-
   const project = c.req.query("project") ?? null;
   const limit = Math.min(Number(c.req.query("limit")) || 50, 100);
   const visible = await getVisibleProjectIds(userCtx(c));

@@ -1,15 +1,6 @@
-// Barrel re-export for all workspace modules
-export { saveNote, listNotes, readNote, updateNote, appendToNote, deleteNote } from "./notes.js";
-export { saveTask, listTasks, listOpenTasks, getTask, updateTask, completeTask, deleteTask } from "./tasks.js";
-export type { Task } from "./tasks.js";
-export { saveTermin, listTermine, getTermin, updateTermin, deleteTermin } from "./termine.js";
-export type { Termin } from "./termine.js";
-export { listTeam, addTeamMember, removeTeamMember } from "./team.js";
-export { listProjects, getProjectInfo, listProjectNotes, readProjectNote } from "./projects.js";
-export type { ProjectInfo } from "./projects.js";
+// Dateizugriff auf den Workspace. Alles Uebrige (Notizen, Aufgaben, Termine,
+// Projekte, Team, Vault-Suche) liegt seit dem Umbau zum Firmenserver in der
+// Datenbank — siehe src/data/. Was hier bleibt, betrifft echte Dateien:
+// Dokumente werden weiterhin im Dateisystem abgelegt und im Explorer geoeffnet.
 export { readFile, createFile, listFolder } from "./files.js";
 export type { FolderEntry } from "./files.js";
-export { editFile, globFiles, grepFiles } from "./fileops.js";
-export type { EditResult, GrepMatch, GrepResult } from "./fileops.js";
-export { searchWorkspace } from "./search.js";
-export type { SearchResult } from "./search.js";

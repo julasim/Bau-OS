@@ -1,10 +1,13 @@
 // ============================================================
 // PATIO — Data Layer Factory
-// Wählt automatisch: DB_ENABLED → PostgreSQL, sonst Filesystem.
-// Alle Consumer importieren von hier — nie direkt von fs-* oder db-*.
+// Alle Consumer importieren von hier — nie direkt aus db-*.
+//
+// Die frueheren Filesystem-Repos (fs-*) sind mit dem Umbau zum
+// Firmenserver entfallen: der Dienst laeuft genau einmal und immer gegen
+// PostgreSQL. Damit sind auch die nullable Repos Geschichte — jedes Repo
+// ist da, kein Aufrufer muss mehr auf null pruefen.
 // ============================================================
 
-import { DB_ENABLED } from "../config.js";
 import type {
   TaskRepository,
   TerminRepository,
@@ -20,17 +23,12 @@ import type {
   PortfolioRepository,
 } from "./types.js";
 
-// Statische Imports — DB-Module verbinden sich erst beim ersten Aufruf (lazy)
-import { fsTasks } from "./fs-tasks.js";
-import { fsTermine } from "./fs-termine.js";
-import { fsNotes } from "./fs-notes.js";
-import { fsProjects } from "./fs-projects.js";
+// Statische Imports — die DB-Module verbinden sich erst beim ersten Aufruf.
 import { dbTasks } from "./db-tasks.js";
 import { dbTermine } from "./db-termine.js";
 import { dbNotes } from "./db-notes.js";
 import { dbProjects } from "./db-projects.js";
 import { dbFiles } from "./db-files.js";
-import { fsTeam } from "./fs-team.js";
 import { dbTeam } from "./db-team.js";
 import { dbBautagebuch } from "./db-bautagebuch.js";
 import { dbMeetings } from "./db-meetings.js";
@@ -40,34 +38,20 @@ import { dbInvoices } from "./db-invoices.js";
 import { dbPortfolio } from "./db-portfolio.js";
 import { dbSearch } from "./db-search.js";
 
-// ── Repos basierend auf Config wählen ────────────────────────
-// User-Daten: DB wenn verfuegbar, sonst FS-Fallback.
-// Chat und Agent-Logs sind mit der LLM-Laufzeit entfallen.
-
-export const taskRepo: TaskRepository = DB_ENABLED ? dbTasks : fsTasks;
-export const terminRepo: TerminRepository = DB_ENABLED ? dbTermine : fsTermine;
-export const noteRepo: NoteRepository = DB_ENABLED ? dbNotes : fsNotes;
-export const projectRepo: ProjectRepository = DB_ENABLED ? dbProjects : fsProjects;
-export const teamRepo: TeamRepository = DB_ENABLED ? dbTeam : fsTeam;
-export const fileRepo: FileRepository | null = DB_ENABLED ? dbFiles : null;
-// Bautagebuch nur im DB-Modus — kein FS-Fallback. UI/LLM pruefen
-// ?-Operator und blenden das Feature im FS-Mode aus.
-export const bautagebuchRepo: BautagebuchRepository | null = DB_ENABLED ? dbBautagebuch : null;
-export const meetingRepo: MeetingRepository | null = DB_ENABLED ? dbMeetings : null;
-export const timeEntryRepo: TimeEntryRepository | null = DB_ENABLED ? dbTimeEntries : null;
-// Projektmanagement (Migration 035) — nur DB-Modus.
-export const phaseRepo: PhaseRepository | null = DB_ENABLED ? dbPhases : null;
-export const invoiceRepo: InvoiceRepository | null = DB_ENABLED ? dbInvoices : null;
-export const portfolioRepo: PortfolioRepository | null = DB_ENABLED ? dbPortfolio : null;
-// Volltextsuche — nur im DB-Modus. Ersetzt die frueheren Vault- und
-// Embedding-Suchwege (siehe db-search.ts).
-export const searchRepo: typeof dbSearch | null = DB_ENABLED ? dbSearch : null;
+export const taskRepo: TaskRepository = dbTasks;
+export const terminRepo: TerminRepository = dbTermine;
+export const noteRepo: NoteRepository = dbNotes;
+export const projectRepo: ProjectRepository = dbProjects;
+export const teamRepo: TeamRepository = dbTeam;
+export const fileRepo: FileRepository = dbFiles;
+export const bautagebuchRepo: BautagebuchRepository = dbBautagebuch;
+export const meetingRepo: MeetingRepository = dbMeetings;
+export const timeEntryRepo: TimeEntryRepository = dbTimeEntries;
+export const phaseRepo: PhaseRepository = dbPhases;
+export const invoiceRepo: InvoiceRepository = dbInvoices;
+export const portfolioRepo: PortfolioRepository = dbPortfolio;
+export const searchRepo = dbSearch;
 export type { SearchHit } from "./db-search.js";
-
-/** Gibt den aktuellen Modus zurueck */
-export function dataMode(): "database" | "filesystem" {
-  return DB_ENABLED ? "database" : "filesystem";
-}
 
 // Re-export types
 export type {

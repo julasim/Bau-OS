@@ -34,7 +34,6 @@ async function resolveProject(c: {
 }
 
 const guard = async (c: { json: (o: unknown, s?: number) => Response }, next: () => Promise<void>) => {
-  if (!invoiceRepo) return c.json({ error: "Teilrechnungen erfordern DB-Modus" }, 503);
   await next();
 };
 invoicesRoutes.use("/projects/:projectName/invoices", guard);
@@ -44,7 +43,7 @@ invoicesRoutes.use("/invoices/*", guard);
 invoicesRoutes.get("/projects/:projectName/invoices", async (c) => {
   const proj = await resolveProject(c);
   if ("error" in proj) return proj.error;
-  return c.json(await invoiceRepo!.list(proj.id));
+  return c.json(await invoiceRepo.list(proj.id));
 });
 
 invoicesRoutes.post("/projects/:projectName/invoices", async (c) => {
@@ -56,7 +55,7 @@ invoicesRoutes.post("/projects/:projectName/invoices", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  const result = await invoiceRepo!.create(proj.id, body);
+  const result = await invoiceRepo.create(proj.id, body);
   if (typeof result === "string") return c.json({ error: result }, 400);
   emit({ type: "invoice", action: "created", id: result.id, project: proj.name });
   return c.json(result);
@@ -72,12 +71,12 @@ invoicesRoutes.put("/invoices/:id", async (c) => {
   }
   // ACL VOR der Mutation: Rechnung laden, Projekt-Zugriff pruefen, erst dann
   // schreiben. Verhindert IDOR (fremde Rechnungen aendern).
-  const existing = await invoiceRepo!.get(id);
+  const existing = await invoiceRepo.get(id);
   if (!existing) return c.json({ error: "Teilrechnung nicht gefunden" }, 404);
   if (!(await canSeeProjectById(userCtx(c), existing.projectId))) {
     return c.json({ error: "Kein Zugriff" }, 403);
   }
-  const result = await invoiceRepo!.update(id, body);
+  const result = await invoiceRepo.update(id, body);
   if (result === null) return c.json({ error: "Teilrechnung nicht gefunden" }, 404);
   if (typeof result === "string") return c.json({ error: result }, 400);
   emit({ type: "invoice", action: "updated", id });
@@ -88,12 +87,12 @@ invoicesRoutes.delete("/invoices/:id", async (c) => {
   const id = c.req.param("id");
   // ACL VOR dem Loeschen: ohne Pruefung koennte jeder User jede Rechnung per
   // ID loeschen (IDOR).
-  const existing = await invoiceRepo!.get(id);
+  const existing = await invoiceRepo.get(id);
   if (!existing) return c.json({ error: "Teilrechnung nicht gefunden" }, 404);
   if (!(await canSeeProjectById(userCtx(c), existing.projectId))) {
     return c.json({ error: "Kein Zugriff" }, 403);
   }
-  const ok = await invoiceRepo!.delete(id);
+  const ok = await invoiceRepo.delete(id);
   if (ok) emit({ type: "invoice", action: "deleted", id, project: existing.projectId });
   return c.json({ ok });
 });

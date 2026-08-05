@@ -17,7 +17,6 @@ function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" }
 }
 
 portfolioRoutes.get("/portfolio", async (c) => {
-  if (!portfolioRepo) return c.json({ error: "Portfolio erfordert DB-Modus" }, 503);
   const visible = await getVisibleProjectIds(userCtx(c));
   const entries = await portfolioRepo.list(visible);
   return c.json(entries);

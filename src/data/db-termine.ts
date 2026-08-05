@@ -1,7 +1,7 @@
 // Datenbank-Implementation: PostgreSQL via postgres.js
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import { validateDatum, validateUhrzeit, normalizeDatum } from "../workspace/termine.js";
+import { validateDatum, validateUhrzeit, normalizeDatum } from "./termin-validation.js";
 import type { Termin, TerminRepository } from "./types.js";
 
 function rowToTermin(row: Record<string, unknown>): Termin {

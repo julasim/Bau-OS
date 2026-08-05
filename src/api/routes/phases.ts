@@ -42,7 +42,7 @@ async function resolvePhaseAcl(c: {
   var: { userId: string | null; userRole: "admin" | "user" };
 }): Promise<{ phaseId: string; projectName: string } | { error: Response }> {
   const phaseId = c.req.param("id");
-  const phase = await phaseRepo!.get(phaseId);
+  const phase = await phaseRepo.get(phaseId);
   if (!phase) return { error: c.json({ error: "Phase nicht gefunden" }, 404) };
   const projectName = phase.projectName ?? "";
   if (!(await canSeeProjectByName(userCtx(c), projectName))) {
@@ -53,7 +53,6 @@ async function resolvePhaseAcl(c: {
 
 // DB-Guard.
 const guard = async (c: { json: (o: unknown, s?: number) => Response }, next: () => Promise<void>) => {
-  if (!phaseRepo) return c.json({ error: "Leistungsphasen erfordern DB-Modus" }, 503);
   await next();
 };
 phasesRoutes.use("/projects/:projectName/phases", guard);
@@ -65,8 +64,8 @@ phasesRoutes.use("/phases/*", guard);
 phasesRoutes.get("/projects/:projectName/phases", async (c) => {
   const proj = await resolveProject(c);
   if ("error" in proj) return proj.error;
-  const phases = await phaseRepo!.list(proj.id);
-  const progress = await phaseRepo!.projectProgress(proj.id);
+  const phases = await phaseRepo.list(proj.id);
+  const progress = await phaseRepo.projectProgress(proj.id);
   return c.json({ phases, progress });
 });
 
@@ -79,7 +78,7 @@ phasesRoutes.get("/projects/:projectName/finance", async (c) => {
   if ("error" in proj) return proj.error;
   const info = await projectRepo.getInfo(proj.name);
   const budget = info?.budget ?? null;
-  const phases = await phaseRepo!.list(proj.id);
+  const phases = await phaseRepo.list(proj.id);
   const invoices = invoiceRepo ? await invoiceRepo.list(proj.id) : [];
   // Ist-Kosten je Phase (Stunden * effektiver Satz).
   const costs = timeEntryRepo
@@ -138,7 +137,7 @@ phasesRoutes.post("/projects/:projectName/phases", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  const result = await phaseRepo!.create(proj.id, body);
+  const result = await phaseRepo.create(proj.id, body);
   if (typeof result === "string") return c.json({ error: result }, 400);
   emit({ type: "phase", action: "created", id: result.id, project: proj.name });
   return c.json(result);
@@ -155,7 +154,7 @@ phasesRoutes.post("/projects/:projectName/phases/reorder", async (c) => {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
   if (!Array.isArray(body.orderedIds)) return c.json({ error: "orderedIds fehlt" }, 400);
-  const ok = await phaseRepo!.reorder(proj.id, body.orderedIds);
+  const ok = await phaseRepo.reorder(proj.id, body.orderedIds);
   if (ok) emit({ type: "phase", action: "updated", project: proj.name });
   return c.json({ ok });
 });
@@ -170,7 +169,7 @@ phasesRoutes.put("/phases/:id", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  const result = await phaseRepo!.update(acl.phaseId, body);
+  const result = await phaseRepo.update(acl.phaseId, body);
   if (result === null) return c.json({ error: "Phase nicht gefunden" }, 404);
   if (typeof result === "string") return c.json({ error: result }, 400);
   emit({ type: "phase", action: "updated", id: acl.phaseId, project: acl.projectName });
@@ -181,7 +180,7 @@ phasesRoutes.put("/phases/:id", async (c) => {
 phasesRoutes.delete("/phases/:id", async (c) => {
   const acl = await resolvePhaseAcl(c);
   if ("error" in acl) return acl.error;
-  const ok = await phaseRepo!.delete(acl.phaseId);
+  const ok = await phaseRepo.delete(acl.phaseId);
   if (ok) emit({ type: "phase", action: "deleted", id: acl.phaseId, project: acl.projectName });
   return c.json({ ok });
 });

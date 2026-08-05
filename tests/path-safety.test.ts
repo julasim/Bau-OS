@@ -3,6 +3,16 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 
+// Path-Traversal-Schutz fuer den Dateizugriff.
+//
+// Diese Tests prueften den Schutz frueher INDIREKT ueber getProjectInfo()
+// aus workspace/projects.ts. Projekte liegen seit dem Umbau zum Firmenserver
+// in der Datenbank, den Zugangsweg gibt es nicht mehr — der Schutz selbst
+// aber sehr wohl: safePath() bewacht jeden Dateizugriff (readFile,
+// createFile, listFolder) und damit den Dateibrowser. Die Tests zielen
+// deshalb jetzt direkt auf safePath und die Datei-Funktionen, statt auf
+// einen Aufrufer, den es nicht mehr gibt.
+
 const tmpDir = path.join(os.tmpdir(), "patio-path-test-" + Date.now());
 
 beforeEach(() => {
@@ -14,86 +24,75 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe("safeProjectName — indirekt via getProjectInfo", () => {
-  let getProjectInfo: (name: string) => unknown;
-  let listProjectNotes: (name: string) => string[];
+describe("safePath — Traversal-Schutz im Dateizugriff", () => {
+  let safePath: (p: string) => string | null;
+  let readFile: (p: string) => string | null;
+  let listFolder: (p?: string) => unknown[];
 
   beforeEach(async () => {
-    const mod = await import("../src/workspace/projects.js");
-    getProjectInfo = mod.getProjectInfo;
-    listProjectNotes = mod.listProjectNotes;
+    const helpers = await import("../src/workspace/helpers.js");
+    const files = await import("../src/workspace/files.js");
+    safePath = helpers.safePath;
+    readFile = files.readFile;
+    listFolder = files.listFolder;
   });
 
-  // ── Path-Traversal-Versuche ──
+  // ── Traversal-Versuche ──────────────────────────────────────────────────
 
-  it("blockiert ../../../etc", () => {
-    const result = getProjectInfo("../../../etc");
-    expect(result).toBeNull();
+  it.each([
+    ["../../../etc", "Aufstieg ueber mehrere Ebenen"],
+    ["name/../../etc", "Aufstieg mitten im Pfad"],
+    ["..", "der nackte Aufstieg"],
+    ["test/../../secret", "Aufstieg hinter einem gueltigen Segment"],
+  ])("blockiert %s (%s)", (evil) => {
+    expect(safePath(evil)).toBeNull();
   });
 
-  it("blockiert name/../../etc", () => {
-    const result = getProjectInfo("name/../../etc");
-    expect(result).toBeNull();
+  it("blockiert einen absoluten Pfad ausserhalb des Workspace", () => {
+    expect(safePath(path.join(os.tmpdir(), "woanders", "geheim.txt"))).toBeNull();
   });
 
-  it("blockiert .. alleine", () => {
-    const result = getProjectInfo("..");
-    expect(result).toBeNull();
+  it("blockiert Symlinks, die aus dem Workspace herauszeigen", () => {
+    const ziel = path.join(os.tmpdir(), "patio-symlink-ziel-" + Date.now());
+    fs.mkdirSync(ziel, { recursive: true });
+    const link = path.join(tmpDir, "raus");
+    try {
+      fs.symlinkSync(ziel, link, "junction");
+    } catch {
+      return; // ohne Symlink-Recht nicht pruefbar (Windows ohne Adminrechte)
+    }
+    expect(safePath("raus")).toBeNull();
+    fs.rmSync(ziel, { recursive: true, force: true });
   });
 
-  it("blockiert Pfade mit Slashes", () => {
-    const result = getProjectInfo("test/../../secret");
-    expect(result).toBeNull();
+  // ── Die Datei-Funktionen muessen den Schutz mitnehmen ────────────────────
+
+  it("readFile liefert null statt fremder Dateiinhalte", () => {
+    const geheim = path.join(os.tmpdir(), "patio-geheim-" + Date.now() + ".txt");
+    fs.writeFileSync(geheim, "streng vertraulich", "utf-8");
+    expect(readFile("../" + path.basename(geheim))).toBeNull();
+    expect(readFile(geheim)).toBeNull();
+    fs.rmSync(geheim, { force: true });
   });
 
-  it("blockiert Pfade mit Backslashes", () => {
-    // safeProjectName nutzt Regex /^[\w\-. ]+$/ — Backslash ist nicht erlaubt
-    const result = getProjectInfo("test\\..\\secret");
-    expect(result).toBeNull();
+  it("listFolder liefert [] bei einem Traversal-Versuch", () => {
+    expect(listFolder("../../../etc")).toEqual([]);
   });
 
-  // ── listProjectNotes mit unsicheren Namen ──
-
-  it("listProjectNotes gibt [] bei Traversal-Versuch", () => {
-    const result = listProjectNotes("../../../etc");
-    expect(result).toEqual([]);
+  it("listFolder liefert [] bei einem Null-Byte im Pfad", () => {
+    expect(listFolder("name\x00evil")).toEqual([]);
   });
 
-  it("listProjectNotes gibt [] bei Null-Byte", () => {
-    const result = listProjectNotes("name\x00evil");
-    expect(result).toEqual([]);
+  // ── Gueltige Pfade muessen durchgehen ────────────────────────────────────
+
+  it.each([["Projekte"], ["EFH Mayer Graz"], ["Bau v2.0"], ["unterordner/datei.md"]])("laesst %s durch", (gut) => {
+    const aufgeloest = safePath(gut);
+    expect(aufgeloest).not.toBeNull();
+    expect(aufgeloest!.startsWith(tmpDir)).toBe(true);
   });
 
-  // ── Gueltige Projektnamen ──
-
-  it("akzeptiert normalen Projektnamen", () => {
-    // Projekt-Ordner erstellen damit getProjectInfo nicht null wegen fehlender Datei zurueckgibt
-    const projDir = path.join(tmpDir, "Projekte", "EFH-Mayer");
-    fs.mkdirSync(projDir, { recursive: true });
-
-    const result = getProjectInfo("EFH-Mayer");
-    expect(result).not.toBeNull();
-    expect(result).toHaveProperty("name", "EFH-Mayer");
-  });
-
-  it("akzeptiert Projektnamen mit Leerzeichen", () => {
-    const projDir = path.join(tmpDir, "Projekte", "EFH Mayer Graz");
-    fs.mkdirSync(projDir, { recursive: true });
-
-    const result = getProjectInfo("EFH Mayer Graz");
-    expect(result).not.toBeNull();
-  });
-
-  it("akzeptiert Projektnamen mit Punkt", () => {
-    const projDir = path.join(tmpDir, "Projekte", "Bau v2.0");
-    fs.mkdirSync(projDir, { recursive: true });
-
-    const result = getProjectInfo("Bau v2.0");
-    expect(result).not.toBeNull();
-  });
-
-  it("gibt null fuer nicht-existierenden Projektnamen", () => {
-    const result = getProjectInfo("gibts-nicht");
-    expect(result).toBeNull();
+  it("readFile liest eine Datei innerhalb des Workspace", () => {
+    fs.writeFileSync(path.join(tmpDir, "notiz.md"), "Inhalt", "utf-8");
+    expect(readFile("notiz.md")).toBe("Inhalt");
   });
 });

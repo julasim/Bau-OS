@@ -28,7 +28,6 @@ function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" }
 
 // Guard: 503 wenn FS-Mode (kein time-entries-Repo).
 const dbGuard = async (c: { json: (o: unknown, s?: number) => Response }, next: () => Promise<void>) => {
-  if (!timeEntryRepo) return c.json({ error: "Stundenerfassung erfordert DB-Modus" }, 503);
   await next();
 };
 timeEntriesRoutes.use("/projects/:projectName/time-entries", dbGuard);
@@ -59,7 +58,7 @@ timeEntriesRoutes.get("/projects/:projectName/time-entries", async (c) => {
   const to = c.req.query("to");
   const limitRaw = c.req.query("limit");
   const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 100, 1), 500) : 100;
-  const entries = await timeEntryRepo!.list(proj.id, { from, to, limit });
+  const entries = await timeEntryRepo.list(proj.id, { from, to, limit });
   return c.json(entries);
 });
 
@@ -72,10 +71,10 @@ timeEntriesRoutes.get("/projects/:projectName/time-entries/summary", async (c) =
   const groupBy = c.req.query("groupBy") === "date" ? "date" : "member";
 
   if (groupBy === "date") {
-    const data = await timeEntryRepo!.summaryByDate(proj.id, from, to);
+    const data = await timeEntryRepo.summaryByDate(proj.id, from, to);
     return c.json({ groupBy, data });
   }
-  const data = await timeEntryRepo!.summaryByMember(proj.id, from, to);
+  const data = await timeEntryRepo.summaryByMember(proj.id, from, to);
   return c.json({ groupBy, data });
 });
 
@@ -89,7 +88,7 @@ timeEntriesRoutes.post("/projects/:projectName/time-entries", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  const result = await timeEntryRepo!.create(proj.id, body, c.var.userId);
+  const result = await timeEntryRepo.create(proj.id, body, c.var.userId);
   if (typeof result === "string") return c.json({ error: result }, 400);
   emit({ type: "time", action: "created", id: result.id, project: proj.name });
   return c.json(result, 201);
@@ -98,7 +97,7 @@ timeEntriesRoutes.post("/projects/:projectName/time-entries", async (c) => {
 // ── Einzeln ───────────────────────────────────────────────────
 timeEntriesRoutes.get("/time-entries/:id", async (c) => {
   const id = c.req.param("id");
-  const entry = await timeEntryRepo!.get(id);
+  const entry = await timeEntryRepo.get(id);
   if (!entry) return c.json({ error: "Eintrag nicht gefunden" }, 404);
   const ctx = userCtx(c);
   if (ctx.role !== "admin") {
@@ -116,7 +115,7 @@ timeEntriesRoutes.get("/time-entries/:id", async (c) => {
 // ── Aktualisieren ─────────────────────────────────────────────
 timeEntriesRoutes.patch("/time-entries/:id", async (c) => {
   const id = c.req.param("id");
-  const entry = await timeEntryRepo!.get(id);
+  const entry = await timeEntryRepo.get(id);
   if (!entry) return c.json({ error: "Eintrag nicht gefunden" }, 404);
   const ctx = userCtx(c);
   if (ctx.role !== "admin") {
@@ -134,7 +133,7 @@ timeEntriesRoutes.patch("/time-entries/:id", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  const result = await timeEntryRepo!.update(id, body);
+  const result = await timeEntryRepo.update(id, body);
   if (typeof result === "string") return c.json({ error: result }, 400);
   if (!result) return c.json({ error: "Eintrag nicht gefunden" }, 404);
   emit({ type: "time", action: "updated", id, project: entry.projectName ?? null });
@@ -144,7 +143,7 @@ timeEntriesRoutes.patch("/time-entries/:id", async (c) => {
 // ── Loeschen ──────────────────────────────────────────────────
 timeEntriesRoutes.delete("/time-entries/:id", async (c) => {
   const id = c.req.param("id");
-  const entry = await timeEntryRepo!.get(id);
+  const entry = await timeEntryRepo.get(id);
   if (!entry) return c.json({ ok: false }, 404);
   const ctx = userCtx(c);
   if (ctx.role !== "admin") {
@@ -156,7 +155,7 @@ timeEntriesRoutes.delete("/time-entries/:id", async (c) => {
       return c.json({ error: "Kein Zugriff" }, 403);
     }
   }
-  const ok = await timeEntryRepo!.delete(id);
+  const ok = await timeEntryRepo.delete(id);
   if (ok) emit({ type: "time", action: "deleted", id, project: entry.projectName ?? null });
   return c.json({ ok });
 });
@@ -178,6 +177,6 @@ timeEntriesRoutes.get("/team/:memberId/time-entries", async (c) => {
       return c.json({ error: "Kein Zugriff auf andere Mitglieder" }, 403);
     }
   }
-  const entries = await timeEntryRepo!.listForMember(memberId, { from, to, limit });
+  const entries = await timeEntryRepo.listForMember(memberId, { from, to, limit });
   return c.json(entries);
 });
