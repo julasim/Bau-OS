@@ -1,8 +1,12 @@
 [Unit]
-Description=PATIO KI-Assistent (Telegram Bot)
+# PATIO ist seit dem Umbau zum Firmenserver reine Web-API + WebUI:
+# kein Telegram-Bot, keine LLM-Laufzeit. Die frueheren Abhaengigkeiten
+# auf ollama.service sind entfallen — die Unit haette sonst auf einen
+# Dienst gewartet, den es gar nicht mehr gibt.
+Description=PATIO — Web-API und Weboberflaeche
 Documentation=https://docs.patio.at
-After=network.target ollama.service
-Wants=ollama.service
+After=network.target postgresql.service
+Wants=postgresql.service
 
 [Service]
 Type=simple
@@ -27,7 +31,8 @@ TasksMax=64
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/opt/patio/logs /opt/patio/.chat_id /opt/patio-workspace /opt/patio/data /opt/patio/tools
+# /opt/patio/.chat_id ist raus — Telegram-Artefakt ohne Konsumenten.
+ReadWritePaths=/opt/patio/logs /opt/patio-workspace /opt/patio/data /opt/patio/tools
 PrivateTmp=true
 ProtectKernelTunables=true
 ProtectKernelModules=true

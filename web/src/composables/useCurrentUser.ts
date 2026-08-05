@@ -14,7 +14,6 @@ interface Me {
   role: string;
   displayName: string | null;
   isProtected?: boolean;
-  hasTelegram?: boolean;
 }
 
 const user = ref<Me | null>(null);

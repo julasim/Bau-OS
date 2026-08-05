@@ -6,8 +6,10 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts"],
     testTimeout: 10_000,
-    // Unhandled Rejections als Warning statt Error — verhindert false-positive Failures
-    // wenn Tests bewusst Promise-Rejections testen (z.B. queue.test.ts Fehler-Isolation)
-    dangerouslyIgnoreUnhandledErrors: true,
+    // Kein `dangerouslyIgnoreUnhandledErrors`: die Option galt global fuer die
+    // gesamte Suite und machte jede unbehandelte Promise-Rejection zur blossen
+    // Warnung — also genau den Fall "gruene Suite trotz asynchronem Fehler".
+    // Begruendet war sie mit `tests/queue.test.ts`; diese Datei gibt es in
+    // diesem Branch nicht mehr.
   },
 });

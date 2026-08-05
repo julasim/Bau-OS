@@ -28,11 +28,13 @@ WORKDIR /opt/patio
 COPY package*.json ./
 RUN npm ci
 
-# Quellcode kopieren + bauen (Backend-TS + Vue-Frontend), dann devDeps entfernen
+# Quellcode kopieren + bauen (Backend-TS + Vue-Frontend), dann devDeps entfernen.
+# Das build-Skript in package.json kopiert src/emails und src/db/migrations
+# selbst nach dist/ — die frueher hier stehenden zusaetzlichen `cp -r` liefen
+# gegen ein BEREITS EXISTIERENDES Ziel und legten dadurch
+# dist/db/migrations/migrations/ bzw. dist/emails/emails/ an.
 COPY . .
 RUN npm run build:all \
-    && cp -r src/db/migrations dist/db/migrations \
-    && cp -r src/emails dist/emails \
     && npm prune --omit=dev
 
 # ── Stage 2: Runtime (schlank) ───────────────────────────────────────────────
@@ -62,13 +64,16 @@ USER node
 
 EXPOSE 3000
 
-# Healthcheck — App sollte auf /api/status antworten.
+# Healthcheck gegen /api/health (src/api/server.ts) — bewusst ohne Auth und
+# ohne Rate-Limit registriert, liefert immer 200.
+# Vorher stand hier /api/status: diese Route existiert nirgends, Hono
+# antwortete mit 404. Zusammen mit dem fehlenden -f (curl beendet sich bei
+# JEDER HTTP-Antwort mit 0) war das faktisch nur ein TCP-Check — ein Prozess
+# ohne funktionierende Routen galt als healthy.
+# Jetzt mit -f: alles >=400 laesst curl mit != 0 enden und schlaegt an.
 # Port 3000 ist im Container fix — API_PORT aus .env ist nur das Host-Mapping.
-# WICHTIG: kein -f (fail on HTTP >=400) — /api/status liefert 401 wenn
-# JWT gesetzt ist. 401 bedeutet "Server laeuft und antwortet korrekt",
-# der Healthcheck soll nur auf Connection-Failure (exit != 0) reagieren.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-    CMD curl -sS -o /dev/null "http://localhost:3000/api/status" || exit 1
+    CMD curl -fsS -o /dev/null "http://localhost:3000/api/health" || exit 1
 
 # Node startet direkt — die App kuemmert sich selbst um DB-Migrationen,
 # wartet wenn noetig auf Postgres, respektiert DB_AUTO_MIGRATE aus .env.

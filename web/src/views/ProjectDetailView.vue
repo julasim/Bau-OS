@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatDate, formatDateShort } from "../utils/format";
+import { formatDate } from "../utils/format";
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { api } from "../api";
@@ -4625,8 +4625,6 @@ async function deleteMeeting() {
   color: var(--color-text-faint);
   font-style: italic;
 }
-
-/* ── Verlauf-Tab ───────────────────────────────────────── */
 
 /* ── Bautagebuch (Migration 011) ───────────────────────── */
 .bt-tab {

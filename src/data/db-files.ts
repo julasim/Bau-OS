@@ -102,7 +102,12 @@ export const dbFiles: FileRepository = {
         await db`
         SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
         LEFT JOIN projects p ON f.project_id = p.id
-        WHERE f.project_id = ANY(${db.array(visibleProjectIds)})
+        -- ::uuid[] ist Pflicht: project_id ist uuid, die Scope-IDs kommen als
+        -- JS-Strings. Ohne Cast wirft Postgres "operator does not exist:
+        -- uuid = text" und die Route endet in einem 500. Der Fehler traf nur
+        -- Non-Admins mit NICHT-leerem Scope — bei leerem Scope greift der
+        -- Short-Circuit unten und die Query laeuft nie.
+        WHERE f.project_id = ANY(${db.array(visibleProjectIds)}::uuid[])
         ORDER BY f.created_at DESC
         LIMIT ${limit}
       `
@@ -154,9 +159,35 @@ export const dbFiles: FileRepository = {
     };
   },
 
-  async search(query, limit = 20) {
+  async search(query, limit = 20, visibleProjectIds) {
     const db = getDb();
     const like = `%${query}%`;
+    // ACL-Scoping analog zu list(): ohne diesen Filter lieferte die Suche
+    // fremde Dateien samt vollem content_text aus — mit ?q=% den gesamten
+    // Bestand. Die Methode kannte den Scope schlicht nicht.
+    // Dateien ohne project_id bleiben fuer Non-Admins ausgeblendet: ohne
+    // Projekt-Kontext gibt es keinen ACL-Anhaltspunkt (gleiche Regel wie list()).
+    if (visibleProjectIds !== undefined) {
+      // Kein Zugriff auf irgendein Projekt → keine Treffer.
+      if (visibleProjectIds.length === 0) return [];
+      // ::uuid[] ist Pflicht: project_id ist uuid, die Scope-IDs kommen als
+      // JS-Strings herein. Ohne Cast wirft Postgres
+      // "operator does not exist: uuid = text" — und zwar nur bei Non-Admins.
+      return (
+        await db`
+        SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
+        LEFT JOIN projects p ON f.project_id = p.id
+        WHERE f.project_id = ANY(${db.array(visibleProjectIds)}::uuid[])
+          AND (
+            f.filename ILIKE ${like}
+            OR f.content_text ILIKE ${like}
+            OR f.filepath ILIKE ${like}
+          )
+        ORDER BY f.updated_at DESC
+        LIMIT ${limit}
+      `
+      ).map(rowToFile);
+    }
     return (
       await db`
       SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f

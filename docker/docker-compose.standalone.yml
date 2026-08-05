@@ -1,8 +1,13 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # PATIO — Standalone Docker Compose (Kunden-Installation)
 #
-# Enthält alle 4 Services inkl. Caddy für automatisches HTTPS.
+# Enthält alle 3 Services inkl. Caddy für automatisches HTTPS.
 # Setzt voraus: CADDY_DOMAIN und CADDY_EMAIL in .env gesetzt.
+#
+# Der frueher hier definierte Service `ollama` ist entfallen: seit AP0 gibt es
+# weder LLM-Laufzeit noch Embeddings, kein Code liest OLLAMA_BASE_URL mehr.
+# Ohne Internet liess sich das Image nicht ziehen — und weil `app` per
+# depends_on daran hing, kam der GESAMTE Stack nicht hoch.
 #
 # Start:   docker compose -f docker-compose.standalone.yml up -d
 # Logs:    docker compose -f docker-compose.standalone.yml logs -f
@@ -33,21 +38,6 @@ services:
     networks:
       - internal
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: patio-ollama
-    restart: always
-    volumes:
-      - ollama_models:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-    networks:
-      - internal
-
   app:
     build:
       context: ..
@@ -58,19 +48,15 @@ services:
     env_file: ../.env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER:-patio}:${POSTGRES_PASSWORD:-patio}@postgres:5432/${POSTGRES_DB:-patio}
-      OLLAMA_BASE_URL: http://ollama:11434/v1
       WORKSPACE_PATH: /workspace
     depends_on:
       postgres:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
     volumes:
       - ${WORKSPACE_HOST_DIR:-../workspace}:/workspace
       - ../logs:/opt/patio/logs
       - ../data:/opt/patio/data
       - ../tools:/opt/patio/tools
-      - ../.chat_id:/opt/patio/.chat_id
     expose:
       - "3000"
     networks:
@@ -97,7 +83,6 @@ services:
 
 volumes:
   postgres_data:
-  ollama_models:
   caddy_data:
   caddy_config:
 

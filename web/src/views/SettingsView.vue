@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import { formatDate, formatNumber } from "../utils/format";
+import { formatDate } from "../utils/format";
 import { ref, onMounted, computed, watch } from "vue";
 import { api } from "../api";
 import { useConfirm } from "../composables/useConfirm";
 
 const { confirm } = useConfirm();
 
+// Nur die Werte, die die Oberflaeche auch anbietet. Die frueheren Felder
+// notificationsEnabled und chatSearchMode hatten keine Bedienelemente mehr
+// (Benachrichtigungen und Chat sind entfallen) — sie wurden nur noch
+// geladen und unveraendert zurueckgeschrieben.
 interface SettingsState {
   displayName?: string;
-  notificationsEnabled?: boolean;
   defaultProject?: string | null;
-  chatSearchMode?: boolean;
 }
 
 interface SettingsResponse {
@@ -34,9 +36,7 @@ const projects = ref<{ name: string }[]>([]);
 
 // Formular-State
 const displayName = ref("");
-const notificationsEnabled = ref(true);
 const defaultProject = ref<string | null>(null);
-const chatSearchMode = ref(false);
 
 const oldPassword = ref("");
 const newPassword = ref("");
@@ -103,12 +103,7 @@ function cancelEmailChange() {
 const dirty = computed(() => {
   if (!data.value) return false;
   const s = data.value.settings;
-  return (
-    (s.displayName ?? "") !== displayName.value ||
-    (s.notificationsEnabled ?? true) !== notificationsEnabled.value ||
-    (s.defaultProject ?? null) !== defaultProject.value ||
-    (s.chatSearchMode ?? false) !== chatSearchMode.value
-  );
+  return (s.displayName ?? "") !== displayName.value || (s.defaultProject ?? null) !== defaultProject.value;
 });
 
 function flash(type: "success" | "error", text: string) {
@@ -128,9 +123,7 @@ async function loadAll() {
     data.value = res;
     projects.value = proj;
     displayName.value = res.settings.displayName ?? "";
-    notificationsEnabled.value = res.settings.notificationsEnabled ?? true;
     defaultProject.value = res.settings.defaultProject ?? null;
-    chatSearchMode.value = res.settings.chatSearchMode ?? false;
   } catch (e) {
     flash("error", e instanceof Error ? e.message : "Laden fehlgeschlagen");
   } finally {
@@ -144,9 +137,7 @@ async function saveSettings() {
     const res = await api.patch<{ ok: boolean; settings: SettingsState }>("/settings", {
       settings: {
         displayName: displayName.value || undefined,
-        notificationsEnabled: notificationsEnabled.value,
         defaultProject: defaultProject.value,
-        chatSearchMode: chatSearchMode.value,
       },
     });
     if (data.value) data.value.settings = res.settings;
@@ -206,12 +197,6 @@ interface ServerPreferences {
   weekStart: "monday" | "sunday";
   calendarDefaultView: "month" | "week" | "day" | "list";
   dateFormat: "DD.MM.YYYY" | "YYYY-MM-DD";
-  telegramNotifications: {
-    termine: boolean;
-    tasks: boolean;
-    meetings: boolean;
-    bautagebuch: boolean;
-  };
 }
 
 const serverPrefs = ref<ServerPreferences | null>(null);
@@ -243,11 +228,9 @@ async function loadPreferences() {
   }
 }
 
-// Patch erlaubt auch Teil-Updates fuer telegramNotifications (Backend
-// macht Deep-Merge), daher loosere Signatur.
-type PreferencesPatch = Partial<Omit<ServerPreferences, "telegramNotifications">> & {
-  telegramNotifications?: Partial<ServerPreferences["telegramNotifications"]>;
-};
+// Teil-Updates sind erlaubt — das Backend merged den Patch in den
+// bestehenden Stand.
+type PreferencesPatch = Partial<ServerPreferences>;
 
 async function patchPreferences(patch: PreferencesPatch) {
   prefsBusy.value = true;
@@ -2333,10 +2316,6 @@ onMounted(() => {
   opacity: 1;
 }
 
-.settings-checkbox {
-  accent-color: var(--accent, var(--color-primary));
-}
-
 .settings-flash {
   border: 1px solid;
 }
@@ -2352,37 +2331,6 @@ onMounted(() => {
   border-color: var(--color-danger-border, #fecaca);
   background: var(--color-danger-bg, #fef2f2);
   color: var(--color-danger-text, #b91c1c);
-}
-
-/* ── Microsoft-Sektion ─────────────────────────────────── */
-.ms-message {
-  font-size: 12px;
-  padding: 8px 12px;
-  border-radius: 6px;
-  margin-top: 12px;
-}
-.ms-msg-ok {
-  background: #dcfce7;
-  color: #166534;
-}
-.ms-msg-err {
-  background: #fee2e2;
-  color: #991b1b;
-}
-
-/* Microsoft 4-Quadrate-Logo, mini fuer Buttons */
-.ms-logo-mini {
-  display: inline-grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 1px;
-  width: 14px;
-  height: 14px;
-}
-.ms-logo-mini > span {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 
 /* ── Sidebar-Layout (Phase 6a) ─────────────────────────────────────── */

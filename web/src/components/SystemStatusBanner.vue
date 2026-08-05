@@ -5,7 +5,6 @@ import BIcon from "./BIcon.vue";
 
 interface DbStatus {
   enabled: boolean;
-  mode?: string;
   healthy?: boolean;
   error?: string;
 }
@@ -35,7 +34,7 @@ const banner = computed<{ key: string; level: "warn" | "error"; text: string } |
     return {
       key: "backend-down",
       level: "error",
-      text: "Server nicht erreichbar — bitte Internetverbindung und Server-Status prüfen. Die Seite wird automatisch aktualisiert.",
+      text: "Server nicht erreichbar — bitte Netzwerkverbindung und Server-Status prüfen. Die Seite wird automatisch aktualisiert.",
     };
   }
 

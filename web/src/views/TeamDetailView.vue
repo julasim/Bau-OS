@@ -626,9 +626,12 @@ onUnmounted(() => {
       </div>
 
       <!-- User-Verknuepfung (Migration 013) — nur fuer Admins sichtbar.
-           Erlaubt einem Team-Mitglied einen Login-Account zuzuordnen,
-           damit Notifications fuer Tasks/Termine/Meetings ankommen. -->
-      <div v-if="isAdmin" :class="['link-card', !member.userId ? 'link-card-warn' : '']">
+           Ordnet einem Team-Mitglied ein Anmeldekonto zu. Ausgewertet wird
+           die Verknuepfung bei der Stundenerfassung: ein Nicht-Admin darf
+           ueber /team/:memberId/time-entries nur die Eintraege des mit ihm
+           verknuepften Mitglieds lesen. Ohne Verknuepfung bleibt der
+           Eintrag rein dokumentarisch — das ist kein Fehlzustand. -->
+      <div v-if="isAdmin" class="link-card">
         <div class="flex items-center" style="gap: 8px; margin-bottom: 8px">
           <BIcon name="link" :size="13" />
           <span
@@ -647,26 +650,28 @@ onUnmounted(() => {
             style="
               font-size: 10px;
               padding: 2px 8px;
-              background: #fef3c7;
-              color: #92400e;
+              background: var(--color-border-subtle);
+              color: var(--color-text-muted);
               border-radius: 999px;
               font-weight: 500;
               text-transform: uppercase;
               letter-spacing: 0.04em;
             "
           >
-            Kein Telegram
+            Nicht verknüpft
           </span>
         </div>
         <p style="font-size: 12px; color: var(--color-text-muted); margin: 0 0 10px 0; line-height: 1.4">
           <template v-if="!member.userId">
-            <strong>Diese Person bekommt keine Telegram-Benachrichtigung</strong> bei Aufgaben, Terminen oder Meetings,
-            die ihr zugewiesen werden — weil kein PATIO-Konto verknüpft ist. Verlinke unten ein bestehendes Konto, oder
-            lege im Admin-Bereich einen neuen User an (gleicher Name → automatische Verknüpfung).
+            Dieses Team-Mitglied ist keinem Anmeldekonto zugeordnet und damit ein reiner Stammdaten-Eintrag. Eine
+            Zuordnung ist nur nötig, wenn die Person sich selbst anmeldet: Sie kann dann ihre eigene Stundenerfassung
+            abrufen. Unten ein bestehendes Konto auswählen, oder im Admin-Bereich ein Konto anlegen — bei gleichem Namen
+            wird es automatisch zugeordnet.
           </template>
           <template v-else>
-            Aufgaben, Termine und Meetings, die dieser Person zugewiesen werden, lösen automatisch eine
-            Telegram-Benachrichtigung aus.
+            Dieses Team-Mitglied ist einem Anmeldekonto zugeordnet. Damit kann die Person ihre eigene Stundenerfassung
+            abrufen, ohne Admin-Rechte zu brauchen. Projektsichtbarkeit und Rolle werden davon nicht gesteuert — die
+            hängen am Konto selbst.
           </template>
         </p>
         <div class="flex items-center" style="gap: 8px; flex-wrap: wrap">
@@ -1029,10 +1034,6 @@ onUnmounted(() => {
   border: 1px solid var(--color-border-subtle);
   border-radius: 8px;
   background: var(--color-bg-subtle);
-}
-.link-card-warn {
-  border-color: #f59e0b;
-  background: #fffbeb;
 }
 @media (max-width: 720px) {
   .stamm-grid {

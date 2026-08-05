@@ -1,16 +1,25 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# PATIO Docker Compose — 3-Service-Architektur (Edge-Proxy uebernimmt TLS)
+# PATIO Docker Compose — 2-Service-Architektur (Edge-Proxy uebernimmt TLS)
 #
-#   postgres  pgvector/pgvector:pg16  — DB + Vector-Extension
-#   ollama    ollama/ollama           — LLM-Runtime + Embeddings
-#   app       (Build aus Dockerfile)  — PATIO Telegram-Bot + WebUI + API
+#   postgres  pgvector/pgvector:pg16  — Datenbank
+#   app       (Build aus Dockerfile)  — PATIO Web-API + WebUI
+#
+# Der frueher hier definierte Service `ollama` ist entfallen: seit AP0 gibt es
+# weder LLM-Laufzeit noch Embeddings, kein Code liest OLLAMA_BASE_URL mehr.
+# Auf einem Firmenserver ohne Internet liess sich das Image nicht ziehen — und
+# weil `app` per depends_on daran haengt, kam der GESAMTE Stack nicht hoch.
+#
+# Zum DB-Image: `pgvector/pgvector:pg16` bleibt vorerst stehen, obwohl PATIO
+# keine Vektoren mehr nutzt. Migration 001 legt die vector-Extension weiterhin
+# an; ein Wechsel auf `postgres:16` laesst eine FRISCHE Installation daran
+# scheitern. Siehe Kommentarkopf von 040_drop_embeddings.sql.
 #
 # TLS + Reverse-Proxy: zentral via /opt/proxy (julasim/Proxy auf GitHub).
 # PATIO haengt sich ueber das externe Docker-Netzwerk `proxy` an den
-# Edge-Caddy. Der Edge-Caddy kuemmert sich um Let's-Encrypt + Routing
-# fuer alle Apps die im proxy-Netzwerk sind.
+# Edge-Caddy. Der Edge-Caddy kuemmert sich um TLS + Routing fuer alle Apps
+# die im proxy-Netzwerk sind.
 #
-# Vorbereitung (einmalig pro VPS):
+# Vorbereitung (einmalig pro Server):
 #   cd /opt/proxy && docker compose up -d
 #   → legt das Docker-Netzwerk `proxy` an + startet edge-caddy auf 80/443.
 #
@@ -19,13 +28,9 @@
 # Logs:
 #   docker compose logs -f
 # Update:
-#   git pull && docker compose pull && docker compose build app && docker compose up -d
+#   git pull && docker compose build app && docker compose up -d app
 # Stop:
 #   docker compose down
-#
-# Standalone-Modus (ohne Edge-Proxy):
-#   Wenn kein zentraler Edge-Proxy existiert, Block "caddy" wieder aktivieren
-#   (siehe Git-History vor dem Edge-Proxy-Umzug) und proxy-Network entfernen.
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: patio
@@ -54,30 +59,6 @@ services:
     networks:
       - default
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: patio-ollama
-    restart: always
-    volumes:
-      - ollama_models:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 15s
-    # Ollama bleibt intern, nur app redet mit ihm via Service-Name.
-    networks:
-      - default
-    # GPU-Support (optional, erfordert nvidia-container-toolkit auf dem Host):
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
-
   app:
     build: .
     image: patio-app:latest
@@ -87,29 +68,24 @@ services:
     environment:
       # Service-zu-Service-URLs ueberschreiben alles aus .env.
       DATABASE_URL: postgres://${POSTGRES_USER:-patio}:${POSTGRES_PASSWORD:-patio}@postgres:5432/${POSTGRES_DB:-patio}
-      OLLAMA_BASE_URL: http://ollama:11434/v1
       WORKSPACE_PATH: /workspace
     depends_on:
       postgres:
-        condition: service_healthy
-      ollama:
         condition: service_healthy
     volumes:
       - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
       - ./logs:/opt/patio/logs
       - ./data:/opt/patio/data
       - ./tools:/opt/patio/tools
-      - ./.chat_id:/opt/patio/.chat_id
     # Port 3000 nur container-intern — Edge-Caddy proxied via proxy-Netzwerk.
     expose:
       - "3000"
     networks:
       - proxy    # externes Netzwerk vom zentralen Edge-Caddy
-      - default  # internes Netzwerk fuer postgres + ollama
+      - default  # internes Netzwerk fuer postgres
 
 volumes:
   postgres_data:
-  ollama_models:
 
 networks:
   # Externes Docker-Netzwerk vom zentralen Edge-Proxy (/opt/proxy).
@@ -117,7 +93,7 @@ networks:
   # ersten PATIO-Start existieren — wird vom Edge-Proxy-Stack angelegt.
   proxy:
     external: true
-  # Internes PATIO-Netzwerk fuer postgres + ollama + app.
+  # Internes PATIO-Netzwerk fuer postgres + app.
   # Compose erstellt das automatisch — Definition hier rein zur
   # Klarheit, damit alle Services explizit ein Netzwerk referenzieren.
   default:

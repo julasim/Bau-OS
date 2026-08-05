@@ -49,9 +49,15 @@ function actorFromCtx(c: Context<AppEnv>): {
   };
 }
 
-// Alle Routes hier brauchen Admin-Rechte.
-adminUsersRoutes.use("/admin/users/*", adminMiddleware);
-adminUsersRoutes.use("/admin/users", adminMiddleware);
+// Alle /admin-Routes dieses Routers brauchen Admin-Rechte. Bewusst breit auf
+// "/admin/*" statt je Pfad einzeln: die vorherigen Guards deckten nur
+// /admin/users(/*) ab, wodurch /admin/audit ungeschuetzt danebenlag und jeder
+// angemeldete Nutzer Login-Versuche, 2FA-Events und IPs aller Konten lesen
+// konnte. Mit dem Prefix-Guard ist auch jede kuenftige Admin-Route gedeckt.
+//
+// Nicht betroffen: /users/mini (siehe unten) — die Route hat kein /admin-
+// Prefix und ist absichtlich fuer alle angemeldeten Nutzer offen.
+adminUsersRoutes.use("/admin/*", adminMiddleware);
 
 // Mini-Liste fuer normale User: nur id+username+displayName, fuer Picker
 // in TeamDetailView, Teilen-Modal, Member-Resolver. KEIN Admin-Guard,

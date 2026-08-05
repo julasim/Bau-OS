@@ -68,9 +68,11 @@ const PROJECT_NAV: ProjNavItem[] = [
   { tab: "bautagebuch", label: "Bautagebuch", icon: "book" },
   { tab: "meetings", label: "Meetings", icon: "kanban" },
   { tab: "stunden", label: "Stunden", icon: "clock" },
-  { tab: "verlauf", label: "Verlauf", icon: "layers" },
   { tab: "zugriff", label: "Zugriff", icon: "lock", adminOnly: true },
 ];
+// Die Liste muss deckungsgleich mit VALID_TABS in ProjectDetailView.vue
+// bleiben — ein Eintrag ohne Gegenstueck setzt zwar ?tab=, faellt intern
+// aber auf "uebersicht" zurueck und bleibt in der Sidebar aktiv markiert.
 const visibleProjectNav = computed(() => PROJECT_NAV.filter((it) => !it.adminOnly || isAdmin.value));
 
 function goProjectTab(t: string) {

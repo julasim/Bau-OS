@@ -1,7 +1,7 @@
 /* ============================================================
    PATIO — App-Shell
    Geteilte Layout-Ebene für alle globalen App-Seiten
-   (Aufgaben · Termine · Akten · Telegram-Agent · Einstellungen).
+   (Aufgaben · Termine · Akten · Einstellungen).
    Baut auf tokens.css + components.css. Reihenfolge:
 
        <link rel="stylesheet" href="tokens.css" />

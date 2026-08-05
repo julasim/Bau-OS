@@ -66,9 +66,14 @@ const router = createRouter({
         { path: "settings", name: "settings", component: () => import("./views/SettingsView.vue") },
         { path: "admin/users", name: "admin-users", component: () => import("./views/AdminUsersView.vue") },
         { path: "admin/audit", name: "admin-audit", component: () => import("./views/AdminAuditView.vue") },
-        { path: "docs", name: "docs", component: () => import("./views/DocsView.vue") },
       ],
     },
+    // Auffangnetz fuer unbekannte Pfade. Ohne diese Route rendert der Router
+    // gar nichts und der Nutzer sieht eine weisse Seite ohne jeden Hinweis —
+    // ein Tippfehler in der Adresse sah dann aus wie ein kaputtes Programm.
+    // Aktuell betrifft das vor allem alte /docs-Lesezeichen: die Seite ist mit
+    // dem Umbau zum Firmenserver entfallen.
+    { path: "/:pfad(.*)*", redirect: { name: "dashboard" } },
   ],
 });
 

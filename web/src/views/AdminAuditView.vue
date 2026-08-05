@@ -54,9 +54,10 @@ const eventOptions = [
   { value: "user.create", label: "User angelegt" },
   { value: "user.delete", label: "User geloescht" },
   { value: "user.role", label: "Rolle geaendert" },
-  { value: "bot.", label: "Bot-Token", isPrefix: true },
-  { value: "pair.", label: "Telegram-Pairing", isPrefix: true },
 ];
+// Kein Filter fuer bot.* / pair.* mehr — solche Events entstehen nicht mehr.
+// Die Labels in eventLabel() bleiben: das Log ist append-only und enthaelt
+// Altbestand, der weiterhin lesbar beschriftet werden muss.
 
 async function load() {
   loading.value = true;
@@ -155,8 +156,8 @@ const filteredCount = computed(() => entries.value.length);
         <div class="eyebrow">System</div>
         <h1>Audit-Log</h1>
         <p class="audit-subtitle">
-          Sicherheitsrelevante Events: Logins, 2FA, User-CRUD, Bot-Token, Telegram-Pairing. Append-only — Eintraege
-          werden nicht editiert.
+          Sicherheitsrelevante Events: Logins, 2FA, Passwort-Aenderungen, User-CRUD. Append-only — Eintraege werden
+          nicht editiert.
         </p>
       </div>
     </header>

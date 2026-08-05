@@ -19,7 +19,6 @@ interface DashboardData {
   todayTermine: string[];
   termine: number;
   projects: number;
-  agents: string[];
 }
 
 interface Task {

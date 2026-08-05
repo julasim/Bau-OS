@@ -155,7 +155,7 @@ async function loadFiles() {
 async function loadUsers() {
   // Nur einmalig fuer Teilen-Modal. /users/mini ist kein Admin-Endpoint —
   // alle eingeloggten User koennen die Mini-Liste lesen (nur id/username/
-  // displayName, ohne Hashes oder Telegram-Daten).
+  // displayName, ohne Hashes oder sonstige Kontodaten).
   if (allUsers.value.length > 0) return;
   try {
     allUsers.value = await api.get<AdminUserMini[]>("/users/mini");

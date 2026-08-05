@@ -304,7 +304,12 @@ filesRoutes.get("/files/search", async (c) => {
   const q = c.req.query("q");
   if (!q) return c.json({ error: "Suchbegriff erforderlich (?q=...)" }, 400);
   if (!DB_ENABLED || !fileRepo) return c.json([]);
-  const results = await fileRepo.search(q);
+  // Sicherheit: wie bei GET /files den Scope IMMER ermitteln. Admin → undefined
+  // (kein Filter), Non-Admin → nur Dateien aus sichtbaren Projekten. Ohne das
+  // gab die Suche fremde Dateien inklusive contentText heraus; mit ?q=% sogar
+  // den gesamten Bestand. Limit bleibt beim Repo-Default.
+  const visibleProjectIds = await getVisibleProjectIds(c);
+  const results = await fileRepo.search(q, undefined, visibleProjectIds);
   return c.json(results);
 });
 

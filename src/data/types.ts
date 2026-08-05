@@ -15,6 +15,12 @@ export interface Task {
    *  dem Join verfuegbar; assignee (Text) bleibt als Legacy-Fallback. */
   assigneeId?: string | null;
   assigneeName?: string | null;
+  /** users.id des Erstellers. Die Spalte gibt es seit Migration 001, sie wurde
+   *  aber nie geschrieben — dadurch war eine projektlose Aufgabe OHNE
+   *  Zuweisung fuer ihren eigenen Ersteller nicht mehr aenderbar, sobald die
+   *  Schreibrouten eine Rechtepruefung bekamen. Nicht mit `assigneeId`
+   *  verwechseln: das ist eine team_members.id, das hier eine users.id. */
+  createdById?: string | null;
   date: string | null;
   dueDate?: string | null;
   location: string | null;
@@ -496,7 +502,10 @@ export interface AgentLog {
 // ── Repository Interfaces ────────────────────────────────────
 
 export interface TaskRepository {
-  save(text: string, project?: string): Promise<Task>;
+  /** @param createdById users.id des Erstellers — noetig, damit er seine
+   *  eigene Aufgabe spaeter auch ohne Projekt und ohne Zuweisung noch
+   *  bearbeiten darf. */
+  save(text: string, project?: string, createdById?: string | null): Promise<Task>;
   list(project?: string): Promise<Task[]>;
   listOpen(project?: string): Promise<Task[]>;
   get(id: string, project?: string): Promise<Task | null>;
@@ -664,7 +673,9 @@ export interface FileRepository {
   /** Liefert den Blob einer Datei (oder null, wenn kein Blob hinterlegt ist,
    *  z.B. bei Legacy-Eintraegen die noch auf filepath zeigen). */
   readBlob(id: string): Promise<{ blob: Buffer; mimeType: string | null; filename: string } | null>;
-  search(query: string, limit?: number): Promise<FileEntry[]>;
+  /** visibleProjectIds → zeigt nur Treffer aus diesen Projekten (Non-Admin-
+   *  Scoping, gleiche Semantik wie list()). undefined → kein Filter (Admin). */
+  search(query: string, limit?: number, visibleProjectIds?: string[]): Promise<FileEntry[]>;
   delete(id: string): Promise<boolean>;
   updateContent(id: string, contentText: string): Promise<boolean>;
   /** Ordnet eine bereits gespeicherte Datei einem Projekt zu (per Projektname).

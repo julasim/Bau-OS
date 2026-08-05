@@ -40,10 +40,14 @@ MCP-Client, Embeddings, DuckDuckGo-Websuche, Outlook-Abgleich und die
 Filesystem-Repos — rund **16.000 Zeilen**. Der Einstiegspunkt `src/index.ts`
 ist nicht mehr bot-, sondern API-zentriert.
 
-**Es gibt keinen Dateisystem-Modus mehr.** Der Dienst laeuft genau einmal und
-immer gegen PostgreSQL; alle Repos sind non-nullable, die 503-Guards in den
-Routen sind weg. Von `src/workspace/` bleibt nur der echte Dateizugriff
-(1.774 → 286 Zeilen) — Dokumente liegen weiterhin als Dateien.
+**Es gibt keinen Dateisystem-Modus mehr.** Der Dienst laeuft immer gegen
+PostgreSQL, und `src/index.ts` bricht ohne `DATABASE_URL` bzw. `JWT_SECRET`
+hart ab — vorher lief er weiter, galt fuer Docker als gesund und lieferte bei
+jedem Datenzugriff einen 500er. Alle Repos sind non-nullable; die 503-Guards
+sind aus den Domaenen-Routen verschwunden, in `src/api/routes/files.ts` stehen
+aber noch 17 `DB_ENABLED`-Abfragen (Altbestand, harmlos, aber irrefuehrend).
+Von `src/workspace/` bleibt nur der echte Dateizugriff (1.774 → 245 Zeilen) —
+Dokumente liegen weiterhin als Dateien.
 
 **Zwei Reste warten bewusst auf AP7 (Anmeldung):** der JSON-Konten-Fallback in
 `src/api/auth.ts` (34 `DB_ENABLED`-Stellen) und `src/api/email.ts`. Beide
@@ -53,6 +57,13 @@ umzubauen.
 > Die Migrationen `022`–`024` (Microsoft-Tabellen und die `ms_*`-Spalten an
 > `termine`) bleiben vorerst stehen — forward-only, und ein `DROP` wäre
 > unumkehrbar. Sie werden mit dem Schema-Paket abgeräumt.
+
+> **pgvector ist fuer Neuinstallationen weiterhin Pflicht.** Migration `040`
+> raeumt die `embedding`-Spalten und HNSW-Indizes aus BESTEHENDEN Datenbanken.
+> Eine frische Installation laeuft aber zuerst durch `001_init.sql`, und die
+> beginnt mit `CREATE EXTENSION vector`. Der geplante Wechsel auf ein
+> gewoehnliches `postgres:16` braucht deshalb zusaetzlich eine Anpassung von
+> `001` — sonst scheitert der erste Start.
 
 **Was als Nächstes ansteht** (Reihenfolge aus dem Plan): Server aufsetzen ·
 Volltextsuche auf `tsvector` heben · Schema ergänzen · Konfliktschutz (`rev`) ·
@@ -90,7 +101,7 @@ npm run build        # tsc → dist/ (kopiert emails/ und db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 172)
+npm test             # vitest run (alle Tests, 220 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -102,9 +113,12 @@ npm run db:status    # Migrations-Status anzeigen
 Husky + lint-staged formatieren/linten gestagte `.ts`/`.vue`-Dateien beim
 Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 8 Dateien / 60 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 119 von 222 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
-> `tests/helpers/acl-fixture.ts`). Die Suite meldet trotzdem grün. Die
+> 14 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
+> Die Suite meldet trotzdem grün, obwohl nur noch 103 Tests wirklich laufen.
+> **Diese Zahl beim Hinzufügen von Tests mitpflegen** — sie war schon einmal
+> veraltet, ausgerechnet die Warnung vor stiller Nicht-Prüfung. Die
 > Test-Datenbank ist der Container `patio-test-db` in **WSL Ubuntu-24.04**; von
 > Windows aus ist sie **nicht** über `localhost` erreichbar, es braucht die
 > WSL-IP (`wsl -d Ubuntu-24.04 -- hostname -I`, ändert sich bei jedem Start):

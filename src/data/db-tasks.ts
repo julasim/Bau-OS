@@ -19,6 +19,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     sortOrder: row.sort_order ? Number(row.sort_order) : undefined,
     completedAt: row.completed_at ? String(row.completed_at) : null,
     phaseId: row.phase_id ? String(row.phase_id) : null,
+    createdById: row.created_by ? String(row.created_by) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
   };
@@ -36,7 +37,7 @@ const TASK_SELECT = `
 `;
 
 export const dbTasks: TaskRepository = {
-  async save(text, project) {
+  async save(text, project, createdById) {
     const db = getDb();
     // Volle UUID — die tasks.id-Spalte ist UUID-typisiert, ein .slice(0,8)
     // wuerde PostgresError "invalid input syntax for type uuid" werfen.
@@ -51,8 +52,8 @@ export const dbTasks: TaskRepository = {
     }
 
     await db`
-      INSERT INTO tasks (id, text, status, project_id, created_at, updated_at)
-      VALUES (${id}, ${text}, 'offen', ${projectId}, ${now}, ${now})
+      INSERT INTO tasks (id, text, status, project_id, created_by, created_at, updated_at)
+      VALUES (${id}, ${text}, 'offen', ${projectId}, ${createdById ?? null}, ${now}, ${now})
     `;
     const task = await this.get(id);
     if (!task) throw new Error("Task nach INSERT nicht lesbar");

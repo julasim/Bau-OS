@@ -15,6 +15,7 @@ export type AppEnv = {
   };
 };
 import { cors } from "hono/cors";
+import { HTTPException } from "hono/http-exception";
 import { secureHeaders } from "hono/secure-headers";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
@@ -30,7 +31,7 @@ import {
   IS_PRODUCTION,
   JWT_SECRET_OK,
 } from "../config.js";
-import { logInfo } from "../logger.js";
+import { logInfo, logError } from "../logger.js";
 import {
   authMiddleware,
   findUser,
@@ -143,6 +144,55 @@ app.get("/api/health", (c) => {
     uptime: Math.floor((Date.now() - startedAt) / 1000),
     db: DB_ENABLED,
   });
+});
+
+// ── Zentrale Fehlerbehandlung ────────────────────────────────────────────────
+// Ohne diesen Handler beantwortet Hono jeden Wurf aus einer Route mit einem
+// nackten "Internal Server Error" als text/plain. Das Frontend erwartet
+// ueberall JSON (`await res.json()`), zeigt dem Nutzer also einen
+// JSON-Parse-Fehler statt einer Meldung — der eigentliche Fehler steht
+// nirgends.
+//
+// Wichtig: Routen, die ihre Fehler selbst beantworten (c.json({error}, 4xx)),
+// laufen hier NICHT durch — sie geben eine Response zurueck, statt zu werfen.
+// Der Handler greift nur bei unbehandelten Wuerfen. Eine bereits fertige
+// Antwort (HTTPException, z.B. aus Hono-Middleware) wird unveraendert
+// durchgereicht.
+app.onError((err, c) => {
+  if (err instanceof HTTPException) return err.getResponse();
+
+  const code = (err as NodeJS.ErrnoException).code ?? "";
+
+  // Kaputter JSON-Body: rund die Haelfte der Routen ruft `await c.req.json()`
+  // ohne eigenes try/catch. Das ist ein Client-Fehler, kein Serverfehler.
+  if (err instanceof SyntaxError) {
+    return c.json({ error: "Ungueltiger JSON-Body" }, 400);
+  }
+
+  // Postgres-SQLSTATEs, die eine sinnvolle Antwort erlauben:
+  //   57014 = abgebrochen durch statement_timeout (z.B. eine zu teure Suche)
+  //   53300 = zu viele Verbindungen
+  if (code === "57014") {
+    logError(`[API] Abfrage abgebrochen (Timeout) — ${c.req.method} ${c.req.path}`, err);
+    return c.json({ error: "Die Anfrage hat zu lange gedauert. Bitte den Umfang eingrenzen." }, 503);
+  }
+  if (code === "53300" || code === "ECONNREFUSED") {
+    logError(`[API] Datenbank nicht erreichbar — ${c.req.method} ${c.req.path}`, err);
+    return c.json({ error: "Datenbank derzeit nicht erreichbar. Bitte kurz warten." }, 503);
+  }
+
+  // Dateizugriff (Uploads, Exporte, Vorlagen).
+  if (code === "EACCES" || code === "EPERM") {
+    logError(`[API] Kein Dateizugriff — ${c.req.method} ${c.req.path}`, err);
+    return c.json({ error: "Kein Zugriff auf die Datei bzw. den Ordner." }, 403);
+  }
+  if (code === "ENOSPC") {
+    logError(`[API] Kein Speicherplatz — ${c.req.method} ${c.req.path}`, err);
+    return c.json({ error: "Kein Speicherplatz mehr auf dem Server." }, 507);
+  }
+
+  logError(`[API] ${c.req.method} ${c.req.path}`, err);
+  return c.json({ error: "Interner Fehler — Details stehen im Log." }, 500);
 });
 
 // ── CORS ─────────────────────────────────────────────────────────────────────

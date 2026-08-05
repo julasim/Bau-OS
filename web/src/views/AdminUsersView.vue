@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { formatDate as fmtDate } from "../utils/format";
-import { ref, computed, onMounted, onUnmounted, watch } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
-import { copyToClipboard } from "../utils/clipboard";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 
@@ -637,53 +636,6 @@ function formatDate(iso?: string) {
   font-size: 11px;
 }
 
-/* ── Bot-Token-Dialog ─────────────────────────────────────── */
-.bot-status-block {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 12px 14px;
-  margin-bottom: 14px;
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: 8px;
-}
-.bot-status-block .bot-status-dot {
-  margin-top: 5px;
-  flex-shrink: 0;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.bot-status-active {
-  background: var(--color-success-text, #16a34a);
-}
-.bot-status-error {
-  background: var(--color-warning-text, #b45309);
-}
-.bot-status-inactive {
-  background: var(--color-text-faint);
-}
-.bot-steps {
-  list-style: decimal;
-  padding-left: 20px;
-  margin: 0 0 14px 0;
-  font-size: 12px;
-  color: var(--color-text-muted);
-  line-height: 1.7;
-}
-.bot-steps li {
-  margin-bottom: 4px;
-}
-.bot-link {
-  color: var(--color-primary);
-  text-decoration: underline;
-}
-.bot-input-invalid {
-  border-color: var(--color-warning-text, #b45309) !important;
-}
-
 /* ── Nutzer-Liste — Layouts ────────────────────────────────── */
 .users-list-wrap {
   overflow-x: auto;
@@ -691,8 +643,8 @@ function formatDate(iso?: string) {
 }
 .users-list-inner {
   /* Desktop: min-width damit die Spalten nicht zerquetschen.
-     Summe: 1fr Name + 90 Rolle + 70 Tg + 100 Datum + 148 Aktionen + Gaps. */
-  min-width: 700px;
+     Summe: 1fr Name + 90 Rolle + 100 Datum + 148 Aktionen + Gaps + Padding. */
+  min-width: 620px;
 }
 .users-list-header {
   gap: 12px;
