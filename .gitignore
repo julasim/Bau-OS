@@ -13,7 +13,9 @@ docker/.env
 
 # Lokale Daten (Secrets)
 /data/
-.claude/settings.local.json
+
+# Lokales Claude-Tooling (Workspace-Konvention: nie committen)
+.claude/
 
 # Testdaten mit erfundenen Projekten/Personen (nicht ins Repo)
 test-uploads/
