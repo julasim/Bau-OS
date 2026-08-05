@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { terminRepo, projectRepo } from "../../data/index.js";
+import { terminRepo, projectRepo, teamRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
@@ -8,6 +8,29 @@ export const termineRoutes = new Hono<AppEnv>();
 
 function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
+}
+
+/** Darf `ctx` diesen projektlosen Termin sehen und aendern?
+ *
+ *  Wie bei den Aufgaben fuehren zwei Wege dahin: der Termin gehoert mir
+ *  (created_by = meine users.id) oder ich bin Teilnehmer. Fuer den zweiten
+ *  Weg reicht KEIN Direktvergleich: `termine.assignee_ids` ist ein Array von
+ *  team_members-IDs (Migration 007), `ctx.userId` eine users.id — zwei
+ *  disjunkte UUID-Raeume. Die Bruecke ist `team_members.user_id`
+ *  (Migration 013), genau wie in tasks.ts und time-entries.ts.
+ *
+ *  Der Ersteller-Vergleich steht zuerst: er braucht keine Datenbank. */
+async function ownsPersonalTermin(
+  ctx: UserCtx,
+  termin: { createdById?: string | null; assigneeIds?: string[] },
+): Promise<boolean> {
+  if (!ctx.userId) return false;
+  if (termin.createdById && termin.createdById === ctx.userId) return true;
+  for (const id of termin.assigneeIds ?? []) {
+    const member = await teamRepo.get(id);
+    if (member?.userId && member.userId === ctx.userId) return true;
+  }
+  return false;
 }
 
 termineRoutes.get("/termine", async (c) => {
@@ -19,13 +42,19 @@ termineRoutes.get("/termine", async (c) => {
   const visible = await getVisibleProjectIds(ctx);
   if (visible === "all") return c.json(all);
   const visibleNames = new Set(await projectRepo.list(visible));
-  const me = ctx.userId;
 
-  const filtered = all.filter((t) => {
-    if (t.project) return visibleNames.has(t.project);
-    // ohne Projekt: User darf den Termin sehen, wenn er Teilnehmer ist.
-    return !!me && Array.isArray(t.assigneeIds) && t.assigneeIds.includes(me);
-  });
+  // Ohne Projekt ist der Termin persoenlich: sichtbar fuer den Ersteller und
+  // fuer die Teilnehmer. Der fruehere Direktvergleich assigneeIds.includes(me)
+  // traf nie zu (team_members-IDs gegen users.id) — projektlose Termine waren
+  // damit fuer Nicht-Admins grundsaetzlich unsichtbar.
+  const filtered: typeof all = [];
+  for (const t of all) {
+    if (t.project) {
+      if (visibleNames.has(t.project)) filtered.push(t);
+      continue;
+    }
+    if (await ownsPersonalTermin(ctx, t)) filtered.push(t);
+  }
   return c.json(filtered);
 });
 
@@ -36,7 +65,7 @@ termineRoutes.get("/termine/:id", async (c) => {
   if (ctx.role !== "admin") {
     const allowed = termin.project
       ? await canSeeProjectByName(ctx, termin.project)
-      : !!ctx.userId && Array.isArray(termin.assigneeIds) && termin.assigneeIds.includes(ctx.userId);
+      : await ownsPersonalTermin(ctx, termin);
     if (!allowed) return c.json({ error: "Kein Zugriff" }, 403);
   }
   return c.json(termin);
@@ -59,7 +88,7 @@ termineRoutes.post("/termine", async (c) => {
   if (body.project && !(await canSeeProjectByName(userCtx(c), body.project))) {
     return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
   }
-  const termin = await terminRepo.save(body.datum, body.text, body.uhrzeit, body.project);
+  const termin = await terminRepo.save(body.datum, body.text, body.uhrzeit, body.project, c.var.userId);
   if (typeof termin === "string") return c.json({ error: termin }, 400);
   let result = termin;
   if (
@@ -103,6 +132,18 @@ termineRoutes.put("/termine/:id", async (c) => {
       isMilestone: boolean;
     }>
   >();
+  // Rechte VOR dem Schreiben pruefen. Bisher fehlte das hier ganz: wer eine
+  // Termin-UUID kannte, konnte jeden Termin aendern — auch aus Projekten, die
+  // ihm GET verweigert haette.
+  const vorher = await terminRepo.get(id);
+  if (!vorher) return c.json({ error: "Termin nicht gefunden" }, 404);
+  const ctxPut = userCtx(c);
+  if (ctxPut.role !== "admin") {
+    const erlaubt = vorher.project
+      ? await canSeeProjectByName(ctxPut, vorher.project)
+      : await ownsPersonalTermin(ctxPut, vorher);
+    if (!erlaubt) return c.json({ error: "Kein Zugriff" }, 403);
+  }
   const termin = await terminRepo.update(id, body);
   if (!termin) return c.json({ error: "Termin nicht gefunden" }, 404);
   emit({ type: "termin", action: "updated", id });
@@ -111,13 +152,27 @@ termineRoutes.put("/termine/:id", async (c) => {
 
 termineRoutes.delete("/termine/:id", async (c) => {
   const id = c.req.param("id");
+  const termin = await terminRepo.get(id);
+  if (!termin) return c.json({ error: "Termin nicht gefunden" }, 404);
+  const ctx = userCtx(c);
+  if (ctx.role !== "admin") {
+    const erlaubt = termin.project
+      ? await canSeeProjectByName(ctx, termin.project)
+      : await ownsPersonalTermin(ctx, termin);
+    if (!erlaubt) return c.json({ error: "Kein Zugriff" }, 403);
+  }
   const ok = await terminRepo.delete(id);
   if (ok) emit({ type: "termin", action: "deleted", id });
   return c.json({ ok });
 });
 
-// Legacy compat
+// Loeschen per Text — Altbestand aus der Bot-Aera, als Termine ueber ihren
+// Wortlaut adressiert wurden. Kein Aufrufer im Frontend. Sie bleibt vorerst
+// bestehen, ist aber jetzt Admins vorbehalten: eine Rechtepruefung waere hier
+// nur scheinbar moeglich, weil terminRepo.delete() den Datensatz erst intern
+// per Textvergleich aufloest und dabei projektuebergreifend trifft.
 termineRoutes.delete("/termine", async (c) => {
+  if (c.var.userRole !== "admin") return c.json({ error: "Kein Zugriff" }, 403);
   const { text, project } = await c.req.json<{ text: string; project?: string }>();
   if (!text) return c.json({ error: "Text erforderlich" }, 400);
   const ok = await terminRepo.delete(text, project);

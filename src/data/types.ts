@@ -55,6 +55,11 @@ export interface Termin {
   phaseId?: string | null;
   /** Migration 035: markiert den Termin als Meilenstein (Gantt-Raute). */
   isMilestone?: boolean;
+  /** users.id des Erstellers — gleiche Begruendung wie bei Task.createdById:
+   *  ohne dieses Feld hat ein projektloser Termin keinen erkennbaren
+   *  Eigentuemer, und die Rechtepruefung muesste ihn allen verweigern.
+   *  Nicht mit `assigneeIds` verwechseln: das sind team_members-IDs. */
+  createdById?: string | null;
   createdAt: string;
 }
 
@@ -515,7 +520,13 @@ export interface TaskRepository {
 }
 
 export interface TerminRepository {
-  save(datum: string, text: string, uhrzeit?: string, project?: string): Promise<Termin | string>;
+  save(
+    datum: string,
+    text: string,
+    uhrzeit?: string,
+    project?: string,
+    createdById?: string | null,
+  ): Promise<Termin | string>;
   list(project?: string): Promise<Termin[]>;
   get(id: string, project?: string): Promise<Termin | null>;
   update(id: string, updates: Partial<Termin>, project?: string): Promise<Termin | null>;

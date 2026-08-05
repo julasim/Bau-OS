@@ -101,7 +101,7 @@ npm run build        # tsc → dist/ (kopiert emails/ und db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 220 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (alle Tests, 228 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -113,7 +113,7 @@ npm run db:status    # Migrations-Status anzeigen
 Husky + lint-staged formatieren/linten gestagte `.ts`/`.vue`-Dateien beim
 Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 119 von 222 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 127 von 230 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
 > 14 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
 > Die Suite meldet trotzdem grün, obwohl nur noch 103 Tests wirklich laufen.

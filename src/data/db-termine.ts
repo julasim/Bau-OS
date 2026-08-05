@@ -27,6 +27,7 @@ function rowToTermin(row: Record<string, unknown>): Termin {
     color: row.color ? String(row.color) : null,
     phaseId: row.phase_id ? String(row.phase_id) : null,
     isMilestone: row.is_milestone === true,
+    createdById: row.created_by ? String(row.created_by) : null,
     createdAt: String(row.created_at),
   };
 }
@@ -48,7 +49,7 @@ const TERMIN_SELECT = `
 `;
 
 export const dbTermine: TerminRepository = {
-  async save(datum, text, uhrzeit, project) {
+  async save(datum, text, uhrzeit, project, createdById) {
     const datumErr = validateDatum(datum);
     if (datumErr) return datumErr;
     if (uhrzeit) {
@@ -70,8 +71,8 @@ export const dbTermine: TerminRepository = {
     }
 
     await db`
-      INSERT INTO termine (id, text, datum, uhrzeit, project_id, created_at)
-      VALUES (${id}, ${text}, ${datum}, ${uhrzeit ?? null}, ${projectId}, ${now})
+      INSERT INTO termine (id, text, datum, uhrzeit, project_id, created_by, created_at)
+      VALUES (${id}, ${text}, ${datum}, ${uhrzeit ?? null}, ${projectId}, ${createdById ?? null}, ${now})
     `;
     const termin = await this.get(id);
     if (!termin) throw new Error("Termin nach INSERT nicht lesbar");
