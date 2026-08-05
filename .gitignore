@@ -5,13 +5,11 @@ dist/
 logs/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
-mcp.json
-
-# Supabase Docker (wird von setup-supabase.sh geklont)
-docker/supabase/
 docker/.env
 
-# Lokale Daten (Secrets)
+# Lokale Daten (Secrets). Enthaelt nur noch users.json — den Legacy-Konten-
+# Fallback, den importLegacyJsonUsers() beim Boot einliest. Faellt mit AP7
+# (Anmeldung haerten) weg.
 /data/
 
 # Lokales Claude-Tooling (Workspace-Konvention: nie committen)

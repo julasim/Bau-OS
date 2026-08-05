@@ -126,13 +126,13 @@ Verzeichnissen nicht im Dateibrowser auftauchen.
 
 | Konstante | Standardwert | `.env`-Variable | Beschreibung |
 |---|---|---|---|
-| `LOG_FILE` | `<cwd>/logs/bot.log` | — | Lesbares Textlog |
+| `LOG_FILE` | `<cwd>/logs/patio.log` | — | Lesbares Textlog |
 | `MAX_LOG_LINES` | `500` | — | Zeilenlimit des Textlogs (Rotation) |
 | `LOG_JSONL_MAX_BYTES` | `5242880` (5 MB) | `LOG_JSONL_MAX_BYTES` | Größe, ab der das JSONL-Log rotiert |
 | `LOG_JSONL_KEEP_FILES` | `5` | `LOG_JSONL_KEEP_FILES` | Anzahl aufbewahrter rotierter Dateien |
 
 Das JSONL-Log ist vollständig und maschinenlesbar, das Textlog gekürzt und
-für den schnellen Blick gedacht. Der Dateiname `bot.log` ist ein Überbleibsel
+für den schnellen Blick gedacht. Der Dateiname `patio.log` ist ein Überbleibsel
 aus der Bot-Zeit und in `src/config.ts` fest verdrahtet.
 
 ## System

@@ -278,5 +278,5 @@ echo "Node:      $(node --version 2>/dev/null || echo 'nicht installiert')"
 echo "RAM:       $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
 echo "Disk:      $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
 echo "Backup:    $(find /opt/patio-backups -name 'patio-backup-*.tar.gz' -mtime -1 | wc -l) aus 24 h"
-echo "Fehler:    $(grep -c '\"level\":\"error\"' /opt/patio/logs/bot.jsonl 2>/dev/null || echo '?') im JSONL-Log"
+echo "Fehler:    $(grep -c '\"level\":\"error\"' /opt/patio/logs/patio.jsonl 2>/dev/null || echo '?') im JSONL-Log"
 ```

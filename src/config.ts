@@ -25,13 +25,15 @@ export const WORKSPACE_LOGS_DIR = "MEMORY_LOGS";
 export const TIMEZONE = "Europe/Vienna";
 export const LOCALE = "de-AT";
 export const LANGUAGE = "Deutsch";
-export const LOG_FILE = path.join(process.cwd(), "logs", "bot.log");
+// Hiess bis zum Umbau zum Firmenserver "bot.log" — den Telegram-Bot gibt es
+// nicht mehr, der Name blieb stehen und war beim Suchen im Betrieb irrefuehrend.
+export const LOG_FILE = path.join(process.cwd(), "logs", "patio.log");
 
 // ── Logging ──────────────────────────────────────────────────────────────────
-export const MAX_LOG_LINES = 500; // bot.log Zeilen-Limit
+export const MAX_LOG_LINES = 500; // patio.log Zeilen-Limit
 
 // JSONL-Log (maschinenlesbar, vollstaendig): groessenbasierte Rotation.
-// Bei Ueberschreitung wird bot.jsonl → bot.jsonl.1, bot.jsonl.1 → .2 ...
+// Bei Ueberschreitung wird patio.jsonl → patio.jsonl.1, patio.jsonl.1 → .2 ...
 // und das aelteste geloescht. Verhindert dass Disk volllaeuft auf
 // Long-Running-Installationen. 5 MB * 5 Files = 25 MB max im Worst-Case.
 export const LOG_JSONL_MAX_BYTES = parseInt(process.env.LOG_JSONL_MAX_BYTES || String(5 * 1024 * 1024), 10);

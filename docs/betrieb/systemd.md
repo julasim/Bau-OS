@@ -99,8 +99,8 @@ sudo journalctl -u patio --since today   # seit heute
 sudo journalctl -u patio -p err          # nur Fehler
 ```
 
-PATIO schreibt zusätzlich in `logs/bot.log` (gekürzt, für den schnellen
-Blick) und `logs/bot.jsonl` (vollständig, maschinenlesbar, rotierend).
+PATIO schreibt zusätzlich in `logs/patio.log` (gekürzt, für den schnellen
+Blick) und `logs/patio.jsonl` (vollständig, maschinenlesbar, rotierend).
 
 ## Sauberes Herunterfahren
 

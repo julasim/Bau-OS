@@ -6,7 +6,7 @@ import { LOG_FILE, MAX_LOG_LINES, TIMEZONE, LOG_JSONL_MAX_BYTES, LOG_JSONL_KEEP_
 //
 // console.* schreibt sofort nach stdout/stderr — das ist die primaere
 // Observability im Container (Docker/journald sammeln es). Die Datei-Persistenz
-// (bot.log fuer readRecentLogs + bot.jsonl maschinenlesbar) laeuft ueber eine
+// (patio.log fuer readRecentLogs + patio.jsonl maschinenlesbar) laeuft ueber eine
 // SERIALISIERTE Async-Queue: kein fs.*Sync mehr im Hot-Path, der Event-Loop
 // blockiert nicht mehr bei jedem Log-Aufruf. Ein einziger Consumer arbeitet die
 // Queue der Reihe nach ab — das garantiert Log-Reihenfolge und verhindert Races
@@ -37,8 +37,8 @@ const jsonlPath = LOG_FILE.replace(/\.log$/, ".jsonl");
 
 // ── Async Write-Queue ─────────────────────────────────────────────────────────
 
-/** Ein Queue-Eintrag: eine human-lesbare Zeile (bot.log) und/oder eine
- *  JSONL-Zeile (bot.jsonl). Beide OHNE abschliessendes "\n" — das setzt der
+/** Ein Queue-Eintrag: eine human-lesbare Zeile (patio.log) und/oder eine
+ *  JSONL-Zeile (patio.jsonl). Beide OHNE abschliessendes "\n" — das setzt der
  *  Writer. */
 interface LogJob {
   human?: string;
@@ -53,7 +53,7 @@ function ensureLogDir(): void {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
-/** Zeilenzahl der bot.log einmalig ermitteln (fuer das Trim-Limit). */
+/** Zeilenzahl der patio.log einmalig ermitteln (fuer das Trim-Limit). */
 async function initLineCount(): Promise<void> {
   if (lineCount >= 0) return;
   try {

@@ -55,8 +55,8 @@ PATIO schreibt zusätzlich in `logs/`:
 
 | Datei | Inhalt |
 |---|---|
-| `bot.log` | Lesbarer Auszug, auf 500 Zeilen gekürzt |
-| `bot.jsonl` | Vollständig und maschinenlesbar, rotiert bei 5 MB, 5 Dateien |
+| `patio.log` | Lesbarer Auszug, auf 500 Zeilen gekürzt |
+| `patio.jsonl` | Vollständig und maschinenlesbar, rotiert bei 5 MB, 5 Dateien |
 
 Die Dateinamen sind ein Überbleibsel aus der Bot-Zeit und in `src/config.ts`
 fest hinterlegt.
@@ -65,11 +65,11 @@ Auswerten:
 
 ```bash
 # Fehler des heutigen Tages
-grep '"level":"error"' /opt/patio/logs/bot.jsonl | tail -20
+grep '"level":"error"' /opt/patio/logs/patio.jsonl | tail -20
 
 # mit jq
 jq -r 'select(.level=="error") | "\(.ts) \(.ctx // "-") \(.msg)"' \
-  /opt/patio/logs/bot.jsonl | tail -20
+  /opt/patio/logs/patio.jsonl | tail -20
 ```
 
 ::: tip Was im Log auffallen sollte

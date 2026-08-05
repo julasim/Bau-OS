@@ -166,7 +166,7 @@ automatische Löschen ab. Aufgeräumt wird vom Wartungs-Cron
 ### LOG_JSONL_MAX_BYTES / LOG_JSONL_KEEP_FILES
 
 Das maschinenlesbare JSONL-Log rotiert größenbasiert: bei Überschreitung
-wird `bot.jsonl` zu `bot.jsonl.1`, `.1` zu `.2` und so weiter; die älteste
+wird `patio.jsonl` zu `patio.jsonl.1`, `.1` zu `.2` und so weiter; die älteste
 Datei fällt weg. Standard sind 5 MB und 5 Dateien, also höchstens 25 MB.
 
 ## Rate-Limiting
