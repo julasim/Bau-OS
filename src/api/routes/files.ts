@@ -6,7 +6,7 @@ import { WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../
 import { readFile, listFolder } from "../../workspace/index.js";
 import { fileRepo, projectRepo } from "../../data/index.js";
 import { getDb } from "../../db/client.js";
-import { emit } from "../events.js";
+import { emit, emitForProjectName } from "../events.js";
 import { validateUpload } from "../file-validation.js";
 import type { AppEnv } from "../server.js";
 
@@ -160,7 +160,7 @@ filesRoutes.post("/files/mkdir", async (c) => {
     return c.json({ error: "Zugriff verweigert" }, 403);
   if (fs.existsSync(fullPath)) return c.json({ error: "Ordner existiert bereits" }, 409);
   fs.mkdirSync(fullPath, { recursive: true });
-  emit({ type: "file", action: "created", id: body.path });
+  emit({ type: "file", action: "created", id: body.path, projectId: null }, { actorId: c.get("userId") });
   return c.json({ success: true });
 });
 
@@ -187,7 +187,9 @@ filesRoutes.delete("/files", async (c) => {
       }
     }
     await fileRepo.delete(body.id);
-    emit({ type: "file", action: "deleted", id: file.filename });
+    emitForProjectName({ type: "file", action: "deleted", id: file.filename }, file.project, {
+      actorId: c.get("userId"),
+    });
     return c.json({ success: true });
   }
 
@@ -203,7 +205,7 @@ filesRoutes.delete("/files", async (c) => {
   } else {
     fs.unlinkSync(fullPath);
   }
-  emit({ type: "file", action: "deleted", id: body.path });
+  emit({ type: "file", action: "deleted", id: body.path, projectId: null }, { actorId: c.get("userId") });
   return c.json({ success: true });
 });
 
@@ -372,7 +374,10 @@ filesRoutes.post("/files/upload", async (c) => {
       }
     }
 
-    if (saved.length > 0) emit({ type: "file", action: "created", id: saved.join(", ") });
+    if (saved.length > 0)
+      emitForProjectName({ type: "file", action: "created", id: saved.join(", ") }, project, {
+        actorId: c.get("userId"),
+      });
     return c.json({ success: true, uploaded: saved, dbEntries });
   }
 
@@ -400,7 +405,10 @@ filesRoutes.post("/files/upload", async (c) => {
     saved.push(relativePath);
   }
 
-  if (saved.length > 0) emit({ type: "file", action: "created", id: saved.join(", ") });
+  // Legacy-FS-Zweig: hier gibt es keine Projektzuordnung, das Ereignis bleibt
+  // projektlos (Admins + Ausloeser).
+  if (saved.length > 0)
+    emit({ type: "file", action: "created", id: saved.join(", "), projectId: null }, { actorId: c.get("userId") });
   return c.json({ success: true, uploaded: saved, dbEntries });
 });
 

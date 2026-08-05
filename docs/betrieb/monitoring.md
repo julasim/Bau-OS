@@ -1,245 +1,178 @@
 # Monitoring
 
-PATIO überwachen: Logs, Health-Checks und Systemstatus.
+PATIO überwachen: Health-Check, Logs, Systemzustand.
 
-## Bot-Logs via journalctl
-
-Die wichtigste Anlaufstelle für Logs:
+## Health-Check
 
 ```bash
-# Live-Logs
+curl -s http://localhost:3000/api/health
+```
+
+```json
+{ "ok": true, "uptime": 86400, "db": true }
+```
+
+Der Endpunkt liegt **vor** der Anmeldung und vor dem Rate-Limit und liefert
+bewusst wenig: keine Versionen, keine Build-Hashes, keine Zugangsdaten — er
+ist anonym erreichbar.
+
+::: warning Was der Health-Check nicht sagt
+`ok: true` heißt: der Prozess lebt und nimmt Anfragen an. `db: true` heißt
+lediglich, dass eine `DATABASE_URL` konfiguriert ist — **nicht**, dass die
+Datenbank gerade antwortet. Eine ausgefallene Datenbank zeigt sich hier
+nicht; sie zeigt sich als 503 auf den fachlichen Routen.
+:::
+
+Aus dem Container heraus:
+
+```bash
+docker compose exec app curl -s localhost:3000/api/health
+```
+
+## Logs
+
+### Docker Compose
+
+```bash
+docker compose logs -f app                # live
+docker compose logs --since 2m app        # letzte zwei Minuten
+docker compose logs --tail 100 app        # letzte 100 Zeilen
+docker compose logs app | grep -i error
+```
+
+### systemd
+
+```bash
 sudo journalctl -u patio -f
-
-# Letzte 100 Zeilen
 sudo journalctl -u patio -n 100
-
-# Logs seit heute
 sudo journalctl -u patio --since today
-
-# Logs der letzten Stunde
-sudo journalctl -u patio --since "1 hour ago"
-
-# Nur Fehler
 sudo journalctl -u patio -p err
-
-# Logs zwischen zwei Zeitpunkten
-sudo journalctl -u patio --since "2026-04-07 08:00" --until "2026-04-07 12:00"
 ```
 
-## /logs Befehl in Telegram
+### Logdateien
 
-PATIO hat einen eingebauten `/logs`-Befehl für Administratoren:
+PATIO schreibt zusätzlich in `logs/`:
 
+| Datei | Inhalt |
+|---|---|
+| `bot.log` | Lesbarer Auszug, auf 500 Zeilen gekürzt |
+| `bot.jsonl` | Vollständig und maschinenlesbar, rotiert bei 5 MB, 5 Dateien |
+
+Die Dateinamen sind ein Überbleibsel aus der Bot-Zeit und in `src/config.ts`
+fest hinterlegt.
+
+Auswerten:
+
+```bash
+# Fehler des heutigen Tages
+grep '"level":"error"' /opt/patio/logs/bot.jsonl | tail -20
+
+# mit jq
+jq -r 'select(.level=="error") | "\(.ts) \(.ctx // "-") \(.msg)"' \
+  /opt/patio/logs/bot.jsonl | tail -20
 ```
-/logs        → Zeigt die letzten Log-Einträge
-```
 
-::: tip Direkt im Chat
-Du brauchst keinen SSH-Zugang für einen schnellen Blick auf die Logs. Schreibe einfach `/logs` an den Bot.
+::: tip Was im Log auffallen sollte
+Wiederkehrende `[FATAL] Uncaught Exception` oder `[FATAL] Unhandled Promise
+Rejection` sind echte Befunde. PATIO beendet sich in diesen Fällen bewusst
+und wird neu gestartet — die Anwendung läuft also weiter, aber die Ursache
+bleibt. Solche Zeilen gehören untersucht, nicht weggeklickt.
 :::
 
-## bot.log Datei
-
-PATIO schreibt zusätzlich eine `bot.log` Datei:
+## Systemzustand
 
 ```bash
-cat /home/patio/patio/bot.log
-```
+# Container
+docker compose ps
+docker stats --no-stream
 
-::: warning Auto-Trimming
-Die `bot.log` Datei wird automatisch auf **maximal 500 Zeilen** gekürzt. Ältere Einträge werden entfernt. Für vollständige Logs nutze `journalctl`.
-:::
-
-## Ollama-Status prüfen
-
-```bash
-# Service-Status
-sudo systemctl status ollama
-
-# API erreichbar?
-curl -s http://localhost:11434/v1/models | head -20
-
-# Welche Modelle sind geladen?
-ollama list
-
-# Ollama-Logs
-sudo journalctl -u ollama -n 50
-```
-
-## Systemressourcen
-
-### RAM-Verbrauch
-
-```bash
-free -h
-```
-
-::: warning Kritische Schwelle
-Wenn der freie RAM unter 200 MB fällt, wird Ollama langsam oder stürzt ab. Prüfe regelmäßig:
-```bash
-free -h | grep Mem
-```
-:::
-
-### Festplattenplatz
-
-```bash
+# Speicherplatz
 df -h /
+du -sh /opt/patio-workspace
+du -sh /opt/patio-backups
 
-# Größe des Vaults
-du -sh /home/patio/vault
-
-# Größe der Backups
-du -sh /home/patio/backups
-
-# Größe der Ollama-Modelle
-du -sh /usr/share/ollama/.ollama/models
+# Größe der Datenbank
+docker compose exec postgres \
+  psql -U patio -d patio -c "SELECT pg_size_pretty(pg_database_size('patio'));"
 ```
 
-### CPU und Prozesse
+::: warning Speicherplatz ist der wahrscheinlichste Ausfallgrund
+Hochgeladene Dateien liegen in der Datenbank, die Backups daneben auf der
+Platte. Läuft sie voll, antwortet die API mit HTTP 507 („Kein Speicherplatz
+mehr auf dem Server") und Schreibvorgänge scheitern. Ein Schwellwert-Alarm
+bei 80 Prozent ist die lohnendste einzelne Überwachungsmaßnahme.
+:::
+
+## Datenbank prüfen
 
 ```bash
-# PATIO Prozess finden
-ps aux | grep "node dist/index.js"
+# Antwortet sie?
+docker compose exec postgres psql -U patio -d patio -c "SELECT 1;"
 
-# Systemlast
-uptime
+# Migrationsstand
+docker compose exec app npm run db:status
 
-# Top-Prozesse
-top -b -n 1 | head -20
+# Aktive Verbindungen
+docker compose exec postgres \
+  psql -U patio -d patio -c "SELECT count(*) FROM pg_stat_activity;"
 ```
 
-## Health-Check-Skript
+## Einfacher Prüfskript
 
-Erstelle ein Skript für einen schnellen Gesundheitscheck:
-
-```bash
-nano /home/patio/health-check.sh
-```
-
-Inhalt:
+`/opt/patio/health-check.sh`:
 
 ```bash
 #!/bin/bash
+echo "=== PATIO Health Check — $(date) ==="
 
-echo "=== PATIO Health Check ==="
-echo "Datum: $(date)"
-echo ""
-
-# 1. Bot-Service
-echo -n "Bot-Service:     "
-if systemctl is-active --quiet patio; then
-    echo "OK (läuft)"
+echo -n "Anwendung:   "
+if curl -sf http://localhost:3000/api/health > /dev/null; then
+  echo "OK"
 else
-    echo "FEHLER (gestoppt!)"
+  echo "FEHLER (antwortet nicht)"
 fi
 
-# 2. Ollama-Service
-echo -n "Ollama-Service:  "
-if systemctl is-active --quiet ollama; then
-    echo "OK (läuft)"
+echo -n "Datenbank:   "
+if docker compose -f /opt/patio/docker-compose.yml exec -T postgres \
+     pg_isready -U patio > /dev/null 2>&1; then
+  echo "OK"
 else
-    echo "FEHLER (gestoppt!)"
+  echo "FEHLER (nicht erreichbar)"
 fi
 
-# 3. Ollama API
-echo -n "Ollama-API:      "
-if curl -s http://localhost:11434/v1/models > /dev/null 2>&1; then
-    echo "OK (erreichbar)"
-else
-    echo "FEHLER (nicht erreichbar!)"
+echo -n "Festplatte:  "
+DISK=$(df / | awk 'NR==2 {print $5}' | tr -d '%')
+if   [ "$DISK" -lt 80 ]; then echo "OK (${DISK}% belegt)"
+elif [ "$DISK" -lt 90 ]; then echo "WARNUNG (${DISK}% belegt)"
+else echo "KRITISCH (${DISK}% belegt)"
 fi
 
-# 4. RAM
-echo -n "RAM verfügbar:  "
-FREE_MB=$(free -m | awk '/Mem:/ {print $7}')
-if [ "$FREE_MB" -gt 500 ]; then
-    echo "OK (${FREE_MB} MB frei)"
-elif [ "$FREE_MB" -gt 200 ]; then
-    echo "WARNUNG (${FREE_MB} MB frei)"
-else
-    echo "KRITISCH (${FREE_MB} MB frei!)"
-fi
-
-# 5. Festplatte
-echo -n "Festplatte:      "
-DISK_PERCENT=$(df / | awk 'NR==2 {print $5}' | tr -d '%')
-if [ "$DISK_PERCENT" -lt 80 ]; then
-    echo "OK (${DISK_PERCENT}% belegt)"
-elif [ "$DISK_PERCENT" -lt 90 ]; then
-    echo "WARNUNG (${DISK_PERCENT}% belegt)"
-else
-    echo "KRITISCH (${DISK_PERCENT}% belegt!)"
-fi
-
-# 6. Vault vorhanden
-echo -n "Vault:           "
-if [ -d "/home/patio/vault/Agents/Main" ]; then
-    echo "OK (vorhanden)"
-else
-    echo "FEHLER (nicht gefunden!)"
-fi
-
-echo ""
-echo "=== Ende ==="
+echo -n "Backup:      "
+NEUESTES=$(find /opt/patio-backups -name 'patio-backup-*.tar.gz' -mtime -1 | wc -l)
+[ "$NEUESTES" -gt 0 ] && echo "OK (Backup aus den letzten 24 h)" \
+                      || echo "WARNUNG (kein aktuelles Backup)"
 ```
 
 ```bash
-chmod +x /home/patio/health-check.sh
-./health-check.sh
+chmod +x /opt/patio/health-check.sh
+/opt/patio/health-check.sh
 ```
 
-Erwartete Ausgabe:
-
-```
-=== PATIO Health Check ===
-Datum: Mon Apr  7 10:30:00 CEST 2026
-
-Bot-Service:     OK (läuft)
-Ollama-Service:  OK (läuft)
-Ollama-API:      OK (erreichbar)
-RAM verfügbar:  OK (2048 MB frei)
-Festplatte:      OK (35% belegt)
-Vault:           OK (vorhanden)
-
-=== Ende ===
-```
-
-## MCP-Server Status
-
-MCP-Server-Verbindungen koennen im Telegram-Chat geprueft werden:
-
-```
-Nutze mcp_server_auflisten
-```
-
-Oder in den Logs:
-
-```bash
-sudo journalctl -u patio --since today | grep -i mcp
-```
-
-Erwartete Log-Eintraege bei gesundem System:
-
-```
-[MCP] filesystem verbunden — 11 Tool(s): read_file, write_file, ...
-```
-
-::: tip Graceful Shutdown
-Bei `systemctl stop patio` werden alle MCP-Server sauber getrennt (`disconnectAll()`). Verwaiste MCP-Prozesse sind damit ausgeschlossen. Pruefen: `ps aux | grep mcp`
-:::
-
-## Automatischer Health Check (optional)
-
-Fuege einen stündlichen Check zum Crontab hinzu:
-
-```bash
-crontab -e
-```
+Stündlich per Cron:
 
 ```cron
-0 * * * * /home/patio/health-check.sh >> /home/patio/health.log 2>&1
+0 * * * * /opt/patio/health-check.sh >> /opt/patio/logs/health.log 2>&1
 ```
+
+## Alarmierung
+
+Ein Prüfskript, dessen Ausgabe niemand liest, meldet keinen Ausfall. Im
+Büronetz genügt in der Regel eine Mail an die Administration, sobald das
+Skript etwas anderes als „OK" liefert — der SMTP-Server steht ohnehin schon
+für die Anmeldecodes bereit.
+
+Externe Überwachungsdienste scheiden aus: der Rechner ist von außen nicht
+erreichbar, und das soll er auch nicht sein.
 
 ## Nächster Schritt
 

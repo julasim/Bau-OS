@@ -7,7 +7,7 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
-import type { ProjectInvoice, ProjectInvoiceInput, InvoiceRepository } from "./types.js";
+import type { ProjectInvoice, InvoiceRepository } from "./types.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 

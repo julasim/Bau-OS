@@ -40,7 +40,7 @@ companiesRoutes.post("/companies", async (c) => {
       website: body.website?.trim() || null,
       notes: body.notes?.trim() || null,
     });
-    emit({ type: "team", action: "created", id: company.id });
+    emit({ type: "team", action: "created", id: company.id }, { actorId: c.var.userId });
     return c.json(company, 201);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -66,7 +66,7 @@ companiesRoutes.patch("/companies/:id", async (c) => {
   try {
     const company = await teamRepo.updateCompany(id, updates);
     if (!company) return c.json({ error: "Firma nicht gefunden" }, 404);
-    emit({ type: "team", action: "updated", id });
+    emit({ type: "team", action: "updated", id }, { actorId: c.var.userId });
     return c.json(company);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -81,6 +81,6 @@ companiesRoutes.delete("/companies/:id", async (c) => {
   if (!teamRepo.deleteCompany) return c.json({ error: "Nicht unterstützt" }, 501);
   const id = c.req.param("id");
   const ok = await teamRepo.deleteCompany(id);
-  if (ok) emit({ type: "team", action: "deleted", id });
+  if (ok) emit({ type: "team", action: "deleted", id }, { actorId: c.var.userId });
   return c.json({ ok });
 });

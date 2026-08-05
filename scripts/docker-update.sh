@@ -99,19 +99,33 @@ else
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. Docker: Offizielle Images pullen (postgres/ollama/caddy), App rebuilden
+# 5. Docker: Postgres-Image pullen, App rebuilden
+#
+# Frueher stand hier `docker compose pull postgres ollama caddy`. Beide
+# Zusatz-Services gibt es in der docker-compose.yml nicht mehr — `ollama` ist
+# mit AP0 entfallen, `caddy` steht nur noch im Standalone-File. Compose bricht
+# bei unbekannten Service-Namen ab, und wegen `if ! docker compose pull ...`
+# hat das Update an dieser Stelle stillschweigend aufgegeben.
 # ─────────────────────────────────────────────────────────────────────────────
 
-echo -e "  ${GREEN}▶ docker compose pull postgres ollama caddy ...${NC}"
-if ! docker compose pull postgres ollama caddy; then
+# Das Proxy-Netz kommt vom zentralen Edge-Proxy und ist in der compose-Datei
+# als `external: true` deklariert. Fehlt es, verweigert Compose den Start mit
+# "network proxy declared as external, but could not be found".
+if ! docker network inspect proxy >/dev/null 2>&1; then
+  echo -e "  ${YELLOW}⚠ Docker-Netz 'proxy' fehlt — wird angelegt${NC}"
+  docker network create proxy >/dev/null
+fi
+
+echo -e "  ${GREEN}▶ docker compose pull postgres ...${NC}"
+if ! docker compose pull postgres; then
   echo -e "  ${YELLOW}⚠ Pull fehlgeschlagen (Offline? Registry down?) — fahre mit lokalen Images fort${NC}"
 fi
 
 echo -e "  ${GREEN}▶ docker compose up -d --build app ...${NC}"
 docker compose up -d --build app
 
-# caddy und ollama nur starten wenn sie down sind (kein unnoetiger Restart)
-docker compose up -d postgres ollama caddy
+# Postgres nur starten wenn er down ist (kein unnoetiger Restart)
+docker compose up -d postgres
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Health-Check (einfach: laeuft der Container?)

@@ -2,7 +2,7 @@ import { defineConfig } from "vitepress";
 
 export default defineConfig({
   title: "PATIO",
-  description: "KI-Assistent für Planung, Termine und Projektsteuerung",
+  description: "Büro-Software für Architektur- und Planungsbüros — im eigenen Netz betrieben",
   lang: "de-DE",
 
   themeConfig: {
@@ -11,7 +11,7 @@ export default defineConfig({
       { text: "Start", link: "/start/uebersicht" },
       { text: "Konzepte", link: "/konzepte/architektur" },
       { text: "Betrieb", link: "/betrieb/voraussetzungen" },
-      { text: "Referenz", link: "/referenz/tools" },
+      { text: "Referenz", link: "/referenz/dateistruktur" },
     ],
 
     sidebar: [
@@ -26,47 +26,19 @@ export default defineConfig({
       },
       {
         text: "Konzepte",
-        items: [
-          { text: "Architektur", link: "/konzepte/architektur" },
-          { text: "Agenten", link: "/konzepte/agenten" },
-          { text: "Workspace", link: "/konzepte/workspace" },
-          { text: "Vault", link: "/konzepte/vault" },
-          { text: "Heartbeat", link: "/konzepte/heartbeat" },
-          { text: "Memory", link: "/konzepte/memory" },
-        ],
-      },
-      {
-        text: "Agenten-Dateien",
-        collapsed: true,
-        items: [
-          { text: "IDENTITY.md", link: "/agenten/identity" },
-          { text: "SOUL.md", link: "/agenten/soul" },
-          { text: "BOOT.md", link: "/agenten/boot" },
-          { text: "AGENTS.md", link: "/agenten/agents" },
-          { text: "TOOLS.md", link: "/agenten/tools" },
-          { text: "MEMORY.md", link: "/agenten/memory" },
-          { text: "HEARTBEAT.md", link: "/agenten/heartbeat" },
-          { text: "BOOTSTRAP.md", link: "/agenten/bootstrap" },
-          { text: "USER.md", link: "/agenten/user" },
-          { text: "MEMORY_LOGS/", link: "/agenten/memory-logs" },
-        ],
+        items: [{ text: "Architektur", link: "/konzepte/architektur" }],
       },
       {
         text: "Konfiguration",
-        items: [
-          { text: "Umgebungsvariablen", link: "/konfiguration/env" },
-          { text: "Modelle", link: "/konfiguration/modelle" },
-          { text: "Slash-Commands", link: "/konfiguration/commands" },
-          { text: "Anpassung", link: "/konfiguration/anpassung" },
-        ],
+        items: [{ text: "Umgebungsvariablen", link: "/konfiguration/env" }],
       },
       {
         text: "Betrieb",
         items: [
           { text: "Voraussetzungen", link: "/betrieb/voraussetzungen" },
-          { text: "Server erstellen", link: "/betrieb/server" },
+          { text: "Server aufsetzen", link: "/betrieb/server" },
           { text: "Software installieren", link: "/betrieb/software" },
-          { text: "Bot deployen", link: "/betrieb/deployment" },
+          { text: "PATIO deployen", link: "/betrieb/deployment" },
           { text: "systemd Service", link: "/betrieb/systemd" },
           { text: "Updates", link: "/betrieb/updates" },
           { text: "Backup", link: "/betrieb/backup" },
@@ -85,7 +57,6 @@ export default defineConfig({
       {
         text: "Referenz",
         items: [
-          { text: "LLM-Tools", link: "/referenz/tools" },
           { text: "Dateistruktur", link: "/referenz/dateistruktur" },
           { text: "Konfiguration", link: "/referenz/config" },
           { text: "Changelog", link: "/referenz/changelog" },

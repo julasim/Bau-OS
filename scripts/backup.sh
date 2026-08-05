@@ -16,7 +16,11 @@
 set -euo pipefail
 
 INSTALL_DIR="${1:-/opt/patio}"
-VAULT_DIR="${2:-/opt/patio-vault}"
+# Muss zum Installer passen (install.sh: WORKSPACE_DIR_DEFAULT).
+# Vorher stand hier /opt/patio-vault aus der Vault-Aera — ein Aufruf
+# ohne zweites Argument brach damit mit "Verzeichnis nicht gefunden" ab,
+# und zwar genau beim naechtlichen Backup, das niemand zusieht.
+VAULT_DIR="${2:-/opt/patio-workspace}"
 BACKUP_DIR="${3:-/opt/patio-backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 

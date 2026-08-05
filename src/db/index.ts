@@ -3,9 +3,10 @@
 // ============================================================
 
 // Direkter PostgreSQL Client (fuer Migrations, Queries, Transaktionen)
-export { getDb, checkDbHealth, checkPgVector, getPoolStats, closeDb, withRetry } from "./client.js";
+export { getDb, checkDbHealth, getPoolStats, closeDb, withRetry } from "./client.js";
 export { runMigrations, migrationStatus } from "./migrate.js";
 
-// Volltextsuche: die frueheren Embedding-/pgvector-Exporte sind mit der
-// LLM-Laufzeit entfallen. Der Ersatz auf Postgres-Volltext (tsvector) kommt
-// als eigenes Arbeitspaket — bis dahin hat die Suche keinen Unterbau.
+// Die frueheren Embedding-/pgvector-Exporte sind mit der LLM-Laufzeit
+// entfallen; `checkPgVector` ebenso, seit das Schema die Extension nicht mehr
+// voraussetzt. Die Volltextsuche liegt in `src/data/db-search.ts` (derzeit
+// ILIKE, spaeter tsvector) und wird ueber `src/data/index.ts` eingebunden.

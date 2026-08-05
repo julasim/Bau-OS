@@ -31,7 +31,7 @@ print_logo() {
   echo '  ██████╔╝██║  ██║╚██████╔╝     ╚██████╔╝███████║'
   echo '  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝       ╚═════╝ ╚══════╝'
   echo -e "${NC}"
-  echo -e "  ${DIM}KI-Assistent für die Baubranche${NC}"
+  echo -e "  ${DIM}Bürosoftware für Architektur- und Planungsbüros${NC}"
   echo -e "  ${DIM}────────────────────────────────────────────────${NC}"
   echo ""
 }
@@ -172,8 +172,13 @@ cmd_env() {
   echo -e "  ${BOLD}Konfiguration (.env):${NC}"
   echo ""
   if [ -f "$INSTALL_DIR/.env" ]; then
-    # BOT_TOKEN maskieren
-    sed 's/\(BOT_TOKEN=\)\(.\{8\}\).*/\1\2.../' "$INSTALL_DIR/.env"
+    # Geheimnisse maskieren. Bisher wurde nur BOT_TOKEN unkenntlich gemacht —
+    # den es gar nicht mehr gibt. JWT_SECRET, das DB-Passwort und die
+    # SMTP-Zugangsdaten standen dagegen im Klartext auf dem Bildschirm.
+    sed -E \
+      -e 's/^(JWT_SECRET|ENCRYPTION_KEY|SMTP_PASS|POSTGRES_PASSWORD)=(.{0,4}).*/\1=\2**** (maskiert)/' \
+      -e 's#^(DATABASE_URL=[a-z]+://[^:/@]+):[^@]*@#\1:****@#' \
+      "$INSTALL_DIR/.env"
   else
     echo -e "  ${RED}  .env nicht gefunden${NC}"
   fi
@@ -192,11 +197,24 @@ cmd_workspace() {
   echo ""
 }
 
-cmd_ollama() {
+# Ersetzt das fruehere `cmd_ollama` (systemctl status ollama). Seit dem Umbau
+# zum Firmenserver gibt es keinen Ollama-Dienst mehr; die harte Abhaengigkeit
+# des Dienstes ist stattdessen PostgreSQL — ohne erreichbare Datenbank bricht
+# src/index.ts den Start ab. Genau das gehoert in ein Diagnose-Werkzeug.
+cmd_db() {
   echo ""
-  echo -e "  ${BOLD}Ollama Status:${NC}"
+  echo -e "  ${BOLD}PostgreSQL:${NC}"
   echo ""
-  systemctl status ollama --no-pager -l
+  if systemctl list-unit-files postgresql.service >/dev/null 2>&1; then
+    systemctl status postgresql --no-pager -l | head -12
+    echo ""
+  fi
+  echo -e "  ${BOLD}Migrationsstand:${NC}"
+  echo ""
+  if [ -d "$INSTALL_DIR" ]; then
+    su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && npm run --silent db:status" 2>&1 || \
+      echo -e "  ${RED}Migrationsstand nicht abrufbar — DATABASE_URL in der .env pruefen${NC}"
+  fi
 }
 
 cmd_user() {
@@ -303,7 +321,7 @@ cmd_help() {
   echo -e "    ${BOLD}user${NC} add|list|delete  Web-Benutzer verwalten"
   echo -e "    ${BOLD}env${NC}              .env Konfiguration anzeigen"
   echo -e "    ${BOLD}workspace${NC}        Workspace-Verzeichnis anzeigen"
-  echo -e "    ${BOLD}ollama${NC}           Ollama Service Status"
+  echo -e "    ${BOLD}db${NC}               Datenbank-Status + Migrationsstand"
   echo ""
   echo -e "  ${DIM}Ohne Befehl: Interaktives Menü${NC}"
   echo ""
@@ -330,7 +348,7 @@ cmd_menu() {
     echo -e "  ${CYAN}[7]${NC}  Auf Updates prüfen"
     echo -e "  ${CYAN}[8]${NC}  .env Konfiguration"
     echo -e "  ${CYAN}[9]${NC}  Workspace anzeigen"
-    echo -e "  ${CYAN}[10]${NC} Ollama Status"
+    echo -e "  ${CYAN}[10]${NC} Datenbank-Status"
     echo -e "  ${CYAN}[11]${NC} Web-User verwalten"
     echo ""
     echo -e "  ${DIM}[0]  Beenden${NC}"
@@ -347,7 +365,7 @@ cmd_menu() {
       7) clear; cmd_check_update; read -rp "  [Enter] zurück..." ;;
       8) clear; cmd_env;       read -rp "  [Enter] zurück..." ;;
       9) clear; cmd_workspace; read -rp "  [Enter] zurück..." ;;
-      10) clear; cmd_ollama;   read -rp "  [Enter] zurück..." ;;
+      10) clear; cmd_db;       read -rp "  [Enter] zurück..." ;;
       11) clear; cmd_user list; read -rp "  [Enter] zurück..." ;;
       0|q|Q) echo ""; break ;;
       *) echo -e "\n  ${RED}Ungültige Eingabe${NC}" ; sleep 1 ;;
@@ -373,7 +391,7 @@ case "${1:-}" in
   user)                cmd_user "${2:-}" "${3:-}" ;;
   env|config)          cmd_env ;;
   workspace)           cmd_workspace ;;
-  ollama)              cmd_ollama ;;
+  db|database)         cmd_db ;;
   help|--help|-h)      print_logo; cmd_help ;;
   "")                  cmd_menu ;;
   *)

@@ -1,64 +1,74 @@
 # Voraussetzungen
 
-Was du brauchst, bevor du PATIO auf einem Server installierst.
+Was gebraucht wird, bevor PATIO im Büro installiert wird.
 
-## Accounts & Zugaenge
+## Der Rechner
 
-| Was | Woher | Hinweis |
-|---|---|---|
-| **Hetzner Cloud Account** | [hetzner.com](https://www.hetzner.com/cloud) | Oder ein anderer VPS-Anbieter mit EU-Standort |
-| **Telegram Bot Token** | [@BotFather](https://t.me/BotFather) | `/newbot` → Token kopieren |
-| **SSH Client** | Bereits installiert (Linux/macOS) oder PuTTY (Windows) | Für den Zugang zum Server |
-| **SSH Key** | `ssh-keygen -t ed25519` | Wird beim Server-Erstellen hinterlegt |
-
-::: tip Warum Hetzner?
-Hetzner hat Rechenzentren in Deutschland und Finnland (EU). Das erleichtert die DSGVO-Konformitaet. Die Preise sind im Vergleich zu AWS/GCP deutlich niedriger.
-:::
-
-## Hardware-Anforderungen
+PATIO läuft auf **einem Rechner im Büronetz**. Ein Mini-PC genügt — die
+Anwendung ist ein Node-Prozess neben einer PostgreSQL-Datenbank, es läuft
+kein Sprachmodell und keine Bildverarbeitung mit.
 
 | Komponente | Minimum | Empfohlen |
 |---|---|---|
+| **CPU** | 2 Kerne | 4 Kerne |
 | **RAM** | 4 GB | 8 GB |
-| **CPU** | 2 vCPU Kerne | 3+ vCPU Kerne |
-| **Speicher** | 20 GB SSD | 40 GB SSD |
-| **OS** | Ubuntu 22.04 LTS | Ubuntu 24.04 LTS |
+| **Speicher** | 64 GB SSD | 256 GB SSD oder mehr |
+| **Betriebssystem** | Ubuntu 22.04 LTS | Ubuntu 24.04 LTS |
 
-::: warning RAM ist entscheidend
-Ollama lädt das gesamte LLM-Modell in den RAM. Ein 7B-Modell (z.B. `qwen2.5:7b`) braucht ca. 4-5 GB RAM. Bei 4 GB Gesamt-RAM wird es knapp — 8 GB sind deutlich stabiler.
+::: tip Speicher ist der begrenzende Faktor
+Hochgeladene Dateien liegen in der Datenbank. Ein Büro mit vielen Plänen und
+Fotos füllt eine Platte deutlich schneller als es CPU oder RAM auslastet.
+Die Backups kommen dazu — planen Sie den Ablageort dafür getrennt.
 :::
 
-## Empfohlene Hetzner-Server
+Der Rechner sollte durchlaufen und nicht der Arbeitsplatz einer Person sein.
+Er braucht eine feste IP im Netz oder einen festen DNS-Namen; die
+Arbeitsplätze erreichen ihn ausschließlich über den Browser.
 
-| Server | vCPU | RAM | SSD | Preis/Monat | Geeignet für |
-|---|---|---|---|---|---|
-| **CPX11** | 2 | 4 GB | 40 GB | ~5 EUR | Minimum, kleine Modelle |
-| **CPX21** | 3 | 8 GB | 80 GB | ~9 EUR | Empfohlen für 7B Modelle |
-| **CPX31** | 4 | 16 GB | 160 GB | ~16 EUR | Größere Modelle, mehrere Agenten |
+## Software auf dem Rechner
 
-::: tip Kosteneinschaetzung
-Für einen einzelnen Kunden mit einem 7B-Modell rechne mit **5-10 EUR/Monat**. Das umfasst Server, Traffic und Snapshots.
+Zwei Wege, je nachdem wie tief man einsteigen will:
+
+| Weg | Was gebraucht wird |
+|---|---|
+| **Docker Compose** (empfohlen) | Docker Engine und das Compose-Plugin |
+| **Bare Metal** | Node.js 24, PostgreSQL 16, Git, `build-essential` |
+
+Details: [Software installieren](/betrieb/software).
+
+## Netz
+
+| Punkt | Anforderung |
+|---|---|
+| **Erreichbarkeit** | Die Arbeitsplätze müssen den Rechner über HTTP(S) erreichen |
+| **Feste Adresse** | Feste IP oder DNS-Eintrag im internen Netz |
+| **Zertifikat** | Eigenes Zertifikat der internen CA oder ein selbst signiertes; Let's Encrypt funktioniert ohne öffentlich erreichbaren Namen nicht |
+| **SMTP** | Ein Mailserver, der aus dem Büronetz erreichbar ist |
+| **Internet** | Nicht erforderlich für den Betrieb — nur für Updates aus dem Git-Repository und für Container-Images beim ersten Aufsetzen |
+
+::: warning Der Login braucht E-Mail
+Die Anmeldung verlangt nach Benutzername und Passwort einen 6-stelligen
+Code, der per E-Mail zugestellt wird. Ohne erreichbaren SMTP-Server kann
+sich **niemand** anmelden. Steht kein Mailserver im Haus, muss dieser Punkt
+vor der Inbetriebnahme geklärt sein.
 :::
 
-## Lokale Werkzeuge
+## Backup-Ziel
 
-Auf deinem lokalen Rechner brauchst du:
-
-```bash
-# SSH Key erstellen (falls noch keiner vorhanden)
-ssh-keygen -t ed25519 -C "patio-server"
-
-# Oeffentlichen Key anzeigen (wird bei Hetzner hinterlegt)
-cat ~/.ssh/id_ed25519.pub
-```
+Ein Backup, das auf demselben Rechner liegt, ist bei dessen Ausfall
+mitverloren. Vorzusehen ist ein zweiter Ablageort im Haus — ein NAS, eine
+Netzfreigabe oder eine Wechselplatte. Details:
+[Backup](/betrieb/backup).
 
 ## Checkliste
 
-- [ ] Hetzner Account erstellt und verifiziert
-- [ ] Telegram Bot Token vorhanden
-- [ ] SSH Key-Paar generiert
-- [ ] Oeffentlichen Key in Hetzner hinterlegt
+- [ ] Rechner beschafft, Ubuntu installiert, läuft durch
+- [ ] Feste IP oder DNS-Name vergeben
+- [ ] Docker Engine + Compose-Plugin installiert (oder Node und PostgreSQL)
+- [ ] Zertifikat für den Reverse-Proxy vorhanden
+- [ ] SMTP-Zugangsdaten vorhanden und aus dem Netz erreichbar
+- [ ] Backup-Ziel festgelegt
 
 ## Nächster Schritt
 
-→ [Server erstellen](/betrieb/server)
+→ [Server aufsetzen](/betrieb/server)

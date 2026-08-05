@@ -1,135 +1,130 @@
 # Updates
 
-PATIO und Ollama-Modelle aktualisieren.
+PATIO auf einen neueren Stand bringen.
 
-## PATIO aktualisieren
+## Vorher: Backup
 
-### Manuell
+Ein Update kann Migrationen mitbringen, und Migrationen sind
+**forward-only** — es gibt keinen Rückweg. Vor jedem Update:
 
 ```bash
-cd /home/patio/patio
+sudo bash /opt/patio/scripts/backup.sh
+```
 
-# Neuen Code holen
+Details: [Backup](/betrieb/backup).
+
+## Docker Compose
+
+```bash
+cd /opt/patio
 git pull
+docker compose build app
+docker compose up -d app
+docker compose logs -f app
+```
 
-# Dependencies aktualisieren
-npm install
+Die Migrationen laufen beim Start der Anwendung mit, sofern
+`DB_AUTO_MIGRATE` nicht auf `false` steht.
 
-# Neu kompilieren
-npm run build
+Für den Standardfall gibt es das Skript `scripts/docker-update.sh`, das
+dieselben Schritte bündelt.
 
-# Service neu starten
+::: warning Nur die .env geändert?
+`docker compose restart` liest die `.env` **nicht** neu ein. Dafür braucht
+es:
+
+```bash
+docker compose up -d --force-recreate app
+```
+
+Prüfen, ob der Wert angekommen ist:
+
+```bash
+docker compose exec app sh -c 'echo $APP_URL'
+```
+:::
+
+## Bare Metal
+
+```bash
+cd /opt/patio
+git pull
+npm ci
+npm run build:all
 sudo systemctl restart patio
-
-# Prüfen ob alles läuft
 sudo systemctl status patio
 ```
 
-### Update-Skript
-
-Erstelle ein Skript für bequeme Updates:
+Oder gebündelt:
 
 ```bash
-nano /home/patio/update-patio.sh
+sudo bash /opt/patio/scripts/update.sh
 ```
 
-Inhalt:
-
-```bash
-#!/bin/bash
-set -e
-
-APP_DIR="/home/patio/patio"
-SERVICE="patio"
-
-echo "=== PATIO Update ==="
-echo ""
-
-cd "$APP_DIR"
-
-echo "1/5 Code aktualisieren..."
-git pull
-
-echo "2/5 Dependencies installieren..."
-npm install
-
-echo "3/5 TypeScript kompilieren..."
-npm run build
-
-echo "4/5 Service neu starten..."
-sudo systemctl restart "$SERVICE"
-
-echo "5/5 Status prüfen..."
-sleep 2
-sudo systemctl status "$SERVICE" --no-pager
-
-echo ""
-echo "=== Update abgeschlossen ==="
-```
-
-Ausführbar machen:
-
-```bash
-chmod +x /home/patio/update-patio.sh
-```
-
-Ausführen:
-
-```bash
-./update-patio.sh
-```
-
-::: tip Keine Datenverluste
-Updates betreffen nur den Anwendungs-Code. Der Vault (alle Daten, Notizen, Agent-Konfiguration) bleibt unberuehrt.
+::: tip npm ci statt npm install
+`npm ci` installiert exakt das, was in `package-lock.json` steht. `npm
+install` darf Versionen anheben — auf einem Produktivsystem ist das keine
+gute Idee.
 :::
 
-## Ollama-Modell aktualisieren
+## Migrationen kontrolliert fahren
+
+Wer den Zeitpunkt selbst bestimmen will, setzt `DB_AUTO_MIGRATE=false` und
+fährt sie explizit:
 
 ```bash
-# Aktuelles Modell auf neueste Version bringen
-ollama pull qwen2.5:7b
-
-# Ollama selbst aktualisieren
-curl -fsSL https://ollama.ai/install.sh | sh
+npm run db:status     # was ist angewendet, was fehlt
+npm run db:migrate    # fehlende anwenden
 ```
 
-::: warning Modell-Update = neuer Download
-`ollama pull` lädt das Modell neu herunter, wenn eine neuere Version verfügbar ist. Das kann einige Minuten dauern und verbraucht Bandbreite.
-:::
+Im Compose-Aufbau:
 
-## Wann ist ein frisches Setup nötig?
-
-Ein `npm run setup` ist **nur** nötig, wenn:
-
-- Der Bot zum ersten Mal auf einem Server installiert wird
-- Die `.env` Datei verloren gegangen ist
-- Der Vault von Grund auf neu erstellt werden soll
-
-::: danger Setup überschreibt Agent-Dateien
-`npm run setup` erstellt die Agent-Dateien (`IDENTITY.md`, `SOUL.md`, etc.) neu. Wenn du sie bereits angepasst hast, gehen diese Änderungen verloren. Mache vorher ein Backup:
 ```bash
-cp -r /home/patio/vault/Agents/Main/ /home/patio/agents-backup-$(date +%Y%m%d)
+docker compose exec app npm run db:status
 ```
-:::
+
+Der Runner hält einen Advisory-Lock, es können also nicht zwei Instanzen
+gleichzeitig migrieren. Getrackt wird per Dateiname in `_migrations`, **ohne
+Prüfsumme** — eine bereits angewendete Migration nachträglich zu ändern
+bleibt folgenlos und ist deshalb zu vermeiden.
+
+## Nach dem Update prüfen
+
+```bash
+# Docker
+docker compose ps
+docker compose exec app curl -s localhost:3000/api/health
+
+# Bare Metal
+systemctl is-active patio
+curl -s localhost:3000/api/health
+```
+
+Dann von einem Arbeitsplatz anmelden und eine Änderung speichern — der
+Health-Check sagt nur, dass der Prozess lebt, nicht dass die Anwendung
+funktioniert.
 
 ## Node.js aktualisieren
 
-Falls eine neue Node.js LTS Version erscheint:
+Nur bei der Bare-Metal-Installation nötig; im Container gibt das Basisimage
+die Version vor.
 
 ```bash
-# NodeSource Repository aktualisieren
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
 sudo apt-get install -y nodejs
-
-# Version prüfen
 node --version
 
-# PATIO neu bauen
-cd /home/patio/patio
-npm install
-npm run build
+cd /opt/patio
+npm ci
+npm run build:all
 sudo systemctl restart patio
 ```
+
+::: warning Native Module neu bauen
+`bcrypt` wird gegen die installierte Node-Version kompiliert. Nach einem
+Wechsel der Hauptversion muss `npm ci` durchlaufen, sonst startet der Dienst
+mit einem ABI-Fehler nicht.
+:::
 
 ## System-Updates
 
@@ -137,14 +132,15 @@ sudo systemctl restart patio
 sudo apt update && sudo apt upgrade -y
 ```
 
-::: tip Neustart nach Kernel-Update
-Nach einem Kernel-Update ist ein Neustart nötig:
+Nach einem Kernel-Update ist ein Neustart fällig:
+
 ```bash
 sudo reboot
 ```
-PATIO und Ollama starten dank systemd automatisch wieder.
-:::
+
+PATIO kommt danach von selbst wieder hoch — über systemd beziehungsweise
+über `restart: always` in der Compose-Datei.
 
 ## Nächster Schritt
 
-→ [Backup-Strategie](/betrieb/backup)
+→ [Backup](/betrieb/backup)

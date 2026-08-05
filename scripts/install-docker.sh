@@ -1,12 +1,24 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
 # PATIO Docker-Installations-Script
-# Installiert PATIO als Docker-Compose-Stack (postgres + ollama + app + caddy)
+# Installiert PATIO als Docker-Compose-Stack: postgres + app.
 #
 # Verwendung:
 #   curl -fsSL https://raw.githubusercontent.com/julasim/patio/main/scripts/install-docker.sh | bash
 #   oder:
 #   bash scripts/install-docker.sh
+#
+# WAS SICH GEGENUEBER FRUEHER GEAENDERT HAT:
+#   Das Script sprach von vier Services (postgres, ollama, app, caddy) und
+#   rief `docker compose pull postgres ollama caddy` auf. In der
+#   docker-compose.yml stehen nur noch zwei: `ollama` ist mit AP0 entfallen,
+#   `caddy` gibt es nur im Standalone-File (docker/docker-compose.standalone.yml,
+#   fuer Kunden-Installationen ueber install-customer.sh). TLS und Routing
+#   uebernimmt hier der gemeinsame Edge-Proxy ueber das externe Docker-Netz
+#   `proxy` — die App veroeffentlicht selbst KEINEN Host-Port.
+#
+#   Ausserdem wurden BOT_TOKEN und OLLAMA_* abgefragt und in die .env
+#   geschrieben, DATABASE_URL dagegen nirgends. Beides ist korrigiert.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -61,7 +73,7 @@ print_logo() {
   echo -e "${BLUE}  ██████╔╝██║  ██║╚██████╔╝     ╚██████╔╝███████║${NC}"
   echo -e "${BLUE}  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝       ╚═════╝ ╚══════╝${NC}"
   echo ""
-  echo -e "  ${CYAN}KI-Assistent für die Baubranche${NC}  ${DIM}[Docker]${NC}"
+  echo -e "  ${CYAN}Bürosoftware für Architektur- und Planungsbüros${NC}  ${DIM}[Docker]${NC}"
   echo -e "  ${DIM}────────────────────────────────────────────────${NC}"
   echo ""
 }
@@ -165,7 +177,8 @@ print_logo
 print_header "PATIO Installation (Docker)"
 
 echo "Dieses Script installiert PATIO als Docker-Compose-Stack."
-echo "4 Services: postgres (pgvector), ollama, app (PATIO), caddy (Reverse-Proxy + HTTPS)."
+echo "2 Services: postgres (Datenbank) und app (Web-API + Weboberfläche)."
+echo "TLS und Domain-Routing übernimmt der gemeinsame Edge-Proxy (/opt/proxy)."
 echo ""
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -178,35 +191,6 @@ check_docker
 # SCHRITT 2: Konfiguration abfragen
 # ═════════════════════════════════════════════════════════════════════════════
 print_section "Konfiguration"
-
-# ── Telegram Bot Token ────────────────────────────────────────────────────────
-echo -e "  ${BOLD}Telegram Bot Token${NC}"
-info "Erstelle einen Bot via @BotFather in Telegram → /newbot"
-echo ""
-BOT_TOKEN=$(ask_required "Bot Token")
-echo ""
-
-# ── LLM-Modus ────────────────────────────────────────────────────────────────
-echo -e "  ${BOLD}LLM-Modus${NC}"
-info "Cloud: kein lokaler RAM nötig, benötigt Ollama-Konto (ollama.com)"
-info "Lokal: Modell wird heruntergeladen, braucht mind. 8 GB RAM"
-LLM_CHOICE=$(select_option "Auswahl" \
-  "Cloud  (empfohlen — kimi-k2.5, gemma4, qwen3 etc.)" \
-  "Lokal  (qwen2.5:7b, llama3.1:8b etc.)")
-
-if [ "$LLM_CHOICE" -eq 1 ]; then
-  LLM_MODE="cloud"
-  echo ""
-  info "Verfügbare Cloud-Modelle: kimi-k2.5:cloud, gemma4:cloud, qwen3-next:cloud"
-  OLLAMA_MODEL=$(ask_default "Modell" "kimi-k2.5:cloud")
-else
-  LLM_MODE="local"
-  echo ""
-  info "Verfügbare lokale Modelle: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
-  OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:7b")
-fi
-
-echo ""
 
 # ── Installationspfade ────────────────────────────────────────────────────────
 INSTALL_DIR=$(ask_default "Installationsverzeichnis (Repo + docker-compose.yml)" "$INSTALL_DIR_DEFAULT")
@@ -242,8 +226,7 @@ echo ""
 
 # ── Zusammenfassung ───────────────────────────────────────────────────────────
 print_section "Zusammenfassung"
-info "Bot Token:    ${BOT_TOKEN:0:8}...${BOT_TOKEN: -4}"
-info "LLM-Modus:    $LLM_MODE ($OLLAMA_MODEL)"
+info "Services:     postgres + app (Docker Compose)"
 info "Web-Admin:    $WEB_USER"
 info "Install-Pfad: $INSTALL_DIR"
 info "Workspace:    $WORKSPACE_DIR"
@@ -281,8 +264,19 @@ mkdir -p "$WORKSPACE_DIR"
 mkdir -p "$INSTALL_DIR/logs"
 mkdir -p "$INSTALL_DIR/tools"
 mkdir -p "$INSTALL_DIR/data"
-touch "$INSTALL_DIR/.chat_id"
+# `.chat_id` war ein Telegram-Artefakt und wird hier nicht mehr angelegt —
+# patio.service hat es bereits aus seinen ReadWritePaths entfernt.
 ok "Verzeichnisse erstellt"
+
+# Das Proxy-Netz stellt der zentrale Edge-Proxy bereit; docker-compose.yml
+# deklariert es als `external: true`. Fehlt es, verweigert Compose den Start
+# mit "network proxy declared as external, but could not be found".
+if ! docker network inspect proxy >/dev/null 2>&1; then
+  docker network create proxy >/dev/null
+  ok "Docker-Netz 'proxy' angelegt"
+else
+  ok "Docker-Netz 'proxy' vorhanden"
+fi
 
 # Kurzform für docker compose mit Projekt-Pfaden
 dc() {
@@ -293,47 +287,52 @@ dc() {
 # SCHRITT 5: Docker-Image bauen
 # ═════════════════════════════════════════════════════════════════════════════
 step "Docker-Images vorbereiten..."
-info "4 Services: postgres (pgvector), ollama, app (PATIO), caddy."
-info "Offizielle Images werden gezogen, nur 'app' lokal gebaut."
+info "2 Services: postgres (Datenbank) und app (PATIO)."
+info "Das Postgres-Image wird gezogen, 'app' lokal gebaut."
 echo ""
 
 # .env erstellen — Service-Namen aus docker-compose.yml als Hostnames.
 JWT_SECRET=$(openssl rand -hex 32)
+ENCRYPTION_KEY=$(openssl rand -hex 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 16)
 cat > "$INSTALL_DIR/.env" << ENVEOF
 # PATIO Konfiguration (generiert von install-docker.sh)
-BOT_TOKEN=$BOT_TOKEN
+# Alle verfügbaren Schlüssel mit Erklärung: .env.example
+
 WORKSPACE_PATH=/workspace
 WORKSPACE_HOST_DIR=$WORKSPACE_DIR
-OLLAMA_MODEL=$OLLAMA_MODEL
+
+# Pflicht für den Web-Login — ohne Secret bricht der Dienst beim Start ab.
 JWT_SECRET=$JWT_SECRET
+# Eigener Schlüssel für die Feld-Verschlüsselung (sonst Rückfall auf JWT_SECRET).
+ENCRYPTION_KEY=$ENCRYPTION_KEY
+API_PORT=3000
 
 # PostgreSQL — Container 'postgres' im compose-Netzwerk.
-# DATABASE_URL wird von docker-compose.yml automatisch aus diesen
-# drei Variablen zusammengesetzt (siehe services.app.environment).
-# Nur relevant wenn du die App mal OHNE Docker laufen laesst — dann
-# musst du DATABASE_URL=postgres://patio:<PW>@localhost:5432/patio
-# zusaetzlich setzen.
+#
+# DATABASE_URL steht hier BEWUSST nicht: docker-compose.yml setzt sie im
+# Block services.app.environment aus den drei Variablen unten zusammen, und
+# `environment` schlägt `env_file`. Ein Wert hier hätte also keine Wirkung.
+# Wer die App ohne Docker betreibt, setzt stattdessen direkt
+#   DATABASE_URL=postgres://patio:<PASSWORT>@localhost:5432/patio
 POSTGRES_USER=patio
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 POSTGRES_DB=patio
 
-# Caddy Reverse-Proxy — Domain leer = nur HTTP auf Port 80
-# Sobald eine Domain gesetzt ist, holt Caddy automatisch ein Let's
-# Encrypt Zertifikat (Port 80 + 443 muessen vom Internet erreichbar sein).
-# Beispiel: CADDY_DOMAIN=patio.meine-firma.at
-CADDY_DOMAIN=
-CADDY_EMAIL=admin@example.com
-
-# App-Port INNERHALB des app-Containers. Caddy proxyt von 80/443
-# darauf — hier aendern bringt nichts, weil Caddyfile fest auf
-# app:3000 zeigt. Nur fuer Bare-Metal-Betrieb (ohne Docker) relevant.
-API_PORT=3000
+# ── SMTP: Pflicht für den Login ──
+# Der Login verschickt 6-stellige Codes per E-Mail. Ohne SMTP_HOST landet der
+# Code nur im Container-Log (docker compose logs app).
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=PATIO <noreply@patio.local>
 ENVEOF
 chmod 600 "$INSTALL_DIR/.env"
 
-# Offizielle Images ziehen, dann App bauen
-dc pull postgres ollama caddy < /dev/null || warn "Pull für Standard-Images fehlgeschlagen — versuche trotzdem weiter"
+# Nur postgres ziehen. `dc pull postgres ollama caddy` brach hier ab, weil
+# Compose die beiden nicht mehr existierenden Service-Namen zurueckweist.
+dc pull postgres < /dev/null || warn "Pull für das Postgres-Image fehlgeschlagen — versuche trotzdem weiter"
 dc build app < /dev/null || err "App-Image konnte nicht gebaut werden. Siehe Fehler oben."
 ok "Images bereit"
 
@@ -382,27 +381,28 @@ chmod 600 "$INSTALL_DIR/data/users.json"
 ok "Admin-User '$WEB_USER' erstellt"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 7: ALLE Container starten
+# SCHRITT 7: Container starten
 # ═════════════════════════════════════════════════════════════════════════════
-# WICHTIG: Wir starten zuerst den kompletten Stack, BEVOR wir Ollama
-# konfigurieren. Dadurch:
-# - faellt das Script bei haengendem signin / abgebrochenem Pull nicht komplett um
-# - die anderen 3 Services (postgres, app, caddy) laufen bereits
-# - der User kann Ollama-Signin/Pull auch spaeter manuell nachholen
-step "Alle Container starten..."
+step "Container starten..."
 dc up -d < /dev/null || err "Container konnten nicht gestartet werden. Siehe Fehler oben."
 
-# Health-Check: Caddy proxt auf Port 80 nach app:3000 — egal welcher HTTP-Code.
-# Timeout 180s: Postgres-Init + Extensions + Migrations + App-Start + Caddy-Start
-# koennen beim allerersten Boot auf langsamen VPS zusammen ueber eine Minute dauern.
+# Health-Check GEGEN DEN CONTAINER, nicht gegen den Host.
+#
+# Frueher wurde hier `curl http://localhost:80` geprueft — das setzte den
+# caddy-Service voraus, den es in dieser compose-Datei nicht gibt. Die App
+# veroeffentlicht bewusst keinen Host-Port (`expose: 3000`), erreichbar ist
+# sie nur ueber das Proxy-Netz. Der Check laeuft deshalb im app-Container
+# gegen /api/health — den einzigen Endpunkt ohne Auth und Rate-Limit.
+#
+# node:http statt fetch: keine Abhaengigkeit von globalem fetch, und der
+# Exit-Code ist eindeutig.
 echo ""
-info "Warte auf PATIO... (erster Start kann bis zu 3 Minuten dauern —"
-info "Postgres init, Migrations, Ollama-Start, Caddy binden)"
-HTTP_PORT_CHECK="${HTTP_PORT:-80}"
+info "Warte auf PATIO... (erster Start kann einige Minuten dauern —"
+info "Postgres-Init, Migrationen, App-Start)"
+HEALTH_JS='require("http").get("http://127.0.0.1:3000/api/health",r=>process.exit(r.statusCode===200?0:1)).on("error",()=>process.exit(1))'
 for i in $(seq 1 180); do
-  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${HTTP_PORT_CHECK}/" 2>/dev/null || echo "000")
-  if [ "$HTTP_CODE" != "000" ]; then
-    ok "PATIO läuft (HTTP $HTTP_CODE via Caddy, nach ${i}s)"
+  if dc exec -T app node -e "$HEALTH_JS" < /dev/null >/dev/null 2>&1; then
+    ok "PATIO läuft (Health-Check grün nach ${i}s)"
     break
   fi
   # Alle 30s ein Lebenszeichen ausgeben, damit der User sieht dass noch gewartet wird
@@ -418,58 +418,17 @@ for i in $(seq 1 180); do
     echo ""
     dc logs --tail 30
     echo ""
-    err "Container konnten nicht gestartet werden. Siehe Logs oben — typische Ursachen: Postgres-Init haengt, Port $HTTP_PORT_CHECK belegt, Caddy-Konfig-Fehler."
+    err "PATIO ist nicht hochgekommen. Siehe Logs oben — typische Ursachen:
+       Postgres-Init haengt, DATABASE_URL/JWT_SECRET fehlt in der .env,
+       oder das Docker-Netz 'proxy' existiert nicht."
   fi
   sleep 1
 done
 
-# ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 8: LLM-Modell vorbereiten (soft-fail — System laeuft auch ohne)
-# ═════════════════════════════════════════════════════════════════════════════
-# Ab hier gilt: Alles was schiefgeht ist optional. Der Stack laeuft bereits,
-# der User kann Signin / Pull spaeter manuell nachholen. Darum warn() statt err().
-
-if [ "$LLM_MODE" = "cloud" ]; then
-  step "Ollama Cloud einrichten..."
-  info "Es wird ein Link angezeigt — öffne ihn im Browser oder Handy."
-  info "Melde dich mit deinem Ollama-Konto an (ollama.com)."
-  info "Falls du das jetzt uebersringen willst, druecke Ctrl+D um in den"
-  info "Signin-Prompt NICHTS einzugeben — dann laeuft das Script weiter."
-  echo ""
-
-  # Signin mit Timeout — wenn User nichts macht, nach 120s abbrechen.
-  # Timeout-Builtin gibt bei Abbruch Exit 124, das ist ok.
-  timeout 120 dc exec ollama ollama signin < /dev/tty 2>&1 || \
-    warn "Signin abgebrochen oder Timeout — holst du spaeter per 'docker compose exec ollama ollama signin' nach"
-
-  # Verbindung antesten
-  CLOUD_TEST=$(dc exec -T ollama ollama list 2>&1 < /dev/null || true)
-  if echo "$CLOUD_TEST" | grep -qi "error\|unauthorized\|failed"; then
-    warn "Ollama Cloud-Verbindung nicht bestaetigt — Modell '$OLLAMA_MODEL' wird beim ersten Chat versucht."
-    info "Login nachholen: docker compose exec ollama ollama signin"
-  else
-    ok "Cloud-Verbindung verifiziert ($OLLAMA_MODEL)"
-  fi
-else
-  step "Modell herunterladen ($OLLAMA_MODEL)..."
-  warn "Das kann je nach Internetverbindung einige Minuten dauern..."
-
-  if ! dc exec -T ollama ollama pull "$OLLAMA_MODEL" < /dev/null; then
-    warn "Modell-Download fehlgeschlagen — holst du spaeter nach mit:"
-    info "  docker compose exec ollama ollama pull $OLLAMA_MODEL"
-  else
-    ok "Modell '$OLLAMA_MODEL' bereit"
-  fi
-fi
-
-# Embedding-Modell IMMER lokal (auch bei Cloud-LLM):
-# Cloud-Modelle bringen Embeddings nicht verlaesslich mit, nomic-embed-text
-# ist klein (~270 MB), laeuft auf jeder CPU und spart Cloud-Credits.
-step "Embedding-Modell herunterladen (nomic-embed-text)..."
-if ! dc exec -T ollama ollama pull nomic-embed-text < /dev/null; then
-  warn "Embedding-Modell nicht geladen — semantische Suche bleibt vorerst aus."
-  info "Nachholen: docker compose exec ollama ollama pull nomic-embed-text"
-fi
+# SCHRITT 8 (LLM-Modelle und Embedding-Modell ziehen) ist ersatzlos entfallen.
+# Seit AP0 gibt es weder LLM-Laufzeit noch Embeddings — und auf einem
+# Firmenserver ohne Internet waren die `ollama pull`-Aufrufe ohnehin nicht
+# durchfuehrbar.
 
 # ═════════════════════════════════════════════════════════════════════════════
 # patio-update Shortcut installieren
@@ -486,23 +445,25 @@ fi
 echo ""
 print_header "Installation abgeschlossen!"
 echo ""
-echo -e "  ${GREEN}▸${NC} Öffne deinen Telegram Bot und schreibe ${BOLD}'Hallo'${NC}"
-echo    "    Der Setup-Wizard führt dich durch die Einrichtung."
+echo -e "  ${YELLOW}▸${NC} ${BOLD}Noch offen: Eintrag im Edge-Proxy.${NC}"
+echo    "    Die App veröffentlicht keinen Host-Port — erreichbar wird sie erst"
+echo    "    über den gemeinsamen Edge-Proxy. Dort in der Caddyfile ergänzen:"
 echo ""
-HTTP_PORT_DISPLAY="${HTTP_PORT:-80}"
-if [ "$HTTP_PORT_DISPLAY" = "80" ]; then
-  echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>${NC} (Port 80 via Caddy)"
-else
-  echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>:${HTTP_PORT_DISPLAY}${NC}"
-fi
+echo    "      patio.meine-firma.at {"
+echo    "          encode gzip zstd"
+echo    "          @stream path /api/events*"
+echo    "          reverse_proxy @stream app:3000 { flush_interval -1 }"
+echo    "          reverse_proxy app:3000"
+echo    "      }"
+echo ""
+echo    "    Danach: docker exec edge-caddy caddy reload --config /etc/caddy/Caddyfile"
 echo    "    Login: ${WEB_USER} / (dein gewähltes Passwort)"
 echo ""
-echo -e "  ${GREEN}▸${NC} HTTPS aktivieren: Setze ${BOLD}CADDY_DOMAIN=deine.domain.at${NC} in der .env"
-echo -e "    und führe ${GREEN}docker compose up -d caddy${NC} aus — Let's Encrypt läuft automatisch."
-echo ""
-echo -e "  ${GREEN}▸${NC} Port aendern (bei HSTS-Browser-Problemen oder belegten 80/443):"
-echo -e "    In .env: ${BOLD}HTTP_PORT=8080${NC} + ${BOLD}HTTPS_PORT=8443${NC}, dann"
-echo -e "    ${GREEN}ufw allow 8080/tcp && docker compose up -d caddy${NC}"
+echo -e "  ${YELLOW}▸${NC} ${BOLD}Noch offen: SMTP eintragen.${NC}"
+echo    "    Der Login schickt 6-stellige Codes per E-Mail. Solange SMTP_HOST in"
+echo    "    ${INSTALL_DIR}/.env leer ist, steht der Code nur im Log."
+echo    "    Nach dem Eintragen: docker compose up -d --force-recreate app"
+echo    "    (ein blosses 'restart' liest die .env nicht neu ein)"
 echo ""
 echo -e "  ${BOLD}Update:${NC}"
 echo -e "    ${GREEN}patio-update${NC}                  → Pull + Rebuild + Restart"
@@ -510,9 +471,8 @@ echo ""
 echo -e "  ${BOLD}Docker-Befehle${NC} (in $INSTALL_DIR):"
 echo    "    docker compose logs -f                    → alle Logs"
 echo    "    docker compose logs -f app                → nur PATIO"
-echo    "    docker compose logs -f ollama             → nur LLM"
 echo    "    docker compose restart app                → PATIO neu starten"
 echo    "    docker compose down                       → alles stoppen"
 echo    "    docker compose exec app bash              → Shell in PATIO"
-echo    "    docker compose exec ollama ollama list    → Modelle auflisten"
+echo    "    docker compose exec app npm run db:status → Migrationsstand"
 echo ""

@@ -1,0 +1,18 @@
+{
+  // Typpruefung fuer scripts/ — die Hauptkonfiguration deckt nur src/**/*.
+  //
+  // WARUM: In scripts/migrate-vault-to-db.ts stand monatelang ein Import auf
+  // ein `VAULT_PATH`, das src/config.ts gar nicht exportiert. Das Skript brach
+  // beim Start ab, und niemand hat es bemerkt — weil weder `tsc --noEmit` noch
+  // ESLint noch die CI diesen Ordner je angesehen haben.
+  //
+  // Die Skripte laufen ueber tsx und werden nicht gebaut, deshalb noEmit.
+  "extends": "./tsconfig.json",
+  "include": ["scripts/**/*.ts", "src/**/*"],
+  "compilerOptions": {
+    // rootDir zurueckziehen: die Hauptkonfiguration setzt src/, hier liegen
+    // die Dateien aber daneben. Gebaut wird ohnehin nichts (noEmit).
+    "rootDir": ".",
+    "noEmit": true
+  }
+}

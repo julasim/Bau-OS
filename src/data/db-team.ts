@@ -9,16 +9,7 @@
 // Lesen:    bevorzugt companyName aus Join, projects-Array aus Junction.
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import type {
-  Company,
-  ContactLogEntry,
-  MemberType,
-  TeamMember,
-  TeamMemberCreateInput,
-  TeamMemberUpdateInput,
-  TeamMemberProject,
-  TeamRepository,
-} from "./types.js";
+import type { Company, ContactLogEntry, MemberType, TeamMember, TeamMemberProject, TeamRepository } from "./types.js";
 
 // ── Row-Mapper ──────────────────────────────────────────────
 

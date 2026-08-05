@@ -72,9 +72,12 @@
   verifiziert: 0 Findings; `fetch-depth: 0`, vor `npm ci`).
 
 **VPS-Betrieb (Runbook)**
-- [`docs/vps-runbook.md`](vps-runbook.md): **INF-4** Offsite-Backup (restic →
+- `docs/vps-runbook.md`: **INF-4** Offsite-Backup (restic →
   Hetzner), **INF-14** Monitoring (Uptime-Kuma), **LLM-Fallback** (Groq/
   OpenRouter via `.env`; dafür neuer `OPENAI_BASE_URL`-Override in `client.ts`).
+  *(Die Datei ist mit dem Umbau zum Firmenserver entfallen — VPS-Betrieb und
+  LLM-Fallback gibt es nicht mehr. Backup und Monitoring stehen jetzt unter
+  [Betrieb](/betrieb/backup).)*
 
 **Bewusst nicht geändert (mit Begründung)**
 - **INF-1** Healthcheck (kein Bug), **SEC-6** JWT-Dev-Warnung (DX), Audit-F:

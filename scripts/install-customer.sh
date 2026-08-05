@@ -10,6 +10,13 @@
 #   - Root-Zugriff (sudo)
 #   - Ports 80 + 443 offen (Firewall)
 #   - Domain-Eintrag bereits gesetzt (z.B. buero.patio.at → Server-IP)
+#
+# Nutzt docker/docker-compose.standalone.yml: postgres + app + caddy, also
+# mit eigenem Reverse-Proxy statt des gemeinsamen Edge-Proxys.
+#
+# Telegram-Bot-Token, OpenAI-Key und Ollama-Modell werden nicht mehr
+# abgefragt — mit dem Umbau zum Firmenserver (AP0) sind Bot und LLM-Laufzeit
+# ersatzlos entfallen, kein Code liest diese Werte noch.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -54,7 +61,7 @@ echo -e "${BLUE}  ██╔══██╗██╔══██║██║   �
 echo -e "${BLUE}  ██████╔╝██║  ██║╚██████╔╝     ╚██████╔╝███████║${NC}"
 echo -e "${BLUE}  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝       ╚═════╝ ╚══════╝${NC}"
 echo ""
-echo -e "  ${CYAN}KI-Assistent für Architekturbüros${NC}"
+echo -e "  ${CYAN}Bürosoftware für Architektur- und Planungsbüros${NC}"
 echo -e "  ${DIM}────────────────────────────────────────────────────────${NC}"
 echo ""
 
@@ -77,12 +84,6 @@ CADDY_DOMAIN=$(ask_required "Domain (z.B. meinbuero.patio.at)")
 CADDY_EMAIL=$(ask_required "E-Mail für SSL-Zertifikat")
 echo ""
 
-echo -e "  ${BOLD}Telegram Bot Token${NC}"
-info "Erstelle einen Bot via @BotFather → /newbot"
-echo ""
-BOT_TOKEN=$(ask_required "Bot Token")
-echo ""
-
 echo -e "  ${BOLD}Web-Oberfläche (Admin-Login)${NC}"
 echo ""
 WEB_USER=$(ask_default "Admin Benutzername" "admin")
@@ -95,33 +96,12 @@ while true; do
 done
 echo ""
 
-echo -e "  ${BOLD}LLM-Modus${NC}"
-info "OpenAI: kein lokaler RAM nötig — empfohlen für die meisten Büros"
-info "Lokal (Ollama): Modell läuft auf dem Server, braucht mind. 8 GB RAM"
-echo ""
-echo "  [1] OpenAI (empfohlen)"
-echo "  [2] Lokal (Ollama)"
-echo ""
-LLM_CHOICE=$(ask_default "Auswahl" "1")
-
-OPENAI_API_KEY=""
-OLLAMA_MODEL=""
-if [ "$LLM_CHOICE" = "1" ]; then
-  OPENAI_API_KEY=$(ask_required "OpenAI API Key (sk-...)")
-else
-  info "Verfügbare Modelle: qwen2.5:7b, llama3.1:8b, qwen2.5:3b"
-  OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:7b")
-fi
-echo ""
-
 # ── Zusammenfassung ───────────────────────────────────────────────────────────
 echo -e "${BOLD}── Zusammenfassung${NC}"
 echo ""
 info "Domain:    https://${CADDY_DOMAIN}"
-info "Bot Token: ${BOT_TOKEN:0:8}...${BOT_TOKEN: -4}"
 info "Admin:     ${WEB_USER}"
-[ -n "$OPENAI_API_KEY" ] && info "LLM:       OpenAI (${OPENAI_API_KEY:0:8}...)"
-[ -n "$OLLAMA_MODEL"   ] && info "LLM:       Ollama lokal (${OLLAMA_MODEL})"
+info "Services:  postgres + app + caddy (Docker Compose, standalone)"
 echo ""
 read -rp "  Installation starten? [j/N]: " CONFIRM < /dev/tty
 [[ ! "$CONFIRM" =~ ^[jJ]$ ]] && echo "Abgebrochen." && exit 0
@@ -175,6 +155,7 @@ ok "Verzeichnisse erstellt"
 step "Admin-Benutzer einrichten..."
 
 JWT_SECRET=$(openssl rand -hex 32)
+ENCRYPTION_KEY=$(openssl rand -hex 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 16)
 
 # bcrypt-Hash via Node.js (falls vorhanden) oder Python3
@@ -208,35 +189,40 @@ cd "$INSTALL_DIR"
 
 cat > .env << ENVEOF
 # PATIO Konfiguration — generiert von install-customer.sh
-# Domain + SSL
+# Alle verfügbaren Schlüssel mit Erklärung: .env.example
+
+# Domain + SSL (nur für den standalone-Caddy in docker/)
 CADDY_DOMAIN=${CADDY_DOMAIN}
 CADDY_EMAIL=${CADDY_EMAIL}
 
-# Telegram
-BOT_TOKEN=${BOT_TOKEN}
-
-# Workspace
+# Workspace — Host-Verzeichnis; im Container liegt es unter /workspace
+# (WORKSPACE_PATH setzt die compose-Datei selbst).
 WORKSPACE_HOST_DIR=${WORKSPACE_DIR}
 
-# Web-Oberfläche
+# Pflicht für den Web-Login — ohne Secret bricht der Dienst beim Start ab.
 JWT_SECRET=${JWT_SECRET}
+# Eigener Schlüssel für die Feld-Verschlüsselung (sonst Rückfall auf JWT_SECRET).
+ENCRYPTION_KEY=${ENCRYPTION_KEY}
 API_PORT=3000
 
-# Datenbank
+# Datenbank — Container 'postgres' im compose-Netzwerk.
+#
+# DATABASE_URL steht hier BEWUSST nicht: docker-compose.standalone.yml setzt
+# sie im Block services.app.environment aus diesen drei Variablen zusammen,
+# und 'environment' schlägt 'env_file'. Ein Wert hier hätte keine Wirkung.
 POSTGRES_USER=patio
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 POSTGRES_DB=patio
-ENVEOF
 
-# LLM-Konfiguration
-if [ -n "$OPENAI_API_KEY" ]; then
-  echo "OPENAI_API_KEY=${OPENAI_API_KEY}" >> .env
-else
-  cat >> .env << ENVEOF
-OLLAMA_BASE_URL=http://ollama:11434/v1
-OLLAMA_MODEL=${OLLAMA_MODEL}
+# ── SMTP: Pflicht für den Login ──
+# Der Login verschickt 6-stellige Codes per E-Mail. Ohne SMTP_HOST landet der
+# Code nur im Container-Log — dann kann sich niemand anmelden.
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=PATIO <noreply@${CADDY_DOMAIN}>
 ENVEOF
-fi
 
 chmod 600 .env
 ok ".env erstellt"
@@ -292,7 +278,12 @@ echo ""
 echo -e "  ${GREEN}▸${NC} Dashboard:  ${BOLD}https://${CADDY_DOMAIN}${NC}"
 echo    "    Login: ${WEB_USER} / (dein Passwort)"
 echo ""
-echo -e "  ${GREEN}▸${NC} Telegram:   Schreibe deinem Bot ${BOLD}'Hallo'${NC}"
+echo -e "  ${YELLOW}▸${NC} ${BOLD}Noch offen: SMTP eintragen.${NC}"
+echo    "    Der Login schickt 6-stellige Codes per E-Mail. Solange SMTP_HOST in"
+echo    "    ${INSTALL_DIR}/.env leer ist, steht der Code nur im Log:"
+echo    "      docker compose -f $COMPOSE_FILE logs app"
+echo    "    Nach dem Eintragen:"
+echo    "      docker compose -f $COMPOSE_FILE up -d --force-recreate app"
 echo ""
 echo -e "  ${GREEN}▸${NC} SSL-Zertifikat wird automatisch von Let's Encrypt geholt."
 echo    "    Das kann beim ersten Aufruf 1-2 Minuten dauern."

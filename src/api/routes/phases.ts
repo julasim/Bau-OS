@@ -11,7 +11,7 @@ import { phaseRepo, invoiceRepo, timeEntryRepo } from "../../data/index.js";
 import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
 import { projectRepo } from "../../data/index.js";
 import type { AppEnv } from "../server.js";
-import { emit } from "../events.js";
+import { emit, emitForProjectName } from "../events.js";
 import type { ProjectPhaseUpsert } from "../../data/types.js";
 
 export const phasesRoutes = new Hono<AppEnv>();
@@ -139,7 +139,7 @@ phasesRoutes.post("/projects/:projectName/phases", async (c) => {
   }
   const result = await phaseRepo.create(proj.id, body);
   if (typeof result === "string") return c.json({ error: result }, 400);
-  emit({ type: "phase", action: "created", id: result.id, project: proj.name });
+  emit({ type: "phase", action: "created", id: result.id, projectId: proj.id }, { actorId: c.var.userId });
   return c.json(result);
 });
 
@@ -155,7 +155,7 @@ phasesRoutes.post("/projects/:projectName/phases/reorder", async (c) => {
   }
   if (!Array.isArray(body.orderedIds)) return c.json({ error: "orderedIds fehlt" }, 400);
   const ok = await phaseRepo.reorder(proj.id, body.orderedIds);
-  if (ok) emit({ type: "phase", action: "updated", project: proj.name });
+  if (ok) emit({ type: "phase", action: "updated", projectId: proj.id }, { actorId: c.var.userId });
   return c.json({ ok });
 });
 
@@ -172,7 +172,11 @@ phasesRoutes.put("/phases/:id", async (c) => {
   const result = await phaseRepo.update(acl.phaseId, body);
   if (result === null) return c.json({ error: "Phase nicht gefunden" }, 404);
   if (typeof result === "string") return c.json({ error: result }, 400);
-  emit({ type: "phase", action: "updated", id: acl.phaseId, project: acl.projectName });
+  // resolvePhaseAcl() liefert nur den Projektnamen — die UUID loest der
+  // Event-Bus selbst auf.
+  emitForProjectName({ type: "phase", action: "updated", id: acl.phaseId }, acl.projectName, {
+    actorId: c.var.userId,
+  });
   return c.json(result);
 });
 
@@ -181,6 +185,9 @@ phasesRoutes.delete("/phases/:id", async (c) => {
   const acl = await resolvePhaseAcl(c);
   if ("error" in acl) return acl.error;
   const ok = await phaseRepo.delete(acl.phaseId);
-  if (ok) emit({ type: "phase", action: "deleted", id: acl.phaseId, project: acl.projectName });
+  if (ok)
+    emitForProjectName({ type: "phase", action: "deleted", id: acl.phaseId }, acl.projectName, {
+      actorId: c.var.userId,
+    });
   return c.json({ ok });
 });

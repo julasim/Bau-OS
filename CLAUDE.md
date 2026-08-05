@@ -58,12 +58,14 @@ umzubauen.
 > `termine`) bleiben vorerst stehen — forward-only, und ein `DROP` wäre
 > unumkehrbar. Sie werden mit dem Schema-Paket abgeräumt.
 
-> **pgvector ist fuer Neuinstallationen weiterhin Pflicht.** Migration `040`
-> raeumt die `embedding`-Spalten und HNSW-Indizes aus BESTEHENDEN Datenbanken.
-> Eine frische Installation laeuft aber zuerst durch `001_init.sql`, und die
-> beginnt mit `CREATE EXTENSION vector`. Der geplante Wechsel auf ein
-> gewoehnliches `postgres:16` braucht deshalb zusaetzlich eine Anpassung von
-> `001` — sonst scheitert der erste Start.
+> **pgvector wird nicht mehr gebraucht.** `001_init.sql` legt weder die
+> Extension noch Vektor-Spalten an, `040` raeumt die Reste aus bestehenden
+> Datenbanken, `041` entfernt die Extension selbst (mehrfach abgesichert: ist
+> sie nicht da oder haengt eine fremde Spalte daran, passiert nichts). Beide
+> Compose-Dateien laufen auf `postgres:16`. Nachgewiesen an einer frisch
+> migrierten Datenbank: nur `pg_trgm`, `plpgsql`, `unaccent`, `uuid-ossp`.
+> `tests/db.test.ts` haelt das fest — der Sweep ueber alle Migrationsdateien
+> laeuft **ohne** Datenbank und greift damit auch in einer DB-losen CI.
 
 **Was als Nächstes ansteht** (Reihenfolge aus dem Plan): Server aufsetzen ·
 Volltextsuche auf `tsvector` heben · Schema ergänzen · Konfliktschutz (`rev`) ·
@@ -101,7 +103,7 @@ npm run build        # tsc → dist/ (kopiert emails/ und db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 228 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (alle Tests, 245 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -113,10 +115,18 @@ npm run db:status    # Migrations-Status anzeigen
 Husky + lint-staged formatieren/linten gestagte `.ts`/`.vue`-Dateien beim
 Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 127 von 230 Tests** —
+> **Prüfbereiche:** `npm run lint` deckt seit dieser Runde `src/`, `tests/`,
+> `scripts/` **und** `web/src` ab — vorher nur die ersten beiden. `.vue`-Dateien
+> bleiben aussen vor (kein `eslint-plugin-vue`), dafür greift `vue-tsc`.
+> Für `scripts/` gibt es jetzt `tsconfig.scripts.json`: `npx tsc --noEmit -p
+> tsconfig.scripts.json`. Grund: in `scripts/migrate-vault-to-db.ts` stand
+> monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
+> Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
+
+> **`npm test` ohne `DATABASE_URL` überspringt still 142 von 247 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
-> 14 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
-> Die Suite meldet trotzdem grün, obwohl nur noch 103 Tests wirklich laufen.
+> 16 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
+> Die Suite meldet trotzdem grün, obwohl nur noch 105 Tests wirklich laufen.
 > **Diese Zahl beim Hinzufügen von Tests mitpflegen** — sie war schon einmal
 > veraltet, ausgerechnet die Warnung vor stiller Nicht-Prüfung. Die
 > Test-Datenbank ist der Container `patio-test-db` in **WSL Ubuntu-24.04**; von

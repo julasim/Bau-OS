@@ -1,12 +1,22 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# PATIO Installations-Script
+# PATIO Installations-Script (bare metal, systemd)
 # Getestet auf: Ubuntu 24.04 LTS
 #
 # Verwendung:
 #   curl -fsSL https://raw.githubusercontent.com/julasim/patio/main/scripts/install.sh | bash
 #   oder:
 #   chmod +x scripts/install.sh && sudo bash scripts/install.sh
+#
+# WAS DIESES SKRIPT EINRICHTET:
+#   Node.js 24 · PostgreSQL (Datenbank, Rolle, Extensions) · PATIO-Build ·
+#   Service-Benutzer · .env · systemd-Unit · CLI-Werkzeug `patio`
+#
+# WAS ES NICHT MEHR TUT:
+#   Telegram-Bot-Token abfragen und Ollama installieren. Beides ist mit dem
+#   Umbau zum Firmenserver (AP0) ersatzlos entfallen; kein Code liest
+#   BOT_TOKEN oder OLLAMA_* noch. Stattdessen wird jetzt die Datenbank
+#   eingerichtet — ohne DATABASE_URL bricht src/index.ts den Start hart ab.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -63,7 +73,7 @@ print_logo() {
   echo -e "${BLUE}  ██████╔╝██║  ██║╚██████╔╝     ╚██████╔╝███████║${NC}"
   echo -e "${BLUE}  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝       ╚═════╝ ╚══════╝${NC}"
   echo ""
-  echo -e "  ${CYAN}KI-Assistent für die Baubranche${NC}"
+  echo -e "  ${CYAN}Bürosoftware für Architektur- und Planungsbüros${NC}"
   echo -e "  ${DIM}────────────────────────────────────────────────${NC}"
   echo ""
 }
@@ -183,31 +193,41 @@ echo ""
 # ═════════════════════════════════════════════════════════════════════════════
 print_section "Konfiguration"
 
-# ── Telegram Bot Token ────────────────────────────────────────────────────────
-echo -e "  ${BOLD}Telegram Bot Token${NC}"
-info "Erstelle einen Bot via @BotFather in Telegram → /newbot"
-echo ""
-BOT_TOKEN=$(ask_required "Bot Token")
-echo ""
+# ── Datenbank ─────────────────────────────────────────────────────────────────
+# PATIO laeuft ausschliesslich gegen PostgreSQL. Ohne DATABASE_URL beendet
+# sich der Dienst beim Start mit Exit-Code 1 (src/index.ts).
+echo -e "  ${BOLD}Datenbank (PostgreSQL)${NC}"
+info "PATIO speichert Projekte, Notizen, Aufgaben, Termine und Team in Postgres."
+info "Ohne Datenbank startet der Dienst nicht."
+DB_CHOICE=$(select_option "Auswahl" \
+  "PostgreSQL auf diesem Server installieren und einrichten (empfohlen)" \
+  "Vorhandene Datenbank nutzen (Connection-String eingeben)")
 
-# ── LLM-Modus ────────────────────────────────────────────────────────────────
-echo -e "  ${BOLD}LLM-Modus${NC}"
-info "Cloud: kein lokaler RAM nötig, benötigt Ollama-Konto (ollama.com)"
-info "Lokal: Modell wird heruntergeladen, braucht mind. 8 GB RAM"
-LLM_CHOICE=$(select_option "Auswahl" \
-  "Cloud  (empfohlen — kimi-k2.5, gemma4, qwen3 etc.)" \
-  "Lokal  (qwen2.5:7b, llama3.1:8b etc.)")
+DB_NAME="patio"
+DB_USER="patio"
+DB_PASS=""
+DATABASE_URL=""
 
-if [ "$LLM_CHOICE" -eq 1 ]; then
-  LLM_MODE="cloud"
-  echo ""
-  info "Verfügbare Cloud-Modelle: kimi-k2.5:cloud, gemma4:cloud, qwen3-next:cloud"
-  OLLAMA_MODEL=$(ask_default "Modell" "kimi-k2.5:cloud")
+if [ "$DB_CHOICE" -eq 1 ]; then
+  DB_MODE="local"
+  # Passwort wird erzeugt statt erfragt: es landet nur in der .env und im
+  # Connection-String, niemand muss es sich merken. Hex = keine Zeichen, die
+  # in SQL oder in der URL escaped werden muessten.
+  DB_PASS=$(openssl rand -hex 16)
+  info "Datenbank '$DB_NAME', Rolle '$DB_USER', Passwort wird erzeugt."
 else
-  LLM_MODE="local"
+  DB_MODE="extern"
   echo ""
-  info "Verfügbare lokale Modelle: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
-  OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:7b")
+  info "Format: postgres://BENUTZER:PASSWORT@HOST:5432/DATENBANK"
+  info "Die Datenbank braucht uuid-ossp, pg_trgm und unaccent (postgresql-contrib)."
+  info "pgvector wird NICHT mehr benötigt — PATIO kennt seit AP0 keine Embeddings."
+  while true; do
+    DATABASE_URL=$(ask_required "DATABASE_URL")
+    if [[ "$DATABASE_URL" =~ ^postgres(ql)?:// ]]; then
+      break
+    fi
+    echo -e "  ${RED}Das sieht nicht nach einem Connection-String aus (postgres://…).${NC}"
+  done
 fi
 
 echo ""
@@ -249,8 +269,12 @@ echo ""
 
 # ── Zusammenfassung ───────────────────────────────────────────────────────────
 print_section "Zusammenfassung"
-info "Bot Token:    ${BOT_TOKEN:0:8}...${BOT_TOKEN: -4}"
-info "LLM-Modus:    $LLM_MODE ($OLLAMA_MODEL)"
+if [ "$DB_MODE" = "local" ]; then
+  info "Datenbank:    lokal (PostgreSQL wird installiert, DB '$DB_NAME')"
+else
+  # Passwort im Connection-String nicht mit ausgeben.
+  info "Datenbank:    extern ($(echo "$DATABASE_URL" | sed -E 's#(://[^:/@]+):[^@]*@#\1:****@#'))"
+fi
 info "Web-Admin:    $WEB_USER (Port $API_PORT)"
 info "Install-Pfad: $INSTALL_DIR"
 info "Workspace:    $WORKSPACE_DIR"
@@ -278,32 +302,88 @@ update-locale LANG=de_AT.UTF-8 LC_ALL=de_AT.UTF-8 2>/dev/null || true
 ok "UTF-8 Locale aktiv (Umlaute werden korrekt dargestellt)"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 3: Node.js 20
+# SCHRITT 3: Node.js 24
+#
+# package.json fordert "engines": { "node": ">=24" }, .nvmrc sagt 24 und das
+# Dockerfile baut auf node:24-bookworm-slim. Hier stand bis zum Umbau
+# Node.js 20 — der Build waere auf einer frischen Maschine schiefgegangen.
 # ═════════════════════════════════════════════════════════════════════════════
-step "Node.js 20 LTS installieren..."
-if ! command -v node &> /dev/null || [[ $(node --version | cut -d. -f1 | tr -d 'v') -lt 20 ]]; then
-  curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+readonly NODE_MAJOR=24
+step "Node.js $NODE_MAJOR installieren..."
+if ! command -v node &> /dev/null || [[ $(node --version | cut -d. -f1 | tr -d 'v') -lt $NODE_MAJOR ]]; then
+  curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - >/dev/null 2>&1
   apt-get install -y nodejs >/dev/null 2>&1
+  command -v node &>/dev/null || err "Node.js konnte nicht installiert werden."
   ok "Node.js $(node --version) installiert"
 else
   ok "Node.js $(node --version) bereits vorhanden"
 fi
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 4: Ollama
+# SCHRITT 4: PostgreSQL
+#
+# Ersetzt den frueheren Ollama-Schritt. Die systemd-Unit (patio.service)
+# deklariert bereits `After=postgresql.service` — nur installiert hat die
+# Datenbank bislang niemand.
+#
+# Wichtig: die Extensions muessen als Superuser angelegt werden — die
+# App-Rolle darf `CREATE EXTENSION` nicht. Deshalb hier vorab, analog zu
+# docker/init/00_extensions.sql beim Container-Setup.
+#
+# Gebraucht werden nur uuid-ossp, pg_trgm und unaccent; alle drei kommen aus
+# postgresql-contrib. pgvector ist NICHT mehr noetig — PATIO kennt seit AP0
+# keine Embeddings, und im internetlosen Buero waere das Paket ohnehin nicht
+# zu beschaffen.
 # ═════════════════════════════════════════════════════════════════════════════
-step "Ollama installieren..."
-if ! command -v ollama &> /dev/null; then
-  curl -fsSL https://ollama.ai/install.sh | sh
-  ok "Ollama installiert"
-else
-  ok "Ollama bereits vorhanden"
-fi
+if [ "$DB_MODE" = "local" ]; then
+  step "PostgreSQL installieren..."
+  if ! command -v psql &> /dev/null; then
+    apt-get install -y postgresql postgresql-contrib >/dev/null 2>&1
+    ok "PostgreSQL installiert"
+  else
+    ok "PostgreSQL bereits vorhanden"
+  fi
 
-systemctl enable ollama --quiet 2>/dev/null || true
-systemctl start ollama 2>/dev/null || true
-sleep 3
-ok "Ollama Service gestartet"
+  systemctl enable postgresql --quiet 2>/dev/null || true
+  systemctl start postgresql 2>/dev/null || true
+
+  step "Datenbank einrichten ($DB_NAME)..."
+  PSQL="su -s /bin/bash postgres -c"
+
+  if $PSQL "psql -tAc \"SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'\"" | grep -q 1; then
+    $PSQL "psql -q -c \"ALTER ROLE \\\"$DB_USER\\\" WITH LOGIN PASSWORD '$DB_PASS'\"" >/dev/null
+    ok "Rolle '$DB_USER' vorhanden — Passwort aktualisiert"
+  else
+    $PSQL "psql -q -c \"CREATE ROLE \\\"$DB_USER\\\" WITH LOGIN PASSWORD '$DB_PASS'\"" >/dev/null
+    ok "Rolle '$DB_USER' angelegt"
+  fi
+
+  if $PSQL "psql -tAc \"SELECT 1 FROM pg_database WHERE datname='$DB_NAME'\"" | grep -q 1; then
+    ok "Datenbank '$DB_NAME' vorhanden"
+  else
+    $PSQL "createdb -O '$DB_USER' '$DB_NAME'" || err "Datenbank '$DB_NAME' konnte nicht angelegt werden."
+    ok "Datenbank '$DB_NAME' angelegt"
+  fi
+
+  # ON_ERROR_STOP=1: ohne diese Extensions scheitert Migration 001, und der
+  # Dienst kaeme dann erst beim allerersten Start nicht hoch — mit einem
+  # Fehler, den hier niemand mehr sieht.
+  if ! $PSQL "psql -v ON_ERROR_STOP=1 -q -d '$DB_NAME' \
+        -c 'CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\"' \
+        -c 'CREATE EXTENSION IF NOT EXISTS pg_trgm' \
+        -c 'CREATE EXTENSION IF NOT EXISTS unaccent'"; then
+    echo ""
+    err "Extensions konnten nicht angelegt werden. Meist fehlt postgresql-contrib:
+       sudo apt-get install postgresql-contrib
+     Danach dieses Script erneut ausführen."
+  fi
+  ok "Extensions bereit (uuid-ossp, pg_trgm, unaccent)"
+
+  DATABASE_URL="postgres://${DB_USER}:${DB_PASS}@localhost:5432/${DB_NAME}"
+else
+  step "Datenbank..."
+  ok "Vorhandene Datenbank wird genutzt — nichts zu installieren"
+fi
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 5: PATIO klonen und bauen (VOR useradd — verhindert skel-Konflikt)
@@ -345,87 +425,8 @@ else
   ok "Benutzer '$SERVICE_USER' bereits vorhanden"
 fi
 
-# ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 7: LLM-Modell vorbereiten
-# ═════════════════════════════════════════════════════════════════════════════
-if [ "$LLM_MODE" = "cloud" ]; then
-  step "Ollama Cloud einrichten..."
-  info "Melde dich mit deinem Ollama-Konto an (ollama.com)."
-  info "Es wird ein Link angezeigt — öffne ihn im Browser/Handy."
-  echo ""
-
-  # Hilfsfunktion: Ollama Cloud-Verbindung testen
-  _test_ollama_cloud() {
-    su -s /bin/bash "$SERVICE_USER" -c "ollama ls" 2>/dev/null | grep -qi "cloud" && return 0
-    # Alternativ: einfacher API-Aufruf
-    su -s /bin/bash "$SERVICE_USER" -c "ollama ls" 2>/dev/null | grep -qv "Error" && return 0
-    return 1
-  }
-
-  # Hilfsfunktion: Login durchführen und auf Browser-Bestätigung warten
-  _do_ollama_signin() {
-    echo ""
-    info "Es wird ein Link angezeigt — öffne ihn im Browser oder Handy."
-    info "Melde dich mit deinem Ollama-Konto an (ollama.com)."
-    echo ""
-    su -s /bin/bash "$SERVICE_USER" -c "ollama signin" < /dev/tty || true
-    echo ""
-    echo -e "  ${YELLOW}→${NC} Sobald du dich im Browser angemeldet hast, drücke Enter um fortzufahren."
-    read -r < /dev/tty
-  }
-
-  # ollama signin als Service-User ausführen (Token muss für patio zugänglich sein)
-  _do_ollama_signin
-
-  # Verbindung verifizieren
-  if _test_ollama_cloud; then
-    ok "Cloud-Verbindung erfolgreich ($OLLAMA_MODEL)"
-  else
-    echo ""
-    warn "Ollama Cloud-Verbindung konnte nicht bestätigt werden"
-    FAIL_CHOICE=$(select_option "Was möchtest du tun?" \
-      "Auf lokales Modell umstellen (wird heruntergeladen)" \
-      "Installation abbrechen" \
-      "Login erneut versuchen")
-
-    case "$FAIL_CHOICE" in
-      1)
-        echo ""
-        info "Wechsle zu lokalem Modell..."
-        LLM_MODE="local"
-        info "Verfügbare: qwen2.5:7b (~4.3GB), llama3.1:8b (~4.7GB), qwen2.5:3b (~2GB)"
-        OLLAMA_MODEL=$(ask_default "Modell" "qwen2.5:3b")
-        step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
-        warn "Das kann einige Minuten dauern..."
-        ollama pull "$OLLAMA_MODEL"
-        ok "Modell '$OLLAMA_MODEL' bereit"
-        ;;
-      2)
-        echo ""
-        info "Installation wurde abgebrochen."
-        info "Ollama Login nachholen: su -s /bin/bash $SERVICE_USER -c 'ollama signin'"
-        exit 0
-        ;;
-      3)
-        echo ""
-        info "Erneuter Login-Versuch..."
-        _do_ollama_signin
-        if _test_ollama_cloud; then
-          ok "Cloud-Verbindung erfolgreich"
-        else
-          warn "Verbindung erneut fehlgeschlagen."
-          info "Manuell nachholen: su -s /bin/bash $SERVICE_USER -c 'ollama signin'"
-          info "Installation wird trotzdem fortgesetzt."
-        fi
-        ;;
-    esac
-  fi
-else
-  step "LLM-Modell herunterladen ($OLLAMA_MODEL)..."
-  warn "Das kann je nach Internetverbindung einige Minuten dauern..."
-  ollama pull "$OLLAMA_MODEL"
-  ok "Modell '$OLLAMA_MODEL' bereit"
-fi
+# SCHRITT 7 (LLM-Modell herunterladen) ist ersatzlos entfallen — seit AP0 gibt
+# es weder LLM-Laufzeit noch Embeddings. Die Datenbank steht bereits (Schritt 4).
 
 # ═════════════════════════════════════════════════════════════════════════════
 # SCHRITT 8: Verzeichnisse + Berechtigungen
@@ -448,12 +449,17 @@ info "Installationsverzeichnis: $INSTALL_DIR"
 ok "Berechtigungen gesetzt"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 9: Web-Admin + JWT vorbereiten
+# SCHRITT 9: Web-Admin + Secrets vorbereiten
 # ═════════════════════════════════════════════════════════════════════════════
 step "Web-Admin einrichten..."
 
-# JWT Secret generieren
+# JWT Secret generieren (64 Hex-Zeichen — deutlich ueber der 32-Zeichen-Grenze,
+# unter der src/index.ts den Production-Start verweigert).
 JWT_SECRET=$(openssl rand -hex 32)
+# Eigener Schluessel fuer die Feld-Verschluesselung. Bei einer Neuinstallation
+# gefahrlos: es gibt noch nichts, was umgeschluesselt werden muesste. Ohne ihn
+# haengt die Verschluesselung am JWT_SECRET und ueberlebt keine Rotation.
+ENCRYPTION_KEY=$(openssl rand -hex 32)
 
 # Passwort hashen (bcrypt via Node.js — Modul ist nach npm install verfügbar)
 PASS_HASH=$(node -e "const b=require('bcrypt'); b.hash(process.argv[1],10).then(h=>console.log(h))" "$WEB_PASS")
@@ -468,41 +474,70 @@ chmod 600 "$INSTALL_DIR/data/users.json"
 ok "Admin-User '$WEB_USER' erstellt"
 
 # ═════════════════════════════════════════════════════════════════════════════
-# SCHRITT 10: .env erstellen (immer BOT_TOKEN prüfen)
+# SCHRITT 10: .env erstellen
+#
+# Pflichtfelder sind WORKSPACE_PATH, DATABASE_URL und JWT_SECRET — fehlt eines,
+# beendet sich der Dienst beim Start. Frueher wurde hier BOT_TOKEN geprueft und
+# DATABASE_URL gar nicht geschrieben; die Installation konnte damit gar nicht
+# hochkommen.
+#
+# Eine bestehende .env wird NICHT ueberschrieben: dort koennen SMTP-Zugaenge,
+# ein ENCRYPTION_KEY und ein bereits benutztes JWT_SECRET stehen. Ein neues
+# JWT_SECRET wuerde nicht nur alle Sitzungen entwerten, sondern (solange kein
+# eigener ENCRYPTION_KEY gesetzt ist) auch die verschluesselten Felder
+# unlesbar machen. Ergaenzt wird nur, was fehlt.
 # ═════════════════════════════════════════════════════════════════════════════
 step ".env konfigurieren..."
+
+# Setzt einen Schluessel nur, wenn er noch nicht (mit Wert) in der .env steht.
+#
+# Bewusst KEIN `sed -i "s|^KEY=.*|KEY=$value|"`: im Ersetzungstext sind "&"
+# und der Trenner "|" Sonderzeichen. Ein Passwort mit "&" waere dabei still
+# verfaelscht worden — genau die Sorte Fehler, die erst Wochen spaeter als
+# "Login geht nicht" auffaellt. Stattdessen: leere Zeile entfernen, Wert
+# woertlich anhaengen.
+env_set_if_missing() {
+  local key="$1" value="$2"
+  if grep -qE "^${key}=.+" "$INSTALL_DIR/.env" 2>/dev/null; then
+    return 1
+  fi
+  grep -vE "^${key}=" "$INSTALL_DIR/.env" > "$INSTALL_DIR/.env.tmp" 2>/dev/null || true
+  mv "$INSTALL_DIR/.env.tmp" "$INSTALL_DIR/.env"
+  printf '%s=%s\n' "$key" "$value" >> "$INSTALL_DIR/.env"
+  return 0
+}
+
 if [ -f "$INSTALL_DIR/.env" ]; then
-  # .env existiert — prüfen ob BOT_TOKEN gesetzt ist
-  EXISTING_TOKEN=$(grep -oP '^BOT_TOKEN=\K.+' "$INSTALL_DIR/.env" 2>/dev/null || true)
-  if [ -z "$EXISTING_TOKEN" ]; then
-    warn ".env existiert, aber BOT_TOKEN ist leer — wird aktualisiert"
-    sed -i "s|^BOT_TOKEN=.*|BOT_TOKEN=$BOT_TOKEN|" "$INSTALL_DIR/.env"
-    sed -i "s|^OLLAMA_MODEL=.*|OLLAMA_MODEL=$OLLAMA_MODEL|" "$INSTALL_DIR/.env"
-    ok ".env aktualisiert (Token + Modell)"
-  else
-    warn ".env bereits vorhanden mit Token — übersprungen"
-    info "Modell manuell ändern: nano $INSTALL_DIR/.env"
-  fi
-  # JWT_SECRET immer setzen/aktualisieren
-  if grep -q '^JWT_SECRET=' "$INSTALL_DIR/.env"; then
-    sed -i "s|^JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET|" "$INSTALL_DIR/.env"
-  else
-    echo "JWT_SECRET=$JWT_SECRET" >> "$INSTALL_DIR/.env"
-  fi
-  if ! grep -q '^API_PORT=' "$INSTALL_DIR/.env"; then
-    echo "API_PORT=$API_PORT" >> "$INSTALL_DIR/.env"
-  fi
+  warn ".env bereits vorhanden — nur fehlende Pflichtwerte werden ergänzt"
+  env_set_if_missing WORKSPACE_PATH "$WORKSPACE_DIR" && info "WORKSPACE_PATH ergänzt"
+  env_set_if_missing DATABASE_URL   "$DATABASE_URL"  && info "DATABASE_URL ergänzt"
+  env_set_if_missing JWT_SECRET     "$JWT_SECRET"    && info "JWT_SECRET ergänzt"
+  env_set_if_missing ENCRYPTION_KEY "$ENCRYPTION_KEY" && info "ENCRYPTION_KEY ergänzt"
+  env_set_if_missing API_PORT       "$API_PORT"      && info "API_PORT ergänzt"
+  ok ".env geprüft"
 else
-  cat > "$INSTALL_DIR/.env" << 'ENVHEADER'
+  cat > "$INSTALL_DIR/.env" << ENVEOF
 # PATIO Konfiguration (generiert von install.sh)
-ENVHEADER
-  cat >> "$INSTALL_DIR/.env" << ENVEOF
-BOT_TOKEN=$BOT_TOKEN
+# Alle verfügbaren Schlüssel mit Erklärung: .env.example
+
+# ── Pflicht: ohne diese drei bricht der Dienst beim Start ab ──
 WORKSPACE_PATH=$WORKSPACE_DIR
-OLLAMA_BASE_URL=http://localhost:11434/v1
-OLLAMA_MODEL=$OLLAMA_MODEL
+DATABASE_URL=$DATABASE_URL
 JWT_SECRET=$JWT_SECRET
+
+# Eigener Schlüssel für die Feld-Verschlüsselung (statt Rückfall auf JWT_SECRET)
+ENCRYPTION_KEY=$ENCRYPTION_KEY
+
 API_PORT=$API_PORT
+
+# ── SMTP: Pflicht für den Login ──
+# Der Login verschickt 6-stellige Codes per E-Mail. Ohne SMTP_HOST landet der
+# Code nur im Server-Log — im Dauerbetrieb kann sich damit niemand anmelden.
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_FROM=PATIO <noreply@patio.local>
 ENVEOF
   ok ".env erstellt"
 fi
@@ -561,15 +596,19 @@ fi
 echo ""
 print_header "Installation abgeschlossen!"
 echo ""
-echo -e "  ${GREEN}▸${NC} Öffne deinen Telegram Bot und schreibe ${BOLD}'Hallo'${NC}"
-echo    "    Der Setup-Wizard führt dich durch die Einrichtung."
-echo ""
 echo -e "  ${GREEN}▸${NC} Web-Oberfläche: ${BOLD}http://<server-ip>:${API_PORT}${NC}"
 echo    "    Login: ${WEB_USER} / (dein gewähltes Passwort)"
+echo ""
+echo -e "  ${YELLOW}▸${NC} ${BOLD}Noch offen: SMTP eintragen.${NC}"
+echo    "    Der Login schickt 6-stellige Codes per E-Mail. Solange SMTP_HOST in"
+echo    "    ${INSTALL_DIR}/.env leer ist, steht der Code nur im Log:"
+echo    "      sudo patio logs"
+echo    "    Nach dem Eintragen: sudo patio restart"
 echo ""
 echo -e "  ${BOLD}CLI-Befehle:${NC}"
 echo    "    patio                   → Interaktives Menü"
 echo    "    patio status            → Status"
+echo    "    patio db                → Datenbank + Migrationsstand"
 echo    "    patio logs              → Logs anzeigen"
 echo    "    patio logs live         → Live-Logs"
 echo    "    sudo patio restart      → Neustart"

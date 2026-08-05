@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { taskRepo, projectRepo, teamRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
-import { emit } from "../events.js";
+import { emitForProjectName } from "../events.js";
 
 export const tasksRoutes = new Hono<AppEnv>();
 
@@ -136,10 +136,10 @@ tasksRoutes.post("/tasks", async (c) => {
       },
       body.project,
     );
-    emit({ type: "task", action: "created", id: task.id, project: body.project });
+    emitForProjectName({ type: "task", action: "created", id: task.id }, body.project, { actorId: c.var.userId });
     return c.json(updated, 201);
   }
-  emit({ type: "task", action: "created", id: task.id, project: body.project });
+  emitForProjectName({ type: "task", action: "created", id: task.id }, body.project, { actorId: c.var.userId });
   return c.json(task, 201);
 });
 
@@ -167,7 +167,9 @@ tasksRoutes.put("/tasks/:id", async (c) => {
   }
   const task = await taskRepo.update(id, body);
   if (!task) return c.json({ error: "Aufgabe nicht gefunden" }, 404);
-  emit({ type: "task", action: "updated", id });
+  // prev.project (Stand VOR dem Update) ist hier die einzige verfuegbare
+  // Projektangabe — taskRepo.update() aendert das Projekt nicht.
+  emitForProjectName({ type: "task", action: "updated", id }, prev.project, { actorId: c.var.userId });
   return c.json(task);
 });
 
@@ -181,7 +183,7 @@ tasksRoutes.patch("/tasks/:id/complete", async (c) => {
     if (!allowed) return c.json({ error: "Kein Zugriff" }, 403);
   }
   const ok = await taskRepo.complete(id);
-  if (ok) emit({ type: "task", action: "completed", id });
+  if (ok) emitForProjectName({ type: "task", action: "completed", id }, task.project, { actorId: c.var.userId });
   return c.json({ ok });
 });
 
@@ -205,6 +207,6 @@ tasksRoutes.delete("/tasks/:id", async (c) => {
     if (!allowed) return c.json({ error: "Kein Zugriff" }, 403);
   }
   const ok = await taskRepo.delete(id);
-  if (ok) emit({ type: "task", action: "deleted", id });
+  if (ok) emitForProjectName({ type: "task", action: "deleted", id }, task.project, { actorId: c.var.userId });
   return c.json({ ok });
 });

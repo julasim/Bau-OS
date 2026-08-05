@@ -1,123 +1,127 @@
 # Schnellstart
 
-In 5 Minuten zum laufenden Bot — lokal auf deinem Rechner.
+PATIO lokal auf dem eigenen Rechner starten — zum Entwickeln oder Ansehen.
+Für den Betrieb im Büro siehe [Voraussetzungen](/betrieb/voraussetzungen).
 
 ## Voraussetzungen
 
 - **Node.js 20+** — [nodejs.org](https://nodejs.org/)
-- **Telegram Bot Token** — von [@BotFather](https://t.me/BotFather)
-- **Entweder:** Ollama (lokal) — [ollama.ai](https://ollama.ai/)
-- **Oder:** OpenAI API Key — [platform.openai.com](https://platform.openai.com/)
+- **PostgreSQL** — lokal installiert oder als Container
 
----
-
-## Option A — Lokal mit Ollama (Datensouveränität)
-
-Keine Daten verlassen deinen Rechner. Erfordert mindestens 8 GB RAM für ein 7B-Modell.
-
-```bash
-# 1. Ollama + Modell
-# macOS/Linux: curl -fsSL https://ollama.ai/install.sh | sh
-# Windows: Download von ollama.ai
-ollama pull qwen2.5:7b
-
-# 2. Projekt klonen
-git clone https://github.com/julasim/patio.git
-cd PATIO/patio
-npm install
-
-# 3. .env erstellen
-cp .env.example .env
-# .env anpassen: BOT_TOKEN, WORKSPACE_PATH, OLLAMA_BASE_URL
-
-# 4. Starten
-npm run dev
-```
-
-Minimale `.env` für Ollama:
-
-```env
-BOT_TOKEN=7123...:AAH...
-WORKSPACE_PATH=/pfad/zum/vault
-OLLAMA_BASE_URL=http://localhost:11434/v1
-OLLAMA_MODEL=qwen2.5:7b
-```
-
----
-
-## Option B — Cloud mit OpenAI (einfacher, höhere Qualität)
-
-Kein Ollama nötig. Anfragen gehen an die OpenAI API. Wenn `OPENAI_API_KEY` gesetzt ist, verwendet PATIO automatisch `gpt-4o-mini` (Haupt) und `gpt-4o` (Vision).
-
-```bash
-# 1. Projekt klonen
-git clone https://github.com/julasim/patio.git
-cd PATIO/patio
-npm install
-
-# 2. .env erstellen
-cp .env.example .env
-# .env anpassen: BOT_TOKEN, WORKSPACE_PATH, OPENAI_API_KEY
-
-# 3. Starten
-npm run dev
-```
-
-Minimale `.env` für OpenAI:
-
-```env
-BOT_TOKEN=7123...:AAH...
-WORKSPACE_PATH=/pfad/zum/vault
-OPENAI_API_KEY=sk-...
-```
-
----
-
-## Web-UI aktivieren (optional)
-
-Zusätzlich zur Telegram-Schnittstelle gibt es eine Browser-Oberfläche (Vue 3 + Hono API).
-
-```bash
-# In .env ergänzen:
-JWT_SECRET=$(openssl rand -hex 32)   # mind. 32 Zeichen
-API_PORT=3000
-
-# API + Frontend starten (zwei Terminals):
-npm run dev        # Backend (Bot + API)
-npm run dev:web    # Frontend-Dev-Server (separates Terminal)
-
-# Dann: http://localhost:5173 (Dev-Server) oder http://localhost:3000 (API direkt)
-```
-
-::: tip JWT_SECRET
-Das Web-Interface ist **nur aktiv, wenn `JWT_SECRET` gesetzt ist**. Ohne diesen Wert startet die Hono-API nicht.
+::: warning Ohne Datenbank kein Start
+PATIO läuft ausschließlich gegen PostgreSQL. Fehlt `DATABASE_URL` oder
+antwortet die Datenbank nicht, bricht der Start mit Exit-Code 1 ab. Einen
+Dateisystem-Modus gibt es nicht.
 :::
 
----
+## 1. Datenbank bereitstellen
 
-## Erste Nachricht
+Am schnellsten als Container:
 
-Öffne Telegram, suche deinen Bot und schreibe:
+```bash
+docker run -d --name patio-db \
+  -e POSTGRES_USER=patio \
+  -e POSTGRES_PASSWORD=patio \
+  -e POSTGRES_DB=patio \
+  -p 5432:5432 \
+  postgres:16
+```
 
-> Hallo!
+Wer PostgreSQL schon installiert hat, legt Rolle und Datenbank direkt an:
 
-Der Setup-Wizard startet automatisch und führt dich durch 6 kurze Fragen:
-1. Name des Assistenten
-2. Emoji
-3. Charakter/Vibe
-4. Für was für ein Unternehmen
-5. Dein Name
-6. Name des Unternehmens
+```bash
+sudo -u postgres createuser patio --pwprompt
+sudo -u postgres createdb -O patio patio
+```
 
-Danach ist der Bot sofort einsatzbereit.
+## 2. Projekt einrichten
 
-## Was jetzt?
+```bash
+git clone https://github.com/julasim/patio.git
+cd patio
+npm install
+```
 
-- Schreibe "Erstelle eine Notiz: Meeting morgen um 10 Uhr"
-- Schreibe "Welche Termine habe ich heute?"
-- Tippe `/hilfe` für alle Befehle
-- Lies [Konzepte](/konzepte/architektur) um zu verstehen wie alles zusammenhängt
+## 3. Konfiguration anlegen
 
-::: tip Produktion
-Für den Einsatz auf einem Server lies das [Deployment-Playbook](/betrieb/voraussetzungen) oder nutze den Ein-Befehl-Installer: `sudo bash scripts/install.sh`.
+Entweder interaktiv:
+
+```bash
+npm run setup
+```
+
+Das Skript fragt nach `WORKSPACE_PATH`, `DATABASE_URL` und `JWT_SECRET` und
+schreibt sie in die `.env` — genau die drei Werte, ohne die der Dienst nicht
+startet.
+
+Oder von Hand:
+
+```bash
+cp .env.example .env
+```
+
+Minimale `.env`:
+
+```bash
+WORKSPACE_PATH=/pfad/zum/dokumentenordner
+DATABASE_URL=postgres://patio:patio@localhost:5432/patio
+JWT_SECRET=<openssl rand -base64 48>
+```
+
+Vollständige Liste aller Variablen: [Umgebungsvariablen](/konfiguration/env).
+
+## 4. Starten
+
+Zwei Terminals:
+
+```bash
+npm run dev        # API auf Port 3000, wendet die Migrationen mit an
+npm run dev:web    # Vite-Dev-Server fürs Frontend
+```
+
+Der Vite-Dev-Server öffnet die Oberfläche; die API liefert die Daten. Im
+Produktionsbau (`npm run build:all`) liefert die API das gebaute Frontend
+selbst aus, dann genügt Port 3000.
+
+## 5. Erstes Konto anlegen
+
+Beim ersten Aufruf ist die Benutzertabelle leer. Die Oberfläche zeigt dann
+den Setup-Assistenten und legt das erste Admin-Konto an — Benutzername,
+Passwort und E-Mail-Adresse.
+
+Sobald ein Konto existiert, ist der Assistent gesperrt (HTTP 410). Weitere
+Benutzer legt der Admin über die Benutzerverwaltung an.
+
+::: warning Anmeldung braucht E-Mail-Versand
+Nach Benutzername und Passwort verlangt der Login einen 6-stelligen Code,
+der per E-Mail zugestellt wird. Ohne `SMTP_HOST` landet er nicht im
+Postfach. Für die lokale Entwicklung: SMTP-Zugangsdaten in die `.env`
+eintragen oder einen lokalen Mailcatcher verwenden.
 :::
+
+## Nützliche Befehle
+
+```bash
+npm run build          # Backend nach dist/
+npm run build:all      # Backend + Frontend
+npm start              # Produktionsstart aus dist/
+
+npm test               # Vitest
+npm run lint           # ESLint
+npm run db:migrate     # Migrationen anwenden
+npm run db:status      # Migrationsstand anzeigen
+
+npm run docs:dev       # diese Dokumentation lokal ansehen
+```
+
+::: warning Tests ohne Datenbank
+Ohne gesetzte `DATABASE_URL` überspringen sich die ACL-, Auth- und
+Datenbanktests **still**. Die Suite meldet trotzdem grün, obwohl der
+größere Teil gar nicht gelaufen ist.
+:::
+
+## Weiter
+
+- [Einrichtung](/start/einrichtung) — erstes Konto und Grundkonfiguration
+- [Architektur](/konzepte/architektur) — wie das System aufgebaut ist
+- [Betrieb](/betrieb/voraussetzungen) — Installation im Büro

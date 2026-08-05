@@ -53,20 +53,6 @@ export async function checkDbHealth(): Promise<boolean> {
 }
 
 /**
- * Prueft ob pgvector Extension installiert ist.
- */
-export async function checkPgVector(): Promise<boolean> {
-  if (!DB_ENABLED) return false;
-  try {
-    const db = getDb();
-    const result = await db`SELECT extname FROM pg_extension WHERE extname = 'vector'`;
-    return result.length > 0;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Liefert Pool-Metriken (Connections insgesamt, idle, waiting).
  * Greift auf interne postgres.js-Felder zu — robust gegen das Fehlen einzelner
  * Felder in unterschiedlichen Versionen.

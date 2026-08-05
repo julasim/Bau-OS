@@ -82,7 +82,9 @@ bautagebuchRoutes.put("/projects/:projectName/bautagebuch/:date", async (c) => {
   }
   const result = await bautagebuchRepo.upsert(proj.id, date, body, c.var.userId);
   if (typeof result === "string") return c.json({ error: result }, 400);
-  emit({ type: "bautagebuch", action: "saved", id: result.id, project: proj.name, data: { date } });
+  // Kein `data: { date }` mehr: das Ereignis nennt nur noch den geaenderten
+  // Datensatz, den Inhalt holt der Client ueber die gefilterte Route.
+  emit({ type: "bautagebuch", action: "saved", id: result.id, projectId: proj.id }, { actorId: c.var.userId });
   return c.json(result);
 });
 
@@ -92,7 +94,7 @@ bautagebuchRoutes.delete("/projects/:projectName/bautagebuch/:date", async (c) =
   if ("error" in proj) return proj.error;
   const date = c.req.param("date");
   const ok = await bautagebuchRepo.delete(proj.id, date);
-  if (ok) emit({ type: "bautagebuch", action: "deleted", project: proj.name, data: { date } });
+  if (ok) emit({ type: "bautagebuch", action: "deleted", projectId: proj.id }, { actorId: c.var.userId });
   return c.json({ ok });
 });
 

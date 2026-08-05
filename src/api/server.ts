@@ -19,7 +19,6 @@ import { HTTPException } from "hono/http-exception";
 import { secureHeaders } from "hono/secure-headers";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
-import path from "path";
 import {
   API_PORT,
   RATE_LIMIT_ATTEMPTS,
@@ -58,13 +57,7 @@ import {
   updateDbUserPassword,
   hashPassword,
 } from "./auth.js";
-import {
-  sendMail,
-  buildLoginOtpMail,
-  buildEmailVerifyMail,
-  buildMagicLinkMail,
-  buildPasswordResetMail,
-} from "./email.js";
+import { sendMail, buildLoginOtpMail, buildEmailVerifyMail, buildMagicLinkMail } from "./email.js";
 import { logEvent as audit } from "../data/db-audit.js";
 import { APP_URL } from "../config.js";
 
@@ -175,6 +168,13 @@ app.onError((err, c) => {
   if (code === "57014") {
     logError(`[API] Abfrage abgebrochen (Timeout) — ${c.req.method} ${c.req.path}`, err);
     return c.json({ error: "Die Anfrage hat zu lange gedauert. Bitte den Umfang eingrenzen." }, 503);
+  }
+  // 22P02 = invalid_text_representation. Tritt auf, sobald ein Pfadsegment
+  // als UUID interpretiert wird, aber keine ist ("/api/tasks/keine-uuid").
+  // Das ist eine unbrauchbare Anfrage, kein Serverfehler — vorher kam ein
+  // nackter 500, was in jedem Monitoring wie ein Ausfall aussieht.
+  if (code === "22P02") {
+    return c.json({ error: "Ungueltige ID im Pfad." }, 400);
   }
   if (code === "53300" || code === "ECONNREFUSED") {
     logError(`[API] Datenbank nicht erreichbar — ${c.req.method} ${c.req.path}`, err);
@@ -1019,6 +1019,12 @@ app.route("/api", exportTemplatesRoutes);
 app.route("/api", projectModulesRoutes);
 app.route("/api", uiPreferencesRoutes);
 // app.route("/api", auth2faRoutes); — siehe Kommentar oben
+
+// Unbekannte API-Pfade: JSON-404 statt der Vue-App. Ohne das faellt ein
+// vertippter oder veralteter API-Aufruf in den SPA-Fallback darunter und
+// bekommt HTML mit Status 200 — ein Client, der JSON erwartet, scheitert dann
+// am Parsen statt am Statuscode. Muss VOR serveStatic stehen.
+app.all("/api/*", (c) => c.json({ error: "Unbekannter Endpunkt." }, 404));
 
 // ── Statische Dateien (Vue SPA in Production) ────────────────────────────────
 app.use("/*", serveStatic({ root: "./dist/web" }));

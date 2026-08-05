@@ -2,8 +2,9 @@
 
 ## Warum
 
-Bisher wurde der Schlüssel für die Feld-Verschlüsselung (Telegram-Bot-Token,
-TOTP-Secret, Microsoft-OAuth-Token) aus dem `JWT_SECRET` abgeleitet. Damit hätte
+Bisher wurde der Schlüssel für die Feld-Verschlüsselung (TOTP-Secret; dazu
+die Altbestände Telegram-Bot-Token und Microsoft-OAuth-Token) aus dem
+`JWT_SECRET` abgeleitet. Damit hätte
 eine `JWT_SECRET`-Rotation alle verschlüsselten Felder unlesbar gemacht. SEC-4
 trennt beide Belange: ein eigener `ENCRYPTION_KEY` verschlüsselt die Felder,
 `JWT_SECRET` signiert nur noch Tokens.
@@ -41,10 +42,15 @@ Betroffene Felder: `users.telegram_bot_token`, `users.totp_secret_encrypted`,
    docker compose exec app npm run db:reencrypt
    ```
    Erwartung: alle Felder auf `ENCRYPTION_KEY` umgeschlüsselt, `fehlgeschlagen=0`.
-6. Funktions-Check (alle drei nutzen entschlüsselte Secrets):
-   - Telegram-Bot antwortet,
-   - 2FA-/OTP-Login funktioniert,
-   - Outlook-/Microsoft-Sync läuft.
+6. Funktions-Check: Der 2FA-/OTP-Login muss funktionieren — er ist der
+   einzige verbliebene Verbraucher eines entschlüsselten Secrets.
+
+   > Die früher hier genannten Proben „Telegram-Bot antwortet" und
+   > „Outlook-Sync läuft" sind entfallen: beide Funktionen gibt es seit dem
+   > Umbau zum Firmenserver nicht mehr. Die zugehörigen Spalten
+   > (`telegram_bot_token`, die Microsoft-Token) stehen noch im Schema und
+   > werden von `scripts/reencrypt.ts` weiterhin mit umgeschlüsselt — sie
+   > enthalten aber nur noch Altbestand.
 
 ### Stufe 2 — Rückfälle entfernen (später, eigener Commit)
 

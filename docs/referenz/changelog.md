@@ -2,6 +2,17 @@
 
 Versionshistorie von PATIO. Älteste Version zuerst.
 
+::: warning Historischer Stand bis v0.13.0
+Die Einträge bis einschließlich **v0.13.0** beschreiben die frühere Fassung
+von PATIO: eine KI-Büro-Software mit Telegram-Bot, Sprachmodell,
+Obsidian-Vault und semantischer Suche über pgvector. All das ist mit dem
+**Umbau zum Firmenserver** ersatzlos entfallen — siehe den letzten Eintrag.
+
+Was dort steht, ist als Historie richtig und als Beschreibung des heutigen
+Systems falsch. Wer wissen will, was PATIO heute tut:
+[Architektur](/konzepte/architektur).
+:::
+
 ## v0.1.0 — Initial MVP
 **04.04.2026**
 
@@ -288,14 +299,59 @@ Vollständiger Datei-Upload via Telegram und Web-API, plus Team-Verwaltung.
 
 ---
 
-## Roadmap
+## Umbau zum Firmenserver
+**2026**
 
-| Feature | Priorität | Status |
-|---|---|---|
-| ALLOWED_CHAT_IDS (Telegram-Zugriffskontrolle) | Hoch | ✅ Implementiert |
-| Sprachnachrichten (Whisper) | Mittel | Vorbereitet |
-| ÖNORM-Kalkulations-Agent | Mittel | Geplant |
-| Telegram-Gruppen-Support | Mittel | Geplant |
-| Rollenbasierte Zugriffskontrolle (Admin/User) | Mittel | Geplant |
-| Webhook-Modus (statt Long Polling) | Niedrig | Geplant |
-| Audit-Log | Niedrig | Geplant |
+PATIO wird vom Internet-Stack zum zentral betriebenen Firmenprogramm im
+eigenen Netz: ein Rechner im Büro, kein Internet, echte Benutzerrollen,
+projektweise Rechte.
+
+### Ersatzlos entfernt (rund 16.000 Zeilen)
+
+- **Telegram-Bot** samt grammY, Session-Queue, Slash-Commands und
+  Benachrichtigungen
+- **Sprachmodell-Laufzeit**: Agentic Loop, Tool-Router, Handler,
+  Kontext-Komprimierung, Agenten-Verwaltung
+- **LLM-Anbindung** an OpenAI und Ollama; der `ollama`-Service ist aus dem
+  Compose-Stack verschwunden
+- **Embeddings und semantische Suche** über pgvector
+- **Websuche und Seitenabruf** samt SSRF-Schutz
+- **MCP-Client** und dynamische Tools
+- **Outlook-Abgleich** über Microsoft Graph
+- **Dateisystem-Modus**: die `fs-*`-Repositories und die Weiche zwischen
+  Datei- und Datenbankbetrieb
+
+### Neu beziehungsweise geändert
+
+- **Harter Boot-Abbruch** bei fehlendem `WORKSPACE_PATH`, `DATABASE_URL`
+  oder `JWT_SECRET`. Vorher lief der Prozess weiter, galt für Docker als
+  gesund und lieferte bei jedem Datenzugriff einen 500er.
+- **Alle Repositories sind non-nullable** — kein Aufrufer prüft mehr auf
+  `null`, weil es keinen zweiten Speicherweg mehr gibt.
+- **Volltextsuche** in `src/data/db-search.ts` über Notizen, Aufgaben,
+  Projekte und Dateien, **mit** Filterung auf sichtbare Projekte. Die alte
+  Suche filterte nicht.
+- **Rechtefilter auf dem Live-Update-Kanal**: Ereignisse tragen keine
+  Inhalte mehr und werden nur an Abonnenten zugestellt, deren
+  Sichtbarkeits-Kontext sie abdeckt.
+- **Zentrale Fehlerbehandlung** in der API: sinnvolle HTTP-Codes statt
+  eines nackten „Internal Server Error" als `text/plain`.
+- **Migrationen `040` und `041`** entfernen Embedding-Spalten, HNSW-Indizes
+  und die Registrierung der `vector`-Extension. PATIO läuft damit auf einem
+  gewöhnlichen `postgres:16` — auf einem Firmenserver ohne Internet ist das
+  Spezial-Image `pgvector/pgvector:pg16` nicht zu beschaffen.
+- **`src/workspace/`** auf den echten Dateizugriff zusammengestrichen (rund
+  1.770 → 245 Zeilen).
+- **`patio.service` und `scripts/install.sh`** fragen weder Bot-Token ab
+  noch installieren sie Ollama; die Unit hängt an `postgresql.service`
+  statt an `ollama.service`.
+
+### Offen
+
+| Vorhaben | Warum |
+|---|---|
+| Anmeldung ohne E-Mail-Versand | Der Login verlangt Codes über SMTP — ohne Mailserver im Haus kann sich niemand anmelden |
+| Volltextsuche auf `tsvector` | Derzeit `ILIKE`; bei großen Beständen zu langsam |
+| Konfliktschutz bei gleichzeitiger Bearbeitung | Zwei Arbeitsplätze am selben Datensatz überschreiben einander |
+| Papierkorb | Gelöschtes ist endgültig weg |
+| Migrationen `022`–`024` abräumen | Microsoft-Tabellen ohne Code; ein `DROP` wäre unumkehrbar und wartet aufs Schema-Paket |

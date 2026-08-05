@@ -1,211 +1,273 @@
 # Umgebungsvariablen (.env)
 
-Alle Einstellungen werden über eine `.env`-Datei im Projekt-Root gesteuert. PATIO lädt diese automatisch beim Start via `dotenv`.
+Alle Einstellungen kommen aus einer `.env`-Datei im Projekt-Root. PATIO lädt
+sie beim Start automatisch via `dotenv` (`import "dotenv/config"` in
+`src/index.ts` und `src/config.ts`).
+
+Diese Seite listet **jede** Variable, die der Code tatsächlich liest.
+Vorlage: `.env.example`. Was hier nicht steht, wird nirgends ausgewertet.
 
 ## Übersicht
 
 | Variable | Pflicht | Standardwert | Beschreibung |
 |---|---|---|---|
-| `BOT_TOKEN` | Ja | — | Telegram Bot Token von [@BotFather](https://t.me/BotFather) |
-| `WORKSPACE_PATH` | Ja | — | Absoluter Pfad zum Obsidian Vault (alias: `VAULT_PATH`) |
-| `OPENAI_API_KEY` | Nein | — | OpenAI API Key — wenn gesetzt, wird OpenAI statt Ollama verwendet |
-| `OLLAMA_BASE_URL` | Nein | `http://localhost:11434/v1` | Basis-URL der Ollama-API |
-| `OLLAMA_MODEL` | Nein | `qwen2.5:7b` | Standard-Modell für den Haupt-Agenten |
-| `OLLAMA_FAST_MODEL` | Nein | Wert von `OLLAMA_MODEL` | Schnelles Modell (via `/fast`) |
-| `OLLAMA_SUBAGENT_MODEL` | Nein | Wert von `OLLAMA_MODEL` | Modell für Sub-Agenten |
-| `DATABASE_URL` | Nein | — | PostgreSQL-Verbindungsstring — aktiviert DB-Modus |
-| `JWT_SECRET` | Nein | — | Secret für JWT-Signierung — aktiviert Web-API |
-| `ALLOWED_CHAT_IDS` | Nein | — | Komma-getrennte Telegram-Chat-IDs (leer = Auto-Owner) |
+| `WORKSPACE_PATH` | Ja | — | Absoluter Pfad zum Dokumenten-Verzeichnis (Alias: `VAULT_PATH`) |
+| `DATABASE_URL` | Ja | — | PostgreSQL-Verbindungsstring |
+| `JWT_SECRET` | Ja | — | Secret für die Login-Token, mind. 32 Zeichen |
+| `API_PORT` | Nein | `3000` | Port der Web-Oberfläche |
+| `APP_URL` | Nein | leer | Öffentliche Basis-URL für Links in E-Mails |
+| `CORS_ORIGINS` | Nein | `http://localhost:<API_PORT>` | Erlaubte Origins, komma-getrennt |
+| `DB_AUTO_MIGRATE` | Nein | `true` | Migrationen beim Start automatisch anwenden |
+| `ENCRYPTION_KEY` | Nein | leer | Eigener Schlüssel für verschlüsselte Felder |
+| `NODE_ENV` | Nein | `development` | `production` schaltet die Härtung scharf |
+| `MAX_UPLOAD_MB` | Nein | `50` | Maximale Dateigröße beim Upload |
+| `AUDIT_RETENTION_DAYS` | Nein | `365` | Aufbewahrung der Audit-Einträge in Tagen, `0` = nie löschen |
+| `API_RATE_LIMIT_REQUESTS` | Nein | `600` | Anfragen pro Zeitfenster und IP |
+| `API_RATE_LIMIT_WINDOW_MS` | Nein | `60000` | Zeitfenster des globalen Limits in Millisekunden |
+| `LOG_JSONL_MAX_BYTES` | Nein | `5242880` | Dateigröße, ab der das JSONL-Log rotiert |
+| `LOG_JSONL_KEEP_FILES` | Nein | `5` | Anzahl rotierter Logdateien |
+| `SMTP_HOST` | Nein | leer | SMTP-Server; leer = keine Mails |
+| `SMTP_PORT` | Nein | `587` | SMTP-Port |
+| `SMTP_USER` | Nein | leer | SMTP-Benutzername |
+| `SMTP_PASS` | Nein | leer | SMTP-Passwort |
+| `SMTP_FROM` | Nein | `PATIO <noreply@patio.local>` | Absenderadresse |
+| `SMTP_SECURE` | Nein | `auto` | TLS-Modus: `auto`, `true`, `false` |
+
+Zusätzlich wertet **Docker Compose** vier Variablen aus, die der
+Anwendungscode selbst nie liest: `POSTGRES_USER`, `POSTGRES_PASSWORD`,
+`POSTGRES_DB` und `WORKSPACE_HOST_DIR` (siehe unten).
 
 ## Pflicht-Variablen
 
-### BOT_TOKEN
-
-Das Telegram Bot Token erhältst du vom [@BotFather](https://t.me/BotFather).
-
-```bash
-BOT_TOKEN=7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-::: warning Sicherheitshinweis
-Das Bot Token ist ein Geheimnis. Committe die `.env`-Datei niemals in ein Git-Repository. Die `.gitignore` schließt `.env` bereits aus.
-:::
+Fehlt eine der drei, bricht `src/index.ts` den Start mit Exit-Code 1 ab. Das
+ist Absicht: ein Dienst, der ohne seine Pflicht-Konfiguration hochkommt,
+sieht für Docker und systemd gesund aus und ist trotzdem tot.
 
 ### WORKSPACE_PATH
 
-Der absolute Pfad zum Obsidian Vault. Alternativ auch als `VAULT_PATH` (Legacy-Alias).
+Absoluter Pfad zum Verzeichnis, in dem PATIO Dokumente als Dateien ablegt.
+`VAULT_PATH` wird als Alias weiterhin akzeptiert.
 
 ```bash
+# Linux
+WORKSPACE_PATH=/opt/patio-workspace
+
 # Windows
-WORKSPACE_PATH=C:\Users\max\Documents\MeinVault
-
-# macOS / Linux
-WORKSPACE_PATH=/home/max/MeinVault
+WORKSPACE_PATH=C:\Users\max\Patio
 ```
-
-::: tip
-Der Vault muss bereits existieren. PATIO erstellt `Agents/`, `Inbox/` und `Logs/` automatisch.
-:::
-
-## LLM-Konfiguration
-
-PATIO unterstützt zwei LLM-Backends: **OpenAI** (Cloud) und **Ollama** (lokal). Die Wahl erfolgt automatisch anhand des `OPENAI_API_KEY`.
-
-### OPENAI_API_KEY
-
-Wenn gesetzt, verwendet PATIO OpenAI statt Ollama. Empfohlen für höchste Antwortqualität.
-
-```bash
-OPENAI_API_KEY=sk-...
-```
-
-| Variable | OpenAI-Modus | Ollama-Modus |
-|---|---|---|
-| Haupt-Modell | `gpt-4o` | `qwen2.5:7b` |
-| Fast-Modell | `gpt-4o-mini` | `qwen2.5:3b` |
-| Embedding | `text-embedding-3-small` (1536 dims) | `nomic-embed-text` (768 dims) |
-
-### OLLAMA_BASE_URL
-
-Nur relevant im Ollama-Modus. Ändern wenn Ollama auf einem anderen Rechner läuft.
-
-```bash
-OLLAMA_BASE_URL=http://localhost:11434/v1
-```
-
-### OLLAMA_MODEL / OLLAMA_FAST_MODEL / OLLAMA_SUBAGENT_MODEL
-
-```bash
-OLLAMA_MODEL=qwen2.5:14b
-OLLAMA_FAST_MODEL=qwen2.5:3b
-OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
-```
-
-## Datenbank (PostgreSQL)
 
 ### DATABASE_URL
 
-Aktiviert den PostgreSQL-Modus. Ohne diese Variable läuft PATIO im reinen Filesystem-Modus.
+PATIO läuft **ausschließlich** gegen PostgreSQL. Einen Dateisystem-Modus
+gibt es seit dem Umbau zum Firmenserver nicht mehr — alle Repositories in
+`src/data/` sind Postgres-Repositories.
 
 ```bash
-DATABASE_URL=postgresql://user:password@localhost:5432/patio
+DATABASE_URL=postgres://patio:PASSWORT@localhost:5432/patio
 ```
 
-Beim Start wird automatisch geprüft ob die DB erreichbar ist. Wenn nicht, beendet sich der Prozess mit Exit-Code 1.
+Nach dem Setzen prüft der Start die Erreichbarkeit (`checkDbHealth()`).
+Antwortet die Datenbank nicht, endet der Prozess mit Exit-Code 1.
 
-### DB_AUTO_MIGRATE
-
-Steuert ob SQL-Migrations beim Start automatisch ausgeführt werden.
-
-```bash
-DB_AUTO_MIGRATE=true   # Standard
-DB_AUTO_MIGRATE=false  # Nur für Produktionsumgebungen empfohlen
-```
-
-### Supabase (optional)
-
-Für Supabase Realtime und Storage:
-
-```bash
-SUPABASE_URL=https://xxx.supabase.co
-SUPABASE_ANON_KEY=eyJ...
-SUPABASE_SERVICE_KEY=eyJ...   # Optional — für Admin-Operationen
-```
-
-### Embeddings
-
-Nur relevant wenn `pgvector` installiert ist:
-
-```bash
-EMBEDDING_MODEL=text-embedding-3-small   # Standard bei OpenAI
-EMBEDDING_DIMENSIONS=1536                # Muss zum Modell passen
-```
-
-::: warning Modellwechsel
-Wenn du das Embedding-Modell änderst, muss das Schema per Migration angepasst werden (andere Dimension). PATIO warnt beim Start wenn Konfiguration und Schema nicht übereinstimmen.
+::: tip Docker Compose
+Im Compose-Setup **nicht** selbst setzen: `docker-compose.yml` baut die
+`DATABASE_URL` aus `POSTGRES_USER`/`POSTGRES_PASSWORD`/`POSTGRES_DB`
+zusammen und richtet sie auf den Container `postgres`. Der Wert im
+`environment:`-Block überschreibt alles aus der `.env`.
 :::
-
-## Zugriffskontrolle
-
-### ALLOWED_CHAT_IDS
-
-Optionale Whitelist für Telegram-Chat-IDs. Wenn leer, gilt der **Auto-Owner-Mechanismus**: Die erste Chat-ID die eine Nachricht sendet, wird als Owner gespeichert — alle anderen werden danach ignoriert.
-
-```bash
-# Explizite Whitelist (mehrere IDs komma-getrennt)
-ALLOWED_CHAT_IDS=123456789,987654321
-
-# Nicht gesetzt → Auto-Owner-Modus (empfohlen für Single-User)
-```
-
-Eigene Chat-ID herausfinden: `/whoami` im Bot.
-
-## Web-API & Sicherheit
-
-| Variable | Pflicht | Standardwert | Beschreibung |
-|---|---|---|---|
-| `JWT_SECRET` | Nein | — | Aktiviert Web-API mit JWT-Auth |
-| `API_PORT` | Nein | `3000` | Port der Hono-API |
-| `CORS_ORIGINS` | Nein | `http://localhost:3000` | Erlaubte CORS-Origins, komma-getrennt |
-| `MAX_UPLOAD_MB` | Nein | `50` | Maximale Datei-Upload-Größe |
 
 ### JWT_SECRET
 
-```bash
-# Sicheres Secret generieren:
-openssl rand -hex 32
-
-JWT_SECRET=dein_sicheres_secret_hier
-```
-
-Wenn nicht gesetzt, ist die Web-API vollständig deaktiviert.
-
-## Vollständige Beispiel-.env
+Signiert die Anmelde-Token. Die Web-API ist der einzige Dienst von PATIO —
+ohne Secret gäbe es keinen Login und damit keinen Dienst.
 
 ```bash
-# === Pflicht ===
-BOT_TOKEN=7123456789:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-WORKSPACE_PATH=/home/patio/vault
+# Secret erzeugen
+openssl rand -base64 48
 
-# === LLM — OpenAI (empfohlen) ===
-OPENAI_API_KEY=sk-...
-
-# === LLM — Ollama (Alternative, lokal) ===
-# OLLAMA_BASE_URL=http://localhost:11434/v1
-# OLLAMA_MODEL=qwen2.5:14b
-# OLLAMA_FAST_MODEL=qwen2.5:3b
-# OLLAMA_SUBAGENT_MODEL=qwen2.5:3b
-
-# === Datenbank (optional) ===
-DATABASE_URL=postgresql://patio:password@localhost:5432/patio
-# DB_AUTO_MIGRATE=true
-
-# === Web-API (optional) ===
-JWT_SECRET=abc123...
-API_PORT=3000
-CORS_ORIGINS=https://patio.example.com
-
-# === Sicherheit ===
-ALLOWED_CHAT_IDS=123456789
-MAX_UPLOAD_MB=50
+JWT_SECRET=<erzeugter Wert>
 ```
 
-## Fest konfigurierte Werte
+Mindestens 32 Zeichen. Bei `NODE_ENV=production` verweigert der Start mit
+kürzerem Secret den Dienst; im Entwicklungsmodus gibt es nur eine Warnung.
 
-Definiert in `src/config.ts`, nur durch Quellcode-Änderung anpassbar:
+## Web-Oberfläche
 
-| Konstante | Wert | Beschreibung |
-|---|---|---|
-| `MAX_TOOL_ROUNDS` | `100` | Max. Iterationen im Agentic Loop |
-| `MAX_SPAWN_DEPTH` | `2` | Max. Tiefe für Sub-Agent-Erzeugung |
-| `MAX_HISTORY_CHARS` | `60.000` | Pruning-Grenze für den Message-Buffer |
-| `COMPACT_THRESHOLD` | `8.000` | Ab dieser Länge wird das Tageslog komprimiert |
-| `KEEP_RECENT_LOGS` | `5` | Anzahl der letzten Log-Einträge die erhalten bleiben |
-| `HISTORY_LOAD_LIMIT` | `10` | Gesprächseinträge die beim Start geladen werden |
-| `TIMEZONE` | `Europe/Vienna` | Zeitzone für alle Datums-Operationen |
-| `LOCALE` | `de-AT` | Locale für Formatierungen |
-| `LANGUAGE` | `Deutsch` | Sprache für LLM-Antworten |
+### API_PORT
 
-::: tip Werte anpassen
-Um diese Werte zu ändern, bearbeite `src/config.ts` direkt und starte den Bot neu. Ein Rebuild ist nötig (`npm run build`).
+Port, auf dem der Hono-Server hört (`0.0.0.0`). Standard `3000`.
+
+### APP_URL
+
+Basis-URL für Links in E-Mails (Anmelde-Link, Passwort-Reset). Leer
+bedeutet: das Backend baut die URL aus den Request-Headern (`x-forwarded-proto`,
+`x-forwarded-host`, `host`) — der Reverse-Proxy muss diese korrekt
+weiterreichen.
+
+```bash
+APP_URL=https://patio.firma.intern
+```
+
+### CORS_ORIGINS
+
+Komma-getrennte Liste erlaubter Origins. Ohne Angabe erlaubt die API nur
+`http://localhost:<API_PORT>`. Wird nur gebraucht, wenn die Oberfläche unter
+einer anderen Herkunft läuft als die API — im Normalbetrieb liefert PATIO
+das Frontend selbst aus, dann ist die Variable überflüssig.
+
+## Datenbank
+
+### DB_AUTO_MIGRATE
+
+Steuert, ob die SQL-Migrationen beim Start automatisch laufen.
+
+```bash
+DB_AUTO_MIGRATE=true    # Standard
+DB_AUTO_MIGRATE=false   # Migrationen nur explizit über `npm run db:migrate`
+```
+
+## Verschlüsselung
+
+### ENCRYPTION_KEY
+
+Eigener Schlüssel für verschlüsselte Datenbankfelder, getrennt vom
+`JWT_SECRET`. So reißt eine Rotation des JWT-Secrets die verschlüsselten
+Felder nicht mit.
+
+Ist der Wert leer, fällt `src/api/crypto.ts` auf `JWT_SECRET` zurück und der
+Start warnt. Ein zu kurzer Schlüssel (< 32 Zeichen) wird ebenfalls nur
+bemängelt, nicht abgelehnt.
+
+Umstellung eines bestehenden Systems: [SEC-4-Migration](/sec-4-crypto-migration).
+
+## Betriebsmodus
+
+### NODE_ENV
+
+`production` schaltet die Härtung scharf: ein zu kurzes `JWT_SECRET` führt
+dann zum Abbruch statt zu einer Warnung.
+
+## Uploads
+
+### MAX_UPLOAD_MB
+
+Obergrenze je hochgeladener Datei in Megabyte, Standard `50`. Daraus
+berechnet `src/config.ts` das Byte-Limit.
+
+## Protokollierung
+
+### AUDIT_RETENTION_DAYS
+
+Wie lange Audit-Einträge (Anmeldungen, fehlgeschlagene Versuche,
+Passwort-Resets) aufbewahrt werden. Standard `365` Tage, `0` schaltet das
+automatische Löschen ab. Aufgeräumt wird vom Wartungs-Cron
+(`src/maintenance.ts`).
+
+### LOG_JSONL_MAX_BYTES / LOG_JSONL_KEEP_FILES
+
+Das maschinenlesbare JSONL-Log rotiert größenbasiert: bei Überschreitung
+wird `bot.jsonl` zu `bot.jsonl.1`, `.1` zu `.2` und so weiter; die älteste
+Datei fällt weg. Standard sind 5 MB und 5 Dateien, also höchstens 25 MB.
+
+## Rate-Limiting
+
+### API_RATE_LIMIT_REQUESTS / API_RATE_LIMIT_WINDOW_MS
+
+Globaler Durchsatz je IP über alle `/api/*`-Routen. Standard: 600 Anfragen
+pro Minute — großzügig genug, dass normale Bedienung nie limitiert wird.
+Wird das Limit überschritten, antwortet die API mit 429 und einem
+`Retry-After`-Header.
+
+Das engere Limit für den Login (5 Versuche je IP in 15 Minuten) ist fest im
+Code hinterlegt und nicht über die `.env` steuerbar.
+
+## SMTP / E-Mail
+
+Die Anmeldung verlangt derzeit einen 6-stelligen Code per E-Mail. Ohne
+`SMTP_HOST` wird kein Code zugestellt.
+
+```bash
+SMTP_HOST=mail.firma.intern
+SMTP_PORT=587
+SMTP_USER=patio@firma.intern
+SMTP_PASS=<Passwort>
+SMTP_FROM=PATIO <patio@firma.intern>
+SMTP_SECURE=auto
+```
+
+`SMTP_SECURE=auto` bedeutet: TLS bei Port 465, STARTTLS bei 587 und 25.
+`true` bzw. `false` überschreiben das.
+
+::: warning Netz ohne Internet
+In einem Büronetz ohne Internetzugang muss der SMTP-Server im eigenen Netz
+stehen — sonst kann sich niemand anmelden. Die Umstellung der Anmeldung auf
+ein netzunabhängiges Verfahren ist als eigenes Arbeitspaket vorgesehen.
 :::
+
+## Nur für Docker Compose
+
+Diese Variablen liest der Anwendungscode nie; sie werden von
+`docker-compose.yml` ausgewertet.
+
+| Variable | Standardwert | Zweck |
+|---|---|---|
+| `POSTGRES_USER` | `patio` | Benutzer im Postgres-Container |
+| `POSTGRES_PASSWORD` | `patio` | Passwort im Postgres-Container |
+| `POSTGRES_DB` | `patio` | Datenbankname |
+| `WORKSPACE_HOST_DIR` | `./workspace` | Host-Verzeichnis, das als `/workspace` eingehängt wird |
+
+Nur im Standalone-Aufbau (`docker/docker-compose.standalone.yml`, eigener
+Caddy statt gemeinsamem Edge-Proxy) kommen `CADDY_DOMAIN` und `CADDY_EMAIL`
+hinzu.
+
+## Beispiel-.env
+
+```bash
+# ── Pflicht ───────────────────────────────────────────────
+WORKSPACE_PATH=/opt/patio-workspace
+DATABASE_URL=postgres://patio:PASSWORT@localhost:5432/patio
+JWT_SECRET=<openssl rand -base64 48>
+
+# ── Web-Oberfläche ────────────────────────────────────────
+API_PORT=3000
+APP_URL=https://patio.firma.intern
+
+# ── E-Mail (für die Anmeldecodes) ─────────────────────────
+SMTP_HOST=mail.firma.intern
+SMTP_PORT=587
+SMTP_USER=patio@firma.intern
+SMTP_PASS=
+SMTP_FROM=PATIO <patio@firma.intern>
+
+# ── Betrieb ───────────────────────────────────────────────
+NODE_ENV=production
+ENCRYPTION_KEY=<openssl rand -base64 48>
+MAX_UPLOAD_MB=50
+
+# ── nur Docker Compose ────────────────────────────────────
+POSTGRES_USER=patio
+POSTGRES_PASSWORD=
+POSTGRES_DB=patio
+```
+
+::: danger .env niemals committen
+Die Datei enthält `JWT_SECRET`, `ENCRYPTION_KEY` und Datenbank-Zugangsdaten.
+Sie steht bereits in `.gitignore`.
+:::
+
+## Feste Werte im Code
+
+Nicht über die `.env` steuerbar, nur durch Änderung von `src/config.ts` und
+anschließenden Neubau:
+
+| Konstante | Wert | Bedeutung |
+|---|---|---|
+| `TIMEZONE` | `Europe/Vienna` | Zeitzone für Cron und Zeitstempel |
+| `LOCALE` | `de-AT` | Datums- und Zahlenformat |
+| `LANGUAGE` | `Deutsch` | Sprache der Oberfläche |
+| `RATE_LIMIT_ATTEMPTS` | `5` | Login-Versuche je IP |
+| `RATE_LIMIT_WINDOW_MS` | `900000` | Sperrfenster nach zu vielen Versuchen (15 Minuten) |
+| `MAX_LOG_LINES` | `500` | Zeilenlimit im lesbaren Textlog |
+| `EXTRACT_MAX_CHARS` | `50000` | Zeichenlimit bei der Text-Extraktion aus Dokumenten |
+
+Die vollständige Liste steht in der [Konfigurationsreferenz](/referenz/config).

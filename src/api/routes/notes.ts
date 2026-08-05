@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { noteRepo, projectRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
-import { emit } from "../events.js";
+import { emitForProjectName } from "../events.js";
 
 export const notesRoutes = new Hono<AppEnv>();
 
@@ -86,7 +86,7 @@ notesRoutes.post("/notes", async (c) => {
     return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
   }
   const path = await noteRepo.save(content, project);
-  emit({ type: "note", action: "created", project });
+  emitForProjectName({ type: "note", action: "created" }, project, { actorId: c.var.userId });
   return c.json({ path }, 201);
 });
 
@@ -101,7 +101,12 @@ notesRoutes.put("/notes/:name", async (c) => {
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
 
   const success = await noteRepo.update(name, content);
-  if (success) emit({ type: "note", action: "updated", id: name });
+  // Projekt der Notiz erneut aufloesen — der ACL-Guard oben verwirft sein
+  // Ergebnis, und das DTO der Notiz traegt keine Projekt-UUID.
+  if (success) {
+    const meta = await resolveNoteProject(name);
+    emitForProjectName({ type: "note", action: "updated", id: name }, meta?.project, { actorId: c.var.userId });
+  }
   return c.json({ success });
 });
 
@@ -112,7 +117,10 @@ notesRoutes.patch("/notes/:name/append", async (c) => {
   const { content } = await c.req.json<{ content: string }>();
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
   const success = await noteRepo.append(name, content);
-  if (success) emit({ type: "note", action: "updated", id: name });
+  if (success) {
+    const meta = await resolveNoteProject(name);
+    emitForProjectName({ type: "note", action: "updated", id: name }, meta?.project, { actorId: c.var.userId });
+  }
   return c.json({ success });
 });
 
@@ -122,6 +130,10 @@ notesRoutes.delete("/notes/:name", async (c) => {
   if (!guard.ok) return c.json({ error: guard.error }, guard.status);
   const deleted = await noteRepo.delete(name);
   if (!deleted) return c.json({ error: "Notiz nicht gefunden" }, 404);
-  emit({ type: "note", action: "deleted", id: name });
+  // Bekannte Einschraenkung: die Notiz ist an dieser Stelle bereits geloescht,
+  // ihr Projekt also nicht mehr aufloesbar. Das Ereignis geht deshalb
+  // projektlos raus und erreicht nur Admins und den Loeschenden — die uebrigen
+  // Projektberechtigten sehen das Verschwinden erst beim naechsten Laden.
+  emitForProjectName({ type: "note", action: "deleted", id: name }, null, { actorId: c.var.userId });
   return c.json({ deleted: name });
 });

@@ -1,161 +1,149 @@
 # Backup
 
-Sicherungsstrategie für PATIO. Das Wichtigste: **der Vault ist alles**.
+Das Wichtigste vorweg: **die Datenbank ist der Datenbestand.** Projekte,
+Notizen, Aufgaben, Termine, Team, Meetings, Bautagebuch, Stunden, Phasen,
+Rechnungen und die hochgeladenen Dateien liegen dort. Das
+Workspace-Verzeichnis hält nur, was ohnehin als Datei abgelegt wurde.
 
-## Was muss gesichert werden?
+## Was gesichert werden muss
 
 | Was | Pfad | Priorität | Inhalt |
 |---|---|---|---|
-| **Vault** | `/home/patio/vault/` | Kritisch | Alle Daten: Notizen, Aufgaben, Termine, Agent-Config, Memory |
-| **.env** | `/home/patio/patio/.env` | Hoch | Bot Token, Pfade, Modell-Konfiguration |
-| **Code** | `/home/patio/patio/` | Niedrig | Kann jederzeit neu geklont werden |
+| **Datenbank** | PostgreSQL | Kritisch | Der gesamte fachliche Bestand |
+| **.env** | `/opt/patio/.env` | Kritisch | `JWT_SECRET`, `ENCRYPTION_KEY`, Zugangsdaten |
+| **Workspace** | `/opt/patio-workspace/` | Hoch | Abgelegte Dokumente |
+| **data/** | `/opt/patio/data/` | Mittel | Alt-Konten (`users.json`) |
+| **Code** | `/opt/patio/` | Niedrig | Jederzeit neu klonbar |
 
-::: tip Der Vault ist die einzige Wahrheit
-Alle Daten liegen als Markdown-Dateien im Vault. Agent-Persönlichkeit, Erinnerungen, Aufgaben, Notizen — alles ist dort. Wenn du den Vault hast, kannst du PATIO jederzeit auf einem neuen Server wiederherstellen.
+::: danger .env und Datenbank gehören zusammen
+`ENCRYPTION_KEY` — beziehungsweise `JWT_SECRET` als Rückfall — entschlüsselt
+Felder in der Datenbank. Geht die `.env` verloren und der Dump bleibt, sind
+diese Felder nicht mehr lesbar. **Immer beide zusammen sichern und beide aus
+demselben Tag zurückspielen.**
 :::
 
-## Manuelles Backup
-
-### Vault kopieren
+## Das mitgelieferte Backup-Skript
 
 ```bash
-# Lokales Backup auf dem Server
-cp -r /home/patio/vault /home/patio/vault-backup-$(date +%Y%m%d)
-
-# Oder per SCP auf deinen Rechner
-scp -r patio@DEINE_SERVER_IP:/home/patio/vault ./vault-backup-$(date +%Y%m%d)
+sudo bash /opt/patio/scripts/backup.sh
 ```
 
-### .env sichern
+Es erzeugt zwei Dateien in `/opt/patio-backups`:
+
+| Datei | Inhalt |
+|---|---|
+| `patio-backup-<Zeitstempel>.tar.gz` | Workspace, `.env`, `data/`, `tools/` |
+| `patio-db-<Zeitstempel>.sql.gz` | `pg_dump` mit `--clean --if-exists --no-owner --no-privileges` |
+
+Beide Dateien bekommen `chmod 600` — im Tarball steckt die `.env`. Backups
+älter als 14 Tage werden gelöscht; über `RETENTION_DAYS` einstellbar.
+
+Eigene Pfade als Argumente:
 
 ```bash
-scp patio@DEINE_SERVER_IP:/home/patio/patio/.env ./env-backup-$(date +%Y%m%d)
+sudo bash /opt/patio/scripts/backup.sh /opt/patio /opt/patio-workspace /mnt/nas/patio
 ```
 
-## Automatisches Backup (Cron)
-
-Erstelle ein Backup-Skript:
+::: warning Der Dump braucht einen laufenden Container
+Das Skript zieht den Dump über `docker exec` aus dem Postgres-Container
+(`patio-postgres`, ersatzweise `patio-db`). Läuft keiner — etwa bei einer
+Bare-Metal-Installation — wird der Dump **übersprungen** und nur eine
+Warnung ausgegeben. Das Skript endet trotzdem mit Erfolg. In diesem Fall
+muss der Dump separat gefahren werden:
 
 ```bash
-nano /home/patio/backup.sh
+pg_dump -U patio --clean --if-exists --no-owner --no-privileges patio \
+  | gzip > /opt/patio-backups/patio-db-$(date +%Y%m%d-%H%M%S).sql.gz
 ```
+:::
 
-Inhalt:
+## Täglich laufen lassen
 
 ```bash
-#!/bin/bash
-set -e
-
-VAULT_PATH="/home/patio/vault"
-BACKUP_DIR="/home/patio/backups"
-ENV_FILE="/home/patio/patio/.env"
-KEEP_DAYS=14
-
-# Backup-Verzeichnis erstellen
-mkdir -p "$BACKUP_DIR"
-
-# Datum für Dateinamen
-DATE=$(date +%Y%m%d_%H%M)
-
-# Vault komprimieren
-tar -czf "$BACKUP_DIR/vault-$DATE.tar.gz" -C "$(dirname $VAULT_PATH)" "$(basename $VAULT_PATH)"
-
-# .env sichern
-cp "$ENV_FILE" "$BACKUP_DIR/env-$DATE.bak"
-
-# Alte Backups löschen (älter als KEEP_DAYS Tage)
-find "$BACKUP_DIR" -name "vault-*.tar.gz" -mtime +$KEEP_DAYS -delete
-find "$BACKUP_DIR" -name "env-*.bak" -mtime +$KEEP_DAYS -delete
-
-echo "[$(date)] Backup erstellt: vault-$DATE.tar.gz"
+sudo crontab -e
 ```
-
-Ausführbar machen:
-
-```bash
-chmod +x /home/patio/backup.sh
-```
-
-### Cronjob einrichten
-
-```bash
-crontab -e
-```
-
-Fuege diese Zeile hinzu (täglich um 3:00 Uhr):
 
 ```cron
-0 3 * * * /home/patio/backup.sh >> /home/patio/backups/backup.log 2>&1
+0 3 * * * /bin/bash /opt/patio/scripts/backup.sh >> /opt/patio/logs/backup.log 2>&1
 ```
 
-Prüfen ob der Cronjob eingerichtet ist:
+Die Vorlage liegt als `scripts/backup-cron.conf` bei. Der Wartungs-Cron von
+PATIO läuft um 03:15 Uhr — bewusst versetzt, damit der Dump nicht mitten in
+eine Löschwelle im Audit-Log fällt.
+
+Prüfen:
 
 ```bash
-crontab -l
+sudo crontab -l
+tail -20 /opt/patio/logs/backup.log
 ```
 
-## Hetzner Snapshots
+## Zweiter Ablageort
 
-Hetzner bietet Server-Snapshots als zusätzliche Sicherung:
+Ein Backup auf demselben Rechner ist bei dessen Ausfall mitverloren. Im
+Büronetz bietet sich ein NAS oder eine Netzfreigabe an:
 
-1. Öffne [console.hetzner.cloud](https://console.hetzner.cloud)
-2. Wähle deinen Server
-3. Tab **"Snapshots"** → **"Snapshot erstellen"**
+```cron
+0 3 * * * /bin/bash /opt/patio/scripts/backup.sh >> /opt/patio/logs/backup.log 2>&1
+30 3 * * * rsync -a --delete /opt/patio-backups/ /mnt/nas/patio-backups/ >> /opt/patio/logs/backup.log 2>&1
+```
 
-::: tip Kosten
-Snapshots kosten bei Hetzner 0,0119 EUR/GB/Monat. Ein 20 GB Snapshot kostet ca. 0,24 EUR/Monat.
-:::
-
-::: warning Snapshots ersetzen kein Backup
-Snapshots sichern den gesamten Server-Zustand. Für regelmäßige Datensicherung nutze das Backup-Skript. Snapshots sind gut vor größeren Änderungen (z.B. OS-Upgrade).
-:::
+Das Ziel muss die Rechte erhalten (`chmod 600`) — die Dateien enthalten
+Secrets. Eine Netzfreigabe, auf die das ganze Büro zugreifen kann, ist als
+Backup-Ziel ungeeignet.
 
 ## Wiederherstellung
 
-### Vault aus Backup wiederherstellen
-
 ```bash
-# Aktuellen Vault sichern (zur Sicherheit)
-mv /home/patio/vault /home/patio/vault-old
-
-# Backup entpacken
-tar -xzf /home/patio/backups/vault-20260407_0300.tar.gz -C /home/patio/
-
-# Bot neu starten
-sudo systemctl restart patio
+sudo bash /opt/patio/scripts/restore.sh \
+  /opt/patio-backups/patio-backup-20260420-030000.tar.gz \
+  /opt/patio-backups/patio-db-20260420-030000.sql.gz
 ```
 
-### .env wiederherstellen
+Das Skript entpackt den Tarball, spielt den Dump in den laufenden
+Postgres-Container ein und startet den Anwendungs-Container neu. Wird der
+Dump weggelassen, sucht es den passenden selbst.
+
+::: danger Der Restore löscht den aktuellen Bestand
+Der Dump läuft mit `--clean --if-exists` — bestehende Tabellen werden
+verworfen und neu angelegt. Vor jedem Restore den aktuellen Stand sichern:
 
 ```bash
-cp /home/patio/backups/env-20260407_0300.bak /home/patio/patio/.env
-sudo systemctl restart patio
+sudo bash /opt/patio/scripts/backup.sh
 ```
+:::
 
-### Komplette Neuinstallation aus Backup
+::: warning Beide Dateien aus demselben Lauf
+Ein Tarball von gestern mit einem Dump von heute bringt eine `.env`, die
+einen anderen Migrationsstand erwartet als der eingespielte. Immer das Paar
+mit demselben Zeitstempel verwenden.
+:::
 
-1. Neuen Server erstellen ([Anleitung](/betrieb/server))
-2. Software installieren ([Anleitung](/betrieb/software))
-3. PATIO klonen und bauen ([Anleitung](/betrieb/deployment))
-4. `.env` aus Backup kopieren
-5. Vault aus Backup entpacken
-6. Service starten
+## Neuaufbau auf einem anderen Rechner
 
-```bash
-# Auf dem neuen Server:
-scp dein-rechner:vault-backup.tar.gz /home/patio/
-tar -xzf vault-backup.tar.gz -C /home/patio/
-scp dein-rechner:env-backup.bak /home/patio/patio/.env
-sudo systemctl start patio
-```
+1. [Server aufsetzen](/betrieb/server) und
+   [Software installieren](/betrieb/software)
+2. Repository klonen
+3. `.env` aus dem Tarball übernehmen
+4. Stack starten, damit der Postgres-Container läuft
+5. `restore.sh` mit Tarball und Dump aufrufen
+6. Anmelden und stichprobenartig prüfen
 
-## Backup-Checkliste
+## Der Test, der zählt
 
-- [ ] Backup-Skript unter `/home/patio/backup.sh` erstellt
-- [ ] Cronjob eingerichtet (täglich)
-- [ ] Erster Testlauf erfolgreich (`./backup.sh`)
-- [ ] `.env` separat gesichert
-- [ ] Hetzner Snapshot vor größeren Änderungen
+Ein Backup, das nie zurückgespielt wurde, ist kein Backup. Einmal im Quartal
+einen Restore auf einem Testsystem fahren und prüfen, ob Anmeldung,
+Projektliste und ein Dateidownload funktionieren. Gerade der Dateidownload
+ist aussagekräftig — er berührt Datenbank, Verschlüsselung und
+Dateisystem gleichzeitig.
+
+## Checkliste
+
+- [ ] `backup.sh` läuft täglich per Cron
+- [ ] Der DB-Dump wird tatsächlich erzeugt (nicht stillschweigend übersprungen)
+- [ ] Backups landen zusätzlich auf einem zweiten Gerät
+- [ ] Die Dateirechte am Zielort sind eng
+- [ ] Ein Restore wurde mindestens einmal durchgespielt
 
 ## Nächster Schritt
 

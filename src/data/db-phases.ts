@@ -9,7 +9,7 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
-import type { ProjectPhase, ProjectPhaseUpsert, PhaseRepository } from "./types.js";
+import type { ProjectPhase, PhaseRepository } from "./types.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 

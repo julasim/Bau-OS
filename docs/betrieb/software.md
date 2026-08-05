@@ -1,181 +1,146 @@
 # Software installieren
 
-Node.js, Git und Ollama auf dem frischen Ubuntu-Server einrichten.
+Zwei Wege. **Docker Compose** ist der empfohlene: die Datenbank kommt als
+Container mit, die Versionen sind festgelegt, ein Update ist ein Rebuild.
+**Bare Metal** ist der Weg für Rechner, auf denen kein Docker laufen soll.
 
-::: tip Voraussetzung
-Du bist als `patio`-Benutzer per SSH eingeloggt. Falls nicht: `ssh patio@DEINE_SERVER_IP`
-:::
+---
 
-## 1. Node.js 20 LTS
+## Weg A — Docker Compose (empfohlen)
+
+### Docker installieren
 
 ```bash
-# NodeSource Repository hinzufuegen
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
-
-# Node.js installieren
-sudo apt-get install -y nodejs
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl gnupg
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+  | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+  | sudo tee /etc/apt/sources.list.d/docker.list
+sudo apt-get update
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io \
+  docker-buildx-plugin docker-compose-plugin
 ```
 
 Prüfen:
 
 ```bash
-node --version   # v20.x.x
-npm --version    # 10.x.x
+docker --version
+docker compose version
 ```
 
-## 2. Git
+### Was der Stack enthält
 
-```bash
-sudo apt-get install -y git
-```
+| Service | Image | Funktion |
+|---|---|---|
+| `postgres` | `postgres:16` | Datenbank, nur im internen Netz |
+| `app` | Build aus `Dockerfile` | PATIO-API und Weboberfläche |
 
-```bash
-git --version    # git version 2.x.x
-```
+Zwei Container, mehr nicht. Der frühere `ollama`-Service ist mit dem Umbau
+entfallen — auf einem Firmenserver ohne Internet ließ sich sein Image nicht
+ziehen, und weil `app` per `depends_on` daran hing, kam der **gesamte** Stack
+nicht hoch.
 
-## 3. Ollama
-
-```bash
-curl -fsSL https://ollama.ai/install.sh | sh
-```
-
-Ollama wird automatisch als **systemd-Service** installiert und gestartet.
-
-### Modell herunterladen
-
-```bash
-ollama pull qwen2.5:7b
-```
-
-::: warning Download-Größe
-Das `qwen2.5:7b` Modell ist ca. 4.4 GB gross. Der Download kann je nach Verbindung einige Minuten dauern.
+::: tip Kein pgvector mehr nötig
+Bis vor Kurzem verlangte das Schema die Extension `pgvector` und damit das
+Spezial-Image `pgvector/pgvector:pg16`. Die Migrationen `040` und `041`
+haben die Vektor-Reste entfernt; PATIO läuft auf einem gewöhnlichen
+`postgres:16`. Das ist genau der Punkt, an dem ein Firmenserver ohne
+Internetzugang sonst gescheitert wäre.
 :::
 
-### Ollama prüfen
+### Reverse-Proxy
 
-```bash
-# Service-Status
-sudo systemctl status ollama
+Der Compose-Stack bringt keinen eigenen HTTPS-Eingang mit; `app` gibt Port
+3000 nur containerintern frei. Davor gehört ein Reverse-Proxy, der TLS
+terminiert.
 
-# API erreichbar?
-curl http://localhost:11434/v1/models
-```
+Zwei Varianten:
 
-Erwartete Antwort:
+- **Gemeinsamer Edge-Proxy** — `docker-compose.yml` hängt `app` an ein
+  externes Docker-Netz namens `proxy`. Das Netz muss vor dem ersten Start
+  existieren.
+- **Standalone** — `docker/docker-compose.standalone.yml` bringt einen
+  eigenen Caddy-Container mit; dann sind `CADDY_DOMAIN` und `CADDY_EMAIL` in
+  der `.env` zu setzen.
 
-```json
-{
-  "object": "list",
-  "data": [
-    {
-      "id": "qwen2.5:7b",
-      "object": "model",
-      ...
-    }
-  ]
+::: warning Kein Let's Encrypt im internen Netz
+Ein Zertifikat von Let's Encrypt setzt einen öffentlich auflösbaren Namen
+voraus. Im Büronetz muss das Zertifikat von der internen CA kommen oder
+selbst signiert sein — dann ist es einmalig auf den Arbeitsplätzen als
+vertrauenswürdig zu hinterlegen.
+:::
+
+Die SSE-Route `/api/events` darf der Proxy **nicht puffern**, sonst kommen
+die Live-Updates nicht an. Bei Caddy:
+
+```caddyfile
+@stream path /api/events*
+reverse_proxy @stream app:3000 {
+    flush_interval -1
+    transport http { read_timeout 24h  write_timeout 24h }
 }
+reverse_proxy app:3000
 ```
 
-## 4. Build-Werkzeuge (optional)
+---
 
-Falls beim `npm install` native Module kompiliert werden müssen:
+## Weg B — Bare Metal
+
+### Node.js 24
 
 ```bash
-sudo apt-get install -y build-essential
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
+sudo apt-get install -y nodejs
+node --version
 ```
 
-## Installierte Software prüfen
-
-Schnellcheck — alles auf einen Blick:
+### Git und Build-Werkzeuge
 
 ```bash
-echo "Node.js: $(node --version)"
-echo "npm:     $(npm --version)"
-echo "Git:     $(git --version)"
-echo "Ollama:  $(ollama --version)"
-sudo systemctl is-active ollama
+sudo apt-get install -y git build-essential
 ```
 
-::: tip Ollama beim Booten
-Ollama startet automatisch beim Server-Start. Du kannst das prüfen mit:
+`build-essential` wird für native Module gebraucht (`bcrypt`, `pdf-parse`).
+
+### PostgreSQL 16
+
 ```bash
-sudo systemctl is-enabled ollama
+sudo apt-get install -y postgresql-16
+
+sudo -u postgres createuser patio --pwprompt
+sudo -u postgres createdb -O patio patio
 ```
+
+Die benötigten Extensions (`uuid-ossp`, `pg_trgm`, `unaccent`) legt Migration
+`001` selbst an — dafür braucht die Rolle allerdings ausreichende Rechte
+beim ersten Lauf.
+
+Verbindung prüfen:
+
+```bash
+psql "postgres://patio:PASSWORT@localhost:5432/patio" -c "SELECT 1;"
+```
+
+::: warning Datenbank nicht ans Netz
+`listen_addresses` in `postgresql.conf` auf `localhost` lassen. PATIO läuft
+auf demselben Rechner; eine von außen erreichbare Datenbank ist eine
+unnötige Angriffsfläche.
 :::
 
-## Alternative Modelle
+### Automatischer Installer
 
-| Modell | Größe | RAM-Bedarf | Hinweis |
-|---|---|---|---|
-| `qwen2.5:3b` | ~2 GB | ~3 GB | Für 4 GB RAM Server |
-| `qwen2.5:7b` | ~4.4 GB | ~5 GB | Standard-Empfehlung |
-| `qwen2.5:14b` | ~9 GB | ~10 GB | Braucht 16 GB RAM |
-| `llama3.1:8b` | ~4.7 GB | ~5.5 GB | Alternative zu Qwen |
+Für Ubuntu gibt es ein Skript, das den Bare-Metal-Weg komplett übernimmt:
 
 ```bash
-# Anderes Modell herunterladen
-ollama pull qwen2.5:3b
-
-# Modelle auflisten
-ollama list
-
-# Nicht mehr benoetigtes Modell löschen
-ollama rm qwen2.5:3b
+sudo bash scripts/install.sh
 ```
 
-## Datenbank (optional)
-
-Ohne `DATABASE_URL` läuft PATIO im reinen Filesystem-Modus — keine extra Installation nötig.
-
-### Option A — PostgreSQL + pgvector (self-hosted)
-
-```bash
-# PostgreSQL 16 installieren
-sudo apt install postgresql-16
-
-# pgvector Extension
-sudo apt install postgresql-16-pgvector
-
-# Datenbank anlegen
-sudo -u postgres createuser patio
-sudo -u postgres createdb -O patio patio
-sudo -u postgres psql -c "GRANT ALL ON DATABASE patio TO patio;"
-
-# In .env eintragen:
-DATABASE_URL=postgresql://patio:password@localhost:5432/patio
-```
-
-### Option B — Supabase (managed, einfacher)
-
-1. Projekt auf supabase.com erstellen
-2. Connection String aus Settings → Database kopieren
-3. In `.env`:
-   ```
-   DATABASE_URL=postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres
-   SUPABASE_URL=https://[ref].supabase.co
-   SUPABASE_ANON_KEY=eyJ...
-   ```
-
-## Docker Compose (vollständiger Stack)
-
-Startet PostgreSQL + Ollama + PATIO + Caddy (HTTPS) in einem Befehl:
-
-```bash
-# .env anpassen (BOT_TOKEN, WORKSPACE_PATH, etc.)
-cp .env.example .env
-nano .env
-
-# Stack starten
-docker compose up -d
-
-# Logs
-docker compose logs -f
-
-# Update
-docker compose pull && docker compose build app && docker compose up -d
-```
-
-Enthaltene Services: PostgreSQL 16 (pgvector), Ollama, PATIO App. TLS wird über einen externen Edge-Proxy (Caddy) bereitgestellt — siehe Kommentar im `docker-compose.yml`.
+Es richtet ein: Node.js 24, PostgreSQL samt Rolle und Extensions, den
+PATIO-Build, den Dienst-Benutzer, die `.env`, eine systemd-Unit und das
+CLI-Werkzeug `patio`. Abgefragt werden Installations- und
+Workspace-Verzeichnis, das erste Admin-Konto und der Port.
 
 ## Nächster Schritt
 

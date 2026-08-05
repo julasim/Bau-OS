@@ -16,6 +16,15 @@
 //    Das schuetzte in die falsche Richtung: Ziel ist der Betrieb OHNE
 //    pgvector. Sie sind durch Tests auf Migration 040 ersetzt.
 //
+// 3. Inzwischen sind die vektor-abhaengigen Anweisungen auch aus 001 selbst
+//    entfernt (sonst scheitert jede FRISCHE Installation auf einem
+//    gewoehnlichen postgres:16, bevor 040 an die Reihe kommt) und 041
+//    entfernt die Extension-Registrierung aus Bestandsdatenbanken. Die
+//    tragende Zusage lautet damit: KEINE Migration setzt pgvector voraus.
+//    Genau das prueft "keine Migration setzt pgvector voraus" ueber alle
+//    Dateien — die ist der eigentliche Regressionsschutz, weil sie auch
+//    ohne Datenbank laeuft.
+//
 // .env muss VOR der skipIf-Auswertung geladen sein — die passiert zur
 // Collection-Zeit, bevor config.ts spaeter selbst dotenv importiert.
 import "dotenv/config";
@@ -28,6 +37,23 @@ const MIGRATIONS_DIR = path.join(import.meta.dirname ?? process.cwd(), "..", "sr
 
 function readMigration(name: string): string {
   return fs.readFileSync(path.join(MIGRATIONS_DIR, name), "utf-8");
+}
+
+function migrationFiles(): string[] {
+  return fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((f) => f.endsWith(".sql"))
+    .sort();
+}
+
+/**
+ * Entfernt SQL-Kommentare, damit Muster-Pruefungen nur auf ausfuehrbaren
+ * Anweisungen greifen. Die Migrationen 040/041 erklaeren in ihren
+ * Kommentarkoepfen ausfuehrlich, was frueher an pgvector haing — ohne diesen
+ * Schritt wuerde genau diese Dokumentation die Tests rot faerben.
+ */
+function stripSqlComments(sql: string): string {
+  return sql.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ");
 }
 
 describe("DB Config", () => {
@@ -120,34 +146,94 @@ describe("Migration Files", () => {
     expect(content).toContain("ALTER TABLE notes DROP COLUMN IF EXISTS embedding");
   });
 
-  it("040 droppt die vector-Extension NICHT", () => {
-    // Bewusste Entscheidung: 001 legt sie bei jeder Neuinstallation ohnehin
-    // wieder an, und in einer gewachsenen DB koennten fremde Objekte daran
-    // haengen. Ein DROP EXTENSION waere unumkehrbar ohne jeden Gewinn.
-    const content = readMigration("040_drop_embeddings.sql");
-    expect(content).not.toMatch(/^\s*DROP\s+EXTENSION/im);
+  it("040 droppt die vector-Extension NICHT — das erledigt 041", () => {
+    // Bewusste Trennung: ein DROP EXTENSION kann an fremden, hier unbekannten
+    // Objekten scheitern und wuerde dann die Aufraeum-Migration mitreissen.
+    const content = stripSqlComments(readMigration("040_drop_embeddings.sql"));
+    expect(content).not.toMatch(/DROP\s+EXTENSION/i);
   });
 
-  it("keine Migration nach 001 fuehrt Embedding-Spalten wieder ein", () => {
-    // Die Aufraeum-Migration 040 darf nicht durch eine spaetere Migration
-    // still ausgehebelt werden.
-    const files = fs
-      .readdirSync(MIGRATIONS_DIR)
-      .filter((f) => f.endsWith(".sql") && f !== "001_init.sql")
-      .sort();
+  it("041 entfernt die vector-Extension abgesichert", () => {
+    // Der Drop ist reine Hygiene (sonst schreibt pg_dump weiterhin
+    // `CREATE EXTENSION vector` in den Dump, was auf einem postgres:16 nicht
+    // mehr einspielbar ist). Er darf deshalb unter keinen Umstaenden den
+    // Boot verhindern — die drei Absicherungen werden hier festgeschrieben.
+    const content = readMigration("041_drop_vector_extension.sql");
+    const sql = stripSqlComments(content);
 
-    for (const file of files) {
-      const content = readMigration(file);
-      expect(content, `${file} fuegt eine VECTOR-Spalte hinzu`).not.toMatch(/ADD\s+COLUMN[^;]*VECTOR\s*\(/i);
-      expect(content, `${file} legt einen HNSW-Index an`).not.toMatch(/USING\s+hnsw/i);
+    expect(sql).toMatch(/DROP\s+EXTENSION\s+vector/i);
+    // (1) Neuinstallation: Extension gar nicht vorhanden → No-op.
+    expect(sql).toMatch(/pg_extension/);
+    // (2) Fremde Objekte nutzen den Typ noch → stehen lassen.
+    expect(sql).toMatch(/pg_attribute/);
+    // (3) Alles andere wird abgefangen statt zu eskalieren.
+    expect(sql).toMatch(/EXCEPTION\s+WHEN\s+OTHERS/i);
+  });
+
+  it("keine Migration setzt pgvector voraus", () => {
+    // DIE tragende Zusage dieses Umbaus, und der einzige Test dafuer, der
+    // ohne Datenbank laeuft: eine Neuinstallation muss auf einem
+    // gewoehnlichen `postgres:16` komplett durchlaufen. Sobald irgendeine
+    // Migration wieder die Extension anlegt, eine VECTOR-Spalte erzeugt oder
+    // eine pgvector-Operatorklasse benutzt, scheitert der allererste Start
+    // auf dem Firmenserver — dort ist pgvector nicht nachinstallierbar.
+    // Gilt ausdruecklich auch fuer 001: eine nachgelagerte Migration kann
+    // einen Fehler in 001 prinzipiell nicht heilen.
+    for (const file of migrationFiles()) {
+      const sql = stripSqlComments(readMigration(file));
+
+      expect(sql, `${file} legt die vector-Extension an`).not.toMatch(/CREATE\s+EXTENSION[^;]*\bvector\b/i);
+      expect(sql, `${file} legt eine VECTOR-Spalte an`).not.toMatch(/\bVECTOR\s*\(\s*\d+\s*\)/i);
+      expect(sql, `${file} legt einen Vektor-Index an`).not.toMatch(/USING\s+(hnsw|ivfflat)/i);
+      expect(sql, `${file} nutzt eine pgvector-Operatorklasse`).not.toMatch(/vector_(cosine|l2|ip)_ops/i);
     }
+  });
+
+  it("001 legt weiterhin die drei benoetigten contrib-Extensions an", () => {
+    // Gegenprobe zum Test darueber: beim Entfernen von `vector` darf nicht
+    // versehentlich zu viel mitgegangen sein. uuid-ossp wird fuer jede
+    // Primaerschluessel-Default gebraucht, pg_trgm fuer die Fuzzy-Suche.
+    // Alle drei gehoeren zu postgresql-contrib und sind im offiziellen
+    // postgres:16-Image enthalten.
+    const sql = stripSqlComments(readMigration("001_init.sql"));
+
+    expect(sql).toMatch(/CREATE\s+EXTENSION\s+IF\s+NOT\s+EXISTS\s+"uuid-ossp"/i);
+    expect(sql).toMatch(/CREATE\s+EXTENSION\s+IF\s+NOT\s+EXISTS\s+pg_trgm/i);
+    expect(sql).toMatch(/CREATE\s+EXTENSION\s+IF\s+NOT\s+EXISTS\s+unaccent/i);
   });
 });
 
-// Gegen die echte DB: nach dem Migrationslauf darf keine Spalte vom Typ
-// `vector` mehr existieren. Das ist die eigentliche Aussage von 040 —
-// die Datei-Tests oben pruefen nur den Wortlaut.
-describe.skipIf(!HAS_DB)("Schema nach Migration 040 (nur mit DATABASE_URL)", () => {
+// Gegen die echte DB: nach dem Migrationslauf darf nichts mehr an pgvector
+// haengen. Das ist die eigentliche Aussage von 040/041 — die Datei-Tests
+// oben pruefen nur den Wortlaut.
+describe.skipIf(!HAS_DB)("Schema ohne pgvector (nur mit DATABASE_URL)", () => {
+  it("die Datenbank kennt die vector-Extension nicht", async () => {
+    // Die Zusage dieses Umbaus, gegen eine echte Datenbank geprueft.
+    // Wichtig auch fuer BESTANDSdatenbanken: dort hatte die alte Fassung von
+    // 001 die Extension angelegt. Sie bleibt sonst als Karteileiche in
+    // `pg_extension` stehen — harmlos im Betrieb, aber `pg_dump` schreibt
+    // dann weiter `CREATE EXTENSION vector` in den Dump, und der laesst sich
+    // auf einem `postgres:16` nicht mehr einspielen. 041 raeumt das auf.
+    const { getDb } = await import("../src/db/client.js");
+    const db = getDb();
+    const rows = await db<{ extname: string }[]>`
+      SELECT extname FROM pg_extension WHERE extname = 'vector'
+    `;
+    expect(rows).toEqual([]);
+  });
+
+  it("die drei benoetigten contrib-Extensions sind vorhanden", async () => {
+    // Gegenprobe: der Umbau darf nicht zu viel entfernt haben.
+    const { getDb } = await import("../src/db/client.js");
+    const db = getDb();
+    const rows = await db<{ extname: string }[]>`
+      SELECT extname FROM pg_extension
+       WHERE extname IN ('uuid-ossp', 'pg_trgm', 'unaccent')
+       ORDER BY extname
+    `;
+    expect(rows.map((r) => r.extname)).toEqual(["pg_trgm", "unaccent", "uuid-ossp"]);
+  });
+
   it("keine vector-Spalten mehr im Schema", async () => {
     const { getDb } = await import("../src/db/client.js");
     const db = getDb();

@@ -1,230 +1,186 @@
 # Zugriffskontrolle
 
-PATIO implementiert mehrere Schichten der Zugriffskontrolle: von der Telegram-Absender-Prüfung bis zur Dateioperations-Whitelist.
+Wer sich anmelden kann, was er dann sieht, und welche Schranken dazwischen
+liegen.
 
-## Telegram-Zugriffskontrolle
+## Anmeldung
 
-### Auto-Owner-Modus (Standard)
-
-Wenn `ALLOWED_CHAT_IDS` nicht gesetzt ist, gilt der **Auto-Owner-Mechanismus**:
-
-1. Erster Kontakt: Jede Chat-ID darf durch (Setup-Phase)
-2. Beim ersten Schreiben wird die Chat-ID in `.chat_id` gespeichert
-3. Ab diesem Zeitpunkt werden **alle anderen Chat-IDs** stillschweigend ignoriert
+Zweistufig: Passwort, dann ein Code aus dem Postfach.
 
 ```
-Erste Nachricht → erlaubt → Chat-ID wird gespeichert
-Zweite Nachricht (gleiche ID) → erlaubt (Owner)
-Nachricht fremder ID → wird ignoriert (kein Reply, kein Fehler)
+1. POST /api/auth/login            Benutzername + Passwort
+   → Ticket + 6-stelliger Code per E-Mail
+2. POST /api/auth/login/2fa        Ticket + Code
+   → JWT
 ```
 
-### Explizite Whitelist (ALLOWED_CHAT_IDS)
+| Element | Wert |
+|---|---|
+| Passwort-Hash | bcrypt, 10 Runden |
+| Mindestlänge Passwort | 8 Zeichen |
+| Code | 6 Ziffern, bcrypt-gehasht gespeichert |
+| Gültigkeit des Codes | 10 Minuten |
+| Fehlversuche je Code | 5, danach ist der Code tot |
+| Zwischenticket | JWT, 5 Minuten gültig |
+| Ausgestelltes JWT | 7 Tage gültig |
 
-Für mehrere Nutzer oder erhöhte Sicherheit:
+Alternativ zum Code lässt sich ein **Anmelde-Link** anfordern. Der Token
+wird als SHA-256-Hash gespeichert; nur der Klartext steht in der Mail, und
+er lässt sich genau einmal einlösen.
 
-```bash
-# .env
-ALLOWED_CHAT_IDS=123456789,987654321
-```
+Für Konten ohne hinterlegte E-Mail-Adresse erzwingt der Login einen
+**Einrichtungsschritt**: die Adresse muss gesetzt und per Code bestätigt
+werden, bevor ein JWT ausgestellt wird.
 
-Die Middleware in `bot.ts` prüft **vor allen Commands** ob die eingehende Chat-ID erlaubt ist.
-
-```
-ALLOWED_CHAT_IDS gesetzt? → prüfe ob ID in der Liste → sonst ignorieren
-ALLOWED_CHAT_IDS leer?    → prüfe .chat_id-Datei    → Auto-Owner-Logik
-```
-
-Eigene Chat-ID herausfinden: `/whoami` im Bot.
-
-::: tip
-Das `/whoami`-Command zeigt Chat-ID, Telegram-Username und Anzeigename — praktisch für die Ersteinrichtung.
+::: warning Der Alt-Konten-Rückfallpfad
+Konten aus `data/users.json` melden sich **ohne** zweiten Faktor an. Der Pfad
+existiert für Erstinbetriebnahme und Wiederherstellung. Beim Start zieht
+PATIO solche Konten idempotent in die Datenbank nach; danach greift für sie
+der reguläre Ablauf. Auf einem produktiven System sollte die Datei leer
+sein.
 :::
 
-### Heartbeat-Targeting
+## Passwort zurücksetzen
 
-Der Heartbeat sendet proaktive Nachrichten immer an die **gespeicherte Owner-Chat-ID** — unabhängig von `ALLOWED_CHAT_IDS`.
-
-## Agent-Datei-Editor: Whitelist
-
-Der LLM-Agent kann über `agent_datei_schreiben` Konfigurationsdateien bearbeiten. Dabei gilt eine **strenge Whitelist**:
-
-```typescript
-const EDITABLE_AGENT_FILES = [
-  "SOUL.md",       // Persönlichkeit des Agenten
-  "BOOT.md",       // Verhaltensregeln bei jedem Start
-  "AGENTS.md",     // Sub-Agent-Konfiguration
-  "TOOLS.md",      // Tool-Konventionen
-  "HEARTBEAT.md",  // Cron-Konfiguration
-  "BOOTSTRAP.md",  // Erst-Start-Prompt
-  "USER.md",       // Nutzer-Profil
-  "IDENTITY.md",   // Name, Emoji, Vibe
-  "MEMORY.md",     // Langzeitgedächtnis
-];
+```
+1. POST /api/auth/forgot-password  Benutzername oder E-Mail
+2. POST /api/auth/reset-password   Reset-Token + Code + neues Passwort
 ```
 
-::: tip Nur Markdown-Dateien
-Der Agent kann **ausschließlich** die oben genannten `.md`-Dateien bearbeiten. Quellcode, `.env`, Systemdateien und beliebige Pfade sind nicht erreichbar.
-:::
+Schritt 1 antwortet **immer** mit 200 — ob es das Konto gibt, verrät die
+Antwort nicht. Ist gar kein SMTP konfiguriert, kommt stattdessen ein klarer
+503 statt eines stillen Fehlschlags.
 
-### Geschützte Agenten (PROTECTED_AGENTS)
+## Ersteinrichtung
 
-Der `Main`-Agent ist als geschützt markiert und kann nicht gelöscht werden:
+`POST /api/setup/admin` legt das erste Admin-Konto an — aber nur, solange
+weder in der Datenbank noch in `data/users.json` ein Konto steht. Danach
+antwortet der Endpunkt mit 410.
 
-| Aktion | Main-Agent | Andere Agenten |
+## Rollen
+
+| Rolle | Sichtbarkeit |
+|---|---|
+| **admin** | Alles. `getVisibleProjectIds()` liefert den Sentinel `"all"`, es wird gar nicht gefiltert |
+| **user** | Nur die Projekte aus der Zuordnungstabelle `user_projects` |
+
+Datensätze **ohne** Projektbezug sind persönlich:
+
+| Typ | Sichtbar für |
+|---|---|
+| Aufgaben | Ersteller oder zugewiesene Person |
+| Termine | Ersteller oder eingetragene Teilnehmer |
+| Notizen | Ersteller |
+| Dateien | Hochladende Person oder über eine Freigabe |
+
+Die gesamte Logik liegt in `src/data/access.ts`. Die Repositories bauen ihre
+WHERE-Klauseln daraus, statt sie sich selbst zusammenzusetzen — genau diese
+eine Stelle ist deshalb prüfbar.
+
+Projekt-Zugriff vergeben und entziehen: `POST` und `DELETE` auf
+`/api/projects/:name/access`.
+
+## Live-Updates
+
+Der SSE-Kanal war lange die einzige Stelle ohne Rechtefilter. Heute zwei
+Stufen:
+
+1. **Kein Inhalt im Ereignis.** Es sagt nur, *was* sich geändert hat
+   (`type`, `action`, `id`, `projectId`), nicht wie es aussieht. Der Client
+   lädt über die reguläre Route nach, und die filtert bereits.
+2. **Zustellung nach Sichtbarkeit.** Jeder Abonnent bringt seinen
+   Sichtbarkeits-Kontext mit; zugestellt wird nur, was er sehen darf —
+   derselbe Maßstab wie überall sonst.
+
+Für den Verbindungsaufbau holt der Client ein **Einmal-Ticket** mit 30
+Sekunden Gültigkeit. Grund: `EventSource` kann keine eigenen Header setzen,
+das Credential müsste also in die URL — und dort landet es in Server-Logs,
+Browser-Verlauf und Referer.
+
+## Rate-Limiting
+
+| Bereich | Grenze | Reaktion |
 |---|---|---|
-| Erstellen | Automatisch beim Setup | Via `agent_erstellen` |
-| Dateien lesen | Erlaubt | Erlaubt |
-| Dateien schreiben | Nur Whitelist | Nur Whitelist |
-| Löschen | **Blockiert** | Erlaubt |
+| Login | 5 Versuche je IP in 15 Minuten | HTTP 429 |
+| Alle `/api/*` | 600 Anfragen je IP und Minute | HTTP 429 mit `Retry-After` |
 
-## Datei-Upload-Sicherheit
+Beide Zähler liegen im Arbeitsspeicher. Für den vorgesehenen Betrieb — eine
+Instanz — genügt das; ein Neustart setzt sie zurück.
 
-### MIME/Endungs-Whitelist
-
-Uploads via Telegram und Web-API werden gegen eine Whitelist erlaubter Dateiendungen geprüft:
-
-```
-pdf, docx, doc, xlsx, xls, csv, txt, md
-png, jpg, jpeg, gif, webp
-zip, json, xml
-```
-
-Nicht erlaubte Endungen werden **vor dem Download** abgelehnt (kein unnötiger Traffic).
-
-### Größenlimit
-
-```bash
-MAX_UPLOAD_MB=50   # Standard: 50 MB
-```
-
-Das Limit wird **vor dem Download** von Telegram geprüft (`file_size`-Feld).
-
-## Path-Traversal-Schutz
-
-Alle Dateioperationen sind gegen Path-Traversal-Angriffe geschützt.
-
-### Workspace-Schutz (`safePath`)
-
-```typescript
-// src/workspace/helpers.ts
-function safePath(relativePath: string): string | null {
-  const resolved = path.resolve(workspacePath, relativePath);
-  // Korrekte Prüfung mit Separator-Suffix — verhindert /vault-backup als /vault-Bypass
-  if (!resolved.startsWith(workspacePath + path.sep) && resolved !== workspacePath) return null;
-  return resolved;
-}
-```
-
-::: warning Separator-Check
-`startsWith("/vault")` würde auch `/vault-backup` akzeptieren. Die korrekte Prüfung mit `path.sep` schließt diesen Bypass aus.
+::: tip Nur die erste IP aus X-Forwarded-For
+Ein Angreifer könnte sonst mit wechselnden Header-Werten pro Anfrage einen
+anderen Zähler erzeugen und das Limit umgehen.
 :::
 
-### Dynamic Tool-Schutz (`safeToolDir`)
+## Uploads
 
-```typescript
-// src/tools.ts
-function safeToolDir(folderName: string): string {
-  if (!/^[\w\-]+$/.test(folderName)) throw new Error("Ungültiger Tool-Name");
-  const resolved = path.resolve(TOOLS_DIR, folderName);
-  if (!resolved.startsWith(path.resolve(TOOLS_DIR) + path.sep)) throw new Error("Path-Traversal erkannt");
-  return resolved;
-}
-```
+Zwei Schranken:
 
-### searchWorkspace-Schutz
+1. **Endungs-Whitelist** — `pdf`, `docx`, `doc`, `xlsx`, `xls`, `csv`,
+   `txt`, `md`, `png`, `jpg`, `jpeg`, `gif`, `webp`, `zip`, `json`, `xml`.
+2. **Magic-Byte-Prüfung** — der aus dem Inhalt erkannte Binärtyp muss zur
+   behaupteten Endung passen. Eine als `.png` getarnte HTML-Datei fliegt
+   raus, ebenso ein PDF hinter einer `.txt`-Endung.
 
-Der `limitTo`-Parameter für die Arbeitsbereichssuche wird auf verdächtige Zeichen geprüft:
+Textformate ohne verlässliche Signatur (`txt`, `md`, `csv`, `json`, `xml`)
+werden anhand der Endung akzeptiert — dafür gibt es keine Magic Bytes.
 
-```typescript
-if (limitTo && /[/\\.]/.test(limitTo)) return [];
-```
+Größenlimit: `MAX_UPLOAD_MB`, Standard 50.
 
-## SSRF-Schutz (Web-Abruf)
+## Dateizugriff
 
-Das `webseite_lesen`-Tool schützt gegen Server-Side Request Forgery:
+`safePath()` in `src/workspace/helpers.ts` löst jeden relativen Pfad gegen
+`WORKSPACE_PATH` auf und weist alles außerhalb ab. Die Prüfung arbeitet mit
+Separator-Suffix — `startsWith("/workspace")` allein würde auch
+`/workspace-backup` durchlassen.
 
-### Blockierte Hostnamen
+Der Dateibrowser blendet auf Wurzelebene die Systemordner `Agents`,
+`MEMORY_LOGS`, `Daily` und `Templates` sowie alles mit führendem Punkt aus.
 
-| Kategorie | Beispiele |
+## HTTP-Absicherung
+
+| Maßnahme | Umsetzung |
 |---|---|
-| Localhost | `localhost`, `127.0.0.1`, `0.0.0.0` |
-| Private IPv4 | `10.*`, `192.168.*`, `172.16–31.*`, `169.254.*` |
-| Dezimal-IPs | `2130706433` (= 127.0.0.1) |
-| IPv6 privat | `::1`, `fd00::`, `fc00::`, `fe80::`, `::ffff:` |
-| lokale Domains | `*.local`, `*.internal` |
+| Security-Header | `hono/secure-headers`: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` und weitere |
+| Content-Security-Policy | Eigene Richtlinie, derzeit im **Report-Only**-Modus |
+| CORS | Ohne `CORS_ORIGINS` nur `http://localhost:<API_PORT>` |
+| Fehlerantworten | Zentral in JSON, ohne Stack-Trace nach außen |
 
-## Rate Limiting
-
-### Login-Endpoint
-
-```
-Max. Versuche:  5 pro IP-Adresse
-Zeitfenster:    15 Minuten
-HTTP-Antwort:   429 Too Many Requests
-Reset:          Bei erfolgreichem Login
-```
-
-### Chat-Endpoint
-
-```
-Max. Anfragen:  30 pro Minute pro User
-Zeitfenster:    60 Sekunden
-HTTP-Antwort:   SSE-Error-Event
-```
-
-## Security Headers
-
-Die Web-API sendet automatisch Security-Header via `hono/secure-headers`:
-
-| Header | Zweck |
-|---|---|
-| `X-Frame-Options` | Clickjacking-Schutz |
-| `X-Content-Type-Options` | MIME-Sniffing deaktivieren |
-| `Content-Security-Policy` | XSS-Reduktion |
-| `Referrer-Policy` | Referrer-Leaks minimieren |
-
-## MCP-Server-Isolation
-
-Der integrierte MCP Filesystem-Server ist **standardmäßig deaktiviert** (`enabled: false` in `mcp.json`). Wenn aktiviert, sollte der Scope auf den Workspace beschränkt werden:
-
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/pfad/zum/vault"],
-      "enabled": false
-    }
-  }
-}
-```
-
-::: danger
-Niemals `.` als Scope setzen — das gibt dem MCP-Server Zugriff auf `.env`, `data/users.json` und den Quellcode.
+::: warning CSP meldet, blockiert aber nicht
+Der Header heißt `Content-Security-Policy-Report-Only`. Verstöße erscheinen
+in der Browser-Konsole, werden aber nicht unterbunden. Der Schritt auf
+Durchsetzung ist bewusst noch nicht getan.
 :::
 
-## Sicherheits-Checkliste
+## Feld-Verschlüsselung
 
-| Prüfpunkt | Status |
+Einzelne Datenbankfelder werden mit AES-GCM verschlüsselt
+(`src/api/crypto.ts`). Schlüssel ist `ENCRYPTION_KEY`, getrennt vom
+`JWT_SECRET` — so reißt eine Rotation des Anmelde-Secrets die
+verschlüsselten Felder nicht mit. Ohne eigenen Schlüssel greift der Rückfall
+auf `JWT_SECRET`, und der Start warnt.
+
+## Audit-Log
+
+Sicherheitsrelevante Vorgänge werden protokolliert, einsehbar unter
+**Verwaltung → Audit**:
+
+| Bereich | Ereignisse |
 |---|---|
-| Telegram-Zugriffskontrolle (Auto-Owner + ALLOWED_CHAT_IDS) | ✅ Implementiert |
-| Session-Queue (Race-Condition-Schutz) | ✅ Implementiert |
-| Agent-Datei-Whitelist | ✅ Implementiert |
-| PROTECTED_AGENTS | ✅ Implementiert |
-| Rate Limiting — Login-API | ✅ Implementiert |
-| Rate Limiting — Chat-API | ✅ Implementiert |
-| Security Headers (hono/secure-headers) | ✅ Implementiert |
-| Path-Traversal-Schutz (Workspace + Tools + Search) | ✅ Implementiert |
-| SSRF-Schutz (inkl. IPv6 + Dezimal-IPs) | ✅ Implementiert |
-| MIME/Endungs-Whitelist (Upload) | ✅ Implementiert |
-| Datei-Größenlimit (Upload) | ✅ Implementiert |
-| Passwort-Mindestlänge (12 Zeichen) | ✅ Implementiert |
-| Sandbox-Härtung (kein fetch, gefilterte Env-Vars) | ✅ Implementiert |
-| JSON.parse Error-Handling | ✅ Implementiert |
-| Graceful Shutdown (SIGTERM/SIGINT) | ✅ Implementiert |
-| MCP-Cleanup bei Shutdown | ✅ Implementiert |
-| MCP Filesystem deaktiviert (enabled: false) | ✅ Implementiert |
-| CORS konfigurierbar | ✅ Implementiert |
-| Rollenbasierte Zugriffskontrolle (Admin/User) | Geplant |
-| Telegram-Gruppen-Modus | Geplant |
-| Audit-Log | Geplant |
+| Anmeldung | `login.success`, `login.fail`, `login.2fa.success`, `login.2fa.fail`, `login.email.sent`, `login.email.fail` |
+| Anmelde-Link | `login.magic_link.sent`, `.success`, `.fail` |
+| E-Mail-Einrichtung | `email_setup.code_sent`, `.success`, `.code_fail` |
+| Passwort | `password_reset.request`, `.success`, `password.admin_reset` |
+| Benutzer | `user.create`, `user.update`, `user.role`, `user.delete` |
+
+Jeder Eintrag hält IP und User-Agent (auf 256 Zeichen gekürzt).
+Aufbewahrung: `AUDIT_RETENTION_DAYS`, Standard 365 Tage; der Wartungs-Cron
+räumt nachts auf.
+
+## Was nicht mehr existiert
+
+Die frühere Zugriffskontrolle über Telegram-Chat-IDs (`ALLOWED_CHAT_IDS`,
+Auto-Owner), die Whitelist für Agenten-Dateien, die Shell-Allowlist und der
+SSRF-Schutz für den Webabruf sind ersatzlos entfallen — mit dem Code, den
+sie abgesichert haben. PATIO ruft im Betrieb keine externen Adressen mehr
+auf und führt keine Shell-Befehle aus.

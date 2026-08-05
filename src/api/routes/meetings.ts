@@ -66,7 +66,7 @@ meetingsRoutes.post("/projects/:projectName/meetings", async (c) => {
   }
   const result = await meetingRepo.create(proj.id, body, c.var.userId);
   if (typeof result === "string") return c.json({ error: result }, 400);
-  emit({ type: "meeting", action: "created", id: result.id, project: proj.name });
+  emit({ type: "meeting", action: "created", id: result.id, projectId: proj.id }, { actorId: c.var.userId });
   return c.json(result, 201);
 });
 
@@ -106,7 +106,7 @@ meetingsRoutes.patch("/meetings/:id", async (c) => {
   const result = await meetingRepo.update(id, body);
   if (typeof result === "string") return c.json({ error: result }, 400);
   if (!result) return c.json({ error: "Meeting nicht gefunden" }, 404);
-  emit({ type: "meeting", action: "updated", id, project: meeting.projectName ?? null });
+  emit({ type: "meeting", action: "updated", id, projectId: meeting.projectId }, { actorId: c.var.userId });
   return c.json(result);
 });
 
@@ -122,7 +122,7 @@ meetingsRoutes.delete("/meetings/:id", async (c) => {
     }
   }
   const ok = await meetingRepo.delete(id);
-  if (ok) emit({ type: "meeting", action: "deleted", id, project: meeting.projectName ?? null });
+  if (ok) emit({ type: "meeting", action: "deleted", id, projectId: meeting.projectId }, { actorId: c.var.userId });
   return c.json({ ok });
 });
 

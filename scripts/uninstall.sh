@@ -71,7 +71,8 @@ echo ""
 
 if [ -d "$WORKSPACE_DIR" ]; then
   echo -e "${YELLOW}  Workspace: $WORKSPACE_DIR${NC}"
-  info "Enthaelt deine Notizen, Aufgaben und Agenten-Daten"
+  info "Enthaelt die abgelegten Dokumente (Plaene, Schriftverkehr, Anhaenge)."
+  info "Notizen, Aufgaben und Termine liegen dagegen in der Datenbank."
   echo ""
 fi
 
@@ -142,15 +143,28 @@ if id "$SERVICE_USER" &>/dev/null 2>&1; then
 fi
 
 # ═════════════════════════════════════════════════════════════
-# Hinweis: Ollama + Node.js bleiben installiert
+# Hinweis: Datenbank + Node.js bleiben bestehen
+#
+# Der frueher hier stehende Ollama-Hinweis ist entfallen — seit dem Umbau
+# zum Firmenserver installiert kein PATIO-Skript mehr Ollama.
+#
+# Die PostgreSQL-Datenbank wird BEWUSST nicht angetastet: dort liegen
+# Projekte, Notizen, Aufgaben, Termine und Team. Ein automatisches DROP
+# waere unumkehrbar und ist keine Aufgabe eines Deinstallations-Skripts.
 # ═════════════════════════════════════════════════════════════
 echo ""
 echo -e "${BOLD}════════════════════════════════════════════════════${NC}"
 echo -e "${GREEN}  PATIO wurde deinstalliert.${NC}"
 echo -e "${BOLD}════════════════════════════════════════════════════${NC}"
 echo ""
-info "Ollama und Node.js wurden NICHT entfernt."
+warn "Die PostgreSQL-Datenbank wurde NICHT geloescht."
+info "Dort liegen Projekte, Notizen, Aufgaben, Termine und Team."
+info "Vorher sichern:  pg_dump -U patio patio > patio-backup.sql"
+info "Erst dann loeschen (unumkehrbar):"
+info "  sudo -u postgres dropdb patio && sudo -u postgres dropuser patio"
+echo ""
+info "PostgreSQL und Node.js selbst wurden NICHT entfernt."
 info "Falls gewuenscht:"
-info "  Ollama:  sudo rm /usr/local/bin/ollama && sudo userdel ollama"
-info "  Node.js: sudo apt remove nodejs"
+info "  PostgreSQL: sudo apt remove postgresql postgresql-contrib"
+info "  Node.js:    sudo apt remove nodejs"
 echo ""

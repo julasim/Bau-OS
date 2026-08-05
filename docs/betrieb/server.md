@@ -1,99 +1,78 @@
-# Server erstellen
+# Server aufsetzen
 
-Schritt-für-Schritt-Anleitung: Hetzner VPS aufsetzen und absichern.
+Den Rechner im Büro vorbereiten: Grundinstallation, Benutzer, Netz, Zeit.
 
-## 1. Server in Hetzner Cloud anlegen
+## 1. Betriebssystem installieren
 
-1. Melde dich bei [console.hetzner.cloud](https://console.hetzner.cloud) an
-2. Klicke **"Server erstellen"**
-3. Wähle folgende Einstellungen:
+Ubuntu Server 24.04 LTS, minimale Installation. Der OpenSSH-Server wird
+mitinstalliert, damit sich der Rechner ohne Bildschirm und Tastatur
+verwalten lässt.
 
-| Einstellung | Wert |
-|---|---|
-| **Standort** | Falkenstein oder Nuernberg (DE) |
-| **Image** | Ubuntu 24.04 LTS |
-| **Typ** | Shared vCPU → **CPX21** (3 vCPU, 8 GB, 80 GB) |
-| **Netzwerk** | Standard (Public IPv4 + IPv6) |
-| **SSH Key** | Deinen oeffentlichen Key hinzufuegen |
-| **Name** | z.B. `patio-kunde1` |
+## 2. System aktualisieren
 
-4. Klicke **"Erstellen & Kaufen"**
-5. Notiere dir die **IP-Adresse**
+```bash
+sudo apt update && sudo apt upgrade -y
+```
 
-::: tip CPX11 reicht zum Testen
-Für erste Tests kannst du mit CPX11 (4 GB RAM) starten und später upgraden. Hetzner erlaubt Upgrades ohne Datenverlust.
+Automatische Sicherheitsupdates einschalten:
+
+```bash
+sudo apt install -y unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+## 3. Feste Adresse vergeben
+
+Der Rechner muss unter derselben Adresse erreichbar bleiben. Entweder eine
+feste Reservierung im DHCP des Routers oder eine statische Konfiguration in
+Netplan. Dazu ein Name im internen DNS, damit die Arbeitsplätze nicht mit
+einer IP-Adresse hantieren müssen — etwa `patio.firma.intern`.
+
+Prüfen:
+
+```bash
+ip -4 addr show
+```
+
+## 4. Dienst-Benutzer anlegen
+
+Der Dienst soll nicht als `root` laufen.
+
+```bash
+sudo adduser patio
+sudo usermod -aG sudo patio
+```
+
+Beim Docker-Aufbau kommt die Docker-Gruppe dazu:
+
+```bash
+sudo usermod -aG docker patio
+```
+
+::: warning Docker-Gruppe ist Root-äquivalent
+Wer in der Gruppe `docker` ist, kann sich über einen Container Root-Rechte
+verschaffen. Auf einem Rechner, der ausschließlich PATIO betreibt, ist das
+vertretbar — bewusst entscheiden sollte man es trotzdem.
 :::
 
-## 2. Firewall konfigurieren
-
-::: warning Nur SSH wird benoetigt
-PATIO verbindet sich aktiv zu Telegram (Long Polling) und Ollama läuft lokal. Es sind **keine eingehenden Ports ausser SSH** nötig.
-:::
-
-Erstelle eine Firewall in Hetzner Cloud:
-
-| Richtung | Protokoll | Port | Quelle | Aktion |
-|---|---|---|---|---|
-| **Eingehend** | TCP | 22 | Alle | Erlauben |
-| **Eingehend** | ICMP | — | Alle | Erlauben |
-| **Eingehend** | Alles andere | — | — | Blockieren |
-| **Ausgehend** | Alles | — | — | Erlauben |
-
-Weise die Firewall dem Server zu.
-
-## 3. Erster Login
-
-```bash
-ssh root@DEINE_SERVER_IP
-```
-
-## 4. System aktualisieren
-
-```bash
-apt update && apt upgrade -y
-```
-
-::: tip Automatische Sicherheitsupdates
-```bash
-apt install -y unattended-upgrades
-dpkg-reconfigure -plow unattended-upgrades
-```
-:::
-
-## 5. Nicht-Root-Benutzer erstellen
-
-```bash
-# Benutzer erstellen
-adduser patio
-
-# Sudo-Rechte vergeben
-usermod -aG sudo patio
-
-# SSH Key für den neuen Benutzer kopieren
-mkdir -p /home/patio/.ssh
-cp /root/.ssh/authorized_keys /home/patio/.ssh/
-chown -R patio:patio /home/patio/.ssh
-chmod 700 /home/patio/.ssh
-chmod 600 /home/patio/.ssh/authorized_keys
-```
-
-Teste den Login in einem **neuen Terminal**:
-
-```bash
-ssh patio@DEINE_SERVER_IP
-```
-
-## 6. SSH absichern
+## 5. SSH absichern
 
 ::: danger Erst testen, dann sperren
-Stelle sicher, dass der Login als `patio` funktioniert, bevor du den Root-Login deaktivierst!
+Stellen Sie sicher, dass die Anmeldung als `patio` funktioniert, bevor Sie
+den Root-Zugang deaktivieren.
 :::
 
+Schlüssel hinterlegen:
+
 ```bash
-sudo nano /etc/ssh/sshd_config
+sudo mkdir -p /home/patio/.ssh
+sudo cp /root/.ssh/authorized_keys /home/patio/.ssh/
+sudo chown -R patio:patio /home/patio/.ssh
+sudo chmod 700 /home/patio/.ssh
+sudo chmod 600 /home/patio/.ssh/authorized_keys
 ```
 
-Ändere diese Zeilen:
+Dann in `/etc/ssh/sshd_config`:
 
 ```ini
 PermitRootLogin no
@@ -101,45 +80,71 @@ PasswordAuthentication no
 PubkeyAuthentication yes
 ```
 
-SSH-Dienst neu starten:
-
 ```bash
-sudo systemctl restart sshd
+sudo systemctl restart ssh
 ```
 
-## 7. Swap einrichten (optional, empfohlen bei 4 GB RAM)
+## 6. Firewall
+
+Der Rechner steht im internen Netz, nicht am Internet. Offen sein müssen nur
+SSH und der Port des Reverse-Proxy:
 
 ```bash
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-
-# Permanent machen
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp
+sudo ufw allow from 192.168.0.0/16 to any port 443 proto tcp
+sudo ufw enable
+sudo ufw status
 ```
 
-Prüfen:
+Das Adressbereich ist an das eigene Netz anzupassen.
 
-```bash
-free -h
-```
+::: warning Datenbank bleibt intern
+Der PostgreSQL-Port darf nicht ins Netz. Im Compose-Aufbau hängt der
+Datenbank-Container nur im internen Docker-Netz und veröffentlicht keinen
+Port; bei einer Bare-Metal-Installation gehört `listen_addresses` auf
+`localhost`.
+:::
 
-## 8. Zeitzone setzen
+## 7. Zeitzone setzen
 
 ```bash
 sudo timedatectl set-timezone Europe/Vienna
 ```
 
-## Server-Zusammenfassung
+PATIO rechnet intern mit `Europe/Vienna` (`TIMEZONE` in `src/config.ts`).
+Weicht die Systemzeit ab, stimmen die Zeitstempel in Protokollen und
+Bautagebuch nicht mit der Wanduhr überein.
 
-Nach diesen Schritten hast du:
+## 8. Verzeichnisse anlegen
 
-- [x] Einen VPS mit Ubuntu 24.04 LTS
-- [x] Firewall: nur SSH offen
-- [x] Einen `patio`-Benutzer mit SSH-Key-Login
-- [x] Root-Login und Passwort-Login deaktiviert
-- [x] (Optional) 2 GB Swap für zusätzlichen Spielraum
+```bash
+sudo mkdir -p /opt/patio /opt/patio-workspace /opt/patio-backups
+sudo chown -R patio:patio /opt/patio /opt/patio-workspace /opt/patio-backups
+```
+
+| Verzeichnis | Inhalt |
+|---|---|
+| `/opt/patio` | Anwendung, `.env`, Compose-Datei |
+| `/opt/patio-workspace` | hochgeladene Dokumente (`WORKSPACE_PATH`) |
+| `/opt/patio-backups` | Tagesbackups |
+
+::: warning Rechte bei Bind-Mounts
+Läuft der Container als Benutzer mit UID 1000, gehören die gemounteten
+Verzeichnisse auf dem Host auch dieser UID. Sonst scheitert das Schreiben
+mit `EACCES` — und der Fehler zeigt sich an unerwarteter Stelle, etwa als
+fehlschlagender Upload.
+:::
+
+## Zusammenfassung
+
+Nach diesen Schritten steht:
+
+- [x] Ubuntu 24.04 LTS, aktuell gehalten
+- [x] Feste Adresse und DNS-Name im internen Netz
+- [x] Dienst-Benutzer `patio` mit SSH-Schlüssel, Root-Login gesperrt
+- [x] Firewall: nur SSH und HTTPS aus dem eigenen Netz
+- [x] Zeitzone `Europe/Vienna`
+- [x] Verzeichnisse angelegt und dem Dienst-Benutzer zugeordnet
 
 ## Nächster Schritt
 

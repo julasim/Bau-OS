@@ -1,68 +1,89 @@
 # Was ist PATIO?
 
-PATIO ist ein KI-Assistent für **Architektur- und Planungsbüros** (Planung, Bauleitung, Statik, Projektsteuerung). Der Kern: Ein intelligenter Assistent, der über **Telegram und Web-UI (Browser)** erreichbar ist und sein Wissen in einem **Obsidian-kompatiblen Workspace (Markdown)** oder optional in einer **PostgreSQL-Datenbank** speichert.
+PATIO ist eine Büro-Software für **Architektur-, Planungs- und
+Projektsteuerungsbüros**. Sie läuft zentral auf einem Rechner im eigenen
+Netz; alle Arbeitsplätze arbeiten im Browser damit.
 
 ::: warning Wichtige Abgrenzung
-PATIO ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe sind Architekten, Bauleiter, Projektsteuerer, Statiker und Sachbearbeiter im Büro — nicht der Polier oder Maurer auf dem Gerüst. Stundenerfassung, Bautagebuch und Meeting-Protokolle dienen der **Doku im Büro** (in der Regel abends/retrospektiv erfasst), nicht der Echtzeit-Eingabe von der Baustelle.
+PATIO ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe
+sind Architekten, Projektleiter, Projektsteuerer, Statiker und
+Sachbearbeiter im Büro — nicht der Polier oder Maurer auf dem Gerüst.
+Stundenerfassung, Bautagebuch und Meeting-Protokolle dienen der **Doku im
+Büro**, in der Regel retrospektiv erfasst, nicht der Echtzeit-Eingabe von
+der Baustelle.
 :::
 
-## Wie funktioniert es?
+## Wie es aufgebaut ist
 
 ```
-Telegram  ODER  Web-UI (Browser)
-        |               |
-[Zugriffskontrolle: Auto-Owner / ALLOWED_CHAT_IDS]
-        |
-[Session-Queue — serialisiert pro Chat-ID]
-        |
-[Agent Runtime — Agentic Loop, bis zu 56 Tools]
-        |
-[LLM: Ollama (lokal) ODER OpenAI (cloud)]
-        |
-[Datenschicht: Workspace (Markdown) ODER PostgreSQL]
+Arbeitsplätze im Büro (Browser)
+            │
+            ▼
+      Reverse-Proxy (TLS)
+            │
+            ▼
+   PATIO-Anwendung (Hono-API + Vue-Oberfläche)
+            │
+            ├──► PostgreSQL   Projekte, Notizen, Aufgaben, Termine, Team
+            └──► Dateisystem  hochgeladene Dokumente
 ```
 
-**Self-hosted by default.** Cloud-LLM (OpenAI) ist optional konfigurierbar — wird aktiviert, wenn `OPENAI_API_KEY` in der `.env` gesetzt ist.
+Zwei Container auf einem Rechner, dazu ein Reverse-Proxy. Kein Cloud-Dienst,
+keine externe Schnittstelle, keine Telemetrie — die Anwendung spricht im
+Betrieb ausschließlich mit ihrer Datenbank und mit den Browsern im Netz.
 
 ## Für wen?
 
 - **Architekturbüros** für Projektsteuerung, Termine, Bauakte
-- **Planungs- und Statikbüros** für Aufgabenverteilung im Team
-- **Projektsteuerer und Bauleiter** (im Büro, nicht auf der Baustelle) für
-  Bautagebuch, Meeting-Protokolle, Stundenerfassung
-- **Datenschutz-bewusste Firmen**, die keine Cloud-KI nutzen wollen (Ollama lokal),
-  oder maximale Qualität bevorzugen (OpenAI cloud)
+- **Planungs- und Statikbüros** für die Aufgabenverteilung im Team
+- **Projektsteuerer** für Bautagebuch, Meeting-Protokolle, Stundenerfassung
+- **Büros mit Datenschutz-Anforderungen**, die Projektdaten nicht in eine
+  Cloud geben wollen
 
-**NICHT für:** Echtzeit-Bedienung von der Baustelle, Polier-Schnelleingabe vom Gerüst, gewerbliches Personal als primäre Bediener. Diese Personen werden als `team_members` im System abgebildet und können per Telegram zugewiesen/benachrichtigt werden, sind aber nicht die Hauptzielgruppe.
+**Nicht dafür gedacht:** Echtzeit-Bedienung von der Baustelle,
+Schnelleingabe vom Gerüst, gewerbliches Personal als Bediener. Diese
+Personen werden im System abgebildet (als Team-Mitglieder, in der
+Stundenerfassung, im Bautagebuch), bedienen es aber nicht.
 
-## Was macht es besonders?
+## Was es kann
 
-| Feature | Beschreibung |
+| Bereich | Umfang |
 |---|---|
-| **Self-hosted** | Läuft auf eigenem Server — keine Daten an Dritte (by default) |
-| **Dual-Backend** | Ollama lokal (Datensouveränität) oder OpenAI cloud (höchste Qualität) |
-| **56 LLM-Tools** | Notizen, Aufgaben, Termine, Projekte, Suche, PDF/DOCX, Team, Web, Bautagebuch, Zeiterfassung und mehr |
-| **Multi-Agent** | Mehrere spezialisierte KI-Agenten mit eigenem Workspace |
-| **Web-UI** | Browser-Interface (Vue 3 + Hono API) zusätzlich zu Telegram |
-| **Anpassbar ohne Code** | Charakter, Regeln, Erinnerungen über Markdown-Dateien steuerbar |
-| **Proaktiv** | Heartbeat-System: Agent meldet sich selbst bei Terminen |
-| **PostgreSQL optional** | Semantische Suche mit pgvector, Supabase Realtime |
+| **Projekte** | Stammdaten, Sub-Projekte, Bauherr-Verknüpfung, Module je Projekt zuschaltbar |
+| **Aufgaben & Termine** | Zuweisung an Team-Mitglieder, Kalenderansicht |
+| **Notizen** | Markdown-Aktenvermerke, projektverknüpft |
+| **Meetings** | Protokolle mit Action-Items, die per Klick zu Aufgaben werden |
+| **Bautagebuch** | Tageseinträge mit Wetter, Personal, Vorkommnissen |
+| **Stundenerfassung** | Zeiten je Projekt und Leistungsphase |
+| **Leistungsphasen** | LPH mit Abhängigkeiten, Auto-Meilensteinen und Gantt-Zeitleiste |
+| **Honorar** | Stundensätze, Deckungsbeitrag je Projekt |
+| **Rechnungen** | Projektbezogene Rechnungsstellung |
+| **Portfolio** | Übersicht über alle Projekte mit echten Fortschrittszahlen |
+| **Team** | Mitglieder, Firmen, Kategorien, Kontakt-Log, vCard |
+| **Dateien** | Upload, Vorschau, Projektakte |
+| **Suche** | Volltext über Notizen, Aufgaben, Projekte und Dateien |
+| **Exporte** | DOCX auf Basis eigener Word-Vorlagen mit Firmen-Branding |
 
-## Datenspeicher: Zwei Modi
+## Datenhaltung
 
-| Modus | Speicherort | Wann sinnvoll |
-|---|---|---|
-| **Markdown (Standard)** | Obsidian-kompatibler Workspace | Einstieg, kleine Teams, maximale Transparenz |
-| **PostgreSQL (optional)** | Postgres + pgvector | Semantische Suche, größere Teams, Supabase Realtime |
+Alles Strukturierte liegt in PostgreSQL: Projekte, Notizen, Aufgaben,
+Termine, Team, Meetings, Bautagebuch, Stunden, Phasen, Rechnungen und die
+Datei-Metadaten. Hochgeladene Dokumente liegen als Dateien unter
+`WORKSPACE_PATH`.
 
-Chat-Verläufe und Agent-Logs verwenden immer Markdown (JSONL), auch im PostgreSQL-Modus — sie sind so einfacher zu lesen und bleiben auch ohne Datenbank verfügbar.
+Einen Dateisystem-Modus als Alternative zur Datenbank gibt es nicht mehr —
+ohne erreichbare Datenbank startet PATIO gar nicht.
 
-## Geschäftsmodell
+## Benutzer und Rechte
 
-Jeder Kunde (Architekturbüro, Planungsbüro, Bauleitungs-Office) bekommt eine eigene Instanz auf einem EU-Server (Hetzner). Der Techniker richtet den Server ein, der Kunde startet den Setup-Wizard selbst. Monatliche Miete: ca. 100–150 EUR pro Büro.
+Anmeldung mit Benutzerkonto, zwei Rollen: **Admin** sieht alles, **Benutzer**
+sieht die Projekte, die ihm zugewiesen sind. Aufgaben, Termine und Notizen
+ohne Projektbezug sind persönlich.
+
+Details: [Zugriffskontrolle](/sicherheit/zugriff).
 
 ## Nächste Schritte
 
-- [Schnellstart](/start/schnellstart) — In 5 Minuten zum laufenden Bot
-- [Architektur](/konzepte/architektur) — Wie das System aufgebaut ist
-- [Deployment](/betrieb/voraussetzungen) — Server aufsetzen für Produktion
+- [Schnellstart](/start/schnellstart) — lokal zum Laufen bringen
+- [Architektur](/konzepte/architektur) — wie das System aufgebaut ist
+- [Betrieb](/betrieb/voraussetzungen) — Server im Büro aufsetzen

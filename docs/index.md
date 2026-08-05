@@ -3,30 +3,30 @@ layout: home
 
 hero:
   name: PATIO
-  text: KI-Assistent für Planung und Projektsteuerung
-  tagline: Notizen, Aufgaben, Termine, Projekte — alles an einem Ort.
+  text: Büro-Software für Architektur- und Planungsbüros
+  tagline: Projekte, Termine, Aufgaben, Notizen, Akten — zentral im eigenen Netz.
   actions:
     - theme: brand
       text: Schnellstart
       link: /start/schnellstart
     - theme: alt
-      text: Konzepte
+      text: Architektur
       link: /konzepte/architektur
     - theme: alt
-      text: Deployment
+      text: Betrieb
       link: /betrieb/voraussetzungen
 
 features:
-  - title: Multi-Agent System
-    details: Mehrere KI-Agenten mit eigener Persönlichkeit, Aufgaben und Gedächtnis. Jeder Agent wird über einfache Markdown-Dateien konfiguriert — kein Code nötig.
-  - title: Obsidian Vault als Brain
-    details: Alle Daten liegen als plain Markdown im Dateisystem. Notizen, Aufgaben, Termine, Projekte — menschlich lesbar, versionierbar, kein Vendor-Lock-in.
-  - title: Datensouveränität
-    details: Läuft auf eigenem Server. Alle Daten bleiben lokal — kein Cloud-Zwang, kein Vendor-Lock-in.
-  - title: Telegram als Interface
-    details: Kein separates Frontend nötig. Alles läuft über Telegram — Nachrichten schreiben, Befehle ausführen, proaktive Erinnerungen empfangen.
-  - title: Proaktiver Heartbeat
-    details: Der Agent prüft automatisch Termine und Aufgaben und meldet sich nur wenn es etwas Relevantes gibt. Konfigurierbar per Cron-Ausdruck in einer MD-Datei.
-  - title: Vollständig anpassbar
-    details: Charakter, Ton, Regeln, Tools, Erinnerungen — alles wird über 10 Markdown-Dateien pro Agent gesteuert. Ändern ohne Neustart, ohne Programmierung.
+  - title: Im eigenen Haus
+    details: Ein Rechner im Büro-LAN, zwei Container (Anwendung und PostgreSQL). Kein Cloud-Dienst, keine Telemetrie, kein Außenkontakt im Betrieb.
+  - title: Die Projektakte
+    details: Stammdaten, Aufgaben, Termine, Notizen, Meeting-Protokolle, Bautagebuch, Dateien und Stunden — alles am Projekt, für alle im Büro sichtbar.
+  - title: Projektsteuerung
+    details: Leistungsphasen mit Abhängigkeiten und Zeitleiste, Honorar und Deckungsbeitrag, Rechnungen und ein Portfolio-Cockpit über alle Projekte.
+  - title: Web-Oberfläche
+    details: Vue-3-Anwendung im Browser — Dashboard, Listen, Kalender und Projektakten. Änderungen erscheinen ohne Neuladen an allen Arbeitsplätzen.
+  - title: Rechte je Projekt
+    details: Anmeldung mit Benutzerkonto, Rollen Admin und Benutzer. Wer kein Projekt zugewiesen bekommt, sieht es auch nicht.
+  - title: Exporte im eigenen Layout
+    details: Meeting-Protokolle, Bautagebuch, Stundenlisten und Projektübersichten als DOCX — auf Basis eigener Word-Vorlagen mit Firmen-Branding.
 ---

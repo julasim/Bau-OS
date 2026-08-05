@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { terminRepo, projectRepo, teamRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
-import { emit } from "../events.js";
+import { emitForProjectName } from "../events.js";
 
 export const termineRoutes = new Hono<AppEnv>();
 
@@ -113,7 +113,7 @@ termineRoutes.post("/termine", async (c) => {
     );
     if (updated) result = updated;
   }
-  emit({ type: "termin", action: "created", id: termin.id, project: body.project });
+  emitForProjectName({ type: "termin", action: "created", id: termin.id }, body.project, { actorId: c.var.userId });
   return c.json(result, 201);
 });
 
@@ -146,7 +146,9 @@ termineRoutes.put("/termine/:id", async (c) => {
   }
   const termin = await terminRepo.update(id, body);
   if (!termin) return c.json({ error: "Termin nicht gefunden" }, 404);
-  emit({ type: "termin", action: "updated", id });
+  // vorher.project = Stand vor dem Update; terminRepo.update() haengt den
+  // Termin nicht um.
+  emitForProjectName({ type: "termin", action: "updated", id }, vorher.project, { actorId: c.var.userId });
   return c.json(termin);
 });
 
@@ -162,7 +164,7 @@ termineRoutes.delete("/termine/:id", async (c) => {
     if (!erlaubt) return c.json({ error: "Kein Zugriff" }, 403);
   }
   const ok = await terminRepo.delete(id);
-  if (ok) emit({ type: "termin", action: "deleted", id });
+  if (ok) emitForProjectName({ type: "termin", action: "deleted", id }, termin.project, { actorId: c.var.userId });
   return c.json({ ok });
 });
 
@@ -176,6 +178,6 @@ termineRoutes.delete("/termine", async (c) => {
   const { text, project } = await c.req.json<{ text: string; project?: string }>();
   if (!text) return c.json({ error: "Text erforderlich" }, 400);
   const ok = await terminRepo.delete(text, project);
-  if (ok) emit({ type: "termin", action: "deleted", project });
+  if (ok) emitForProjectName({ type: "termin", action: "deleted" }, project, { actorId: c.var.userId });
   return c.json({ success: ok });
 });

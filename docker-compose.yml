@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # PATIO Docker Compose — 2-Service-Architektur (Edge-Proxy uebernimmt TLS)
 #
-#   postgres  pgvector/pgvector:pg16  — Datenbank
+#   postgres  postgres:16              — Datenbank
 #   app       (Build aus Dockerfile)  — PATIO Web-API + WebUI
 #
 # Der frueher hier definierte Service `ollama` ist entfallen: seit AP0 gibt es
@@ -9,10 +9,17 @@
 # Auf einem Firmenserver ohne Internet liess sich das Image nicht ziehen — und
 # weil `app` per depends_on daran haengt, kam der GESAMTE Stack nicht hoch.
 #
-# Zum DB-Image: `pgvector/pgvector:pg16` bleibt vorerst stehen, obwohl PATIO
-# keine Vektoren mehr nutzt. Migration 001 legt die vector-Extension weiterhin
-# an; ein Wechsel auf `postgres:16` laesst eine FRISCHE Installation daran
-# scheitern. Siehe Kommentarkopf von 040_drop_embeddings.sql.
+# Zum DB-Image: hier stand `pgvector/pgvector:pg16`. Dieses Spezial-Image ist
+# im internetlosen Buero nicht zu beschaffen, und PATIO braucht es seit AP0
+# nicht mehr. Das Schema haengt nicht laenger an pgvector — 001 legt keine
+# Vektor-Objekte mehr an, 040 raeumt sie aus Bestandsdatenbanken, 041 entfernt
+# dort die Extension-Registrierung. Benoetigt werden nur uuid-ossp, pg_trgm
+# und unaccent; alle drei sind contrib und im offiziellen postgres:16 dabei.
+#
+# BEI EINER BESTEHENDEN INSTALLATION die Reihenfolge einhalten: zuerst die App
+# aktualisieren (Migrationen laufen, 041 entfernt die Extension noch mit
+# vorhandener Library), erst danach das DB-Image wechseln. Das Datenverzeichnis
+# selbst ist kompatibel — beide Images sind PostgreSQL 16.
 #
 # TLS + Reverse-Proxy: zentral via /opt/proxy (julasim/Proxy auf GitHub).
 # PATIO haengt sich ueber das externe Docker-Netzwerk `proxy` an den
@@ -37,7 +44,7 @@ name: patio
 
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: postgres:16
     container_name: patio-postgres
     restart: always
     environment:

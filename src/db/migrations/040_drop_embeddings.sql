@@ -18,25 +18,24 @@
 -- auf einem Firmenserver ohne Internet ist das Spezial-Image
 -- `pgvector/pgvector:pg16` schlicht nicht zu beschaffen.
 --
--- WICHTIGE EINSCHRAENKUNG (bitte lesen, bevor das DB-Image gewechselt wird):
--- Diese Migration raeumt BESTEHENDE Datenbanken auf. Eine FRISCHE
--- Installation laeuft weiterhin zuerst durch Migration 001, und die beginnt
--- in Zeile 7 mit `CREATE EXTENSION IF NOT EXISTS vector` und legt in Zeile
--- 50/65 die VECTOR(768)-Spalten an. Ohne verfuegbare pgvector-Extension
--- scheitert 001 dort, und der Boot bricht ab, bevor 040 ueberhaupt an die
--- Reihe kommt. Forward-only heisst hier: der Wechsel auf `postgres:16`
--- braucht zusaetzlich eine Anpassung von 001 (bedingtes Anlegen oder
--- Entfernen der vector-Teile) — das ist bewusst NICHT Teil dieser Migration.
+-- GELTUNGSBEREICH (die frueher hier notierte Einschraenkung ist erledigt):
+-- Diese Migration raeumt BESTEHENDE Datenbanken auf. Der zweite, hier nicht
+-- loesbare Teil — eine FRISCHE Installation laeuft zuerst durch 001, und die
+-- begann mit `CREATE EXTENSION vector` samt VECTOR(768)-Spalten — ist
+-- inzwischen direkt in `001_init.sql` behoben: die vier vektor-abhaengigen
+-- Anweisungen sind dort entfernt. Das ist ohne Risiko fuer Bestandsdaten,
+-- weil der Runner per Dateiname trackt und 001 dort nie wieder laeuft
+-- (Begruendung ausfuehrlich im Kommentarkopf von 001).
 --
--- Die Extension selbst wird NICHT gedroppt:
---   * Nach dem Drop der beiden Spalten nutzt zwar kein Objekt mehr den
+-- Die Extension selbst wird HIER NICHT gedroppt — das erledigt, bewusst
+-- getrennt und abgesichert, Migration 041:
+--   * Nach dem Drop der beiden Spalten nutzt kein Objekt mehr den
 --     vector-Typ (geprueft ueber information_schema.columns: genau diese
 --     zwei Spalten waren die einzigen udt_name='vector').
---   * Aber ein DROP EXTENSION ist unumkehrbar-teuer und bringt nichts:
---     auf Bestandsinstallationen ist pgvector ohnehin vorhanden, und
---     Migration 001 wuerde sie bei jeder Neuinstallation wieder anlegen.
---     Ausserdem koennten in einer gewachsenen DB manuell angelegte Objekte
---     daran haengen, die diese Migration nicht kennt.
+--   * Ein `DROP EXTENSION` gehoert aber nicht in dieselbe Migration wie der
+--     Spalten-Drop: es kann an fremden, hier unbekannten Objekten scheitern
+--     und wuerde dann diese Aufraeum-Migration mitreissen. 041 prueft
+--     deshalb vorher und faengt den Fehlerfall ab.
 --
 -- Forward-only, idempotent (IF EXISTS ueberall).
 -- ============================================================

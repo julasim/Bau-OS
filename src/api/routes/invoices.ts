@@ -57,7 +57,7 @@ invoicesRoutes.post("/projects/:projectName/invoices", async (c) => {
   }
   const result = await invoiceRepo.create(proj.id, body);
   if (typeof result === "string") return c.json({ error: result }, 400);
-  emit({ type: "invoice", action: "created", id: result.id, project: proj.name });
+  emit({ type: "invoice", action: "created", id: result.id, projectId: proj.id }, { actorId: c.var.userId });
   return c.json(result);
 });
 
@@ -79,7 +79,7 @@ invoicesRoutes.put("/invoices/:id", async (c) => {
   const result = await invoiceRepo.update(id, body);
   if (result === null) return c.json({ error: "Teilrechnung nicht gefunden" }, 404);
   if (typeof result === "string") return c.json({ error: result }, 400);
-  emit({ type: "invoice", action: "updated", id });
+  emit({ type: "invoice", action: "updated", id, projectId: existing.projectId }, { actorId: c.var.userId });
   return c.json(result);
 });
 
@@ -93,7 +93,9 @@ invoicesRoutes.delete("/invoices/:id", async (c) => {
     return c.json({ error: "Kein Zugriff" }, 403);
   }
   const ok = await invoiceRepo.delete(id);
-  if (ok) emit({ type: "invoice", action: "deleted", id, project: existing.projectId });
+  // Frueher stand die UUID im Feld `project` (Name) — das Feld gibt es nicht
+  // mehr, die ID gehoert nach `projectId`.
+  if (ok) emit({ type: "invoice", action: "deleted", id, projectId: existing.projectId }, { actorId: c.var.userId });
   return c.json({ ok });
 });
 

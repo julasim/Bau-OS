@@ -2,9 +2,49 @@
 -- PATIO — Initiales Datenbank-Schema
 -- Erstellt alle Kerntabellen fuer Phase 4
 -- ============================================================
+-- NACHTRAEGLICHE AENDERUNG (Umbau zum Firmenserver)
+--
+-- Diese Datei enthielt urspruenglich vier Dinge, die pgvector voraussetzen
+-- (Zeilenangaben beziehen sich auf die alte Fassung):
+--   * CREATE EXTENSION IF NOT EXISTS vector            (vormals Zeile 7)
+--   * files.embedding  VECTOR(768)                     (vormals Zeile 50)
+--   * notes.embedding  VECTOR(768)                     (vormals Zeile 65)
+--   * zwei HNSW-Indizes darauf                         (vormals Zeile 162/163)
+-- Alles davon ist hier entfernt.
+--
+-- WARUM ausgerechnet in DIESER Datei und nicht per neuer Migration:
+-- Der Firmenserver steht ohne Internet im Buero — das Spezial-Image
+-- `pgvector/pgvector:pg16` ist dort nicht zu beschaffen, es laeuft ein
+-- gewoehnliches `postgres:16`. Migration 040 raeumt die Vektor-Reste zwar
+-- aus BESTEHENDEN Datenbanken, aber eine FRISCHE Installation laeuft
+-- zuerst durch diese Datei hier: ohne verfuegbare Extension scheitert sie
+-- gleich in der ersten Anweisung, und der Boot bricht ab, bevor 040
+-- ueberhaupt an die Reihe kommt. Eine nachgelagerte Migration kann das
+-- prinzipiell nicht heilen.
+--
+-- Verworfene Alternative — bedingtes Anlegen (DO-Block + dynamisches
+-- EXECUTE, je nachdem ob pgvector verfuegbar ist): erzeugt je nach
+-- Maschine ein ANDERES Schema, und auf einem pgvector-faehigen Server
+-- legt es genau die Spalten an, die 040 unmittelbar danach wieder
+-- wegwirft. Jede spaetere Migration muesste dann mit beiden Varianten
+-- rechnen. Kein Gewinn, nur Sonderfaelle.
+--
+-- WARUM Bestandsinstallationen das nicht beruehrt:
+-- Der Runner (src/db/migrate.ts) trackt Migrationen per DATEINAME in
+-- `_migrations` und bildet KEINE Pruefsumme. Wo `001_init.sql` bereits
+-- angewandt ist, wird diese Datei nie wieder gelesen — der Eintrag bleibt
+-- gueltig, das dortige Schema unveraendert. Aufgeraeumt wird dort weiter
+-- durch 040 (Spalten/Indizes) und 041 (Extension). Beide Wege enden beim
+-- identischen Schema:
+--   frisch  : 001 ohne Vektoren        → 040 + 041 laufen als No-op
+--   Bestand : 001 mit Vektoren (alt)   → 040 + 041 raeumen sie ab
+--
+-- Die drei verbleibenden Extensions sind unproblematisch: uuid-ossp,
+-- pg_trgm und unaccent gehoeren zu postgresql-contrib und sind im
+-- offiziellen `postgres:16`-Image enthalten.
+-- ============================================================
 
 -- Extensions sicherstellen (falls nicht durch init-Script erstellt)
-CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS unaccent;
@@ -36,7 +76,7 @@ CREATE TABLE IF NOT EXISTS projects (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- ── Dateien (mit Embedding-Vektor) ──────────────────────────
+-- ── Dateien ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS files (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
@@ -47,7 +87,6 @@ CREATE TABLE IF NOT EXISTS files (
   mime_type TEXT,
   content_text TEXT,
   summary TEXT,
-  embedding VECTOR(768),
   tags TEXT[] DEFAULT '{}',
   analyzed BOOLEAN DEFAULT false,
   analysis_result JSONB,
@@ -56,13 +95,12 @@ CREATE TABLE IF NOT EXISTS files (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- ── Notizen (mit Embedding-Vektor) ──────────────────────────
+-- ── Notizen ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS notes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   title TEXT NOT NULL,
   content TEXT NOT NULL,
   project_id UUID REFERENCES projects(id) ON DELETE SET NULL,
-  embedding VECTOR(768),
   tags TEXT[] DEFAULT '{}',
   source TEXT DEFAULT 'web',
   pinned BOOLEAN DEFAULT false,
@@ -152,17 +190,10 @@ CREATE TABLE IF NOT EXISTS team_members (
 -- Indizes
 -- ============================================================
 
--- Vector-Indizes (IVFFlat fuer Cosine Similarity)
--- Werden erst erstellt wenn genuegend Daten vorhanden sind
--- (IVFFlat braucht mindestens lists * 10 Rows)
--- CREATE INDEX idx_files_embedding ON files USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
--- CREATE INDEX idx_notes_embedding ON notes USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
+-- (Hier standen bis zum Firmenserver-Umbau die beiden HNSW-Indizes auf
+--  files.embedding / notes.embedding — siehe Kommentarkopf oben.)
 
--- HNSW-Indizes (funktionieren sofort, auch bei wenig Daten)
-CREATE INDEX IF NOT EXISTS idx_files_embedding ON files USING hnsw (embedding vector_cosine_ops);
-CREATE INDEX IF NOT EXISTS idx_notes_embedding ON notes USING hnsw (embedding vector_cosine_ops);
-
--- Volltext-Suche
+-- Fuzzy-Textsuche (pg_trgm)
 CREATE INDEX IF NOT EXISTS idx_files_filename_trgm ON files USING gin (filename gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_notes_title_trgm ON notes USING gin (title gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_notes_content_trgm ON notes USING gin (content gin_trgm_ops);

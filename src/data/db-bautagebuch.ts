@@ -14,7 +14,7 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
-import type { BautagebuchEntry, BautagebuchRepository, BautagebuchUpsertInput } from "./types.js";
+import type { BautagebuchEntry, BautagebuchRepository } from "./types.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 

@@ -37,7 +37,8 @@ TARBALL="$1"
 DB_DUMP="${2:-}"
 
 INSTALL_DIR="${INSTALL_DIR:-/opt/patio}"
-VAULT_DIR="${VAULT_DIR:-/opt/patio-vault}"
+# Gleicher Pfad wie in backup.sh und install.sh.
+VAULT_DIR="${VAULT_DIR:-/opt/patio-workspace}"
 DB_CONTAINER="${DB_CONTAINER:-patio-postgres}"
 APP_CONTAINER="${APP_CONTAINER:-patio-app}"
 
@@ -77,7 +78,7 @@ fi
 echo "[$(date)] Tarball entpacken..."
 # tar wurde mit "-C $(dirname $VAULT_DIR) basename" + "-C $INSTALL_DIR .env data/ tools/"
 # erstellt. Beim Restore landen die zwei Sets in / (root), damit /opt/patio/.env
-# und /opt/patio-vault wieder am richtigen Platz sind.
+# und /opt/patio-workspace wieder am richtigen Platz sind.
 tar -xzf "$TARBALL" -C / 2>&1 | tail -10
 
 # Permissions auf .env wieder absichern (sonst lesbar fuer alle).

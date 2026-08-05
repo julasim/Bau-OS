@@ -53,7 +53,7 @@ teamRoutes.post("/team", async (c) => {
       memberType: normalizeMemberType(body.memberType),
       projectId: null,
     });
-    emit({ type: "team", action: "created", id: member.id });
+    emit({ type: "team", action: "created", id: member.id }, { actorId: c.var.userId });
     return c.json(member, 201);
   } catch {
     return c.json({ error: "Mitglied existiert bereits" }, 409);
@@ -101,7 +101,7 @@ teamRoutes.patch("/team/:id", async (c) => {
 
   const member = await teamRepo.update(id, updates);
   if (!member) return c.json({ error: "Mitglied nicht gefunden" }, 404);
-  emit({ type: "team", action: "updated", id });
+  emit({ type: "team", action: "updated", id }, { actorId: c.var.userId });
   return c.json(member);
 });
 
@@ -109,7 +109,7 @@ teamRoutes.patch("/team/:id", async (c) => {
 teamRoutes.delete("/team/:name", async (c) => {
   const name = c.req.param("name");
   const ok = await teamRepo.remove(name);
-  if (ok) emit({ type: "team", action: "deleted" });
+  if (ok) emit({ type: "team", action: "deleted" }, { actorId: c.var.userId });
   return c.json({ ok });
 });
 
@@ -126,8 +126,13 @@ teamRoutes.post("/team/:id/projects", async (c) => {
 
   const ok = await teamRepo.assignToProject(memberId, body.projectId, body.projectRole ?? null);
   if (!ok) return c.json({ error: "Zuordnung fehlgeschlagen" }, 500);
-  emit({ type: "team", action: "updated", id: memberId });
-  emit({ type: "project", action: "updated", id: body.projectId });
+  emit({ type: "team", action: "updated", id: memberId }, { actorId: c.var.userId });
+  emit(
+    { type: "project", action: "updated", id: body.projectId, projectId: body.projectId },
+    {
+      actorId: c.var.userId,
+    },
+  );
   const member = await teamRepo.get(memberId);
   return c.json(member);
 });
@@ -141,7 +146,7 @@ teamRoutes.patch("/team/:id/projects/:projectId", async (c) => {
 
   const ok = await teamRepo.updateProjectRole(memberId, projectId, body.projectRole ?? null);
   if (!ok) return c.json({ error: "Zuordnung nicht gefunden" }, 404);
-  emit({ type: "team", action: "updated", id: memberId });
+  emit({ type: "team", action: "updated", id: memberId }, { actorId: c.var.userId });
   return c.json({ ok });
 });
 
@@ -153,8 +158,8 @@ teamRoutes.delete("/team/:id/projects/:projectId", async (c) => {
 
   const ok = await teamRepo.unassignFromProject(memberId, projectId);
   if (ok) {
-    emit({ type: "team", action: "updated", id: memberId });
-    emit({ type: "project", action: "updated", id: projectId });
+    emit({ type: "team", action: "updated", id: memberId }, { actorId: c.var.userId });
+    emit({ type: "project", action: "updated", id: projectId, projectId }, { actorId: c.var.userId });
   }
   return c.json({ ok });
 });
@@ -177,6 +182,6 @@ teamRoutes.post("/team/:id/log", async (c) => {
   };
   const ok = await teamRepo.appendLog(memberId, entry);
   if (!ok) return c.json({ error: "Mitglied nicht gefunden" }, 404);
-  emit({ type: "team", action: "updated", id: memberId });
+  emit({ type: "team", action: "updated", id: memberId }, { actorId: c.var.userId });
   return c.json(entry, 201);
 });

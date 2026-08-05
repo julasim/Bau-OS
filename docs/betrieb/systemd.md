@@ -1,160 +1,128 @@
 # systemd-Service
 
-PATIO als systemd-Service einrichten, damit der Bot automatisch startet und bei Abstuerzen neu gestartet wird.
+Für die Bare-Metal-Installation. Beim Docker-Compose-Aufbau übernimmt
+`restart: always` in der Compose-Datei diese Aufgabe — dann ist diese Seite
+nicht einschlägig.
 
-## Service-Datei erstellen
+## Service-Datei
+
+Das Repository bringt eine fertige Unit mit: `patio.service` im Repo-Root.
+Der Installer `scripts/install.sh` legt sie mit angepassten Pfaden ab.
+Manuell:
 
 ```bash
-sudo nano /etc/systemd/system/patio.service
+sudo cp /opt/patio/patio.service /etc/systemd/system/patio.service
+sudo nano /etc/systemd/system/patio.service   # Pfade prüfen
 ```
 
-Folgenden Inhalt einfuegen:
+Der Inhalt im Wesentlichen:
 
 ```ini
 [Unit]
-Description=PATIO Telegram Bot
-Documentation=https://github.com/your-org/patio
-After=network.target ollama.service
-Wants=ollama.service
+Description=PATIO — Web-API und Weboberflaeche
+After=network.target postgresql.service
+Wants=postgresql.service
 
 [Service]
 Type=simple
 User=patio
-Group=patio
-WorkingDirectory=/home/patio/patio
+WorkingDirectory=/opt/patio
+EnvironmentFile=/opt/patio/.env
+Environment=LANG=de_AT.UTF-8 LC_ALL=de_AT.UTF-8
 ExecStart=/usr/bin/node dist/index.js
-Restart=on-failure
-RestartSec=5
-StartLimitIntervalSec=60
-StartLimitBurst=5
-
-# Umgebungsvariablen aus .env laden
-EnvironmentFile=/home/patio/patio/.env
-
-# Sicherheit
-NoNewPrivileges=true
-ProtectSystem=strict
-ReadWritePaths=/home/patio/vault /home/patio/patio
-
-# Logging
+Restart=always
+RestartSec=3
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=patio
+
+MemoryMax=512M
+MemoryHigh=384M
+CPUQuota=100%
+TasksMax=64
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/opt/patio/logs /opt/patio-workspace /opt/patio/data /opt/patio/tools
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-::: tip Abhängigkeit von Ollama
-`After=ollama.service` stellt sicher, dass Ollama zuerst startet. `Wants=ollama.service` startet Ollama mit, falls es noch nicht läuft.
+::: tip Abhängigkeit von PostgreSQL
+`After=postgresql.service` sorgt dafür, dass die Datenbank zuerst startet.
+Das ist keine Kosmetik: PATIO bricht mit Exit-Code 1 ab, wenn die Datenbank
+beim Start nicht antwortet. `Restart=always` fängt das ab — beim
+Systemstart würde der Dienst sonst dauerhaft ausfallen, nur weil er ein paar
+Sekunden zu früh dran war.
 :::
 
-## Service aktivieren und starten
+::: warning ProtectSystem=strict und ReadWritePaths
+Das Dateisystem ist bis auf die aufgeführten Pfade schreibgeschützt. Wird
+`WORKSPACE_PATH` auf ein anderes Verzeichnis gelegt, muss es in
+`ReadWritePaths` ergänzt werden — sonst schlagen alle Uploads mit `EACCES`
+fehl. Die API übersetzt das in einen HTTP-403; im Log steht `Kein
+Dateizugriff`.
+:::
+
+## Aktivieren und starten
 
 ```bash
-# systemd neu laden
 sudo systemctl daemon-reload
-
-# Service beim Booten automatisch starten
 sudo systemctl enable patio
-
-# Service jetzt starten
 sudo systemctl start patio
 ```
 
-## Wichtige Befehle
+## Befehle
 
-| Befehl | Beschreibung |
+| Befehl | Wirkung |
 |---|---|
-| `sudo systemctl start patio` | Bot starten |
-| `sudo systemctl stop patio` | Bot stoppen |
-| `sudo systemctl restart patio` | Bot neu starten |
+| `sudo systemctl start patio` | starten |
+| `sudo systemctl stop patio` | stoppen |
+| `sudo systemctl restart patio` | neu starten (liest die `.env` neu ein) |
 | `sudo systemctl status patio` | Status anzeigen |
-| `sudo systemctl enable patio` | Autostart aktivieren |
-| `sudo systemctl disable patio` | Autostart deaktivieren |
+| `sudo systemctl enable patio` | Autostart einschalten |
+| `sudo systemctl disable patio` | Autostart ausschalten |
 
-### Status prüfen
-
-```bash
-sudo systemctl status patio
-```
-
-Erwartete Ausgabe:
-
-```
-● patio.service - PATIO Telegram Bot
-     Loaded: loaded (/etc/systemd/system/patio.service; enabled)
-     Active: active (running) since ...
-   Main PID: 12345 (node)
-     Memory: 120.0M
-        CPU: 1.234s
-     CGroup: /system.slice/patio.service
-             └─12345 /usr/bin/node dist/index.js
-```
-
-## Logs anzeigen
+## Logs
 
 ```bash
-# Live-Logs (wie tail -f)
-sudo journalctl -u patio -f
-
-# Letzte 50 Zeilen
-sudo journalctl -u patio -n 50
-
-# Logs seit heute
-sudo journalctl -u patio --since today
-
-# Nur Fehler
-sudo journalctl -u patio -p err
+sudo journalctl -u patio -f              # live
+sudo journalctl -u patio -n 100          # letzte 100 Zeilen
+sudo journalctl -u patio --since today   # seit heute
+sudo journalctl -u patio -p err          # nur Fehler
 ```
 
-::: warning Restart-Limits
-Die Konfiguration erlaubt maximal **5 Neustarts in 60 Sekunden**. Wenn der Bot oefter abstuerzt, stoppt systemd den Service. Prüfe dann die Logs:
-```bash
-sudo journalctl -u patio -n 100 --no-pager
-```
-Und starte manuell nach Fehlerbehebung:
-```bash
-sudo systemctl reset-failed patio
-sudo systemctl start patio
-```
-:::
+PATIO schreibt zusätzlich in `logs/bot.log` (gekürzt, für den schnellen
+Blick) und `logs/bot.jsonl` (vollständig, maschinenlesbar, rotierend).
 
-## Graceful Shutdown
+## Sauberes Herunterfahren
 
-PATIO faehrt bei `SIGTERM` und `SIGINT` sauber herunter:
+Auf `SIGTERM` und `SIGINT` schließt PATIO die Datenbankverbindung und
+beendet sich mit Code 0. `systemctl stop` und `systemctl restart` sind damit
+unkritisch.
 
-1. **Bot stoppen** — Telegram-Polling wird beendet
-2. **MCP-Server trennen** — Alle verbundenen MCP-Server-Prozesse werden sauber beendet
-3. **Prozess beenden** — `process.exit(0)`
+Unbehandelte Exceptions und Promise-Rejections werden mit Stack ins Log
+geschrieben; danach beendet sich der Prozess bewusst, statt in einem
+undefinierten Zustand weiterzulaufen. `Restart=always` fährt ihn wieder
+hoch — häufen sich solche Neustarts im Journal, ist das ein echter Befund
+und kein Rauschen.
 
-```typescript
-// src/index.ts
-process.on("SIGTERM", () => shutdown("SIGTERM"));
-process.on("SIGINT", () => shutdown("SIGINT"));
-```
-
-Das bedeutet:
-- `systemctl stop patio` beendet den Bot sauber (kein Datenverlust)
-- `systemctl restart patio` startet den Bot sauber neu
-- Keine verwaisten MCP-Server-Prozesse nach einem Neustart
-
-::: tip Kein KillSignal noetig
-Da der Bot auf SIGTERM reagiert, muss in der Service-Datei kein `KillSignal` oder `TimeoutStopSec` konfiguriert werden. systemd sendet standardmaessig SIGTERM und wartet 90 Sekunden.
-:::
-
-## Service nach .env-Änderung neu laden
-
-Wenn du die `.env` Datei änderst, muss der Service neu gestartet werden:
+## Nach einer .env-Änderung
 
 ```bash
 sudo systemctl restart patio
 ```
 
-::: tip Kein daemon-reload nötig
-Bei Änderungen an der `.env` reicht ein `restart`. Nur bei Änderungen an der `.service`-Datei selbst brauchst du vorher `sudo systemctl daemon-reload`.
-:::
+`daemon-reload` ist nur nötig, wenn die `.service`-Datei selbst geändert
+wurde.
 
 ## Nächster Schritt
 
-→ [Updates durchführen](/betrieb/updates)
+→ [Updates](/betrieb/updates)

@@ -1,202 +1,190 @@
-# Deployment
+# PATIO deployen
 
-PATIO auf den Server bringen, konfigurieren und erstmals starten.
-
-## Automatische Installation (empfohlen)
-
-```bash
-sudo bash scripts/install.sh
-```
-
-Der Installer fragt interaktiv nach:
-1. **Telegram Bot Token**
-2. **LLM-Modus**: Cloud (kimi-k2.5, qwen3, gemma4) oder Lokal (qwen2.5:7b, llama3.1:8b)
-3. **Installationsverzeichnis** (Standard: `/opt/patio`)
-4. **Workspace-Verzeichnis** (Standard: `/opt/patio-workspace`)
-5. **Web-Admin Benutzername**
-6. **Web-Admin Passwort**
-7. **API-Port** (Standard: 3000)
-
-Was automatisch eingerichtet wird:
-- Node.js 20 LTS
-- Ollama + Modell-Download (im Lokal-Modus)
-- systemd-Service `patio` (Autostart, Restart bei Fehler)
-- CLI-Tool `/usr/local/bin/patio`
-- `.env` und `data/users.json`
-
-### patio CLI
-
-Nach der Installation steht ein interaktives CLI zur Verfügung:
-
-```bash
-patio              # Interaktives Menü
-patio status       # Service-Status
-patio logs         # Letzte Logs
-patio logs live    # Logs live verfolgen
-sudo patio restart # Bot neu starten
-sudo patio update  # Updates einspielen
-sudo patio user add  # Web-Benutzer anlegen
-```
+Die Anwendung auf den Rechner bringen, konfigurieren und erstmals starten.
 
 ---
 
-## Manuelle Installation
+## Docker Compose
 
-Falls du die Installation Schritt für Schritt selbst durchführen möchtest.
-
-### 1. Repository klonen
+### 1. Repository holen
 
 ```bash
-cd /home/patio
-git clone https://github.com/your-org/patio.git
-cd patio
+sudo -u patio git clone https://github.com/julasim/patio.git /opt/patio
+cd /opt/patio
 ```
 
-::: tip Privates Repository?
-Falls das Repo privat ist, nutze SCP statt Git:
+### 2. .env anlegen
+
 ```bash
-# Auf deinem lokalen Rechner:
-scp -r ./patio patio@DEINE_SERVER_IP:/home/patio/
+cp .env.example .env
+nano .env
 ```
-Oder richte einen SSH Deploy Key ein:
+
+Erforderlich:
+
 ```bash
-# Auf dem Server:
-ssh-keygen -t ed25519 -C "deploy-key"
-cat ~/.ssh/id_ed25519.pub
-# → Key als Deploy Key im GitHub Repo hinterlegen
+WORKSPACE_PATH=/workspace          # Pfad IM Container, nicht auf dem Host
+JWT_SECRET=<openssl rand -base64 48>
+ENCRYPTION_KEY=<openssl rand -base64 48>
+NODE_ENV=production
+
+POSTGRES_USER=patio
+POSTGRES_PASSWORD=<starkes Passwort>
+POSTGRES_DB=patio
+
+WORKSPACE_HOST_DIR=/opt/patio-workspace
+
+SMTP_HOST=mail.firma.intern
+SMTP_PORT=587
+SMTP_USER=patio@firma.intern
+SMTP_PASS=<Passwort>
+SMTP_FROM=PATIO <patio@firma.intern>
+
+APP_URL=https://patio.firma.intern
 ```
+
+::: warning DATABASE_URL nicht selbst setzen
+`docker-compose.yml` baut sie aus `POSTGRES_USER`, `POSTGRES_PASSWORD` und
+`POSTGRES_DB` zusammen und richtet sie auf den Container `postgres`. Der
+Wert im `environment:`-Block überschreibt alles, was in der `.env` steht.
+Gleiches gilt für `WORKSPACE_PATH`, das im Container fest auf `/workspace`
+zeigt — der Host-Pfad kommt über `WORKSPACE_HOST_DIR`.
 :::
 
-### 2. Dependencies installieren
+::: danger .env niemals committen
+Sie enthält `JWT_SECRET`, `ENCRYPTION_KEY` und das Datenbank-Passwort und
+steht bereits in `.gitignore`.
+:::
+
+### 3. Proxy-Netz sicherstellen
+
+Nur beim Aufbau mit gemeinsamem Edge-Proxy:
 
 ```bash
-cd /home/patio/patio
-npm install
+docker network create proxy   # falls noch nicht vorhanden
 ```
 
-### 3. TypeScript kompilieren
+### 4. Bauen und starten
 
 ```bash
-npm run build
+docker compose build app
+docker compose up -d
+docker compose ps
 ```
 
-Das erstellt den `dist/` Ordner mit dem kompilierten JavaScript.
+Erwartet: beide Container laufen, `postgres` meldet `healthy`.
 
-### 4. Setup ausführen
+### 5. Start prüfen
+
+```bash
+docker compose logs -f app
+```
+
+Erwartete Zeilen:
+
+```
+[DB] PostgreSQL verbunden
+[API] Web-Server gestartet auf http://0.0.0.0:3000
+PATIO gestartet
+```
+
+Bricht der Start ab, sagt die Meldung warum — die Pflicht-Prüfungen sind
+bewusst redselig:
+
+| Meldung | Ursache |
+|---|---|
+| `WORKSPACE_PATH fehlt in .env` | Dokumentenverzeichnis nicht gesetzt |
+| `DATABASE_URL fehlt in .env` | Datenbank nicht konfiguriert |
+| `die Datenbank antwortet nicht` | Postgres nicht erreichbar oder Zugangsdaten falsch |
+| `JWT_SECRET fehlt in .env` | Kein Secret gesetzt |
+| `JWT_SECRET zu kurz` | Unter 32 Zeichen, bei `NODE_ENV=production` fatal |
+
+### 6. Erreichbarkeit prüfen
+
+```bash
+docker compose exec app curl -s localhost:3000/api/health
+```
+
+Antwort: `{"ok":true,"uptime":…,"db":true}`.
+
+Danach von einem Arbeitsplatz aus die konfigurierte Adresse aufrufen und den
+[Setup-Assistenten](/start/einrichtung) durchlaufen.
+
+---
+
+## Bare Metal
+
+### 1. Repository holen und bauen
+
+```bash
+sudo -u patio git clone https://github.com/julasim/patio.git /opt/patio
+cd /opt/patio
+npm ci
+npm run build:all
+```
+
+`build:all` baut das Backend nach `dist/` und das Frontend nach `dist/web`,
+von wo die API es ausliefert.
+
+### 2. Konfiguration
 
 ```bash
 npm run setup
 ```
 
-Der interaktive Installer fragt nach:
+Das Skript fragt `WORKSPACE_PATH`, `DATABASE_URL` und `JWT_SECRET` ab und
+schreibt sie in die `.env`. Alles Weitere (SMTP, `APP_URL`,
+`ENCRYPTION_KEY`, `NODE_ENV`) danach von Hand ergänzen — siehe
+[Umgebungsvariablen](/konfiguration/env).
 
-| Eingabe | Beispielwert | Beschreibung |
-|---|---|---|
-| **BOT_TOKEN** | `7123456:AAH...` | Telegram Bot Token von @BotFather |
-| **VAULT_PATH** | `/home/patio/vault` | Pfad zum Obsidian Vault (wird erstellt) |
-| **OLLAMA_BASE_URL** | `http://localhost:11434/v1` | Ollama API Endpunkt |
-| **OLLAMA_MODEL** | `qwen2.5:7b` | Das Modell, das Ollama nutzen soll |
-
-::: warning Vault-Pfad
-Verwende einen **absoluten Pfad**. Der Ordner wird automatisch erstellt, falls er nicht existiert.
-:::
-
-### 5. Ergebnis prüfen
-
-#### .env Datei
-
-```bash
-cat .env
-```
-
-Erwartete Ausgabe:
-
-```env
-BOT_TOKEN=7123456:AAHxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-VAULT_PATH=/home/patio/vault
-OLLAMA_BASE_URL=http://localhost:11434/v1
-OLLAMA_MODEL=qwen2.5:7b
-```
-
-#### Workspace-Dateien
-
-```bash
-ls /home/patio/vault/Agents/Main/
-```
-
-Erwartete Ausgabe:
-
-```
-AGENTS.md    BOOT.md       BOOTSTRAP.md  HEARTBEAT.md
-IDENTITY.md  MEMORY.md     Logs/         SOUL.md
-TOOLS.md     USER.md
-```
-
-### 6. Erststart (manuell)
+### 3. Erststart von Hand
 
 ```bash
 npm start
 ```
 
-Der Bot sollte starten und du siehst:
+Beim ersten Start wendet PATIO die Migrationen an (`DB_AUTO_MIGRATE`,
+standardmäßig an). Läuft alles, mit `Ctrl+C` beenden und den Dienst als
+systemd-Unit einrichten.
+
+### 4. Verzeichnisstruktur
 
 ```
-[INFO] Bot gestartet
-[INFO] Ollama verbunden: qwen2.5:7b
+/opt/patio/                 Anwendung
+├── dist/                   gebautes Backend
+│   └── web/                gebautes Frontend
+├── src/                    Quellcode
+├── .env                    Konfiguration
+├── data/                   Alt-Konten (users.json)
+└── logs/                   Text- und JSONL-Log
+
+/opt/patio-workspace/       hochgeladene Dokumente (WORKSPACE_PATH)
+/opt/patio-backups/         Tagesbackups
 ```
 
-Öffne jetzt Telegram und schreibe dem Bot eine Nachricht. Wenn er antwortet, funktioniert alles.
+---
 
-::: tip Ersteinrichtung via Telegram
-Beim ersten Start führt der Bot dich durch die Ersteinrichtung (Bootstrap). Beantworte die Fragen — danach loescht der Bot die `BOOTSTRAP.md` und ist betriebsbereit.
-:::
+## Update
 
-Stoppe den Bot mit `Ctrl+C`.
-
-### 7. Verzeichnisstruktur
-
-Nach dem erfolgreichen Start sieht die Struktur so aus:
-
-```
-/home/patio/
-├── patio/              ← Anwendungs-Code
-│   ├── dist/            ← Kompilierter Code
-│   ├── src/             ← TypeScript Quellcode
-│   ├── .env             ← Konfiguration
-│   └── package.json
-└── vault/               ← Alle Daten (Obsidian Vault)
-    ├── Agents/Main/     ← Agent-Konfiguration
-    ├── Inbox/           ← Notizen
-    ├── Aufgaben/        ← Aufgaben
-    └── Termine/         ← Termine
-```
-
-::: danger .env niemals committen
-Die `.env` Datei enthaelt den Bot Token. Sie darf **niemals** in ein Git-Repository gelangen. Sie steht bereits in `.gitignore`.
-:::
-
-## Docker Compose (Alternative)
-
-Statt des systemd-Installers kann der vollständige Stack auch via Docker Compose gestartet werden. Das umfasst PostgreSQL 16 (pgvector), Ollama und die PATIO App.
+**Docker Compose:**
 
 ```bash
-# .env anpassen (BOT_TOKEN, WORKSPACE_PATH, etc.)
-cp .env.example .env
-nano .env
-
-# Stack starten
-docker compose up -d
-
-# Logs verfolgen
-docker compose logs -f
-
-# Update einspielen
-git pull && docker compose pull && docker compose build app && docker compose up -d
+cd /opt/patio && git pull && docker compose build app && docker compose up -d app
 ```
 
-::: tip TLS / HTTPS
-Docker Compose stellt keinen eigenen HTTPS-Proxy bereit. Für Produktivbetrieb mit TLS einen externen Edge-Caddy (`/opt/proxy`) oder einen eigenen Reverse-Proxy vorschalten — siehe Kommentar im `docker-compose.yml`.
+**Bare Metal:**
+
+```bash
+cd /opt/patio && git pull && npm ci && npm run build:all && sudo systemctl restart patio
+```
+
+::: warning Nur die .env geändert?
+`docker compose restart` liest die `.env` **nicht** neu ein. Es braucht
+`docker compose up -d --force-recreate app`. Bei systemd genügt ein
+`restart`, weil die Unit die Datei bei jedem Start neu einliest.
 :::
+
+Mehr dazu: [Updates](/betrieb/updates).
 
 ## Nächster Schritt
 

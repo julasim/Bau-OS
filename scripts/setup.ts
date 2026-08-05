@@ -1,140 +1,357 @@
 #!/usr/bin/env node
 /**
- * PATIO Installer
- * Läuft einmalig beim ersten Aufsetzen auf einem neuen Server/PC.
- * Erstellt .env und den Agents/Main/ Workspace.
+ * PATIO — Ersteinrichtung
+ *
+ * Schreibt die `.env` fuer eine lauffaehige Installation und legt das
+ * Workspace-Verzeichnis an. Laeuft einmalig beim Aufsetzen, ist aber
+ * gefahrlos wiederholbar.
+ *
+ * WAS HIER GEFRAGT WIRD, UND WARUM GENAU DAS:
+ * `src/index.ts` bricht den Boot mit Exit-Code 1 ab, wenn WORKSPACE_PATH,
+ * DATABASE_URL oder JWT_SECRET fehlen. Ein Setup, das diese drei nicht
+ * erfragt, erzeugt eine Installation, die garantiert nicht startet — genau
+ * das war der Zustand dieses Skripts vor dem Umbau zum Firmenserver (es
+ * fragte BOT_TOKEN und OLLAMA_*, beides gibt es seit AP0 nicht mehr).
+ *
+ * WARUM DIE .env ZEILENWEISE GESCHRIEBEN WIRD:
+ * Die frueheren readEnv()/writeEnv() haben die Datei mit `split("=")`
+ * zerlegt und komplett neu geschrieben. Folge: alle Kommentare weg, und
+ * jeder Wert mit "=" darin (Base64-Secrets enden auf "=" oder "==") wurde
+ * beim ersten "=" abgeschnitten. Da JWT_SECRET laut src/config.ts auch der
+ * Rueckfall-Schluessel der Feld-Verschluesselung ist, waren verschluesselte
+ * Felder danach nicht mehr lesbar. Deshalb: nur die Zeilen anfassen, deren
+ * Wert sich wirklich aendert; alles andere bleibt Byte fuer Byte stehen.
  */
 
 import readline from "readline";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ENV_PATH = path.join(ROOT, ".env");
 
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+// ─────────────────────────────────────────────────────────────────────────────
+// .env lesen und schreiben (zeilenerhaltend)
+// ─────────────────────────────────────────────────────────────────────────────
 
-function ask(question: string): Promise<string> {
-  return new Promise(resolve => rl.question(question, answer => resolve(answer.trim())));
+export interface EnvFile {
+  /** Die Datei so, wie sie auf der Platte steht — inklusive Kommentaren. */
+  lines: string[];
+  /** Ausgewertete Schluessel/Werte, nur zum Anzeigen und Pruefen. */
+  values: Record<string, string>;
 }
 
-function readEnv(): Record<string, string> {
-  if (!fs.existsSync(ENV_PATH)) return {};
-  return Object.fromEntries(
-    fs.readFileSync(ENV_PATH, "utf-8")
-      .split("\n")
-      .filter(l => l.includes("=") && !l.startsWith("#"))
-      .map(l => l.split("=").map(s => s.trim()) as [string, string])
-  );
-}
+// Ein Zuweisungs-Zeile: optionales "export ", Schluesselname, "=", Rest.
+// Der Rest wird NICHT weiter zerlegt — "=" im Wert ist voellig zulaessig.
+const ENV_LINE = /^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=(.*)$/;
 
-function writeEnv(values: Record<string, string>): void {
-  const lines = Object.entries(values).map(([k, v]) => `${k}=${v}`);
-  fs.writeFileSync(ENV_PATH, lines.join("\n") + "\n", "utf-8");
-}
-
-function createWorkspace(vaultPath: string): void {
-  const agentPath = path.join(vaultPath, "Agents", "Main");
-  const memLogsPath = path.join(agentPath, "MEMORY_LOGS");
-
-  fs.mkdirSync(memLogsPath, { recursive: true });
-
-  const files: Record<string, string> = {
-    "IDENTITY.md": `# Identity\n\n## Name: Main Agent\n## Emoji: 🤖\n## Vibe: Hilfsbereit, präzise, zuverlässig.\n## Kontext: Allgemeiner KI-Assistent für Büro und Unternehmen.\n`,
-    "SOUL.md": `# Main Agent – Soul\n\n## Identität\nDu bist der Main Agent — ein KI-Assistent für Büro und Unternehmen.\nHilfsbereit, präzise, zuverlässig — immer auf den Punkt.\n\n## Aufgaben\n- Notizen, Aufgaben und Termine verwalten\n- Informationen abrufen und speichern\n- Im Vault suchen und Dateien lesen\n- Bei Bedarf spezialisierte Sub-Agenten starten\n\n## Ton & Stil\n- Immer auf Deutsch\n- Kurz und direkt — wir sind in Telegram, kein Fließtext\n- Bestätigung: kurz ("✅ gespeichert")\n- Unsicherheit: nachfragen statt raten\n\n## Langzeitgedächtnis (MEMORY.md)\nNutze memory_speichern proaktiv wenn der Benutzer sagt "merk dir", "vergiss nicht" oder eine Information dauerhaft relevant ist.\n`,
-    "USER.md": `# User\n\nNoch nicht eingerichtet.\n`,
-    "AGENTS.md": `# Main Agent – Betriebsanweisungen\n\n## Rolle & Auftrag\nDu bist der Main Agent — der einzige Agent der direkt mit dem Benutzer kommuniziert.\nDu koordinierst alle anderen Agents und entscheidest selbst wann du sie brauchst.\n\n## Prioritäten\n1. Explizite Aufgaben sofort erledigen\n2. Wichtige Informationen in MEMORY.md speichern\n3. Bei komplexen Aufgaben Sub-Agents spawnen\n4. Kurz und direkt antworten\n\n## Memory\n- MEMORY.md — dauerhaftes Wissen\n- MEMORY_LOGS/ — Tages-Logs (werden automatisch komprimiert)\n\n## Sub-Agents\n- Neue Agents mit agent_erstellen anlegen\n- Sub-Agents können keine weiteren Agents spawnen (max. Tiefe: 2)\n- Pro Anfrage max. 5 Tool-Aufrufe bevor eine Antwort gegeben wird\n\n## Limits\n- Max. Tool-Runden pro Anfrage: 5\n- Max. Spawn-Tiefe: 2 (Main → Sub-Agent, nicht tiefer)\n- Geschützter Agent: Main (kann nicht gelöscht/überschrieben werden)\n`,
-    "BOOT.md": `# Main Agent – Boot\n\n## Bei jedem Gespräch\n- Antworte immer auf Deutsch\n- Halte Antworten kurz und direkt — wir sind in Telegram, kein Fließtext\n- Bestätigungen kurz halten (z.B. "✅ gespeichert", "erledigt")\n- Bei Unsicherheit nachfragen statt raten\n- Keine unnötigen Höflichkeitsfloskeln\n\n## Startup-Checkliste\n- Heutige Termine prüfen → bei Terminen heute kurz erwähnen\n- Überfällige Aufgaben prüfen → wenn vorhanden hinweisen\n- MEMORY.md auf aktuelle Relevanz prüfen\n`,
-    "BOOTSTRAP.md": `# Main Agent – Bootstrap\n\nDu bist ein freundlicher Einrichtungsassistent für diesen KI-Agenten.\nDeine Aufgabe: Den Benutzer durch eine kurze Einrichtung führen.\nStelle je eine Frage pro Nachricht und warte auf die Antwort.\nSei kurz und freundlich. Antworte immer auf Deutsch.\n\n## Fragen (der Reihe nach)\n1. Wie soll der Assistent heißen? (Beispiel: PATIO)\n2. Welches Emoji passt dazu? (Beispiel: 🏗️)\n3. Wie soll sein Charakter sein? (Beispiel: Präzise, verlässlich, direkt)\n4. Für was für ein Unternehmen ist er? (Beispiel: Architekturbüro in Wien)\n5. Wie heißt du? (Vorname reicht)\n6. Name des Unternehmens?\n\n## Abschluss\nSobald du alle 6 Antworten hast, rufe setup_abschliessen auf mit:\n- name, emoji, vibe, context, userName, userCompany\n\n## Dateien die erstellt werden\n- IDENTITY.md — Name, Emoji, Vibe, Kontext\n- SOUL.md — Identität und Charakter\n- USER.md — Profil des Benutzers\n`,
-    "TOOLS.md": `# Main Agent – Tool-Konventionen\n\n## Wann welches Tool\n- notiz_speichern → freie Gedanken, Beobachtungen, Ideen\n- aufgabe_speichern → konkrete To-dos mit Verb am Anfang\n- termin_speichern → Meetings, Deadlines (immer mit Datum TT.MM.JJJJ)\n- memory_speichern → dauerhaft wichtige Fakten\n- vault_suchen → vor dem Erstellen erst suchen ob es schon existiert\n- agent_spawnen → für kurze Sub-Aufgaben\n- agent_spawnen_async → für längere Aufgaben\n\n## Regeln\n- Nie doppelt speichern — zuerst suchen\n- Aufgaben immer mit konkretem Verb beginnen\n- Termine immer mit Datum im Format TT.MM.JJJJ\n- Bei Unsicherheit nachfragen statt raten\n`,
-    "MEMORY.md": `# Memory – Main Agent\n\nHier werden dauerhafte Erkenntnisse, Entscheidungen und wichtige Fakten gespeichert.\n`,
-    "HEARTBEAT.md": `# Main Agent – Heartbeat\n\nCron: */30 8-20 * * 1-6\n\n## Aufgaben\nPruefe ob es etwas Relevantes zu melden gibt:\n1. Termine die HEUTE anstehen (nutze termine_auflisten)\n2. Offene Aufgaben die ueberfaellig oder dringend sind (nutze aufgaben_auflisten)\n3. Wichtige Erinnerungen aus MEMORY.md\n\n## Regeln\n- NUR melden wenn es etwas Konkretes gibt (Termin heute, ueberfaellige Aufgabe)\n- Wenn NICHTS relevant ist: antworte exakt mit [STILL] — keine Nachricht wird gesendet\n- Kurz und knapp — maximal 3-5 Zeilen\n- Keine Floskeln, kein "Guten Morgen", direkt zur Sache\n- Termine: Uhrzeit + was ansteht\n- Aufgaben: nur ueberfaellige oder heute faellige\n`,
-  };
-
-  let created = 0;
-  for (const [filename, content] of Object.entries(files)) {
-    const fp = path.join(agentPath, filename);
-    if (!fs.existsSync(fp)) {
-      fs.writeFileSync(fp, content, "utf-8");
-      created++;
+/**
+ * Entfernt genau EIN Paar umschliessender Anfuehrungszeichen, so wie dotenv
+ * es tut. Der Inhalt bleibt unangetastet — auch "=", "+" und "/".
+ */
+function unquote(raw: string): string {
+  const v = raw.trim();
+  if (v.length >= 2) {
+    const first = v[0];
+    const last = v[v.length - 1];
+    if ((first === '"' && last === '"') || (first === "'" && last === "'")) {
+      return v.slice(1, -1);
     }
   }
-
-  console.log(`  Workspace: ${agentPath}`);
-  console.log(`  ${created} Dateien angelegt${created < Object.keys(files).length ? `, ${Object.keys(files).length - created} bereits vorhanden` : ""}`);
+  return v;
 }
 
-async function main() {
-  console.log("\n╔══════════════════════════════╗");
-  console.log("║       PATIO Installer       ║");
-  console.log("╚══════════════════════════════╝\n");
+/** Wertet eine einzelne Zeile aus. Kommentare und Leerzeilen ergeben null. */
+export function parseEnvLine(line: string): { key: string; value: string } | null {
+  const trimmed = line.trimStart();
+  if (!trimmed || trimmed.startsWith("#")) return null;
+  const m = ENV_LINE.exec(line);
+  if (!m) return null;
+  return { key: m[1], value: unquote(m[2]) };
+}
 
-  const env = readEnv();
-
-  // ─── BOT_TOKEN ──────────────────────────────────────────────────────────────
-  let botToken = env["BOT_TOKEN"] || "";
-  if (botToken) {
-    console.log(`BOT_TOKEN: bereits vorhanden ✓`);
-  } else {
-    console.log("Erstelle einen Telegram Bot via @BotFather und füge den Token hier ein.");
-    botToken = await ask("BOT_TOKEN: ");
-    if (!botToken) { console.error("BOT_TOKEN darf nicht leer sein."); process.exit(1); }
+export function parseEnv(text: string): EnvFile {
+  // Zeilenenden normalisieren, aber sonst nichts anfassen.
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const values: Record<string, string> = {};
+  for (const line of lines) {
+    const parsed = parseEnvLine(line);
+    // Bei doppelten Schluesseln gewinnt der letzte — so liest dotenv es auch.
+    if (parsed) values[parsed.key] = parsed.value;
   }
+  return { lines, values };
+}
 
-  // ─── VAULT_PATH ─────────────────────────────────────────────────────────────
-  let vaultPath = env["VAULT_PATH"] || "";
-  if (vaultPath) {
-    console.log(`VAULT_PATH: bereits vorhanden ✓ (${vaultPath})`);
-  } else {
-    console.log("\nPfad zum Obsidian Vault (wo Notizen, Aufgaben etc. gespeichert werden).");
-    console.log("Beispiel Windows: C:\\Users\\Name\\Obsidian\\Vault");
-    vaultPath = await ask("VAULT_PATH: ");
-    if (!vaultPath) { console.error("VAULT_PATH darf nicht leer sein."); process.exit(1); }
-    if (!fs.existsSync(vaultPath)) {
-      const create = await ask(`Pfad existiert nicht. Anlegen? (j/n): `);
-      if (create.toLowerCase() === "j") {
-        fs.mkdirSync(vaultPath, { recursive: true });
-        console.log("  Ordner angelegt ✓");
-      } else {
-        console.error("Abgebrochen."); process.exit(1);
+/**
+ * Quotet nur, wenn es sein muss: Leerzeichen, "#" oder ein fuehrendes
+ * Anfuehrungszeichen wuerden den Wert sonst verkuerzen. "=", "+" und "/"
+ * brauchen KEINE Quotes — Base64-Secrets bleiben damit unveraendert lesbar.
+ */
+export function formatValue(value: string): string {
+  const needsQuotes = /\s|#/.test(value) || /^["']/.test(value);
+  if (!needsQuotes) return value;
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
+
+/**
+ * Setzt einen Wert und laesst den Rest der Datei unberuehrt.
+ * Mehrfach vorkommende Schluessel werden auf eine Zeile reduziert — sonst
+ * haengt der wirksame Wert davon ab, welche Zeile zuletzt gelesen wird.
+ */
+export function setEnvValue(file: EnvFile, key: string, value: string): void {
+  const newLine = `${key}=${formatValue(value)}`;
+  const out: string[] = [];
+  let replaced = false;
+  for (const line of file.lines) {
+    if (parseEnvLine(line)?.key === key) {
+      if (!replaced) {
+        out.push(newLine);
+        replaced = true;
       }
+      continue;
+    }
+    out.push(line);
+  }
+  if (!replaced) {
+    // Ans Ende haengen, aber keine Leerzeile davor verschlucken.
+    while (out.length > 0 && out[out.length - 1].trim() === "") out.pop();
+    out.push(newLine);
+  }
+  file.lines = out;
+  file.values[key] = value;
+}
+
+export function serializeEnv(file: EnvFile): string {
+  return file.lines.join("\n").replace(/\n*$/, "\n");
+}
+
+export function readEnvFile(envPath: string): EnvFile {
+  if (!fs.existsSync(envPath)) return { lines: [], values: {} };
+  return parseEnv(fs.readFileSync(envPath, "utf-8"));
+}
+
+/**
+ * Schreibt die .env atomar (tmp + rename) und legt vorher eine
+ * Sicherungskopie an. Die .env traegt Zugangsdaten — Rechte 0600.
+ */
+export function writeEnvFile(envPath: string, file: EnvFile): string | null {
+  let backup: string | null = null;
+  if (fs.existsSync(envPath)) {
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    backup = `${envPath}.bak-${stamp}`;
+    fs.copyFileSync(envPath, backup);
+  }
+  const tmp = `${envPath}.tmp`;
+  fs.writeFileSync(tmp, serializeEnv(file), { encoding: "utf-8", mode: 0o600 });
+  fs.renameSync(tmp, envPath);
+  try {
+    fs.chmodSync(envPath, 0o600);
+  } catch {
+    /* Windows kennt keine POSIX-Rechte — kein Grund abzubrechen. */
+  }
+  return backup;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Eingabe-Helfer
+// ─────────────────────────────────────────────────────────────────────────────
+
+function createPrompt(): { ask: (q: string) => Promise<string>; close: () => void } {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return {
+    ask: (question: string) => new Promise<string>((resolve) => rl.question(question, (a) => resolve(a.trim()))),
+    close: () => rl.close(),
+  };
+}
+
+/** Kuerzt ein Secret fuer die Anzeige — nichts Geheimes ins Terminal. */
+function mask(value: string): string {
+  if (value.length <= 8) return "********";
+  return `${value.slice(0, 4)}…${value.slice(-2)} (${value.length} Zeichen)`;
+}
+
+/** Zeigt eine DATABASE_URL ohne Passwort an. */
+function maskDbUrl(url: string): string {
+  return url.replace(/:\/\/([^:/@]+):[^@]*@/, "://$1:***@");
+}
+
+function isValidDbUrl(url: string): boolean {
+  return /^postgres(ql)?:\/\/[^\s]+$/.test(url);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Hauptprogramm
+// ─────────────────────────────────────────────────────────────────────────────
+
+const HEADER = [
+  "# PATIO Konfiguration (angelegt von npm run setup)",
+  "# Vollstaendige Liste aller Schluessel mit Erklaerung: .env.example",
+  "",
+];
+
+async function main(): Promise<void> {
+  const { ask, close } = createPrompt();
+
+  console.log("\n╔════════════════════════════════╗");
+  console.log("║      PATIO Ersteinrichtung     ║");
+  console.log("╚════════════════════════════════╝\n");
+  console.log("PATIO laeuft als Web-Dienst gegen PostgreSQL.");
+  console.log("Ohne WORKSPACE_PATH, DATABASE_URL und JWT_SECRET startet der Dienst nicht.\n");
+
+  const env = readEnvFile(ENV_PATH);
+  if (env.lines.length === 0) env.lines = [...HEADER];
+
+  // ── WORKSPACE_PATH ─────────────────────────────────────────────────────────
+  // Hier liegen die Dokumente als Dateien. Alles andere (Projekte, Notizen,
+  // Aufgaben, Termine, Team) steht in der Datenbank.
+  let workspacePath = env.values["WORKSPACE_PATH"] || "";
+  const legacyVaultPath = env.values["VAULT_PATH"] || "";
+
+  if (!workspacePath && legacyVaultPath) {
+    // Altbestand: frueher hiess der Schluessel VAULT_PATH. src/config.ts liest
+    // ihn noch als Rueckfall, aber der kanonische Name ist WORKSPACE_PATH.
+    console.log(`Gefunden: VAULT_PATH=${legacyVaultPath} (alter Name).`);
+    const take = await ask("Als WORKSPACE_PATH uebernehmen? (j/n): ");
+    if (take.toLowerCase() === "j") workspacePath = legacyVaultPath;
+  }
+
+  if (workspacePath) {
+    console.log(`WORKSPACE_PATH: bereits gesetzt ✓ (${workspacePath})`);
+  } else {
+    console.log("\nVerzeichnis fuer die Dokumentenablage.");
+    console.log("Beispiel Linux:   /opt/patio-workspace");
+    console.log("Beispiel Windows: C:\\Users\\Name\\PATIO");
+    workspacePath = await ask("WORKSPACE_PATH: ");
+    if (!workspacePath) {
+      console.error("WORKSPACE_PATH darf nicht leer sein — der Dienst bricht sonst beim Start ab.");
+      close();
+      process.exit(1);
     }
   }
 
-  // ─── OLLAMA ─────────────────────────────────────────────────────────────────
-  let ollamaUrl = env["OLLAMA_BASE_URL"] || "";
-  if (ollamaUrl) {
-    console.log(`OLLAMA_BASE_URL: bereits vorhanden ✓ (${ollamaUrl})`);
-  } else {
-    console.log("\nOllama API URL (Standard: http://localhost:11434/v1)");
-    const input = await ask("OLLAMA_BASE_URL [Enter für Standard]: ");
-    ollamaUrl = input || "http://localhost:11434/v1";
+  if (!fs.existsSync(workspacePath)) {
+    const create = await ask(`Pfad existiert nicht. Anlegen? (j/n): `);
+    if (create.toLowerCase() === "j") {
+      fs.mkdirSync(workspacePath, { recursive: true });
+      console.log("  Verzeichnis angelegt ✓");
+    } else {
+      console.error("Abgebrochen — ohne existierendes Verzeichnis kann PATIO keine Dateien ablegen.");
+      close();
+      process.exit(1);
+    }
   }
 
-  let model = env["OLLAMA_MODEL"] || "";
-  if (model) {
-    console.log(`OLLAMA_MODEL: bereits vorhanden ✓ (${model})`);
+  // ── DATABASE_URL ───────────────────────────────────────────────────────────
+  let databaseUrl = env.values["DATABASE_URL"] || "";
+  if (databaseUrl) {
+    console.log(`DATABASE_URL: bereits gesetzt ✓ (${maskDbUrl(databaseUrl)})`);
   } else {
-    const input = await ask("OLLAMA_MODEL [Enter für qwen2.5:7b]: ");
-    model = input || "qwen2.5:7b";
+    console.log("\nVerbindung zur PostgreSQL-Datenbank.");
+    console.log("Format: postgres://BENUTZER:PASSWORT@HOST:5432/DATENBANK");
+    console.log("Bei Docker-Compose bleibt der Wert leer — docker-compose.yml setzt ihn selbst.");
+    while (true) {
+      const input = await ask("DATABASE_URL (leer = Docker-Compose): ");
+      if (!input) {
+        console.log("  uebersprungen — docker-compose.yml setzt DATABASE_URL aus POSTGRES_*.");
+        break;
+      }
+      if (isValidDbUrl(input)) {
+        databaseUrl = input;
+        break;
+      }
+      console.log("  Das sieht nicht nach einem Connection-String aus (postgres://…). Bitte erneut.");
+    }
   }
 
-  // ─── .env schreiben ─────────────────────────────────────────────────────────
-  writeEnv({ ...env, BOT_TOKEN: botToken, VAULT_PATH: vaultPath, OLLAMA_BASE_URL: ollamaUrl, OLLAMA_MODEL: model });
-  console.log("\n.env gespeichert ✓");
+  // ── JWT_SECRET ─────────────────────────────────────────────────────────────
+  // Zweitverwendung beachten: solange ENCRYPTION_KEY leer ist, verschluesselt
+  // src/crypto.ts mit dem JWT_SECRET. Ein Austausch macht dann bestehende
+  // verschluesselte Felder unlesbar — deshalb wird ein vorhandener Wert hier
+  // niemals ungefragt ersetzt.
+  let jwtSecret = env.values["JWT_SECRET"] || "";
+  if (jwtSecret) {
+    console.log(`JWT_SECRET: bereits gesetzt ✓ (${mask(jwtSecret)})`);
+    if (jwtSecret.length < 32) {
+      console.log("  ! Kuerzer als 32 Zeichen — in Produktion verweigert der Dienst den Start.");
+    }
+  } else {
+    console.log("\nJWT_SECRET fuer den Web-Login (mind. 32 Zeichen).");
+    const input = await ask("JWT_SECRET [Enter = neu erzeugen]: ");
+    if (input) {
+      jwtSecret = input;
+      if (jwtSecret.length < 32) {
+        console.log("  ! Kuerzer als 32 Zeichen — in Produktion verweigert der Dienst den Start.");
+      }
+    } else {
+      jwtSecret = crypto.randomBytes(48).toString("base64");
+      console.log(`  Erzeugt ✓ (${mask(jwtSecret)})`);
+    }
+  }
 
-  // ─── Workspace anlegen ──────────────────────────────────────────────────────
-  console.log("\nAgent-Workspace anlegen...");
-  createWorkspace(vaultPath);
+  // ── ENCRYPTION_KEY ─────────────────────────────────────────────────────────
+  // Nur bei einer frischen Installation automatisch erzeugen. Kommt der
+  // Schluessel spaeter dazu, muessen die bereits verschluesselten Felder mit
+  // `npm run db:reencrypt` umgeschluesselt werden — das darf dieses Skript
+  // nicht im Vorbeigehen ausloesen.
+  const encryptionKey = env.values["ENCRYPTION_KEY"] || "";
+  let newEncryptionKey = "";
+  const freshInstall = !fs.existsSync(ENV_PATH);
+  if (encryptionKey) {
+    console.log(`ENCRYPTION_KEY: bereits gesetzt ✓ (${mask(encryptionKey)})`);
+  } else if (freshInstall) {
+    newEncryptionKey = crypto.randomBytes(32).toString("base64");
+    console.log(`ENCRYPTION_KEY: erzeugt ✓ (${mask(newEncryptionKey)})`);
+  } else {
+    console.log("ENCRYPTION_KEY: nicht gesetzt — Feld-Verschluesselung nutzt das JWT_SECRET.");
+    console.log("  Eigenen Schluessel nachziehen: docs/sec-4-crypto-migration.md + npm run db:reencrypt");
+  }
 
-  // ─── Fertig ─────────────────────────────────────────────────────────────────
-  console.log("\n✅ Installation abgeschlossen!");
-  console.log("\nStarten mit:");
-  console.log("  npm run dev    (Entwicklung, mit Auto-Reload)");
-  console.log("  npm start      (Produktion, nach npm run build)\n");
+  // ── API_PORT ───────────────────────────────────────────────────────────────
+  let apiPort = env.values["API_PORT"] || "";
+  if (apiPort) {
+    console.log(`API_PORT: bereits gesetzt ✓ (${apiPort})`);
+  } else {
+    const input = await ask("API_PORT [Enter fuer 3000]: ");
+    apiPort = input || "3000";
+  }
 
-  rl.close();
+  // ── .env schreiben ─────────────────────────────────────────────────────────
+  setEnvValue(env, "WORKSPACE_PATH", workspacePath);
+  if (databaseUrl) setEnvValue(env, "DATABASE_URL", databaseUrl);
+  setEnvValue(env, "JWT_SECRET", jwtSecret);
+  if (newEncryptionKey) setEnvValue(env, "ENCRYPTION_KEY", newEncryptionKey);
+  setEnvValue(env, "API_PORT", apiPort);
+
+  const backup = writeEnvFile(ENV_PATH, env);
+  console.log(`\n.env gespeichert ✓ (${ENV_PATH})`);
+  if (backup) console.log(`Sicherungskopie der vorigen Fassung: ${path.basename(backup)}`);
+
+  // ── Naechste Schritte ──────────────────────────────────────────────────────
+  console.log("\nFertig. Weiter geht es mit:");
+  if (!databaseUrl) {
+    console.log("  docker compose up -d          (Datenbank + Dienst als Container)");
+  } else {
+    console.log("  npm run db:status            Verbindung + Migrationsstand pruefen");
+    console.log("  npm run dev                  Entwicklung (Auto-Reload)");
+    console.log("  npm run build && npm start   Produktion");
+  }
+  console.log("");
+  console.log("Hinweis: Der Login schickt 6-stellige Codes per E-Mail. Ohne SMTP_* in der");
+  console.log(".env landet der Code im Server-Log (siehe .env.example, Abschnitt SMTP).");
+  console.log("");
+
+  close();
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+// Nur ausfuehren, wenn direkt aufgerufen — beim Import (Tests) passiert nichts.
+const invokedDirectly =
+  !!process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

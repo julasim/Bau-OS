@@ -90,7 +90,7 @@ timeEntriesRoutes.post("/projects/:projectName/time-entries", async (c) => {
   }
   const result = await timeEntryRepo.create(proj.id, body, c.var.userId);
   if (typeof result === "string") return c.json({ error: result }, 400);
-  emit({ type: "time", action: "created", id: result.id, project: proj.name });
+  emit({ type: "time", action: "created", id: result.id, projectId: proj.id }, { actorId: c.var.userId });
   return c.json(result, 201);
 });
 
@@ -136,7 +136,7 @@ timeEntriesRoutes.patch("/time-entries/:id", async (c) => {
   const result = await timeEntryRepo.update(id, body);
   if (typeof result === "string") return c.json({ error: result }, 400);
   if (!result) return c.json({ error: "Eintrag nicht gefunden" }, 404);
-  emit({ type: "time", action: "updated", id, project: entry.projectName ?? null });
+  emit({ type: "time", action: "updated", id, projectId: entry.projectId }, { actorId: c.var.userId });
   return c.json(result);
 });
 
@@ -156,7 +156,7 @@ timeEntriesRoutes.delete("/time-entries/:id", async (c) => {
     }
   }
   const ok = await timeEntryRepo.delete(id);
-  if (ok) emit({ type: "time", action: "deleted", id, project: entry.projectName ?? null });
+  if (ok) emit({ type: "time", action: "deleted", id, projectId: entry.projectId }, { actorId: c.var.userId });
   return c.json({ ok });
 });
 

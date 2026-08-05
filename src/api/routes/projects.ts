@@ -4,7 +4,7 @@ import { findDbUserById } from "../auth.js";
 import { getVisibleProjectIds, canSeeProjectByName, type UserCtx } from "../../data/access.js";
 import type { ProjectUpdate } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
-import { emit } from "../events.js";
+import { emit, emitForProjectName } from "../events.js";
 
 // Hilfs-Builder: holt UserCtx aus dem Hono-Context — eine Stelle weniger,
 // an der man c.var-Felder vergisst.
@@ -104,7 +104,9 @@ projectsRoutes.post("/projects", async (c) => {
   );
   if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
 
-  emit({ type: "project", action: already ? "updated" : "created", id: name });
+  emitForProjectName({ type: "project", action: already ? "updated" : "created", id: name }, name, {
+    actorId: c.var.userId,
+  });
   const info = await projectRepo.getInfo(name);
   return c.json(info, already ? 200 : 201);
 });
@@ -171,7 +173,7 @@ projectsRoutes.patch("/projects/:name", async (c) => {
   if (!ok) {
     return c.json({ error: "Projekt nicht gefunden oder Update fehlgeschlagen" }, 404);
   }
-  emit({ type: "project", action: "updated", id: name });
+  emitForProjectName({ type: "project", action: "updated", id: name }, name, { actorId: c.var.userId });
 
   const updated = await projectRepo.getInfo(name);
   return c.json(updated);
@@ -203,7 +205,7 @@ projectsRoutes.put("/projects/:name/rename", async (c) => {
   if (result === "not-found") return c.json({ error: "Projekt nicht gefunden" }, 404);
   if (result === "conflict") return c.json({ error: "Projekt mit diesem Namen existiert bereits" }, 409);
 
-  emit({ type: "project", action: "updated", id: newName });
+  emitForProjectName({ type: "project", action: "updated", id: newName }, newName, { actorId: c.var.userId });
   const info = await projectRepo.getInfo(newName);
   return c.json(info);
 });
@@ -306,7 +308,11 @@ projectsRoutes.delete("/projects/:name", async (c) => {
   }
   const ok = await projectRepo.delete(name);
   if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
-  emit({ type: "project", action: "deleted", id: name });
+  // Bekannte Einschraenkung: das Projekt ist weg, es gibt also keine
+  // Projekt-UUID mehr, an der die Sichtbarkeit haengen koennte. Das Ereignis
+  // geht projektlos raus und erreicht damit nur Admins und den Loeschenden;
+  // die uebrigen Berechtigten merken das Verschwinden beim naechsten Laden.
+  emit({ type: "project", action: "deleted", id: name, projectId: null }, { actorId: c.var.userId });
   return c.body(null, 204);
 });
 
@@ -334,7 +340,7 @@ projectsRoutes.post("/projects/:name/access", async (c) => {
   if (!target) return c.json({ error: "User nicht gefunden" }, 404);
 
   await projectRepo.grantAccess(info.id!, body.userId);
-  emit({ type: "project", action: "updated", id: info.name });
+  emit({ type: "project", action: "updated", id: info.name, projectId: info.id ?? null }, { actorId: c.var.userId });
   return c.json({ ok: true });
 });
 
@@ -345,7 +351,8 @@ projectsRoutes.delete("/projects/:name/access/:userId", async (c) => {
   if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
 
   const ok = await projectRepo.revokeAccess(info.id!, c.req.param("userId"));
-  if (ok) emit({ type: "project", action: "updated", id: info.name });
+  if (ok)
+    emit({ type: "project", action: "updated", id: info.name, projectId: info.id ?? null }, { actorId: c.var.userId });
   return c.json({ ok });
 });
 
@@ -389,7 +396,7 @@ projectsRoutes.post("/projects/:name/tasks", async (c) => {
   if (body.assigneeId !== undefined) {
     await taskRepo.update(task.id, { assigneeId: body.assigneeId ?? null }, name);
   }
-  emit({ type: "task", action: "created", project: name });
+  emitForProjectName({ type: "task", action: "created", id: task.id }, name, { actorId: c.var.userId });
   return c.json({ ok: true });
 });
 
@@ -397,7 +404,7 @@ projectsRoutes.patch("/projects/:name/tasks", async (c) => {
   const name = c.req.param("name");
   const { text } = await c.req.json<{ text: string }>();
   const ok = await taskRepo.complete(text, name);
-  if (ok) emit({ type: "task", action: "completed", project: name });
+  if (ok) emitForProjectName({ type: "task", action: "completed" }, name, { actorId: c.var.userId });
   return c.json({ ok });
 });
 
@@ -424,7 +431,7 @@ projectsRoutes.post("/projects/:name/termine", async (c) => {
   if (body.assigneeIds !== undefined) {
     await terminRepo.update(termin.id, { assigneeIds: body.assigneeIds }, name);
   }
-  emit({ type: "termin", action: "created", project: name });
+  emitForProjectName({ type: "termin", action: "created", id: termin.id }, name, { actorId: c.var.userId });
   return c.json({ ok: true });
 });
 
@@ -432,6 +439,6 @@ projectsRoutes.delete("/projects/:name/termine", async (c) => {
   const name = c.req.param("name");
   const { text } = await c.req.json<{ text: string }>();
   const ok = await terminRepo.delete(text, name);
-  if (ok) emit({ type: "termin", action: "deleted", project: name });
+  if (ok) emitForProjectName({ type: "termin", action: "deleted" }, name, { actorId: c.var.userId });
   return c.json({ ok });
 });

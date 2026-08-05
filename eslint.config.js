@@ -14,5 +14,5 @@ export default tseslint.config(
       "preserve-caught-error": "off",
     },
   },
-  { ignores: ["dist/", "node_modules/", "web/", "docs/", "tools/", "scripts/"] },
+  { ignores: ["dist/", "node_modules/", "docs/", "tools/"] },
 );

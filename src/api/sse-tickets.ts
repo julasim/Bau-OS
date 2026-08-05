@@ -16,7 +16,22 @@
 
 import crypto from "crypto";
 
-type TicketEntry = { userId: string | null; expiresAt: number };
+/** Wer hinter einem Ticket steckt.
+ *
+ *  Warum die Rolle mitgespeichert wird: beim Verbindungsaufbau mit Ticket
+ *  laeuft die authMiddleware NICHT vollstaendig durch (sie winkt bei gueltigem
+ *  Ticket direkt mit `next()` durch, ohne `userId`/`userRole` zu setzen). Die
+ *  SSE-Route haette danach keine Identitaet mehr, an die sie den
+ *  Sichtbarkeits-Filter haengen koennte — und eine fehlende Rolle darf auf
+ *  keinen Fall als „Admin" durchgehen. Das Ticket wird beim POST ausgestellt,
+ *  also genau dann, wenn die Identitaet noch feststeht. */
+export interface TicketIdentity {
+  /** `users.id`. `null` bei Legacy-Konten ohne UUID. */
+  userId: string | null;
+  role: "admin" | "user";
+}
+
+type TicketEntry = TicketIdentity & { expiresAt: number };
 
 const _tickets = new Map<string, TicketEntry>();
 
@@ -32,11 +47,12 @@ function pruneTickets(): void {
 
 /** Erzeugt ein neues Einmal-Ticket, setzt die TTL und gibt den
  *  Ticket-String zurueck. */
-export function createTicket(userId: string | null): string {
+export function createTicket(identity: TicketIdentity): string {
   pruneTickets();
   const ticket = crypto.randomBytes(24).toString("hex");
   _tickets.set(ticket, {
-    userId,
+    userId: identity.userId,
+    role: identity.role,
     expiresAt: Date.now() + TICKET_TTL_MS,
   });
   return ticket;
@@ -55,12 +71,13 @@ export function peekTicket(ticket: string): boolean {
   return true;
 }
 
-/** Wie peekTicket, loescht das Ticket aber danach (One-Time-Use).
+/** Wie peekTicket, loescht das Ticket aber danach (One-Time-Use) und liefert
+ *  die hinterlegte Identitaet zurueck. `null` = ungueltig oder abgelaufen.
  *  Wird in der GET /events-Route zum Einloesen verwendet. */
-export function consumeTicket(ticket: string): boolean {
+export function consumeTicket(ticket: string): TicketIdentity | null {
   const entry = _tickets.get(ticket);
-  if (!entry) return false;
+  if (!entry) return null;
   _tickets.delete(ticket);
-  if (entry.expiresAt < Date.now()) return false;
-  return true;
+  if (entry.expiresAt < Date.now()) return null;
+  return { userId: entry.userId, role: entry.role };
 }

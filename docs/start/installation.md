@@ -1,201 +1,166 @@
 # Installation
 
-Detaillierte Anleitung für die Installation auf einem frischen System.
+Anleitung für eine Installation von Grund auf. Für den Betrieb im Büro
+führt der Weg über die [Betriebs-Kapitel](/betrieb/voraussetzungen) — diese
+Seite fasst die Möglichkeiten zusammen und ordnet sie ein.
 
 ## Systemanforderungen
 
 | Komponente | Minimum | Empfohlen |
 |---|---|---|
-| **OS** | Ubuntu 22.04 / macOS / Windows | Ubuntu 24.04 LTS |
-| **RAM** | 4 GB | 8 GB (für 7B Modell) |
+| **Betriebssystem** | Ubuntu 22.04 / macOS / Windows | Ubuntu 24.04 LTS |
 | **CPU** | 2 Kerne | 4 Kerne |
-| **Speicher** | 10 GB frei | 20 GB frei |
-| **Node.js** | 20.x | 20.x LTS |
+| **RAM** | 4 GB | 8 GB |
+| **Speicher** | 20 GB frei | 256 GB SSD (Produktivbetrieb) |
+| **Node.js** | 20.x | 24.x LTS |
+| **PostgreSQL** | 16 | 16 |
 
-::: warning RAM ist entscheidend (nur Ollama-Modus)
-Ollama braucht RAM für das LLM-Modell. Ein 7B-Modell benötigt ca. 4–5 GB RAM. Wenn der Server zu wenig RAM hat, wird das Modell sehr langsam oder stürzt ab. Im OpenAI-Modus entfällt diese Anforderung.
+::: tip Bescheidene Anforderungen
+PATIO ist ein Node-Prozess neben einer Datenbank. Es läuft kein Sprachmodell
+mit — die frühere RAM-Anforderung von 8 GB allein für Ollama ist entfallen.
+Der begrenzende Faktor ist der Speicherplatz: hochgeladene Dateien liegen in
+der Datenbank, und die Backups kommen dazu.
 :::
 
 ---
 
-## Empfohlener Weg: Automatischer Installer (Produktion)
+## Weg 1 — Docker Compose (empfohlen für den Betrieb)
 
-Für Ubuntu-Server gibt es einen vollautomatischen Installer, der alles von Grund auf einrichtet:
+Zwei Container: die Anwendung und PostgreSQL 16. Ein Reverse-Proxy davor
+terminiert TLS.
+
+```bash
+git clone https://github.com/julasim/patio.git /opt/patio
+cd /opt/patio
+cp .env.example .env
+nano .env                    # JWT_SECRET, POSTGRES_*, SMTP_*, APP_URL
+docker compose build app
+docker compose up -d
+```
+
+Vollständig: [PATIO deployen](/betrieb/deployment).
+
+::: warning Kein Reverse-Proxy im Stack
+`docker-compose.yml` gibt Port 3000 nur containerintern frei. Für HTTPS
+gehört ein Proxy davor — entweder ein gemeinsamer Edge-Proxy im externen
+Docker-Netz `proxy` oder der Standalone-Aufbau
+`docker/docker-compose.standalone.yml` mit eigenem Caddy.
+:::
+
+---
+
+## Weg 2 — Automatischer Installer (Bare Metal)
+
+Für Ubuntu-Server:
 
 ```bash
 sudo bash scripts/install.sh
 ```
 
-Der Installer fragt interaktiv nach:
+Der Installer richtet ein:
 
-1. **Telegram Bot Token** — von @BotFather
-2. **LLM-Modus** — Cloud (Ollama Cloud: kimi-k2.5, gemma4, qwen3 etc.) oder Lokal (qwen2.5:7b, llama3.1:8b etc.)
-3. **Installationsverzeichnis** — Standard: `/opt/patio`
-4. **Workspace-Verzeichnis** — Standard: `/opt/patio-workspace`
-5. **Web-Admin Benutzername** — für die Web-Oberfläche (Standard: `admin`)
-6. **Web-Admin Passwort**
-7. **API-Port** — Standard: `3000`
+- Node.js 24 LTS
+- PostgreSQL samt Rolle, Datenbank und Extensions
+- den PATIO-Build (Backend und Frontend)
+- den Dienst-Benutzer und die Verzeichnisse
+- die `.env` mit erzeugten Secrets
+- die systemd-Unit `patio` mit Autostart
+- das CLI-Werkzeug `/usr/local/bin/patio`
 
-Was der Installer automatisch einrichtet:
+Abgefragt werden Installations- und Workspace-Verzeichnis, Benutzername und
+Passwort des ersten Admin-Kontos sowie der Port.
 
-- Systempakete aktualisieren (apt-get update/upgrade)
-- Node.js 20 LTS (via nodesource)
-- Ollama + gewähltes Modell (lokal oder Cloud-Login)
-- Service-Benutzer `patio` anlegen
-- Verzeichnisse + Berechtigungen setzen
-- Web-Admin-User in `data/users.json` (Passwort bcrypt-gehasht)
-- JWT-Secret generieren + `.env` mit allen Werten befüllen
-- CLI-Tool `/usr/local/bin/patio` installieren
-- systemd-Service `patio` (autostart bei Reboot) aktivieren und starten
-
-### CLI nach Installation
+### Das CLI danach
 
 ```bash
-patio                   # Interaktives Menü
+patio                   # interaktives Menü
 patio status            # Status anzeigen
-patio logs              # Letzte Logs
-patio logs live         # Live-Logs (tail -f)
-sudo patio restart      # Service neu starten
+patio logs              # letzte Logs
+sudo patio restart      # Dienst neu starten
 sudo patio update       # Update aus Git einspielen
-sudo patio user add     # Neuen Web-User anlegen
+sudo patio user add     # Benutzer anlegen
 ```
 
 ---
 
-## Alternative: Docker Compose
+## Weg 3 — Manuell
 
-Für Umgebungen mit Docker steht ein vollständiger Stack bereit:
-
-```bash
-cp .env.example .env
-# .env anpassen: BOT_TOKEN, WORKSPACE_PATH, etc.
-docker compose up -d
-```
-
-Stack-Komponenten (laut `docker-compose.yml`):
-
-| Service | Image | Funktion |
-|---|---|---|
-| **postgres** | `pgvector/pgvector:pg16` | PostgreSQL mit pgvector-Extension |
-| **ollama** | `ollama/ollama:latest` | Lokales LLM (optional; weglassen wenn OpenAI genutzt wird) |
-| **app** | Build aus `Dockerfile` | PATIO Bot + API + Web-UI |
-
-::: tip Reverse Proxy / TLS
-Der Docker-Stack bringt keinen eigenen Reverse Proxy mit. TLS und Routing übernimmt ein externer Edge-Proxy (Caddy), der über das Docker-Netzwerk `proxy` angebunden wird. Für lokale Tests ohne Edge-Proxy ist Port 3000 direkt im Container verfügbar.
-:::
-
-Port 3000 ist im Docker-Container nur intern exponiert (`expose`, nicht `ports`). Der Edge-Proxy leitet HTTPS-Requests an den Container weiter.
-
----
-
-## Manuell: Node.js installieren
+### Node.js
 
 ::: code-group
 ```bash [Ubuntu/Debian]
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
 sudo apt-get install -y nodejs
 ```
 
 ```bash [macOS]
-brew install node@20
+brew install node@24
 ```
 
 ```powershell [Windows]
-# Download von https://nodejs.org/
-# Oder via winget:
 winget install OpenJS.NodeJS.LTS
 ```
 :::
 
-Prüfe die Installation:
-
 ```bash
-node --version   # v20.x.x
-npm --version    # 10.x.x
+node --version
+npm --version
 ```
 
-## Manuell: Ollama installieren (nur Ollama-Modus)
+### PostgreSQL
 
 ::: code-group
-```bash [Linux]
-curl -fsSL https://ollama.ai/install.sh | sh
+```bash [Ubuntu/Debian]
+sudo apt-get install -y postgresql-16
+sudo -u postgres createuser patio --pwprompt
+sudo -u postgres createdb -O patio patio
 ```
 
-```bash [macOS]
-brew install ollama
-```
-
-```powershell [Windows]
-# Download von https://ollama.ai/download/windows
+```bash [Docker]
+docker run -d --name patio-db \
+  -e POSTGRES_USER=patio -e POSTGRES_PASSWORD=patio -e POSTGRES_DB=patio \
+  -p 5432:5432 postgres:16
 ```
 :::
 
-Modell herunterladen:
+Die Extensions `uuid-ossp`, `pg_trgm` und `unaccent` legt Migration `001`
+selbst an.
+
+### Build-Werkzeuge
+
+Unter Linux für die nativen Module (`bcrypt`, `pdf-parse`):
 
 ```bash
-ollama pull qwen2.5:7b
+sudo apt-get install -y build-essential
 ```
 
-Prüfe ob Ollama läuft:
-
-```bash
-curl http://localhost:11434/v1/models
-```
-
-## Telegram Bot erstellen
-
-1. Öffne Telegram und suche **@BotFather**
-2. Schreibe `/newbot`
-3. Wähle einen Namen (z.B. "PATIO Assistent")
-4. Wähle einen Username (z.B. "patio_assistent_bot")
-5. Kopiere den **Bot Token** — du brauchst ihn gleich
-
-::: tip Tipp
-Deaktiviere "Group Privacy" mit `/setprivacy` → Disabled, falls der Bot in Gruppen funktionieren soll.
-:::
-
-## Manuell: PATIO installieren
+### PATIO
 
 ```bash
 git clone https://github.com/julasim/patio.git
-cd PATIO/patio
-npm install
+cd patio
+npm ci
+npm run setup          # fragt WORKSPACE_PATH, DATABASE_URL, JWT_SECRET ab
+npm run build:all
+npm start
 ```
 
-## Manuell: Setup ausführen
+Die Migrationen laufen beim ersten Start mit.
 
-```bash
-npm run setup
-```
+---
 
-Der interaktive Installer erstellt:
-- `.env` Datei mit allen Konfigurationswerten
-- Agent-Workspace unter `WORKSPACE_PATH/Agents/Main/` (10 Markdown-Dateien)
+## Nach der Installation
 
-## Vault-Struktur
+Beim ersten Aufruf im Browser zeigt PATIO den Setup-Assistenten und legt das
+erste Admin-Konto an — sofern der Installer das nicht schon getan hat.
 
-Nach dem Setup sieht der Workspace so aus:
-
-```
-WORKSPACE_PATH/
-├── Agents/
-│   └── Main/
-│       ├── IDENTITY.md
-│       ├── SOUL.md
-│       ├── BOOT.md
-│       ├── BOOTSTRAP.md    ← wird nach Ersteinrichtung gelöscht
-│       ├── AGENTS.md
-│       ├── USER.md
-│       ├── TOOLS.md
-│       ├── MEMORY.md
-│       ├── HEARTBEAT.md
-│       └── MEMORY_LOGS/
-├── Inbox/                  ← hier landen Notizen
-├── Aufgaben/               ← hier landen Aufgaben
-└── Termine/                ← hier landen Termine
-```
+::: warning Ohne E-Mail-Versand keine Anmeldung
+Der Login verlangt einen Code per E-Mail. `SMTP_HOST` und die zugehörigen
+Werte müssen gesetzt und der Mailserver erreichbar sein.
+:::
 
 ## Nächste Schritte
 
-- [Einrichtung](/start/einrichtung) — Setup-Wizard via Telegram starten
-- [Betrieb](/betrieb/voraussetzungen) — Für Produktion auf einem Server
+- [Einrichtung](/start/einrichtung) — Konten, Branding, Team, Projekte
+- [Betrieb](/betrieb/voraussetzungen) — Produktivbetrieb im Büro
+- [Umgebungsvariablen](/konfiguration/env) — alles, was in die `.env` gehört

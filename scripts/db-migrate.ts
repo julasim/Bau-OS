@@ -7,7 +7,7 @@
 
 import "dotenv/config";
 import { DB_ENABLED } from "../src/config.js";
-import { runMigrations, migrationStatus, checkDbHealth, checkPgVector, closeDb } from "../src/db/index.js";
+import { runMigrations, migrationStatus, checkDbHealth, closeDb } from "../src/db/index.js";
 
 const command = process.argv[2] || "migrate";
 
@@ -25,9 +25,11 @@ try {
     console.log(`   Verbindung:  ${healthy ? "✅ OK" : "❌ Nicht erreichbar"}`);
 
     if (healthy) {
-      const hasVector = await checkPgVector();
-      console.log(`   pgvector:    ${hasVector ? "✅ Installiert" : "❌ Nicht installiert"}`);
-
+      // Die frueher hier ausgegebene pgvector-Zeile ist entfallen: PATIO kennt
+      // seit AP0 keine Embeddings mehr, das Schema legt keine Vektor-Objekte
+      // an und beide compose-Dateien laufen auf einem gewoehnlichen
+      // postgres:16. "❌ Nicht installiert" haette also den Sollzustand als
+      // Mangel gemeldet.
       const status = await migrationStatus();
       console.log(`\n📋 Migrations:`);
       for (const m of status) {
@@ -50,12 +52,9 @@ try {
       console.log("\n✅ Datenbank ist auf dem neuesten Stand");
     }
 
-    // pgvector pruefen
-    const hasVector = await checkPgVector();
-    if (!hasVector) {
-      console.warn("\n⚠️  pgvector Extension nicht gefunden!");
-      console.warn("   Fuehre aus: CREATE EXTENSION IF NOT EXISTS vector;");
-    }
+    // Die pgvector-Warnung ist entfallen. Sie erschien nach dem Umbau auf
+    // postgres:16 nach JEDEM erfolgreichen Lauf und riet zu einem Befehl
+    // (CREATE EXTENSION vector), der dort gar nicht ausfuehrbar ist.
   } else {
     console.error(`Unbekannter Befehl: ${command}`);
     console.error("Verfuegbar: migrate, status");

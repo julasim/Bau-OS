@@ -1,464 +1,282 @@
 # Troubleshooting
 
-Haeufige Probleme und Lösungen für PATIO im Produktivbetrieb.
-
-## Bot antwortet nicht
-
-### 1. Service prüfen
-
-```bash
-sudo systemctl status patio
-```
-
-Falls `inactive` oder `failed`:
-
-```bash
-sudo journalctl -u patio -n 50 --no-pager
-sudo systemctl restart patio
-```
-
-### 2. Ollama prüfen
-
-```bash
-sudo systemctl status ollama
-curl http://localhost:11434/v1/models
-```
-
-Falls Ollama nicht läuft:
-
-```bash
-sudo systemctl restart ollama
-# Warten bis das Modell geladen ist (ca. 10-30 Sek.)
-sleep 10
-sudo systemctl restart patio
-```
-
-### 3. Bot Token prüfen
-
-```bash
-grep BOT_TOKEN /home/patio/patio/.env
-```
-
-::: danger Token kompromittiert?
-Falls der Token oeffentlich wurde, erstelle sofort einen neuen bei @BotFather mit `/revoke` und aktualisiere die `.env`:
-```bash
-nano /home/patio/patio/.env
-sudo systemctl restart patio
-```
-:::
-
-### 4. Netzwerk prüfen
-
-```bash
-# Kann der Server Telegram erreichen?
-curl -s https://api.telegram.org/bot<DEIN_TOKEN>/getMe
-```
-
-Falls keine Verbindung: DNS oder Firewall prüfen.
-
-```bash
-# DNS-Aufloesung testen
-nslookup api.telegram.org
-
-# Ausgehende HTTPS-Verbindung testen
-curl -I https://api.telegram.org
-```
-
----
-
-## Ollama: Out of Memory
-
-Symptome: Bot antwortet extrem langsam oder gar nicht. In den Logs:
-
-```
-Error: model requires more memory than available
-```
-
-### Lösung 1: Kleineres Modell verwenden
-
-```bash
-ollama pull qwen2.5:3b
-```
-
-`.env` anpassen:
-
-```bash
-nano /home/patio/patio/.env
-# OLLAMA_MODEL=qwen2.5:3b
-sudo systemctl restart patio
-```
-
-### Lösung 2: Swap hinzufuegen
-
-```bash
-sudo fallocate -l 4G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
-```
-
-::: warning Swap ist langsam
-Swap auf SSD ist akzeptabel, aber deutlich langsamer als RAM. Besser: Server upgraden (z.B. CPX11 → CPX21).
-:::
-
-### Lösung 3: Server upgraden
-
-In der Hetzner Cloud Console: Server → Rescale → CPX21 (8 GB RAM) wählen. Erfordert kurzen Neustart.
-
----
-
-## Telegram Timeout / Fehler 409
-
-### Fehler 409: Conflict
-
-```
-Error: 409: Conflict: terminated by other getUpdates request
-```
-
-**Ursache:** Zwei Bot-Instanzen laufen gleichzeitig mit dem gleichen Token.
-
-```bash
-# Alle Node-Prozesse finden
-ps aux | grep node
-
-# Doppelte Instanzen beenden
-sudo systemctl stop patio
-pkill -f "node dist/index.js"
-sudo systemctl start patio
-```
-
-### Timeout-Fehler
-
-```
-Error: ETIMEOUT connecting to api.telegram.org
-```
-
-```bash
-# Netzwerk prüfen
-ping -c 3 api.telegram.org
-
-# DNS prüfen
-cat /etc/resolv.conf
-
-# Ggf. Google DNS setzen
-echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
-```
-
----
-
-## Build-Fehler nach Update
-
-### npm install schlaegt fehl
-
-```bash
-# Node Modules komplett neu installieren
-cd /home/patio/patio
-rm -rf node_modules package-lock.json
-npm install
-```
-
-### TypeScript-Kompilierungsfehler
-
-```bash
-# Node.js Version prüfen
-node --version
-# Muss v20.x.x sein
-
-# Falls zu alt:
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
-sudo apt-get install -y nodejs
-```
-
-### Permission-Fehler
-
-```bash
-# Eigentuemer prüfen
-ls -la /home/patio/patio/
-
-# Falls nötig, Eigentuemer korrigieren
-sudo chown -R patio:patio /home/patio/patio
-sudo chown -R patio:patio /home/patio/vault
-```
-
----
-
-## Heartbeat funktioniert nicht
-
-Der Heartbeat (geplante Nachrichten) wird über die `HEARTBEAT.md` Datei konfiguriert.
-
-### 1. HEARTBEAT.md prüfen
-
-```bash
-cat /home/patio/vault/Agents/Main/HEARTBEAT.md
-```
-
-::: warning Cron-Zeile erforderlich
-Die Datei **muss** eine Zeile mit `Cron:` enthalten, z.B.:
-```markdown
-Cron: 0 8 * * 1-5
-```
-Ohne diese Zeile wird kein Heartbeat ausgefuehrt.
-:::
-
-### 2. Nach Änderungen neu starten
-
-Heartbeat-Änderungen werden erst nach einem Neustart wirksam:
-
-```bash
-sudo systemctl restart patio
-```
-
-### 3. Cronjob in den Logs prüfen
-
-```bash
-sudo journalctl -u patio --since today | grep -i heartbeat
-```
-
----
-
-## Agent gibt falsche oder unpassende Antworten
-
-### SOUL.md prüfen
-
-Die Persönlichkeit des Agenten ist in `SOUL.md` definiert:
-
-```bash
-cat /home/patio/vault/Agents/Main/SOUL.md
-```
-
-Passe die Datei an, falls der Ton oder die Anweisungen nicht stimmen:
-
-```bash
-nano /home/patio/vault/Agents/Main/SOUL.md
-```
-
-::: tip Kein Neustart nötig
-Änderungen an `SOUL.md`, `BOOT.md` und anderen Agent-Dateien werden bei der nächsten Nachricht automatisch geladen. Kein Neustart erforderlich.
-:::
-
-### BOOT.md prüfen
-
-Die Startanweisungen für jeden Chat:
-
-```bash
-cat /home/patio/vault/Agents/Main/BOOT.md
-```
-
-### Tages-Log zurücksetzen
-
-Falls der Kontext durch einen fehlerhaften Tages-Log verunreinigt ist:
-
-```
-/clear
-```
-
-Dieser Befehl in Telegram loescht den Tages-Log und startet frisch.
-
-### Modell wechseln
-
-Falls das Modell grundsaetzlich unpassende Antworten gibt:
-
-```bash
-# Anderes Modell testen
-ollama pull llama3.1:8b
-
-# In .env ändern
-nano /home/patio/patio/.env
-# OLLAMA_MODEL=llama3.1:8b
-
-sudo systemctl restart patio
-```
-
----
-
-## Festplatte voll
-
-```bash
-# Plattennutzung prüfen
-df -h /
-
-# Größte Verzeichnisse finden
-du -sh /home/patio/* | sort -rh
-
-# Alte Backups aufräumen
-ls -lh /home/patio/backups/
-find /home/patio/backups/ -name "vault-*.tar.gz" -mtime +30 -delete
-
-# Alte Ollama-Modelle entfernen
-ollama list
-ollama rm nicht-benoetigtes-modell
-
-# Journal-Logs begrenzen
-sudo journalctl --vacuum-size=100M
-```
-
----
-
-## Login-Sperre (Rate Limiting)
-
-Symptom: HTTP 429 "Zu viele Login-Versuche" bei der Web-API.
-
-**Ursache:** Nach 5 fehlgeschlagenen Login-Versuchen wird die IP fuer 15 Minuten gesperrt.
-
-**Loesung:** 15 Minuten warten, dann erneut versuchen. Alternativ den Bot neu starten (setzt den Zaehler zurueck):
-
-```bash
-sudo systemctl restart patio
-```
-
----
-
-## Shell-Befehl nicht erlaubt
-
-Symptom: Agent meldet `Befehl "xyz" nicht erlaubt`.
-
-**Ursache:** PATIO verwendet eine **Allowlist** fuer Shell-Befehle. Nur ~40 definierte Befehle sind erlaubt.
-
-**Loesung:** Pruefen ob der Befehl in der Allowlist steht (`src/llm/executor.ts`). Falls ein zusaetzlicher Befehl benoetigt wird, diesen zur `ALLOWED_COMMANDS`-Liste hinzufuegen und neu builden:
-
-```bash
-cd /home/patio/patio
-nano src/llm/executor.ts    # Befehl zur ALLOWED_COMMANDS-Liste hinzufuegen
-npm run build
-sudo systemctl restart patio
-```
-
----
-
-## MCP-Server Verbindungsfehler
-
-Symptom: MCP-Tools nicht verfuegbar oder Fehlermeldung "nicht verbunden".
-
-```bash
-# MCP-Konfiguration pruefen
-cat /home/patio/patio/mcp.json
-
-# Bot-Logs auf MCP-Fehler pruefen
-sudo journalctl -u patio --since today | grep -i mcp
-```
-
-**Loesung:** MCP-Server in Telegram neu verbinden:
-
-```
-Nutze mcp_server_verbinden mit name="filesystem"
-```
-
-::: tip Automatischer Reconnect
-MCP-Server werden beim Bot-Start automatisch verbunden. Bei Problemen reicht oft ein Neustart: `sudo systemctl restart patio`
+Häufige Probleme und ihre Ursachen. Die Reihenfolge folgt der Häufigkeit,
+nicht der Dramatik.
+
+::: tip Erst Logs, dann raten
+Vor jeder Vermutung: frische Logs holen. `docker compose logs --since 2m
+app` beziehungsweise `journalctl -u patio -n 100`. PATIO ist bei
+Startfehlern ausgesprochen redselig — die Meldung nennt fast immer die
+Ursache.
 :::
 
 ---
 
-## Path-Traversal blockiert
+## Der Dienst startet nicht
 
-Symptom: Datei-Operationen geben `null` oder "Pfad ungueltig" zurueck.
+PATIO bricht bei fehlender Pflicht-Konfiguration **absichtlich** mit
+Exit-Code 1 ab. Ein Dienst, der ohne sie hochkommt, sieht für Docker und
+systemd gesund aus und ist trotzdem tot.
 
-**Ursache:** Der Path-Traversal-Schutz blockiert Pfade die ausserhalb des Vaults liegen (z.B. `../../etc/passwd`).
+| Meldung im Log | Ursache | Abhilfe |
+|---|---|---|
+| `WORKSPACE_PATH fehlt in .env` | Dokumentenverzeichnis nicht gesetzt | `WORKSPACE_PATH` eintragen |
+| `DATABASE_URL fehlt in .env` | Keine Datenbank konfiguriert | `DATABASE_URL` eintragen; im Compose-Aufbau `POSTGRES_*` prüfen |
+| `die Datenbank antwortet nicht` | Postgres läuft nicht oder Zugangsdaten falsch | siehe unten |
+| `JWT_SECRET fehlt in .env` | Kein Secret gesetzt | `openssl rand -base64 48` |
+| `JWT_SECRET zu kurz` | Unter 32 Zeichen bei `NODE_ENV=production` | längeres Secret setzen |
 
-**Loesung:** Nur relative Pfade innerhalb des Vaults verwenden:
-- Korrekt: `Projekte/Alpha/README.md`
-- Blockiert: `../../../etc/passwd`
-- Blockiert: `/absolute/pfade`
+::: warning Aus dem falschen Verzeichnis gestartet
+`docker compose` findet die `.env` nur, wenn es aus dem Projektverzeichnis
+läuft. Aus dem Home-Verzeichnis aufgerufen kommen Warnungen der Art
+`variable is not set` und anschließend `role "..." does not exist`. Nicht
+die Datenbank ist kaputt — der Pfad ist falsch.
+:::
 
 ---
 
-## Datenbank-Probleme
+## Datenbank nicht erreichbar
 
-### DB nicht erreichbar beim Start
-
-```
-[DB] DATABASE_URL ist gesetzt aber die DB antwortet nicht.
-```
-
-PATIO beendet sich mit Exit-Code 1 wenn `DATABASE_URL` gesetzt ist aber die DB nicht antwortet.
-
-Prüfen:
 ```bash
-# PostgreSQL läuft?
+# Docker
+docker compose ps
+docker compose logs postgres --tail 50
+docker compose exec postgres pg_isready -U patio
+
+# Bare Metal
 systemctl status postgresql
-
-# Verbindung testen
-psql "$DATABASE_URL" -c "SELECT 1"
+psql "$DATABASE_URL" -c "SELECT 1;"
 ```
 
-Lösung: PostgreSQL starten oder `DATABASE_URL` aus `.env` entfernen (→ Filesystem-Modus).
+Häufige Ursachen:
 
-### Embedding-Dimensions Mismatch
+- Der Postgres-Container ist noch nicht `healthy`, wenn `app` startet. Das
+  `depends_on` mit `condition: service_healthy` deckt den Normalfall ab; nach
+  einem Stromausfall kann die Datenbank länger für die Wiederherstellung
+  brauchen. `restart: always` fängt das ab — im Log stehen dann ein bis zwei
+  fehlgeschlagene Startversuche.
+- Passwort in der `.env` geändert, aber das Datenbank-Volume ist alt.
+  `POSTGRES_PASSWORD` wirkt **nur beim allerersten Anlegen** des Volumes.
+  Danach muss das Passwort in der Datenbank selbst geändert werden.
+- Migrationen hängen. Der Runner nimmt einen Advisory-Lock; ein hart
+  abgeschossener Prozess kann ihn kurzzeitig halten. Neustart.
 
-```
-[DB] Embedding-Dimensionen stimmen nicht überein
-```
+---
 
-Das konfiguriete Modell liefert andere Dimensionen als das DB-Schema erwartet. Kein Bot-Absturz — nur Embeddings deaktiviert.
+## Änderung an der .env wirkt nicht
 
-Lösung: Migration schreiben oder Embedding-Tabellen leeren + neu befüllen:
+`docker compose restart` liest die `.env` **nicht** neu ein.
+
 ```bash
-npm run db:embed
+docker compose up -d --force-recreate app
+docker compose exec app sh -c 'echo $APP_URL'
+```
+
+Bei systemd genügt `sudo systemctl restart patio` — die Unit liest
+`EnvironmentFile` bei jedem Start neu.
+
+::: warning Zwei Werte lassen sich nicht per .env ändern
+`docker-compose.yml` setzt `DATABASE_URL` und `WORKSPACE_PATH` im
+`environment:`-Block. Was dort steht, überschreibt die `.env` immer. Wer
+diese Werte ändern will, muss die Compose-Datei anpassen.
+:::
+
+---
+
+## Niemand kann sich anmelden
+
+Der Login verlangt nach Benutzername und Passwort einen 6-stelligen Code per
+E-Mail. Kommt keine Mail an, ist der Zugang zu.
+
+```bash
+# Kommt die Anwendung an den Mailserver?
+docker compose exec app sh -c 'echo $SMTP_HOST'
+docker compose logs app | grep -i -E "smtp|login.email"
+```
+
+| Symptom | Ursache |
+|---|---|
+| HTTP 502, „Login-Code konnte nicht zugestellt werden" | SMTP nicht erreichbar oder Zugangsdaten falsch |
+| Kein Code, aber Erfolgsmeldung | `SMTP_HOST` leer — der Code steht dann nur im Server-Log |
+| „Kein aktiver Code" | Der Code ist abgelaufen; der Login muss neu gestartet werden |
+| „Zu viele Fehlversuche" | Der Code wurde zu oft falsch eingegeben; Login neu starten |
+
+::: tip Notfall-Zugang
+Steht der Mailversand still, findet sich der erzeugte Code im Server-Log,
+solange `SMTP_HOST` leer ist. Das ist ein Notbehelf für die Inbetriebnahme,
+kein Betriebszustand — im Log liest ihn jeder mit, der Logzugriff hat.
+:::
+
+---
+
+## Anmeldung gesperrt (HTTP 429)
+
+Nach 5 fehlgeschlagenen Versuchen ist die IP 15 Minuten gesperrt. Die Zähler
+liegen im Arbeitsspeicher des Prozesses:
+
+```bash
+docker compose restart app       # setzt die Zähler zurück
+```
+
+Der globale Rate-Limit (600 Anfragen pro Minute und IP) greift im normalen
+Betrieb nicht. Schlägt er zu, obwohl nur wenige Personen arbeiten, steht
+vermutlich ein Proxy davor, der alle Anfragen unter derselben IP zeigt —
+dann muss er `X-Forwarded-For` korrekt setzen.
+
+---
+
+## Live-Updates kommen nicht an
+
+Änderungen anderer Arbeitsplätze erscheinen erst nach dem Neuladen.
+
+Ursache ist fast immer der Reverse-Proxy: er puffert die SSE-Verbindung
+`/api/events`. Bei Caddy:
+
+```caddyfile
+@stream path /api/events*
+reverse_proxy @stream app:3000 {
+    flush_interval -1
+    transport http { read_timeout 24h  write_timeout 24h }
+}
+```
+
+Bei nginx entsprechend `proxy_buffering off;` und ein großzügiges
+`proxy_read_timeout`.
+
+Prüfen, ob überhaupt jemand verbunden ist:
+
+```bash
+docker compose logs app | grep -i -E "sse|events"
 ```
 
 ---
 
-## MCP-Probleme
+## Upload schlägt fehl
 
-### MCP-Server startet nicht
+| Symptom | Ursache |
+|---|---|
+| „Kein Zugriff auf die Datei bzw. den Ordner" (403) | Dateirechte am Workspace-Verzeichnis |
+| „Kein Speicherplatz mehr auf dem Server" (507) | Platte voll |
+| Datei wird abgelehnt | Endung nicht erlaubt oder Inhalt passt nicht zur Endung |
+| Datei zu groß | über `MAX_UPLOAD_MB` (Standard 50) |
 
-Prüfen ob der Befehl in `mcp.json` stimmt:
+Rechte prüfen und richten:
+
 ```bash
-npx @modelcontextprotocol/server-filesystem /pfad/zum/vault
+ls -la /opt/patio-workspace
+sudo chown -R 1000:1000 /opt/patio-workspace    # Container läuft als UID 1000
 ```
 
-PATIO versucht bei Absturz automatisch 3 Reconnects (5/10/15 Sekunden Backoff). Danach Log-Eintrag `[MCP] Reconnect failed`.
+Bei systemd zusätzlich `ReadWritePaths` in der Unit prüfen —
+`ProtectSystem=strict` macht alles andere schreibgeschützt.
+
+Erlaubte Endungen: `pdf`, `docx`, `doc`, `xlsx`, `xls`, `csv`, `txt`, `md`,
+`png`, `jpg`, `jpeg`, `gif`, `webp`, `zip`, `json`, `xml`. Zusätzlich prüft
+PATIO die Magic Bytes: eine als `.png` getarnte HTML-Datei wird abgelehnt.
 
 ---
 
-## LLM-Probleme
+## Suche findet nichts oder wirft einen Fehler
 
-### Modell ignoriert tool_choice=required
+Die Volltextsuche filtert auf die sichtbaren Projekte. Zwei typische Fälle:
 
-```
-⚠️ Das Modell hat 3x behauptet, die Aktion ausgeführt zu haben, aber keinen Tool-Call gemacht
-```
+- **Ein Benutzer findet weniger als ein Admin.** Das ist beabsichtigt — er
+  sieht nur zugewiesene Projekte.
+- **Fehler `operator does not exist: uuid = text`.** Ein fehlender
+  Typ-Cast in einer Suchabfrage. Tritt ausschließlich bei Nicht-Admins auf,
+  weil Admins gar nicht gefiltert werden — deshalb fällt so etwas beim Test
+  mit einem Admin-Konto nie auf.
 
-Das aktive Modell unterstützt Function-Calling nicht zuverlässig.
+---
 
-Lösung: Größeres Modell verwenden:
-```
-/model qwen2.5:14b
-```
-
-Oder in OpenAI-Modus wechseln (OPENAI_API_KEY setzen).
-
-### Ollama nicht erreichbar (im Ollama-Modus)
+## Antwort dauert zu lange (HTTP 503)
 
 ```
-Error: connect ECONNREFUSED 127.0.0.1:11434
+Die Anfrage hat zu lange gedauert. Bitte den Umfang eingrenzen.
 ```
+
+Eine Abfrage lief in das `statement_timeout` von PostgreSQL (SQLSTATE
+57014). Meist eine sehr breite Suche oder eine Portfolio-Auswertung über
+viele Projekte. Kurzfristig: Suchbegriff eingrenzen. Mittelfristig: die
+Umstellung der Suche von `ILIKE` auf `tsvector` steht als eigenes
+Arbeitspaket an.
+
+Kommt stattdessen „Datenbank derzeit nicht erreichbar" (SQLSTATE 53300),
+sind die Verbindungen aufgebraucht:
 
 ```bash
-# Ollama starten
-ollama serve
+docker compose exec postgres \
+  psql -U patio -d patio -c "SELECT count(*) FROM pg_stat_activity;"
+```
 
-# Oder als Service
-systemctl start ollama
-systemctl enable ollama
+---
+
+## Migrationen
+
+```bash
+docker compose exec app npm run db:status
+```
+
+Zu beachten:
+
+- **Forward-only.** Es gibt keinen Rückweg. Vor jedem Update ein Backup.
+- **Kein Prüfsummen-Tracking.** Der Runner merkt sich Dateinamen. Eine
+  bereits angewendete Migration nachträglich zu ändern bleibt folgenlos —
+  und führt zu Systemen, die auf demselben Stand behaupten zu sein und es
+  nicht sind.
+- **Doppelte Nummern.** `005` und `006` existieren je zweimal. Historisch
+  gewachsen, unproblematisch — der Runner arbeitet nach Dateinamen.
+
+---
+
+## Fehler nach dem Bauen
+
+```bash
+# Abhängigkeiten sauber neu holen
+cd /opt/patio
+rm -rf node_modules
+npm ci
+
+# Node-Version prüfen
+node --version    # 24.x erwartet
+```
+
+Nach einem Wechsel der Node-Hauptversion muss `npm ci` durchlaufen: `bcrypt`
+ist ein natives Modul und wird gegen die installierte Version kompiliert.
+
+---
+
+## Platte voll
+
+```bash
+df -h /
+du -sh /opt/patio-backups /opt/patio-workspace /opt/patio/logs
+
+# Datenbankgröße
+docker compose exec postgres \
+  psql -U patio -d patio -c "SELECT pg_size_pretty(pg_database_size('patio'));"
+
+# Alte Backups
+find /opt/patio-backups -name 'patio-backup-*.tar.gz' -mtime +30 -delete
+
+# Journal begrenzen
+sudo journalctl --vacuum-size=200M
+
+# Ungenutzte Docker-Images
+docker image prune -a
 ```
 
 ---
 
 ## Schnelldiagnose
 
-Kopiere diesen Block und führe ihn auf dem Server aus:
-
 ```bash
-echo "=== Schnelldiagnose ==="
-echo "Bot:     $(systemctl is-active patio)"
-echo "Ollama:  $(systemctl is-active ollama)"
-echo "Node:    $(node --version 2>/dev/null || echo 'FEHLT')"
-echo "RAM:     $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
-echo "Disk:    $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
-echo "Uptime:  $(uptime -p)"
-echo "Vault:   $(ls /home/patio/vault/Agents/Main/IDENTITY.md 2>/dev/null && echo 'OK' || echo 'FEHLT')"
-echo "Fehler:  $(journalctl -u patio -p err --since '1 hour ago' --no-pager 2>/dev/null | wc -l) in letzter Stunde"
-echo "========================"
+echo "=== PATIO Schnelldiagnose ==="
+echo "Container: $(docker compose -f /opt/patio/docker-compose.yml ps --format '{{.Name}} {{.State}}' | tr '\n' ' ')"
+echo "Health:    $(curl -s localhost:3000/api/health || echo 'keine Antwort')"
+echo "Node:      $(node --version 2>/dev/null || echo 'nicht installiert')"
+echo "RAM:       $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
+echo "Disk:      $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
+echo "Backup:    $(find /opt/patio-backups -name 'patio-backup-*.tar.gz' -mtime -1 | wc -l) aus 24 h"
+echo "Fehler:    $(grep -c '\"level\":\"error\"' /opt/patio/logs/bot.jsonl 2>/dev/null || echo '?') im JSONL-Log"
 ```

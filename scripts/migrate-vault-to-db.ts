@@ -1,23 +1,40 @@
 #!/usr/bin/env tsx
 // ============================================================
-// PATIO — Vault → Datenbank Migration
-// Liest alle Daten aus dem Filesystem-Vault und importiert sie
-// in die PostgreSQL-Datenbank.
+// PATIO — Einmal-Import: Datei-Ablage → Datenbank
 //
-// Aufruf: npx tsx scripts/migrate-vault-to-db.ts
-//         npm run db:import
+// Liest eine alte, dateibasierte Ablage (Projekte/, Inbox/, data/*.json)
+// und schreibt sie in die PostgreSQL-Datenbank. Gedacht fuer die
+// Uebernahme gewachsener Bestaende — etwa aus der Zeit vor dem Umbau zum
+// Firmenserver oder aus PATIO Desktop (apps/patio-app-lokal).
+//
+// Der laufende Betrieb braucht dieses Skript NICHT: seit AP0 gibt es
+// keinen Filesystem-Modus mehr, alle Daten entstehen direkt in der DB.
+//
+// Aufruf: npx tsx scripts/migrate-vault-to-db.ts [ABLAGE-PFAD]
+//         npm run db:import -- /pfad/zur/alten/ablage
+//
+// Ohne Argument wird WORKSPACE_PATH aus der .env genommen.
+//
+// WARUM DAS SKRIPT VORHER GAR NICHT LIEF:
+// Es importierte `VAULT_PATH` aus src/config.ts — diesen Export gibt es
+// nicht (der Schluessel heisst dort WORKSPACE_PATH). Node brach beim Start
+// mit "does not provide an export named 'VAULT_PATH'" ab. Aufgefallen ist
+// das nie, weil tsconfig.json nur src/**/* prueft und scripts/ damit weder
+// von `tsc --noEmit` noch von der CI gesehen wird.
 //
 // Voraussetzungen:
 //   - DATABASE_URL in .env gesetzt
-//   - Migrations bereits ausgefuehrt (npm run db:migrate)
-//   - Vault-Daten vorhanden
+//   - Migrationen bereits ausgefuehrt (npm run db:migrate)
+//
+// Der Import ist wiederholbar: bereits vorhandene Datensaetze werden
+// anhand von Name/Text/Datum erkannt und uebersprungen.
 // ============================================================
 
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { DB_ENABLED, VAULT_PATH } from "../src/config.js";
+import { DB_ENABLED, WORKSPACE_PATH } from "../src/config.js";
 import { getDb, checkDbHealth, closeDb } from "../src/db/index.js";
 
 // ── Validierung ─────────────────────────────────────────────
@@ -27,10 +44,21 @@ if (!DB_ENABLED) {
   process.exit(1);
 }
 
-if (!VAULT_PATH || !fs.existsSync(VAULT_PATH)) {
-  console.error("❌ VAULT_PATH nicht gesetzt oder existiert nicht:", VAULT_PATH);
+// Erstes Argument schlaegt die .env — so laesst sich eine fremde Ablage
+// importieren, ohne die Konfiguration des laufenden Dienstes zu aendern.
+const SOURCE_PATH = process.argv[2] || WORKSPACE_PATH || "";
+
+if (!SOURCE_PATH || !fs.existsSync(SOURCE_PATH)) {
+  console.error("❌ Ablage-Pfad nicht angegeben oder nicht vorhanden:", SOURCE_PATH || "(leer)");
+  console.error("   Aufruf: npm run db:import -- /pfad/zur/alten/ablage");
+  console.error("   Alternativ WORKSPACE_PATH in der .env setzen.");
   process.exit(1);
 }
+
+// data/*.json (globale Aufgaben, Termine, Team) lagen frueher im
+// Installationsverzeichnis, nicht in der Ablage. Zweites Argument erlaubt
+// einen abweichenden Ort.
+const DATA_DIR = process.argv[3] || path.join(process.cwd(), "data");
 
 // ── Hilfsfunktionen ─────────────────────────────────────────
 
@@ -115,8 +143,9 @@ try {
     process.exit(1);
   }
 
-  console.log("\n🔄 Vault → Datenbank Migration");
-  console.log(`   Vault: ${VAULT_PATH}`);
+  console.log("\n🔄 Datei-Ablage → Datenbank");
+  console.log(`   Quelle:      ${SOURCE_PATH}`);
+  console.log(`   data/*.json: ${DATA_DIR}`);
   console.log("");
 
   let totalProjects = 0;
@@ -129,7 +158,7 @@ try {
   // ── 1. Projekte ─────────────────────────────────────────
 
   console.log("📁 Projekte migrieren...");
-  const projektePath = path.join(VAULT_PATH, "Projekte");
+  const projektePath = path.join(SOURCE_PATH, "Projekte");
   const projectNames = listDirs(projektePath);
   const projectIds = new Map<string, string>();
 
@@ -159,7 +188,7 @@ try {
   skipped = 0;
 
   // Globale Tasks aus data/tasks.json
-  const globalTasksPath = path.join(process.cwd(), "data", "tasks.json");
+  const globalTasksPath = path.join(DATA_DIR, "tasks.json");
   const globalTasks = readJsonSafe<VaultTask[]>(globalTasksPath) || [];
 
   // Projekt-Tasks
@@ -207,7 +236,7 @@ try {
   console.log("📅 Termine migrieren...");
   skipped = 0;
 
-  const globalTerminePath = path.join(process.cwd(), "data", "termine.json");
+  const globalTerminePath = path.join(DATA_DIR, "termine.json");
   const globalTermine = readJsonSafe<VaultTermin[]>(globalTerminePath) || [];
 
   const allTermine: { termin: VaultTermin; projectName?: string }[] = globalTermine.map((t) => ({ termin: t }));
@@ -253,7 +282,7 @@ try {
   skipped = 0;
 
   // Inbox-Notizen
-  const inboxPath = path.join(VAULT_PATH, "Inbox");
+  const inboxPath = path.join(SOURCE_PATH, "Inbox");
   const inboxFiles = listMdFiles(inboxPath);
   const allNotes: { filepath: string; projectName?: string }[] = inboxFiles.map((f) => ({
     filepath: path.join(inboxPath, f),
@@ -304,7 +333,7 @@ try {
   console.log("👥 Team migrieren...");
   skipped = 0;
 
-  const teamPath = path.join(process.cwd(), "data", "team.json");
+  const teamPath = path.join(DATA_DIR, "team.json");
   const team = readJsonSafe<VaultTeamMember[]>(teamPath) || [];
 
   for (const member of team) {

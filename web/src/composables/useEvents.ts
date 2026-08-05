@@ -9,11 +9,21 @@ export const connectionError = ref<string | null>(null);
 
 export type EventType = "task" | "termin" | "note" | "project" | "file" | "team";
 
+/**
+ * Ein Live-Ereignis sagt nur, WAS sich geaendert hat — nie, wie es aussieht.
+ * Es gibt bewusst kein Inhaltsfeld: der Kanal ging frueher ungefiltert an
+ * jeden angemeldeten Client, samt beliebiger Nutzdaten. Wer den Inhalt
+ * braucht, laedt ueber die regulaere Route nach; die filtert nach Rechten.
+ *
+ * `projectId` ersetzt das fruehere `project` (Name): der Server filtert die
+ * Zustellung ueber die Projekt-UUID, und die gehoert damit auch ins DTO.
+ * Fehlt sie oder ist sie null, ist der Datensatz projektlos.
+ */
 export interface DataEvent {
   type: EventType;
   action: "created" | "updated" | "deleted" | "completed";
   id?: string;
-  project?: string | null;
+  projectId?: string | null;
   timestamp: string;
 }
 

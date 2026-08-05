@@ -73,6 +73,11 @@ for (const f of FIELDS) {
   for (const row of rows) {
     total++;
     const val = String(row.val);
+    // Die Query liefert id/val bewusst als `unknown` (der Spaltenname steht
+    // erst zur Laufzeit fest). Fuer die WHERE-Klausel unten braucht
+    // postgres.js einen konkreten Bind-Typ — die id-Spalten sind UUID oder
+    // TEXT, String() ist dafuer verlustfrei.
+    const rowId = String(row.id);
     if (!needsReencrypt(val)) {
       skipped++;
       continue;
@@ -80,7 +85,7 @@ for (const f of FIELDS) {
     const plain = decryptString(val);
     if (plain === null) {
       failed++;
-      console.warn(`  ❗ ${f.table}.${f.col} ${f.idCol}=${row.id}: nicht entschluesselbar — uebersprungen (nichts geschrieben).`);
+      console.warn(`  ❗ ${f.table}.${f.col} ${f.idCol}=${rowId}: nicht entschluesselbar — uebersprungen (nichts geschrieben).`);
       continue;
     }
     const reenc = encryptString(plain);
@@ -89,7 +94,7 @@ for (const f of FIELDS) {
     // aber niemals null in die Spalte schreiben — das waere Datenverlust.
     if (reenc === null) {
       failed++;
-      console.warn(`  ❗ ${f.table}.${f.col} ${f.idCol}=${row.id}: Re-Encryption ergab null — uebersprungen (nichts geschrieben).`);
+      console.warn(`  ❗ ${f.table}.${f.col} ${f.idCol}=${rowId}: Re-Encryption ergab null — uebersprungen (nichts geschrieben).`);
       continue;
     }
     if (!DRY) {
@@ -99,16 +104,16 @@ for (const f of FIELDS) {
       // "geueberholt" zaehlen (kein Fehler).
       const result = await db`
         UPDATE ${db(f.table)} SET ${db(f.col)} = ${reenc}
-         WHERE ${db(f.idCol)} = ${row.id} AND ${db(f.col)} = ${val}
+         WHERE ${db(f.idCol)} = ${rowId} AND ${db(f.col)} = ${val}
       `;
       if (result.count === 0) {
         overtaken++;
-        console.warn(`  ⏭  ${f.table}.${f.col} ${f.idCol}=${row.id}: zwischenzeitlich geaendert — uebersprungen (geueberholt).`);
+        console.warn(`  ⏭  ${f.table}.${f.col} ${f.idCol}=${rowId}: zwischenzeitlich geaendert — uebersprungen (geueberholt).`);
         continue;
       }
     }
     migrated++;
-    console.log(`  ${DRY ? "[dry] " : "✓ "}${f.table}.${f.col} ${f.idCol}=${row.id} umgeschluesselt.`);
+    console.log(`  ${DRY ? "[dry] " : "✓ "}${f.table}.${f.col} ${f.idCol}=${rowId} umgeschluesselt.`);
   }
 }
 

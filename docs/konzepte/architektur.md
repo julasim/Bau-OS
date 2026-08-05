@@ -1,171 +1,156 @@
 # Architektur
 
-PATIO besteht aus fünf Schichten: **Telegram** (Interface), **Web-API + Frontend** (Browser-Interface), **Agent Runtime** (Logik), **LLM** (Intelligenz) und **Datenschicht** (Speicher — Filesystem oder PostgreSQL).
+PATIO besteht aus drei Schichten: der **Vue-Oberfläche** im Browser, der
+**Hono-API** als einzigem Dienst und **PostgreSQL** als Speicher. Dokumente
+liegen daneben als echte Dateien im Dateisystem.
 
 ## Datenfluss
 
 ```
-[Telegram Bot (grammY)]       [Vue 3 Frontend]
-        |                            |
-        v                            v
-[Session Queue]            [Hono HTTP-API + JWT]
-  serialisiert pro                   |
-  Chat-ID                            |
-        |                            |
-        +------------ + ------------+
-                       |
-                       v
-          [processAgent / processMessage]
-           Agent-Runtime (src/llm/runtime.ts)
-                       |
-          ┌────────────┼────────────┐
-          v            v            v
-     [Built-in    [Dynamic      [MCP Tools
-      Tools]       Tools]        (stdio)]
-      src/llm/     tools/        mcp.json
-      handlers/    *.json+*.js
-          |
-          v
-   [OpenAI SDK Client]
-   OpenAI oder Ollama-Endpunkt
-          |
-          v
-   [Data Layer — src/data/index.ts]
-   ┌──────────────┬──────────────┐
-   v              v              v
-[PostgreSQL]  [Filesystem]   [Chat-Log]
- db-*.ts       fs-*.ts       immer FS
- src/db/       workspace/    (JSONL)
+        Arbeitsplätze im Büro-LAN
+        (Browser, Vue-3-Anwendung)
+                    │
+                    │  HTTPS
+                    ▼
+            [ Reverse-Proxy ]
+                    │
+                    ▼
+    ┌───────────────────────────────────┐
+    │  Hono-API (src/api/server.ts)     │
+    │  · JWT-Auth, Rate-Limit, CORS     │
+    │  · Routes je Domäne               │
+    │  · SSE-Kanal für Live-Updates     │
+    └────────────┬──────────────────────┘
+                 │
+                 ▼
+    ┌───────────────────────────────────┐
+    │  Datenschicht (src/data/index.ts) │
+    │  · ein Repository je Domäne       │
+    │  · Sichtbarkeit via access.ts     │
+    └────────┬──────────────────┬───────┘
+             │                  │
+             ▼                  ▼
+      [ PostgreSQL ]     [ Dateisystem ]
+      Projekte, Notizen,  WORKSPACE_PATH:
+      Aufgaben, Termine,  hochgeladene
+      Team, Metadaten     Dokumente
 ```
 
-### Ablauf einer Telegram-Nachricht
+Es gibt **keine ausgehende Verbindung** im Betrieb — abgesehen vom
+SMTP-Server für die Anmeldecodes, der im eigenen Netz stehen sollte.
 
-1. **Telegram** empfängt die Nachricht, Bot prüft Zugriffskontrolle (Auto-Owner / ALLOWED_CHAT_IDS)
-2. **Session Queue** reiht sie ein — eine Nachricht pro Chat-ID gleichzeitig
-3. **Agent Runtime** lädt den Workspace (MD-Dateien) als System-Prompt + letzte N Gesprächseinträge
-4. **Action Detection** prüft ob die Anfrage eine Aktion ist — falls ja, wird `antworten` in Runde 1 gefiltert
-5. **LLM** generiert Tool-Aufrufe in einem Agentic Loop (bis zu `MAX_TOOL_ROUNDS`)
-6. **Tools** führen Aktionen aus (Notiz speichern, Termin anlegen, Semantische Suche, etc.)
-7. **Antwort** via `antworten`-Tool zurück an Telegram
+### Ablauf einer Anfrage
+
+1. Der Browser schickt die Anfrage mit dem JWT im `Authorization`-Header.
+2. Der globale Rate-Limit prüft die IP (Standard: 600 Anfragen pro Minute).
+3. `authMiddleware` prüft das Token und legt `userId`, `userRole` und
+   `dbUser` in den Hono-Kontext.
+4. Die Route lädt über `src/data/index.ts` — und nur darüber.
+5. Das Repository filtert über `getVisibleProjectIds()` auf die für diesen
+   Benutzer sichtbaren Projekte. Admins bekommen den Sentinel `"all"` und
+   damit keinen Filter.
+6. Schreibende Routen melden die Änderung an den Event-Bus. Der stellt sie
+   allen SSE-Abonnenten zu, deren Sichtbarkeits-Kontext sie abdeckt — ohne
+   Inhalte, nur „was hat sich geändert". Der Client lädt über die reguläre
+   Route nach.
 
 ## Modulstruktur
 
 ```
 src/
-|-- index.ts              Einstiegspunkt — DB-Init, Bot, Heartbeat, API
-|-- bot.ts                Telegram-Bot: Commands, Nachrichten-Routing, Upload-Handler
-|-- config.ts             Zentrale Konfiguration (Konstanten + Pfade)
-|-- format.ts             Markdown → Telegram HTML Konverter
-|-- queue.ts              Message-Serialisierung pro Chat-ID
-|-- logger.ts             File-Logging (bot.log, max 500 Zeilen)
-|-- heartbeat.ts          Cron-basierte periodische Agent-Runs
-|-- tools.ts              Dynamic Tools: laden, erstellen, löschen
-|-- mcp.ts                MCP-Server: stdio-Transport, Tool-Proxy, Reconnect
-|-- web.ts                webseite_lesen-Tool mit SSRF-Schutz
-|-- commands/
-|   +-- system.ts         Alle /slash-Commands
-|-- llm/
-|   |-- client.ts         OpenAI-Client, Model-State, buildDateLine()
-|   |-- tools.ts          Tool-Definitionen aggregiert (built-in + dynamic + MCP)
-|   |-- handlers/         Handler-Module je Domäne (notes, tasks, agents, ...)
-|   |-- executor.ts       Tool-Ausführung (Router)
-|   |-- runtime.ts        Agent-Loop: processAgent(), processBtw()
-|   |-- compaction.ts     Log-Komprimierung (runCompaction, compactNow)
-|   |-- actions.ts        Action-Detection, TOOL_SKIP_CORRECTION, Retry-Logik
-|   |-- whitelist.ts      Tool-Whitelist für System-Prompt
-|   +-- setup.ts          Setup-Wizard + State
-|-- workspace/
-|   |-- helpers.ts        safePath(), atomicWriteSync(), Frontmatter-Utils
-|   |-- notes.ts          Notizen-CRUD (FS)
-|   |-- tasks.ts          Aufgaben-CRUD (FS)
-|   |-- termine.ts        Termine-CRUD (FS)
-|   |-- projects.ts       Projekte (FS)
-|   |-- files.ts          Datei-Operationen (FS)
-|   |-- search.ts         Vault-Volltextsuche
-|   |-- agents.ts         Agent-Workspace: laden, Compaction-Lock, History-Parser
-|   +-- index.ts          Barrel Re-Exports
-|-- data/
-|   |-- index.ts          Factory: wählt DB- oder FS-Implementierung
-|   |-- types.ts          Shared Interfaces (Task, Termin, Note, Project, ...)
-|   |-- db-notes.ts       Notes → PostgreSQL
-|   |-- db-tasks.ts       Tasks → PostgreSQL
-|   |-- db-termine.ts     Termine → PostgreSQL
-|   |-- db-team.ts        Team → PostgreSQL
-|   |-- db-files.ts       Files → PostgreSQL (bytea)
-|   |-- db-projects.ts    Projects → PostgreSQL
-|   |-- fs-notes.ts       Notes → Markdown-Filesystem
-|   |-- fs-tasks.ts       Tasks → JSONL-Filesystem
-|   |-- fs-chat.ts        Chat-History → JSONL (immer FS, cap: 10k Zeilen)
-|   +-- fs-agent-logs.ts  Agent-Logs → JSONL (immer FS, cap: 5k Zeilen)
-|-- db/
-|   |-- client.ts         PostgreSQL-Pool (postgres.js)
-|   |-- migrate.ts        SQL-Migrations-Runner (idempotent)
-|   |-- embeddings.ts     Auto-Embed beim Speichern (OpenAI / nomic-embed-text)
-|   |-- semantic-search.ts Vector-, Hybrid- und Text-Suche
-|   +-- migrations/       NNN_name.sql Migrations-Dateien
-+-- api/
-    |-- server.ts         Hono HTTP-Server, CORS, Security-Headers, JWT-Auth
-    |-- auth.ts           JWT-Middleware, Login-Rate-Limit
-    |-- realtime-bridge.ts Supabase Realtime → Bot-Notifications
-    +-- routes/
-        |-- notes.ts      REST: /notes
-        |-- tasks.ts      REST: /tasks
-        |-- termine.ts    REST: /termine
-        |-- projects.ts   REST: /projects
-        |-- files.ts      REST: /files (Upload + Download)
-        |-- team.ts       REST: /team
-        |-- agents.ts     REST: /agents
-        |-- chat.ts       SSE: /chat (Agentic Loop im Browser)
-        |-- search.ts     REST: /search
-        |-- dashboard.ts  REST: /dashboard
-        +-- settings.ts   REST: /settings (Passwort ändern)
+├── index.ts       Boot: .env → Datenbank → API → Wartungs-Cron
+├── config.ts      alle Konstanten und Umgebungsvariablen
+├── logger.ts      Konsole + Textlog + JSONL, nicht blockierend
+├── maintenance.ts täglicher Cron (Audit-Retention, abgelaufene Tokens)
+├── api/
+│   ├── server.ts        Hono-App, Login-Kette, Middleware, statische Auslieferung
+│   ├── auth.ts          JWT, Benutzer, E-Mail-Codes, Anmelde-Links
+│   ├── crypto.ts        Feld-Verschlüsselung (AES-GCM)
+│   ├── events.ts        Event-Bus mit Rechtefilter
+│   ├── sse-tickets.ts   Einmal-Tickets für den SSE-Aufbau
+│   ├── file-validation.ts  Endung + Magic Bytes bei Uploads
+│   ├── email.ts         SMTP-Versand
+│   └── routes/          24 Route-Dateien je Domäne
+├── data/
+│   ├── index.ts   einzige Import-Fläche für alle Repositories
+│   ├── access.ts  Sichtbarkeit und ACL
+│   ├── types.ts   Entities und Repository-Verträge
+│   └── db-*.ts    21 Postgres-Repositories
+├── db/
+│   ├── client.ts  Verbindungspool (postgres.js)
+│   ├── migrate.ts Migrations-Runner mit Advisory-Lock
+│   └── migrations/ nummerierte SQL-Dateien, forward-only
+├── workspace/     echter Dateizugriff (safePath, lesen/schreiben, PDF/DOCX-Extraktion)
+└── export/        DOCX-Erzeugung aus Word-Vorlagen
 
-web/                      Vue 3 + Pinia + Vue Router (separates Vite-Projekt)
-tools/                    Dynamic Tools (je Ordner: tool.json + run.js/run.sh)
+web/               Vue 3 + Pinia + Vue Router (eigenes Vite-Projekt)
 ```
+
+Detaillierte Auflistung: [Dateistruktur](/referenz/dateistruktur).
 
 ## Stack
 
 | Komponente | Technologie |
 |---|---|
-| **Bot Framework** | grammY (TypeScript) |
-| **Runtime** | Node.js 22+, tsx watch (dev), tsc (prod) |
-| **LLM** | OpenAI API **oder** Ollama (lokal) — automatische Wahl via `OPENAI_API_KEY` |
-| **Web-API** | Hono (TypeScript-first, kompakt) |
-| **Frontend** | Vue 3 + Pinia + Vue Router (optional) |
-| **Datenbank** | PostgreSQL + pgvector (optional) — ohne DB: Filesystem-Modus |
-| **Realtime** | Supabase Realtime (optional) |
-| **Brain / Workspace** | Obsidian-kompatibler Vault (plain .md) |
-| **Scheduling** | node-cron (Europe/Vienna) |
-| **Deployment** | Hetzner VPS pro Kunde (EU, DSGVO) |
+| Laufzeit | Node.js 24 (Container), TypeScript |
+| HTTP-API | Hono |
+| Datenbank | PostgreSQL 16 via `postgres.js` |
+| Frontend | Vue 3 + Pinia + Vue Router + Vite + Tailwind v4 |
+| Live-Updates | Server-Sent Events |
+| Dokumenten-Export | `docxtemplater` auf Basis eigener Word-Vorlagen |
+| Zeitplanung | `node-cron` (Europe/Vienna) |
+| Betrieb | Docker Compose, zwei Container, Reverse-Proxy davor |
 
 ## Design-Prinzipien
 
-### Zwei Modi, eine Codebasis
+### Ein Speicher, kein Zweitweg
 
-PATIO läuft in zwei Datenmodi — die Auswahl erfolgt automatisch beim Start:
+PATIO läuft ausschließlich gegen PostgreSQL. Der frühere Dateisystem-Modus
+ist ersatzlos entfallen — alle Repositories sind Postgres-Repositories und
+non-nullable, kein Aufrufer prüft mehr auf `null`. Das Dateisystem hält nur
+noch, was ohnehin Dateien sind: hochgeladene Dokumente.
 
-- **Filesystem-Modus** (Standard): Alle Daten als Markdown/JSONL im Workspace. Kein extra Dienst nötig, alles mit dem Texteditor bearbeitbar.
-- **Datenbank-Modus** (`DATABASE_URL` gesetzt): PostgreSQL für strukturierte Daten, mit optionalem `pgvector` für semantische Suche. Chat-History und Agent-Logs bleiben immer im Filesystem (leicht per `grep`).
+Der Datenzugriff läuft **ausschließlich** über `src/data/index.ts`. Direkt
+aus `db-*` zu importieren umgeht die Abstraktion und ist verboten.
 
-Der Datenzugriff erfolgt **ausschließlich** über `src/data/index.ts` — nie direkt aus den `db-*`- oder `fs-*`-Implementierungen heraus.
+### Harter Abbruch statt stiller Zombie
 
-### Verhalten in Dateien, nicht in Code
+Fehlt `WORKSPACE_PATH`, `DATABASE_URL` oder `JWT_SECRET`, beendet sich der
+Prozess mit Exit-Code 1. Vorher lief er weiter, hörte auf Port 3000, galt für
+Docker als gesund und lieferte bei jedem Datenzugriff einen 500er. Ein
+Dienst, der ohne seine Pflicht-Konfiguration hochkommt, ist schlimmer als
+einer, der gar nicht startet.
 
-Der Code injiziert nur das heutige Datum. Alles andere — Sprache, Ton, Stil, Regeln, Tool-Konventionen — kommt aus den Agent-MD-Dateien (`SOUL.md`, `BOOT.md`, `MEMORY.md`, etc.). Änderungen am Verhalten erfordern keinen Code-Eingriff und keinen Neustart.
+Dieselbe Haltung gilt zur Laufzeit: unbehandelte Exceptions und
+Promise-Rejections werden mit Stack protokolliert und beenden den Prozess
+kontrolliert, damit `restart: always` ihn sauber neu hochfährt.
 
-### Tool-System: drei Quellen
+### Sichtbarkeit an einer Stelle
 
-Jede LLM-Runde bekommt Tools aus drei Quellen gleichzeitig:
+`src/data/access.ts` ist die einzige Quelle für „wer darf was sehen". Die
+Repositories bauen ihre WHERE-Klauseln daraus, statt sich die Logik jeweils
+selbst aus `user_projects` zusammenzusetzen. Auch der SSE-Kanal misst an
+demselben Maßstab.
 
-1. **Built-in Tools** (`src/llm/handlers/`) — statisch im Code definiert, immer verfügbar
-2. **Dynamic Tools** (`tools/`) — jeder Unterordner ist ein Tool; Änderungen sind sofort wirksam
-3. **MCP Tools** (`mcp.json`) — externe MCP-Server als stdio-Kindprozesse; Tools werden automatisch mit Server-Prefix versehen
+### Migrationen forward-only
 
-### Agentic Loop mit Halluzinations-Schutz
+Plain SQL in `src/db/migrations/`, benannt `NNN_name.sql`, idempotent
+geschrieben (`IF NOT EXISTS`, DO-Block-Guards). Der Runner trackt per
+Dateiname in `_migrations`, fährt jede Migration in einer eigenen
+Transaktion und hält einen Advisory-Lock gegen parallel startende Instanzen.
+Rückwärts-Migrationen gibt es nicht.
 
-Das Modell kann keine Antwort direkt ausgeben — es muss das `antworten`-Tool aufrufen. Bei erkannten Aktions-Anfragen wird `antworten` in Runde 1 herausgefiltert, damit das Modell nicht behaupten kann, eine Aktion ausgeführt zu haben ohne es wirklich getan zu haben. Ignoriert das Modell `tool_choice: "required"`, gibt es bis zu `MAX_TOOL_SKIP_RETRIES` Retries mit verstärktem Korrektions-Prompt.
+### Kein Außenkontakt
 
-### Pro Kunde eine Instanz
+Kein Chat-Bot, keine KI-Laufzeit, keine Websuche, kein Cloud-Dienst, keine
+Telemetrie. Das ist keine Einstellung, sondern der Zustand des Codes: die
+entsprechenden Module wurden entfernt, nicht abgeschaltet.
 
-Keine geteilte Infrastruktur. Jeder Kunde bekommt einen eigenen Server, eigenen Workspace, eigene Konfiguration. Vollständige Datenisolation.
+## Was es früher gab
+
+PATIO war eine self-hosted KI-Büro-Software mit Telegram-Bot,
+LLM-Agenten, Vault-Dateien und semantischer Suche über pgvector. Mit dem
+Umbau zum Firmenserver ist das alles ersatzlos entfallen — rund 16.000
+Zeilen. Wer auf alte Notizen, Skripte oder Konfigurationen stößt, die
+`BOT_TOKEN`, `OPENAI_API_KEY`, `OLLAMA_BASE_URL` oder Agenten-Markdown
+erwähnen: das ist Altbestand, kein aktueller Stand.

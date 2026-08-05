@@ -1,137 +1,151 @@
 # DSGVO & Datenschutz
 
-PATIO wurde für maximalen Datenschutz konzipiert. Im Standard-Modus (Ollama) verlassen keine Nutzerdaten deinen Server. Cloud-LLM (OpenAI) ist opt-in.
+PATIO läuft auf einem Rechner im eigenen Netz. Es gibt **keine
+Auftragsverarbeitung durch Dritte**: kein Cloud-Dienst, kein Sprachmodell,
+keine Analytik, keine Telemetrie. Die Anwendung spricht im Betrieb
+ausschließlich mit ihrer eigenen Datenbank, mit den Browsern im Netz und —
+für die Anmeldecodes — mit dem konfigurierten SMTP-Server.
 
-## Grundprinzip: Datensouveränität by default
-
-```
-Telegram ──► Dein VPS (Hetzner) ──► Ollama (lokal) ──► Workspace (Markdown / PostgreSQL)
-```
-
-::: tip Datensouveränität by default
-Im Standard-Modus (Ollama) werden alle Anfragen lokal verarbeitet — kein Datenabfluss an einen LLM-Anbieter.
-
-Wenn `OPENAI_API_KEY` in der `.env` gesetzt ist, werden Anfragen an OpenAI gesendet (opt-in). In diesem Fall gelten die Datenschutzbedingungen von OpenAI — Nutzungsdaten gehen an OpenAI's Server.
-
-Für maximalen Datenschutz: Ollama ohne `OPENAI_API_KEY` verwenden.
+::: tip Was sich geändert hat
+Die frühere Fassung von PATIO verarbeitete Inhalte über ein Sprachmodell
+(wahlweise OpenAI oder ein lokal betriebenes) und lief über Telegram als
+Transportweg. Beides ist mit dem Umbau zum Firmenserver **ersatzlos
+entfallen** — nicht abgeschaltet, sondern aus dem Code entfernt. Damit
+fallen OpenAI und Telegram als Empfänger personenbezogener Daten weg.
 :::
 
-## EU-Server
+## Datenfluss
 
-| Eigenschaft | Wert |
-|---|---|
-| Hoster | Hetzner Online GmbH |
-| Standort | Deutschland (Falkenstein/Nürnberg) oder Finnland (Helsinki) |
-| Rechtsraum | EU / DSGVO |
-| Datenverarbeitung | Ausschließlich auf dem gemieteten VPS |
-| Subauftragnehmer | Keine (self-hosted); bei OpenAI-Nutzung: OpenAI als Subauftragnehmer |
+```
+Arbeitsplatz im Büro (Browser)
+        │  HTTPS, internes Netz
+        ▼
+PATIO auf dem Bürorechner
+        ├──► PostgreSQL (derselbe Rechner)
+        ├──► Dateisystem (derselbe Rechner)
+        └──► SMTP-Server (für Anmeldecodes)
+```
 
-## Welche Daten werden gespeichert?
+Ausgehende Verbindungen gibt es außer zum SMTP-Server keine. Steht der
+Mailserver im Haus, verlässt kein Datum das Gebäude.
 
-PATIO speichert ausschließlich Daten, die der Nutzer **aktiv sendet**:
+## Welche Daten gespeichert werden
 
-| Datentyp | Speicherort | Beschreibung |
+Alles Strukturierte liegt in PostgreSQL:
+
+| Kategorie | Tabellen (Auswahl) | Inhalt |
 |---|---|---|
-| Telegram-Nachrichten | `Agents/Main/MEMORY_LOGS/` | Tageslog der Konversation (Markdown) |
-| Notizen | `Inbox/` oder PostgreSQL | Vom Nutzer erstellte Notizen |
-| Aufgaben | `Aufgaben.md` oder PostgreSQL | Todo-Liste |
-| Termine | `Termine.md` oder PostgreSQL | Terminliste |
-| Projektdateien | `Projekte/` oder PostgreSQL | Projektspezifische Dateien |
-| Langzeitgedächtnis | `Agents/Main/MEMORY.md` | Dauerhaft gespeicherte Fakten |
-| Bot-Log | `logs/bot.log` | Technisches Log (max. 500 Zeilen) |
-| Chat-ID | `.chat_id` | Telegram Chat-ID für Heartbeat |
-| Chat-Sessions | JSONL-Dateien (`MEMORY_LOGS/`) | Gesprächsverlauf — immer Markdown, auch im DB-Modus |
-| Embeddings | PostgreSQL + pgvector (optional) | Vektoren für semantische Suche |
+| Fachdaten | `projects`, `notes`, `tasks`, `termine`, `meetings`, `bautagebuch`, `time_entries`, `project_phases`, `project_invoices` | Was das Büro erfasst |
+| Personen | `team_members`, `companies`, `project_team_members` | Beschäftigte, Bauherren, Fachplaner, Behördenkontakte — inklusive Kontaktdaten und Kontakt-Log |
+| Konten | `users`, `user_projects` | Benutzername, Anzeigename, E-Mail, Passwort-Hash, Rolle, Projektzuordnung |
+| Dateien | `files`, `file_shares`, `file_stars` | Hochgeladene Dokumente samt Inhalt |
+| Anmeldung | `email_otp_tokens` | Kurzlebige Codes und Anmelde-Link-Tokens, gehasht |
+| Protokoll | `audit_log` | Anmeldungen und Kontenänderungen |
 
-::: tip Chat-Verlauf immer als Datei
-Chat-History und Agent-Logs werden immer als JSONL-Dateien gespeichert — unabhängig davon, ob PostgreSQL aktiv ist. Das macht sie einfach lesbar und löschbar.
+Dazu Dateien im Dateisystem unter `WORKSPACE_PATH` sowie technische Logs in
+`logs/`.
+
+::: warning IP-Adressen werden gespeichert
+Das Audit-Log hält zu jedem Anmeldevorgang und jeder Kontenänderung
+**IP-Adresse und User-Agent** fest — auch bei fehlgeschlagenen Versuchen.
+Das ist für die Sicherheitsanalyse gewollt und personenbezogen. Es gehört
+ins Verarbeitungsverzeichnis. Aufbewahrung: `AUDIT_RETENTION_DAYS`, Standard
+365 Tage; `0` schaltet die automatische Löschung ab.
 :::
 
-::: warning Keine automatische Datenerkennung
-PATIO erkennt **nicht** automatisch, ob eine Nachricht personenbezogene Daten enthält. Der Nutzer ist selbst verantwortlich dafür, welche Inhalte er dem Bot sendet.
+::: warning Keine automatische Erkennung
+PATIO erkennt **nicht**, ob ein Eintrag personenbezogene oder besonders
+schutzwürdige Daten enthält. Was in einer Notiz, einem Protokoll oder einem
+hochgeladenen Dokument landet, verantwortet die erfassende Person.
 :::
 
-## Was wird NICHT gespeichert?
+## Was nicht gespeichert wird
 
-- **Keine Tracking-Cookies** — Die Web-UI verwendet JWT im `localStorage`, kein Session-Tracking, keine Tracking-Cookies
-- **Kein Tracking** — Keine Analytics, kein Google Analytics, kein Matomo
-- **Keine IP-Adressen** — Telegram-Nachrichten enthalten keine IP
-- **Keine Nutzungsprofile** — Kein Profiling, kein Scoring
-- **Keine Drittanbieter-APIs** im Ollama-Modus — Im OpenAI-Modus gehen Prompt-Daten an OpenAI (opt-in)
+- **Keine Tracking-Cookies.** Das Anmelde-Token liegt im `localStorage` des
+  Browsers, es gibt kein Session-Cookie und kein Tracking.
+- **Keine Analytik.** Kein Google Analytics, kein Matomo, keine Telemetrie
+  an den Hersteller.
+- **Keine Nutzungsprofile**, kein Scoring, keine automatisierte
+  Entscheidungsfindung im Sinne von Art. 22 DSGVO.
+- **Keine Übermittlung an Dritte.** Es gibt keine Schnittstelle, über die
+  Inhalte das System verlassen — außer den Exporten, die eine Person selbst
+  auslöst.
 
-## Daten löschen
+## Auskunft und Löschung
 
-### Markdown-Modus (Standard)
+Alles liegt in einer Datenbank, die dem Büro selbst gehört. Auskunft und
+Löschung sind damit ohne Hersteller möglich.
 
-Das vollständige Löschen aller Nutzerdaten ist trivial:
+**Einzelne Person aus dem Team entfernen:** über die Oberfläche unter
+**Team**. Ihre Zuordnungen zu Projekten und der Kontakt-Log gehen mit.
+
+**Benutzerkonto löschen:** unter **Verwaltung → Benutzer**. Im Audit-Log
+bleibt der Benutzername als Text stehen, während der Bezug zur Konto-ID
+gelöst wird — bewusst, damit alte Einträge lesbar bleiben. Wer auch das
+entfernen muss, löscht die betreffenden Audit-Zeilen direkt.
+
+**Vollständige Löschung des Bestands:**
 
 ```bash
-# Alle Vault-Daten löschen
-rm -rf /pfad/zum/vault/*
+# Datenbank verwerfen
+docker compose down -v          # löscht auch das Datenvolume
 
-# Oder spezifisch:
-rm -rf /pfad/zum/vault/Agents/Main/MEMORY_LOGS/   # Gespräche
-rm -rf /pfad/zum/vault/Inbox/                       # Notizen
-rm /pfad/zum/vault/Aufgaben.md                      # Aufgaben
-rm /pfad/zum/vault/Termine.md                       # Termine
-rm /pfad/zum/vault/Agents/Main/MEMORY.md            # Gedächtnis
+# Dokumente verwerfen
+rm -rf /opt/patio-workspace/*
 
-# Technische Daten löschen
-rm logs/bot.log
-rm .chat_id
+# Backups verwerfen
+rm -rf /opt/patio-backups/*
 ```
 
-::: tip Einfache Datenlösung (Markdown-Modus)
-Da alle Daten als **Markdown-Dateien** im Vault liegen, reicht ein einfaches `rm -rf` auf den Vault-Ordner, um alle Nutzerdaten vollständig zu löschen. Keine Datenbank, kein Export nötig.
+::: danger Backups nicht vergessen
+Eine Löschung, die die Backups auslässt, ist keine. Die Tagesarchive halten
+den Bestand bis zu 14 Tage (`RETENTION_DAYS`) — auf dem Rechner und am
+Zweitablageort.
 :::
 
-### PostgreSQL-Modus (optional)
+## Auftragsverarbeitung
 
-```bash
-# Einzelne Tabellen bereinigen:
-psql patio -c "DELETE FROM notes; DELETE FROM tasks; DELETE FROM termine; DELETE FROM projects;"
+Betreibt das Büro PATIO auf eigener Hardware für eigene Zwecke, liegt keine
+Auftragsverarbeitung durch den Hersteller vor — er hat keinen Zugriff auf
+das System.
 
-# Oder: gesamte Datenbank löschen
-dropdb patio
-```
+Ein Auftragsverarbeitungsvertrag nach Art. 28 DSGVO wird gebraucht, sobald
+Dritte am System arbeiten:
 
-## Auftragsverarbeitung (AVV)
-
-Für den Einsatz bei Kunden ist ein **Auftragsverarbeitungsvertrag** (AVV) nach Art. 28 DSGVO empfohlen:
-
-| Punkt | Umsetzung |
+| Beteiligter | Wann relevant |
 |---|---|
-| Gegenstand | KI-gestützte Notizverwaltung via Telegram und Web-UI |
-| Art der Daten | Textnachrichten, Notizen, Aufgaben, Termine |
-| Betroffene Personen | Nutzer des Telegram-Bots und der Web-Oberfläche |
-| Dauer | Solange der VPS betrieben wird |
-| Löschung | Vault-Ordner löschen = vollständige Datenlösung (Markdown-Modus); DROP TABLE / dropdb im DB-Modus |
-| Subauftragnehmer | Hetzner (Hosting), Telegram (Nachrichtenübermittlung), ggf. OpenAI (opt-in, nur wenn OPENAI_API_KEY gesetzt) |
-| Technische Maßnahmen | SSH-Zugang, Firewall, eigener VPS, lokales LLM (Standard) |
+| Externe IT-Betreuung | Wenn sie den Rechner administriert und damit Zugriff auf die Daten hat |
+| Hersteller / Support | Nur wenn er zu Wartungszwecken Zugriff erhält — im Regelbetrieb nicht der Fall |
+| E-Mail-Anbieter | Wenn der SMTP-Server nicht im Haus steht, sondern extern betrieben wird |
 
-::: warning Telegram als Transportweg
-Telegram überträgt Nachrichten über seine Server. Die Telegram-API speichert Nachrichten für die Zustellung. Dies liegt außerhalb der Kontrolle von PATIO. Für besonders sensible Daten sollte ein alternativer Kanal in Betracht gezogen werden.
+::: warning Externer Mailserver ist ein Datenabfluss
+Läuft der SMTP-Versand über einen externen Anbieter, gehen E-Mail-Adresse
+und Anmeldezeitpunkt der Benutzer dorthin. Das ist der einzige verbleibende
+Weg, auf dem personenbezogene Daten das Haus verlassen. Im Netz ohne
+Internetzugang stellt sich die Frage nicht.
 :::
 
-## Technische und organisatorische Maßnahmen (TOMs)
+## Technische und organisatorische Maßnahmen
 
-| Maßnahme | Beschreibung |
+| Maßnahme | Umsetzung |
 |---|---|
-| Zutrittskontrolle | SSH-Key-basierter Zugang zum Server |
-| Zugangskontrolle | Bot reagiert nur auf gespeicherte Chat-ID; Web-UI erfordert JWT-Authentifizierung |
-| Zugriffskontrolle | Agent-Datei-Editor mit Whitelist (nur bestimmte MD-Dateien) |
-| Rate Limiting (Login) | Max. 5 Versuche pro IP in 15 Min (Brute-Force-Schutz für Web-Login) |
-| Rate Limiting (API) | Max. 600 Requests/Min pro IP (globaler API-Throttle, 429 mit Retry-After) |
-| Path-Traversal-Schutz | Alle Datei-Operationen validieren Pfade gegen Vault-Grenze |
-| Shell-Allowlist | Nur ~40 definierte Befehle ausführbar (kein rm, shutdown etc.) |
-| Sandbox-Härtung | Dynamische Tools ohne Netzwerkzugriff, gefilterte Umgebungsvariablen |
-| SSRF-Schutz | IPv6-Adressen und dezimale IP-Darstellungen werden blockiert |
-| Security Headers | X-Frame-Options, Content-Security-Policy (Web-UI) |
-| MIME-Whitelist | Upload-Filter: nur erlaubte Dateitypen werden akzeptiert |
-| Trennungskontrolle | Jeder Kunde eigener VPS, eigener Vault, eigener Bot |
-| Pseudonymisierung | Chat-ID statt Klarnamen im System |
-| Verfügbarkeit | VPS mit Hetzner SLA, Bot-Neustart via `/restart` |
-| Belastbarkeit | Session-Queue verhindert Race Conditions |
-| Graceful Shutdown | Sauberes Herunterfahren bei SIGTERM/SIGINT, MCP-Cleanup |
-| Fehlerresilienz | JSON.parse Error-Handling verhindert Datenverlust bei korrupten Dateien |
-| Audit-Log | Login-Ereignisse werden mit Retention (Standard: 365 Tage) aufbewahrt |
+| Zutrittskontrolle | Der Rechner steht im Büro; physischer Zugang ist zu regeln |
+| Zugangskontrolle | Anmeldung mit Passwort (bcrypt) und Code per E-Mail |
+| Zugriffskontrolle | Rollen Admin/Benutzer, Sichtbarkeit projektweise über `user_projects` |
+| Trennungskontrolle | Je Büro eine eigene Installation auf eigener Hardware |
+| Übertragung | HTTPS über den Reverse-Proxy; keine unverschlüsselte Verbindung im Netz |
+| Verschlüsselung | AES-GCM für einzelne Datenbankfelder |
+| Eingabekontrolle | Audit-Log für Anmeldungen und Kontenänderungen |
+| Brute-Force-Schutz | 5 Anmeldeversuche je IP in 15 Minuten, 5 Fehlversuche je Code |
+| Upload-Prüfung | Endungs-Whitelist plus Magic-Byte-Prüfung |
+| Verfügbarkeit | Tägliches Backup mit Datenbank-Dump, zweiter Ablageort |
+| Belastbarkeit | Automatischer Neustart nach Absturz, sauberes Herunterfahren bei SIGTERM |
+
+Details: [Zugriffskontrolle](/sicherheit/zugriff) und
+[Datenisolation](/sicherheit/isolation).
+
+::: warning Kein Rechtsrat
+Diese Seite beschreibt, was die Software tut und wo die Daten liegen. Sie
+ersetzt keine datenschutzrechtliche Beratung und kein
+Verarbeitungsverzeichnis.
+:::
