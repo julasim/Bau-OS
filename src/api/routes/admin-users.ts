@@ -21,9 +21,6 @@ import {
   deleteDbUser,
   updateDbUserPassword,
   hashPassword,
-  createPairToken,
-  setUserBotToken,
-  setUserBotEnabled,
   countDbAdmins,
 } from "../auth.js";
 import type { AppEnv } from "../server.js";
@@ -272,116 +269,6 @@ adminUsersRoutes.patch("/admin/users/:id/password", async (c) => {
     targetLabel: target.username,
   });
   return c.json({ ok: true });
-});
-
-// ── Telegram-Pair-Token generieren (Phase 5) ───────────────────────────────
-// Admin generiert einen Token, der User schickt /pair <token> dem Bot.
-// 10 Minuten gueltig — danach automatisch ungueltig.
-//
-// Response enthaelt zusaetzlich botUsername — das ist der Telegram-Username
-// (ohne @) des Bots, an den der Pair-Befehl geschickt werden muss. UI baut
-// daraus einen t.me/<username>-Link, damit der User direkt in den richtigen
-// Chat gelangt. Wenn der Ziel-User einen eigenen Bot hat, ist das sein Bot —
-// sonst der Default-Bot. Kann null sein wenn weder eigener Bot laeuft noch
-// Default-Bot gesetzt ist.
-adminUsersRoutes.post("/admin/users/:id/pair-token", async (c) => {
-  const id = c.req.param("id");
-  const target = await findDbUserById(id);
-  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
-  const result = await createPairToken(id);
-  let botUsername: string | null = null;
-  try {
-    const { getBotUsernameForUser } = await import("../../bot-manager.js");
-    botUsername = getBotUsernameForUser(id);
-  } catch {
-    /* BotManager nicht aktiv (FS-Mode) — UI faellt auf generische Anzeige zurueck */
-  }
-  void audit({
-    ...actorFromCtx(c),
-    event: "pair.create",
-    targetUserId: id,
-    targetLabel: target.username,
-  });
-  return c.json({ ...result, botUsername }, 201);
-});
-
-// ── Telegram-Bot eines Users setzen/entfernen (Phase 6) ───────────────────
-// Admin-Override: kann fuer jeden User den Bot-Token setzen/loeschen.
-// Self-Service-Variante laeuft ueber /me/telegram-bot (settings.ts).
-//
-// Helper: liefert botUsername (aus Bot-Manager-Cache) + botRunning,
-// gleicher Pattern wie in settings.ts. UI nutzt das, um zu zeigen
-// ob der Bot wirklich gestartet ist (vs. nur Token gesetzt).
-async function getBotMeta(userId: string): Promise<{ botUsername: string | null; botRunning: boolean }> {
-  try {
-    const { getBotUsernameForUser, getBotStatus } = await import("../../bot-manager.js");
-    return {
-      botUsername: getBotUsernameForUser(userId),
-      botRunning: getBotStatus(userId) === "running",
-    };
-  } catch {
-    return { botUsername: null, botRunning: false };
-  }
-}
-
-// GET — aktuellen Bot-Status fuer den User abrufen.
-// Token selbst wird NIE im Response zurueckgegeben.
-adminUsersRoutes.get("/admin/users/:id/telegram-bot", async (c) => {
-  const id = c.req.param("id");
-  const target = await findDbUserById(id);
-  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
-  const meta = await getBotMeta(target.id);
-  return c.json({
-    hasToken: !!target.telegramBotToken,
-    enabled: target.telegramBotEnabled,
-    chatId: target.telegramChatId,
-    ...meta,
-  });
-});
-
-adminUsersRoutes.put("/admin/users/:id/telegram-bot", async (c) => {
-  const id = c.req.param("id");
-  const target = await findDbUserById(id);
-  if (!target) return c.json({ error: "User nicht gefunden" }, 404);
-
-  const body = await c.req.json<{ token?: string | null; enabled?: boolean }>();
-  // Token-Format-Validation — gleiche Regex wie in settings.ts.
-  // BotFather-Tokens haben das Format "123456789:ABC..." (Ziffern,
-  // Doppelpunkt, mind. 30 Zeichen aus [A-Za-z0-9_-]).
-  let tokenChanged: "set" | "clear" | null = null;
-  if ("token" in body && body.token != null) {
-    const token = String(body.token).trim();
-    if (!/^\d{6,}:[A-Za-z0-9_-]{30,}$/.test(token)) {
-      return c.json({ error: "Bot-Token hat falsches Format. Erwartet: '123456789:ABC...' (von @BotFather)" }, 400);
-    }
-    await setUserBotToken(id, token);
-    tokenChanged = "set";
-  } else if ("token" in body) {
-    await setUserBotToken(id, null);
-    tokenChanged = "clear";
-  }
-  if ("enabled" in body) {
-    await setUserBotEnabled(id, body.enabled === true);
-  }
-  // Bot-Manager neu synchronisieren — alter Bot stoppt, neuer startet.
-  try {
-    const { refresh } = await import("../../bot-manager.js");
-    await refresh();
-  } catch {
-    /* Manager ist evtl. nicht aktiv (FS-Mode) — kein Fehler */
-  }
-  emit({ type: "team", action: "updated", id });
-  if (tokenChanged) {
-    void audit({
-      ...actorFromCtx(c),
-      event: tokenChanged === "set" ? "bot.token.set" : "bot.token.clear",
-      targetUserId: id,
-      targetLabel: target.username,
-    });
-  }
-  // Frischen Status zurueckgeben, damit UI sofort sieht ob Bot startet.
-  const meta = await getBotMeta(id);
-  return c.json({ ok: true, ...meta });
 });
 
 // ── Loeschen ────────────────────────────────────────────────────────────────

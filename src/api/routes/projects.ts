@@ -5,7 +5,6 @@ import { getVisibleProjectIds, canSeeProjectByName, type UserCtx } from "../../d
 import type { ProjectUpdate } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
-import { notifyProjectAccessGranted } from "../../notifications.js";
 
 // Hilfs-Builder: holt UserCtx aus dem Hono-Context — eine Stelle weniger,
 // an der man c.var-Felder vergisst.
@@ -336,11 +335,6 @@ projectsRoutes.post("/projects/:name/access", async (c) => {
 
   await projectRepo.grantAccess(info.id!, body.userId);
   emit({ type: "project", action: "updated", id: info.name });
-  // Notification an den neu freigegebenen User. Eigene Aktion → kein Self-Ping.
-  if (body.userId !== c.var.userId) {
-    const actor = c.var.dbUser?.displayName ?? c.var.dbUser?.username ?? null;
-    void notifyProjectAccessGranted(body.userId, info.name, actor);
-  }
   return c.json({ ok: true });
 });
 

@@ -114,20 +114,6 @@ interface TeamMember {
   // Migration 006 — Junction-Daten
   projects?: { id: string; name: string; projectRole: string | null }[];
 }
-interface AgentLog {
-  id?: string;
-  sessionId: string;
-  agentName: string;
-  eventType: string;
-  toolName?: string;
-  parameters?: Record<string, unknown>;
-  resultSummary?: string;
-  thought?: string;
-  error?: string;
-  projectId?: string;
-  durationMs?: number;
-  createdAt?: string;
-}
 
 const route = useRoute();
 const router = useRouter();
@@ -164,16 +150,6 @@ const newMemberRole = ref("");
 // Existierendes Mitglied zuordnen
 const assignMemberId = ref(""); // "" = keine Auswahl
 
-// ── Verlauf-State (Stufe 3d) ──────────────────────────────
-// Der Uebersichts-Tab zeigt nur die letzten 5 Eintraege, der Verlauf-Tab
-// paginiert; beide speisen sich aus /agent-logs?projectId=<uuid>.
-const recentActivity = ref<AgentLog[]>([]);
-const recentActivityLoaded = ref(false);
-const fullActivity = ref<AgentLog[]>([]);
-const fullActivityLoaded = ref(false);
-const fullActivityHasMore = ref(false);
-const fullActivityLoading = ref(false);
-
 // ── Zugriff (Phase 3) ────────────────────────────────────
 const accessList = ref<ProjectAccessEntry[]>([]);
 const accessLoaded = ref(false);
@@ -182,7 +158,6 @@ const allUsersLoaded = ref(false);
 const accessAddUserId = ref(""); // ausgewaehlter User im Dropdown
 const accessSaving = ref(false);
 const accessError = ref<string | null>(null);
-const ACTIVITY_PAGE = 30;
 
 const viewingNote = ref<string | null>(null);
 const noteContent = ref("");
@@ -220,7 +195,6 @@ type Tab =
   | "bautagebuch"
   | "meetings"
   | "stunden"
-  | "verlauf"
   | "zugriff";
 const tab = ref<Tab>("uebersicht");
 
@@ -237,7 +211,6 @@ const VALID_TABS: Tab[] = [
   "bautagebuch",
   "meetings",
   "stunden",
-  "verlauf",
   "zugriff",
 ];
 function isValidTab(t: unknown): t is Tab {
@@ -256,7 +229,7 @@ watch(
 
 // ── Projekt-Module (Phase 6e) ────────────────────────────────────────────
 // Effektive Modul-Sicht (globale Defaults + per-Projekt-Override). Tabs
-// deren Modul auf false ist werden ausgeblendet. uebersicht/verlauf/zugriff
+// deren Modul auf false ist werden ausgeblendet. uebersicht/zugriff
 // sind immer sichtbar (kein Modul-Mapping).
 interface ProjectModuleFlags {
   stammdaten: boolean;
@@ -300,7 +273,7 @@ const PROJECT_MODULE_LIST: { key: keyof ProjectModuleFlags; label: string }[] = 
 
 // Tab-Sichtbarkeit pro Modul. Tabs ohne Modul-Mapping sind immer aktiv.
 function tabVisible(t: Tab): boolean {
-  if (t === "uebersicht" || t === "verlauf" || t === "zugriff") return true;
+  if (t === "uebersicht" || t === "zugriff") return true;
   if (t === "stunden") return moduleFlags.value.time_entries;
   return moduleFlags.value[t as keyof ProjectModuleFlags];
 }
@@ -609,10 +582,10 @@ onMounted(async () => {
   void loadProjectModules();
   // Lazy-Loads fuer den initialen Tab anstossen (falls nicht Uebersicht).
   if (tab.value !== "uebersicht") void openTab(tab.value);
-  // Uebersicht ist Default-Tab — Activity + Children erst nach loadAll laden,
-  // weil info.id als Filter fuer beides gebraucht wird.
+  // Uebersicht ist Default-Tab — Children erst nach loadAll laden,
+  // weil info.id als Filter gebraucht wird.
   if (tab.value === "uebersicht") {
-    await Promise.all([loadRecentActivity(), loadChildren()]);
+    await loadChildren();
   }
   // Click-away-Listener fuer das Aktions-Menue.
   document.addEventListener("mousedown", onGlobalClick);
@@ -1064,11 +1037,9 @@ async function openTab(t: Tab) {
     if (!timeLoaded.value) await loadTimeEntries();
   }
   if (t === "uebersicht") {
-    if (!recentActivityLoaded.value) await loadRecentActivity();
     if (!childrenLoaded.value) await loadChildren();
     if (!teamLoaded.value) await loadTeam();
   }
-  if (t === "verlauf" && !fullActivityLoaded.value) await loadFullActivity(true);
   if (t === "zugriff") {
     if (!accessLoaded.value) await loadAccess();
     if (!allUsersLoaded.value) await loadAllUsers();
@@ -1386,87 +1357,6 @@ function initial(name: string): string {
 
 function mapsLink(standort: string): string {
   return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(standort)}`;
-}
-
-// ── Verlauf / Aktivitaet (Stufe 3d) ───────────────────────
-// /agent-logs?projectId=<uuid> liefert die vom Agenten ausgefuehrten Tools
-// inkl. Thoughts/Errors fuer genau dieses Projekt. Kein separates "events"-
-// Log noetig — die agent_logs-Tabelle ist das einzige persistente Activity-
-// Signal, das wir pro Projekt haben.
-async function loadRecentActivity() {
-  if (!info.value) return;
-  try {
-    const resp = await api.get<{ enabled: boolean; items: AgentLog[] }>(
-      `/agent-logs?projectId=${encodeURIComponent(info.value.id)}&limit=5`,
-    );
-    recentActivity.value = resp.items || [];
-  } catch {
-    recentActivity.value = [];
-  } finally {
-    recentActivityLoaded.value = true;
-  }
-}
-
-async function loadFullActivity(reset = false) {
-  if (!info.value || fullActivityLoading.value) return;
-  fullActivityLoading.value = true;
-  try {
-    const offset = reset ? 0 : fullActivity.value.length;
-    const resp = await api.get<{ enabled: boolean; items: AgentLog[] }>(
-      `/agent-logs?projectId=${encodeURIComponent(info.value.id)}&limit=${ACTIVITY_PAGE}&offset=${offset}`,
-    );
-    const items = resp.items || [];
-    fullActivity.value = reset ? items : [...fullActivity.value, ...items];
-    // Heuristik: weniger als die Page-Size zurueck → keine weiteren Eintraege.
-    fullActivityHasMore.value = items.length === ACTIVITY_PAGE;
-  } catch {
-    if (reset) fullActivity.value = [];
-    fullActivityHasMore.value = false;
-  } finally {
-    fullActivityLoaded.value = true;
-    fullActivityLoading.value = false;
-  }
-}
-
-// Human-readable Label fuer eventType + toolName. Der Agent schickt Events wie
-// "tool_call", "thought", "error", "agent_spawn" etc. — fuer den Projekt-
-// Verlauf reicht der Tool-Name plus der Result-Summary.
-function activityLabel(log: AgentLog): string {
-  if (log.error) return "Fehler";
-  if (log.toolName) return log.toolName;
-  if (log.eventType === "thought") return "Gedanke";
-  if (log.eventType === "agent_spawn") return "Subagent gestartet";
-  if (log.eventType === "agent_result") return "Subagent fertig";
-  return log.eventType;
-}
-
-function activitySubtext(log: AgentLog): string {
-  if (log.error) return log.error;
-  if (log.resultSummary) return log.resultSummary;
-  if (log.thought) return log.thought;
-  // Parameters als letzte Fallback-Zeile — kompakt gerendert.
-  if (log.parameters && Object.keys(log.parameters).length > 0) {
-    try {
-      return JSON.stringify(log.parameters).slice(0, 120);
-    } catch {
-      return "";
-    }
-  }
-  return "";
-}
-
-function activityTime(iso?: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const now = Date.now();
-  const diffMin = Math.floor((now - d.getTime()) / 60000);
-  if (diffMin < 1) return "gerade eben";
-  if (diffMin < 60) return `vor ${diffMin} Min`;
-  const diffHrs = Math.floor(diffMin / 60);
-  if (diffHrs < 24) return `vor ${diffHrs} Std`;
-  const diffDays = Math.floor(diffHrs / 24);
-  if (diffDays < 7) return `vor ${diffDays} Tg`;
-  return formatDateShort(d);
 }
 
 // ── Quick-Add (Uebersicht) ───────────────────────────────
@@ -2853,33 +2743,6 @@ async function deleteMeeting() {
               </div>
             </div>
           </section>
-
-          <!-- Letzte Aktivität -->
-          <section class="ap-panel">
-            <div class="ap-panel-head">
-              <span class="ap-panel-title">Letzte Aktivität</span>
-              <span style="flex: 1"></span>
-              <button class="pt-btn pt-btn--ghost pt-btn--sm" @click="openTab('verlauf')">Alle →</button>
-            </div>
-            <div class="ap-panel-body flush">
-              <div v-if="!recentActivityLoaded" class="ueb-empty" style="padding: 16px 20px">Lade…</div>
-              <div v-else-if="recentActivity.length === 0" class="ueb-empty" style="padding: 16px 20px">
-                Noch keine Aktivität.
-              </div>
-              <div
-                v-for="log in recentActivity"
-                :key="log.id ?? `${log.sessionId}-${log.createdAt}`"
-                class="pt-list-item"
-              >
-                <div class="pt-list-grow">
-                  <div class="pt-li-title">{{ activityLabel(log) }}</div>
-                  <div class="pt-li-meta">
-                    {{ activityTime(log.createdAt) }}<span v-if="log.agentName"> · {{ log.agentName }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
         </div>
       </div>
     </div>
@@ -3905,43 +3768,6 @@ async function deleteMeeting() {
       </div>
     </div>
 
-    <!-- Verlauf (Stufe 3d) -->
-    <div v-if="tab === 'verlauf'" class="verlauf-tab">
-      <div v-if="!fullActivityLoaded" class="empty-hint">Lade Verlauf…</div>
-      <div v-else-if="fullActivity.length === 0" class="empty-hint">
-        Noch keine Aktivität. Sobald der Agent etwas in diesem Projekt tut, erscheint es hier.
-      </div>
-      <div v-else style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
-        <div
-          v-for="log in fullActivity"
-          :key="log.id ?? `${log.sessionId}-${log.createdAt}`"
-          class="verlauf-row"
-          :class="{ 'verlauf-error': !!log.error }"
-        >
-          <div class="verlauf-bullet">
-            <BIcon
-              :name="log.error ? 'x' : log.toolName ? 'code' : log.eventType === 'thought' ? 'message' : 'clock'"
-              :size="12"
-            />
-          </div>
-          <div style="flex: 1; min-width: 0">
-            <div class="verlauf-head">
-              <span class="verlauf-label">{{ activityLabel(log) }}</span>
-              <span class="verlauf-agent" v-if="log.agentName">· {{ log.agentName }}</span>
-              <span v-if="log.durationMs" class="verlauf-duration">· {{ log.durationMs }} ms</span>
-            </div>
-            <div v-if="activitySubtext(log)" class="verlauf-sub">{{ activitySubtext(log) }}</div>
-          </div>
-          <div class="verlauf-time font-mono">{{ activityTime(log.createdAt) }}</div>
-        </div>
-      </div>
-      <div v-if="fullActivityHasMore" class="flex" style="justify-content: center; margin-top: 12px">
-        <button class="patio-btn ghost sm" :disabled="fullActivityLoading" @click="loadFullActivity(false)">
-          {{ fullActivityLoading ? "Lädt…" : "Mehr laden" }}
-        </button>
-      </div>
-    </div>
-
     <!-- Zugriff (Phase 3) — nur fuer Admins, sonst kommt der Tab gar nicht erst -->
     <div v-if="tab === 'zugriff' && isAdmin">
       <div
@@ -4801,80 +4627,6 @@ async function deleteMeeting() {
 }
 
 /* ── Verlauf-Tab ───────────────────────────────────────── */
-.verlauf-tab {
-  min-height: 200px;
-}
-.verlauf-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--color-border-subtle);
-  transition: background 180ms ease;
-}
-.verlauf-row:first-child {
-  border-top: 0;
-}
-.verlauf-row:hover {
-  background: var(--color-bg-subtle);
-}
-.verlauf-error {
-  background: color-mix(in srgb, var(--color-danger-text, #dc2626) 6%, transparent);
-}
-
-.verlauf-bullet {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-.verlauf-error .verlauf-bullet {
-  color: var(--color-danger-text);
-  border-color: var(--color-danger-text);
-}
-
-.verlauf-head {
-  font-size: 13px;
-  color: var(--color-text);
-  display: flex;
-  gap: 6px;
-  align-items: baseline;
-  flex-wrap: wrap;
-}
-.verlauf-label {
-  font-weight: 500;
-}
-.verlauf-agent,
-.verlauf-duration {
-  font-size: 11px;
-  color: var(--color-text-muted);
-}
-.verlauf-sub {
-  font-size: 12px;
-  color: var(--color-text-secondary);
-  margin-top: 3px;
-  line-height: 1.5;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  word-break: break-word;
-}
-.verlauf-time {
-  font-size: 11px;
-  color: var(--color-text-faint);
-  flex-shrink: 0;
-  white-space: nowrap;
-}
 
 /* ── Bautagebuch (Migration 011) ───────────────────────── */
 .bt-tab {

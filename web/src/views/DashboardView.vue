@@ -361,7 +361,7 @@ const statCards = computed(() => [
         style="border: 1px dashed var(--color-border); border-radius: 8px"
       >
         <div class="empty-state-icon"><BIcon name="folder" :size="26" /></div>
-        <div class="empty-state-text">Noch keine Projekte. Über den Telegram-Agenten oder direkt anlegen.</div>
+        <div class="empty-state-text">Noch keine Projekte angelegt.</div>
         <router-link to="/projects" class="patio-btn solid sm" style="text-decoration: none">
           <BIcon name="plus" :size="11" :stroke-width="2" />
           Erstes Projekt anlegen

@@ -3,7 +3,6 @@ import { terminRepo, projectRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
-import { notifyTerminInvited, resolveUserIdsFromMembers } from "../../notifications.js";
 import { getMsAccount } from "../../data/db-microsoft.js";
 import { pushToOutlook, deleteFromOutlook } from "../../sync/microsoft-sync.js";
 import { logError } from "../../logger.js";
@@ -112,26 +111,6 @@ termineRoutes.post("/termine", async (c) => {
   emit({ type: "termin", action: "created", id: termin.id, project: body.project });
   // MS-Graph-Sync: pending markieren + async push (fire-and-forget).
   void triggerMsSync(c.var.userId, result.id);
-  // Notification an alle Teilnehmer mit verlinktem User-Account.
-  if (body.assigneeIds && body.assigneeIds.length > 0) {
-    void (async () => {
-      const userIds = await resolveUserIdsFromMembers(body.assigneeIds!);
-      if (userIds.length > 0) {
-        const actor = c.var.dbUser?.displayName ?? c.var.dbUser?.username ?? null;
-        await notifyTerminInvited(
-          userIds,
-          {
-            text: result.text,
-            datum: result.datum,
-            uhrzeit: result.uhrzeit,
-            project: body.project ?? null,
-          },
-          c.var.userId,
-          actor,
-        );
-      }
-    })();
-  }
   return c.json(result, 201);
 });
 
@@ -150,37 +129,11 @@ termineRoutes.put("/termine/:id", async (c) => {
       isMilestone: boolean;
     }>
   >();
-  // Vorigen Stand laden, damit wir nur NEUE Teilnehmer benachrichtigen
-  // (kein Spam wenn nur Datum/Ort geaendert wird).
-  const prev = await terminRepo.get(id);
   const termin = await terminRepo.update(id, body);
   if (!termin) return c.json({ error: "Termin nicht gefunden" }, 404);
   emit({ type: "termin", action: "updated", id });
   // MS-Graph-Sync: pending markieren + async push.
   void triggerMsSync(c.var.userId, id);
-  if ("assigneeIds" in body && Array.isArray(body.assigneeIds)) {
-    const prevIds = new Set(prev?.assigneeIds ?? []);
-    const added = body.assigneeIds.filter((mid) => !prevIds.has(mid));
-    if (added.length > 0) {
-      void (async () => {
-        const userIds = await resolveUserIdsFromMembers(added);
-        if (userIds.length > 0) {
-          const actor = c.var.dbUser?.displayName ?? c.var.dbUser?.username ?? null;
-          await notifyTerminInvited(
-            userIds,
-            {
-              text: termin.text,
-              datum: termin.datum,
-              uhrzeit: termin.uhrzeit,
-              project: termin.project,
-            },
-            c.var.userId,
-            actor,
-          );
-        }
-      })();
-    }
-  }
   return c.json(termin);
 });
 

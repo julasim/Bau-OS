@@ -18,7 +18,6 @@ interface AdminUser {
   displayName: string | null;
   role: "admin" | "user";
   isProtected: boolean;
-  hasTelegram: boolean;
   email: string | null;
   createdAt: string;
   updatedAt: string;
@@ -126,196 +125,6 @@ async function submitPasswordReset() {
   }
 }
 
-// ── Bot-Token verwalten (Admin-Override) ───────────────────────
-// Erlaubt dem Admin, fuer einen User direkt das Bot-Token einzutragen,
-// ohne dass der User sich selbst einloggen muss. Ueblicher Onboarding-
-// Flow: Admin legt User an → User-Account verlinkt mit Team-Mitglied
-// → Admin generiert Bot-Token bei @BotFather → traegt ihn hier ein →
-// Backend startet sofort den per-User-Bot → Admin generiert Pair-Code
-// → schickt /pair an User.
-const showBotDialog = ref(false);
-const botTarget = ref<AdminUser | null>(null);
-interface BotStatus {
-  hasToken: boolean;
-  enabled: boolean;
-  chatId: string | null;
-  botUsername: string | null;
-  botRunning: boolean;
-}
-const botStatus = ref<BotStatus | null>(null);
-const botTokenInput = ref("");
-const botDialogSaving = ref(false);
-const botDialogError = ref<string | null>(null);
-const botDialogMessage = ref<string | null>(null);
-
-const BOT_TOKEN_RE = /^\d{6,}:[A-Za-z0-9_-]{30,}$/;
-const botTokenValid = computed(() => BOT_TOKEN_RE.test(botTokenInput.value.trim()));
-
-async function openBotTokenDialog(user: AdminUser) {
-  botTarget.value = user;
-  botTokenInput.value = "";
-  botDialogError.value = null;
-  botDialogMessage.value = null;
-  botStatus.value = null;
-  showBotDialog.value = true;
-  try {
-    botStatus.value = await api.get<BotStatus>(`/admin/users/${encodeURIComponent(user.id)}/telegram-bot`);
-  } catch (e) {
-    botDialogError.value = e instanceof Error ? e.message : "Status nicht abrufbar";
-  }
-}
-
-function closeBotTokenDialog() {
-  showBotDialog.value = false;
-  botTokenInput.value = "";
-  botDialogError.value = null;
-  botDialogMessage.value = null;
-}
-
-async function saveBotToken() {
-  if (!botTarget.value || !botTokenValid.value || botDialogSaving.value) return;
-  const token = botTokenInput.value.trim();
-  botDialogSaving.value = true;
-  botDialogError.value = null;
-  botDialogMessage.value = null;
-  try {
-    const res = await api.put<{ ok: boolean; botUsername: string | null; botRunning: boolean }>(
-      `/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`,
-      { token },
-    );
-    botTokenInput.value = "";
-    if (res.botRunning && res.botUsername) {
-      botDialogMessage.value = `Bot @${res.botUsername} läuft. Jetzt Pair-Code generieren und dem User schicken.`;
-    } else {
-      botDialogMessage.value = "Token gespeichert, aber Bot startet nicht. Token bei @BotFather noch gültig?";
-    }
-    // Status frisch laden
-    botStatus.value = await api.get<BotStatus>(`/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`);
-  } catch (e) {
-    botDialogError.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
-  } finally {
-    botDialogSaving.value = false;
-  }
-}
-
-async function removeBotToken() {
-  if (!botTarget.value || !(await confirm({ message: "Bot-Token wirklich entfernen?", confirmDanger: true }))) return;
-  botDialogSaving.value = true;
-  botDialogError.value = null;
-  try {
-    await api.put(`/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`, {
-      token: null,
-    });
-    botDialogMessage.value = "Bot entfernt.";
-    botStatus.value = await api.get<BotStatus>(`/admin/users/${encodeURIComponent(botTarget.value.id)}/telegram-bot`);
-  } catch (e) {
-    botDialogError.value = e instanceof Error ? e.message : "Entfernen fehlgeschlagen";
-  } finally {
-    botDialogSaving.value = false;
-  }
-}
-
-// ── Telegram-Pair-Token (Phase 5) ───────────────────────
-const showPairDialog = ref(false);
-const pairTarget = ref<AdminUser | null>(null);
-const pairToken = ref<string | null>(null);
-const pairBotUsername = ref<string | null>(null);
-const pairExpiresAt = ref<string | null>(null);
-const pairSaving = ref(false);
-const pairError = ref<string | null>(null);
-const pairCountdown = ref<string>("");
-let pairCountdownTimer: ReturnType<typeof setInterval> | null = null;
-
-// Voller Befehl, den der User in Telegram an den Bot schickt — als Block
-// fuers Copy-to-Clipboard. Inkl. /pair-Praefix damit nichts vergessen wird.
-const pairCommand = computed(() => (pairToken.value ? `/pair ${pairToken.value}` : ""));
-const pairBotLink = computed(() => (pairBotUsername.value ? `https://t.me/${pairBotUsername.value}` : null));
-
-async function openPairDialog(user: AdminUser) {
-  pairTarget.value = user;
-  pairToken.value = null;
-  pairBotUsername.value = null;
-  pairExpiresAt.value = null;
-  pairError.value = null;
-  showPairDialog.value = true;
-  pairSaving.value = true;
-  try {
-    const res = await api.post<{ token: string; expiresAt: string; botUsername: string | null }>(
-      `/admin/users/${encodeURIComponent(user.id)}/pair-token`,
-      {},
-    );
-    pairToken.value = res.token;
-    pairBotUsername.value = res.botUsername ?? null;
-    pairExpiresAt.value = res.expiresAt;
-    startPairCountdown();
-  } catch (e) {
-    pairError.value = e instanceof Error ? e.message : "Token konnte nicht generiert werden";
-  } finally {
-    pairSaving.value = false;
-  }
-}
-
-function closePairDialog() {
-  showPairDialog.value = false;
-  if (pairCountdownTimer) {
-    clearInterval(pairCountdownTimer);
-    pairCountdownTimer = null;
-  }
-}
-
-function startPairCountdown() {
-  if (pairCountdownTimer) clearInterval(pairCountdownTimer);
-  const tick = () => {
-    if (!pairExpiresAt.value) return;
-    const diff = new Date(pairExpiresAt.value).getTime() - Date.now();
-    if (diff <= 0) {
-      pairCountdown.value = "abgelaufen";
-      if (pairCountdownTimer) {
-        clearInterval(pairCountdownTimer);
-        pairCountdownTimer = null;
-      }
-      return;
-    }
-    const m = Math.floor(diff / 60000);
-    const s = Math.floor((diff % 60000) / 1000);
-    pairCountdown.value = `${m}:${String(s).padStart(2, "0")}`;
-  };
-  tick();
-  pairCountdownTimer = setInterval(tick, 1000);
-}
-
-// Gemeinsames Feedback-Message-State fuer beide Copy-Aktionen.
-// success = gruener Hinweis, error = roter Hinweis. 2.5s sichtbar.
-const copyMessage = ref<{ text: string; type: "success" | "error" } | null>(null);
-function showCopyFeedback(text: string, type: "success" | "error") {
-  copyMessage.value = { text, type };
-  setTimeout(() => {
-    if (copyMessage.value?.text === text) copyMessage.value = null;
-  }, 2500);
-}
-
-async function copyToken() {
-  if (!pairToken.value) return;
-  const ok = await copyToClipboard(pairToken.value);
-  if (ok) {
-    showCopyFeedback(`Code "${pairToken.value}" kopiert`, "success");
-  } else {
-    showCopyFeedback("Kopieren fehlgeschlagen — bitte manuell markieren", "error");
-  }
-}
-
-// Kopiert den vollstaendigen "/pair CODE"-Befehl (haeufiger Wunsch: einfach
-// in Telegram pasten ohne nochmal zu tippen).
-async function copyPairCommand() {
-  if (!pairCommand.value) return;
-  const ok = await copyToClipboard(pairCommand.value);
-  if (ok) {
-    showCopyFeedback("Befehl kopiert", "success");
-  } else {
-    showCopyFeedback("Kopieren fehlgeschlagen — bitte manuell markieren", "error");
-  }
-}
-
 // ── Inline-Aktionen ─────────────────────────────────────
 async function toggleRole(user: AdminUser) {
   if (user.isProtected) return;
@@ -361,15 +170,6 @@ async function loadUsers() {
 }
 
 onMounted(loadUsers);
-
-// Timer-Cleanup beim Unmount, falls der Pair-Modal offen war als der User
-// die Seite verlassen hat.
-onUnmounted(() => {
-  if (pairCountdownTimer) {
-    clearInterval(pairCountdownTimer);
-    pairCountdownTimer = null;
-  }
-});
 
 // ── Helpers ─────────────────────────────────────────────
 function initials(name: string): string {
@@ -423,7 +223,6 @@ function formatDate(iso?: string) {
         <div class="users-list-header flex items-center">
           <span class="eyebrow flex-1">Name</span>
           <span class="eyebrow" style="width: 90px">Rolle</span>
-          <span class="eyebrow" style="width: 70px">Telegram</span>
           <span class="eyebrow" style="width: 100px">Angelegt</span>
           <span class="eyebrow" style="width: 148px; text-align: right">Aktionen</span>
         </div>
@@ -471,7 +270,7 @@ function formatDate(iso?: string) {
               <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 1px">
                 <span v-if="u.displayName">{{ u.username }}</span>
               </div>
-              <!-- Mobile-Meta-Zeile: Rolle + Telegram-Status + Datum als Chips,
+              <!-- Mobile-Meta-Zeile: Rolle + Datum als Chips,
                  nur unter 768px sichtbar (CSS unten). -->
               <div class="user-meta-mobile">
                 <button
@@ -482,9 +281,6 @@ function formatDate(iso?: string) {
                 >
                   {{ u.role === "admin" ? "Admin" : "Nutzer" }}
                 </button>
-                <span class="user-meta-text">
-                  {{ u.hasTelegram ? "Telegram verknüpft" : "kein Telegram" }}
-                </span>
                 <span class="user-meta-text font-mono" style="display: inline-flex; align-items: center; gap: 4px">
                   <BIcon name="calendar" :size="10" />{{ formatDate(u.createdAt) }}
                 </span>
@@ -502,23 +298,10 @@ function formatDate(iso?: string) {
               {{ u.role === "admin" ? "Admin" : "Nutzer" }}
             </button>
           </div>
-          <div
-            class="user-col-telegram"
-            style="width: 70px; font-size: 11px; color: var(--color-text-muted); display: flex; align-items: center"
-          >
-            <BIcon v-if="u.hasTelegram" name="check" :size="13" />
-            <span v-else>—</span>
-          </div>
           <div class="user-col-date font-mono" style="width: 100px; font-size: 11px; color: var(--color-text-tertiary)">
             {{ formatDate(u.createdAt) }}
           </div>
           <div class="user-actions" style="display: flex; justify-content: flex-end; gap: 4px">
-            <button class="row-action" @click="openBotTokenDialog(u)" :title="'Bot-Token verwalten'">
-              <BIcon name="cpu" :size="12" />
-            </button>
-            <button class="row-action" @click="openPairDialog(u)" :title="'Telegram pairen'">
-              <BIcon name="message" :size="12" />
-            </button>
             <button class="row-action" @click="openPasswordReset(u)" :title="'Passwort zurücksetzen'">
               <BIcon name="lock" :size="12" />
             </button>
@@ -694,223 +477,6 @@ function formatDate(iso?: string) {
         </div>
       </div>
     </div>
-
-    <!-- Telegram-Pair-Dialog (Phase 5) -->
-    <div v-if="showPairDialog && pairTarget" class="modal-overlay" @click.self="closePairDialog">
-      <div class="modal-card" style="max-width: 520px">
-        <div class="eyebrow" style="margin-bottom: 4px">Telegram</div>
-        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 14px 0">
-          „{{ pairTarget.username }}" mit Telegram verknüpfen
-        </h2>
-
-        <div v-if="pairSaving" style="text-align: center; padding: 24px; color: var(--color-text-muted)">
-          Lade Code…
-        </div>
-        <div
-          v-else-if="pairError"
-          style="
-            padding: 8px 12px;
-            font-size: 12px;
-            color: var(--color-danger-text);
-            background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
-            border-radius: 6px;
-          "
-        >
-          {{ pairError }}
-        </div>
-        <template v-else-if="pairToken">
-          <!-- Schritt 1: Welcher Bot? -->
-          <div class="pair-step">
-            <div class="pair-step-label"><span class="pair-step-num">1</span> Bot in Telegram öffnen</div>
-            <div class="pair-step-body">
-              <template v-if="pairBotUsername">
-                <a
-                  :href="pairBotLink ?? '#'"
-                  target="_blank"
-                  rel="noopener"
-                  class="patio-btn solid sm"
-                  style="display: inline-flex; align-items: center; gap: 6px; text-decoration: none"
-                >
-                  <BIcon name="message" :size="11" />
-                  @{{ pairBotUsername }} öffnen
-                </a>
-                <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 6px">
-                  Falls noch nie genutzt: erst <code class="inline-cmd">/start</code> schicken.
-                </div>
-              </template>
-              <div v-else style="font-size: 12px; color: var(--color-warning-text, #b45309)">
-                Kein Bot bekannt. Wenn der User einen <strong>eigenen Bot</strong> nutzen soll, muss er sich erst
-                einloggen → Settings → „Mein Telegram-Bot" einrichten. Sonst muss der
-                <code class="inline-cmd">BOT_TOKEN</code> in der <code class="inline-cmd">.env</code> gesetzt sein.
-              </div>
-            </div>
-          </div>
-
-          <!-- Schritt 2: Befehl senden -->
-          <div class="pair-step">
-            <div class="pair-step-label"><span class="pair-step-num">2</span> Diesen Befehl in den Chat kopieren</div>
-            <div class="pair-step-body">
-              <div class="pair-cmd-box">
-                <code class="pair-cmd">{{ pairCommand }}</code>
-                <button class="patio-btn ghost sm" @click="copyPairCommand" title="Befehl kopieren">Kopieren</button>
-              </div>
-              <div
-                v-if="copyMessage"
-                :style="{
-                  fontSize: '11px',
-                  marginTop: '4px',
-                  color: copyMessage.type === 'success' ? 'var(--color-success-text)' : 'var(--color-danger-text)',
-                }"
-              >
-                {{ copyMessage.text }}
-              </div>
-            </div>
-          </div>
-
-          <!-- Meta: Gültigkeit -->
-          <div class="pair-meta">
-            <span>Gültig noch:</span>
-            <span class="font-mono" :class="{ 'pair-token-expired': pairCountdown === 'abgelaufen' }">
-              {{ pairCountdown }}
-            </span>
-            <button
-              class="patio-btn ghost sm"
-              @click="copyToken"
-              :title="'Nur Code kopieren'"
-              style="margin-left: auto"
-            >
-              Nur Code
-            </button>
-          </div>
-        </template>
-
-        <div class="flex items-center justify-end" style="gap: 8px; margin-top: 20px">
-          <button class="patio-btn solid" @click="closePairDialog">Schließen</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Bot-Token-Dialog (Admin-Override) -->
-    <div v-if="showBotDialog && botTarget" class="modal-overlay" @click.self="closeBotTokenDialog">
-      <div class="modal-card" style="max-width: 540px">
-        <div class="eyebrow" style="margin-bottom: 4px">Telegram-Bot</div>
-        <h2 style="font-size: 18px; font-weight: 600; margin: 0 0 14px 0">Bot für „{{ botTarget.username }}"</h2>
-
-        <!-- Status-Block -->
-        <div v-if="botStatus" class="bot-status-block">
-          <span
-            class="bot-status-dot"
-            :class="
-              botStatus.botRunning
-                ? 'bot-status-active'
-                : botStatus.hasToken
-                  ? 'bot-status-error'
-                  : 'bot-status-inactive'
-            "
-          ></span>
-          <div style="flex: 1">
-            <div style="font-size: 13px; font-weight: 600; color: var(--color-text)">
-              <template v-if="botStatus.botRunning && botStatus.botUsername">
-                Bot @{{ botStatus.botUsername }} läuft
-              </template>
-              <template v-else-if="botStatus.hasToken">Token gesetzt, aber Bot läuft nicht</template>
-              <template v-else>Noch kein Bot eingerichtet</template>
-            </div>
-            <div style="font-size: 11px; color: var(--color-text-muted); margin-top: 2px">
-              <template v-if="botStatus.chatId">
-                gepairt mit Chat
-                <span class="font-mono">{{ botStatus.chatId }}</span>
-              </template>
-              <template v-else-if="botStatus.botRunning">
-                Noch nicht gepairt — separat über „Telegram pairen" einen Code generieren.
-              </template>
-              <template v-else-if="botStatus.hasToken">
-                Token bei @BotFather noch gültig? Sonst neuen erzeugen.
-              </template>
-              <template v-else>Token aus @BotFather unten eintragen.</template>
-            </div>
-          </div>
-        </div>
-
-        <!-- Anleitung -->
-        <ol class="bot-steps">
-          <li>
-            Bot bei
-            <a href="https://t.me/BotFather" target="_blank" rel="noopener" class="bot-link">@BotFather</a>
-            anlegen → <code class="inline-cmd">/newbot</code> → Anweisungen folgen.
-          </li>
-          <li>
-            Token ähnlich
-            <code class="inline-cmd">123456789:AAE…</code> hier eintragen + speichern.
-          </li>
-          <li>Danach „Telegram pairen" ausführen, damit der User selbst seinen Chat verlinkt.</li>
-        </ol>
-
-        <!-- Token-Eingabe -->
-        <div class="flex items-center gap-3" style="margin-top: 8px">
-          <input
-            v-model="botTokenInput"
-            type="password"
-            placeholder="123456789:ABC-DEF... (von @BotFather)"
-            class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
-            style="
-              min-width: 0;
-              border: 1px solid var(--color-border);
-              background: var(--color-bg);
-              color: var(--color-text);
-            "
-            :class="{ 'bot-input-invalid': botTokenInput.length > 0 && !botTokenValid }"
-          />
-          <button
-            class="patio-btn solid"
-            :disabled="botDialogSaving || !botTokenValid"
-            :style="{ opacity: botDialogSaving || !botTokenValid ? 0.5 : 1 }"
-            @click="saveBotToken"
-          >
-            {{ botDialogSaving ? "…" : botStatus?.hasToken ? "Bot wechseln" : "Bot einrichten" }}
-          </button>
-        </div>
-        <div
-          v-if="botTokenInput.length > 0 && !botTokenValid"
-          style="font-size: 11px; color: var(--color-warning-text, #b45309); margin-top: 6px"
-        >
-          Format passt nicht — Telegram-Tokens sehen so aus:
-          <span class="font-mono">123456789:ABCdefGHI-JKL_mnoPQR_stuVWXyz0123456</span>
-        </div>
-
-        <!-- Status-Messages -->
-        <p v-if="botDialogMessage" style="font-size: 12px; color: var(--color-success-text); margin-top: 12px">
-          {{ botDialogMessage }}
-        </p>
-        <p
-          v-if="botDialogError"
-          style="
-            margin-top: 12px;
-            padding: 8px 12px;
-            font-size: 12px;
-            color: var(--color-danger-text);
-            background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
-            border-radius: 6px;
-          "
-        >
-          {{ botDialogError }}
-        </p>
-
-        <!-- Footer-Actions -->
-        <div class="flex items-center justify-between" style="gap: 8px; margin-top: 20px">
-          <button
-            v-if="botStatus?.hasToken"
-            class="patio-btn ghost"
-            :disabled="botDialogSaving"
-            @click="removeBotToken"
-          >
-            Bot entfernen
-          </button>
-          <span v-else></span>
-          <button class="patio-btn solid" @click="closeBotTokenDialog">Schließen</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -1071,105 +637,6 @@ function formatDate(iso?: string) {
   font-size: 11px;
 }
 
-/* ── Pair-Token-Box ─────────────────────────────────────── */
-.pair-token-box {
-  border: 1px solid var(--color-border);
-  border-radius: 10px;
-  padding: 16px 20px;
-  background: var(--color-bg-subtle);
-  text-align: center;
-}
-.pair-token-label {
-  font-size: 10px;
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 6px;
-}
-.pair-token-value {
-  font-family: var(--font-mono, monospace);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--color-text);
-  margin-bottom: 12px;
-  user-select: all;
-}
-.pair-token-meta {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  color: var(--color-text-muted);
-}
-.pair-token-expired {
-  color: var(--color-danger-text);
-}
-
-/* Neuer step-by-step Pair-Dialog */
-.pair-step {
-  margin-bottom: 14px;
-}
-.pair-step-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-bottom: 6px;
-}
-.pair-step-num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: var(--color-text);
-  color: var(--color-bg);
-  font-size: 11px;
-  font-weight: 700;
-}
-.pair-step-body {
-  padding-left: 26px;
-}
-.pair-cmd-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  background: var(--color-bg-subtle);
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-}
-.pair-cmd {
-  font-family: var(--font-mono, monospace);
-  font-size: 14px;
-  color: var(--color-text);
-  flex: 1;
-  user-select: all;
-  word-break: break-all;
-}
-.pair-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--color-text-muted);
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px solid var(--color-border-subtle);
-}
-.inline-cmd {
-  font-family: var(--font-mono, monospace);
-  background: var(--color-bg-subtle);
-  padding: 1px 5px;
-  border-radius: 3px;
-  font-size: 11px;
-}
-
 /* ── Bot-Token-Dialog ─────────────────────────────────────── */
 .bot-status-block {
   display: flex;
@@ -1233,7 +700,7 @@ function formatDate(iso?: string) {
   background: var(--color-bg-subtle);
   border-bottom: 1px solid var(--color-border);
 }
-/* Mobile-Meta-Zeile (Rolle/Telegram/Datum als Chips) — Default hidden,
+/* Mobile-Meta-Zeile (Rolle/Datum als Chips) — Default hidden,
    wird unter 768px aktiviert. */
 .user-meta-mobile {
   display: none;
@@ -1252,7 +719,6 @@ function formatDate(iso?: string) {
   }
   /* Spalten-Divs verstecken — Daten wandern in die Mobile-Meta-Zeile */
   .user-col-role,
-  .user-col-telegram,
   .user-col-date {
     display: none !important;
   }

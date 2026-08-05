@@ -334,7 +334,7 @@ function abortFlow() {
           PATIO
         </h1>
         <p style="font-size: 14px; color: var(--color-login-text-secondary); line-height: 1.6; margin: 0 0 24px 0">
-          KI-Assistent für Planung, Termine und Projektsteuerung.
+          Planung, Termine und Projektsteuerung fürs Büro.
         </p>
       </div>
 

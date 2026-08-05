@@ -26,25 +26,37 @@
 - **Sprache & Tonalität:** Bürodeutsch, kein Baustellen-Jargon. „Eintrag
   dokumentieren" statt „schnell auf der Baustelle eintippen".
 
+## Umbau zum Firmenserver (LAUFEND — Stand 2026-08-05)
+
+> PATIO wird vom Internet-Stack zum **zentral betriebenen Firmenprogramm im
+> eigenen Netz** umgebaut: ein Mini-PC im Büro, kein Internet, echte
+> Benutzerrollen, projektweise Rechte. Plan und Arbeitspakete:
+> `~/.claude/plans/dynamic-floating-pearl.md`, Zielbild:
+> `../../PATIO-Umbau-Firmenserver.md` (dessen Zeile 24 ist überholt — Basis ist
+> **dieses** Projekt, nicht `apps/patio-app-lokal`).
+
+**AP0 erledigt:** Telegram-Bot, LLM-/Agenten-Laufzeit, MCP-Client, Embeddings
+und die DuckDuckGo-Websuche sind entfernt (~9.400 Zeilen). Der Einstiegspunkt
+`src/index.ts` ist nicht mehr bot-, sondern API-zentriert.
+
+**Was als Nächstes ansteht** (Reihenfolge aus dem Plan): Server aufsetzen ·
+Volltextsuche auf `tsvector` heben · Schema ergänzen · Konfliktschutz (`rev`) ·
+Papierkorb · Rückportierung aus `apps/patio-app-lokal` · **Anmeldung auf TOTP**
+(heute erzwingt der Login E-Mail-Codes über SMTP — ohne Internet kann sich
+niemand anmelden) · Rechte scharf schalten.
+
 ## Stack & Deployment
 
-- **Backend:** Node.js + TypeScript + Hono (HTTP-API) + grammY (Telegram),
-  PostgreSQL via postgres.js (+ pgvector, optional).
-- **LLM:** OpenAI-SDK als Client — zeigt auf OpenAI (wenn `OPENAI_API_KEY`
-  gesetzt) **oder** auf Ollama via OpenAI-kompatiblen Endpoint
-  (`OLLAMA_BASE_URL`). **Produktiv aktuell: Ollama Cloud** (im
-  `patio-ollama`-Container per `ollama signin` eingeloggt, starkes Cloud-Modell
-  — gut im Tool-Calling; `.env.example`-Default ist aktuell `kimi-k2.5:cloud`).
-  Lokale Modelle (z.B.
-  `qwen2.5:7b`) gehen, sind auf kleiner Hardware aber zu langsam/schwach
-  fürs agentic Tool-Calling.
+- **Backend:** Node.js + TypeScript + Hono (HTTP-API), PostgreSQL via
+  postgres.js. Kein LLM, kein Bot, kein Außenkontakt im Betrieb.
 - **Frontend:** Vue 3 (Composition API) + Pinia + Vite + Tailwind v4 (`web/`).
 - **Deployment:** Docker Compose auf eigener VM unter `/opt/patio`.
-  Container: `patio-app`, `patio-postgres`, `patio-ollama`. Davor ein
-  **gemeinsamer Edge-Proxy** `edge-caddy` (externes Docker-Netz `proxy`,
-  `external: true`) — terminiert TLS, routet per Domain, hält DB/Ollama im
-  privaten Netz. SSE-Routes (`/api/chat`, `/api/events`) werden ungepuffert
-  durchgeleitet.
+  Container: `patio-app`, `patio-postgres`. Davor ein **gemeinsamer Edge-Proxy**
+  `edge-caddy` (externes Docker-Netz `proxy`, `external: true`) — terminiert
+  TLS, routet per Domain, hält die DB im privaten Netz. Die SSE-Route
+  `/api/events` wird ungepuffert durchgeleitet.
+  **Für den Firmenserver ändert sich das** (siehe AP1 im Plan): eigenes
+  Zertifikat statt Let's Encrypt, `postgres:16` statt `pgvector/pgvector:pg16`.
 
 **Deploy/Update auf dem Server (der übliche Weg):**
 
@@ -57,13 +69,13 @@ DB-Migrationen laufen beim Start automatisch (`DB_AUTO_MIGRATE`, default an).
 ## Befehle (aus dem Repo-Root)
 
 ```bash
-npm run dev          # tsx watch src/index.ts (Bot + API)
+npm run dev          # tsx watch src/index.ts (API)
 npm run dev:web      # Vite Dev-Server fürs Frontend
-npm run build        # tsc → dist/
+npm run build        # tsc → dist/ (kopiert emails/ und db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, ~282)
+npm test             # vitest run (alle Tests, 178)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -75,27 +87,34 @@ npm run db:status    # Migrations-Status anzeigen
 Husky + lint-staged formatieren/linten gestagte `.ts`/`.vue`-Dateien beim
 Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 
+> **`npm test` ohne `DATABASE_URL` überspringt still 8 Dateien / 60 Tests** —
+> und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
+> `tests/helpers/acl-fixture.ts`). Die Suite meldet trotzdem grün. Die
+> Test-Datenbank ist der Container `patio-test-db` in **WSL Ubuntu-24.04**; von
+> Windows aus ist sie **nicht** über `localhost` erreichbar, es braucht die
+> WSL-IP (`wsl -d Ubuntu-24.04 -- hostname -I`, ändert sich bei jedem Start):
+>
+> ```bash
+> DATABASE_URL="postgres://patio:patio@<WSL-IP>:5432/patio" npm test
+> ```
+
 ## Architektur-Kern
 
 - **Entry:** `src/index.ts` — lädt `.env` → DB-Healthcheck + Auto-Migrate →
-  Bot → Heartbeat → MCP-Clients → Hono-API. Support-Module: `bot-manager.ts`
-  (per-User-Bots, Main als Fallback), `notifications.ts`, `maintenance.ts`,
-  `sync/` (Microsoft Graph / Outlook).
-- **Telegram-Pipeline:** `bot.ts` → `queue.ts` (per-Chat-FIFO) →
-  `llm/runtime.ts`. Der Tool-Loop läuft bis `MAX_TOOL_ROUNDS` mit
-  `tool_choice:"required"`, bis das Modell `antworten` aufruft (Terminator).
-  `antworten` ist load-bearing: ohne Tool-Call keine Nutzer-Antwort.
-- **Agenten:** Markdown-Dateien unter `<workspace>/Agents/<Name>/`
-  (SOUL/BOOT/TOOLS/HEARTBEAT/MEMORY …). Laufzeit-Rekonfiguration, kein
-  Neustart. Nur `Main` ist geschützt. Sub-Agenten via `agent_spawnen` bis
-  `MAX_SPAWN_DEPTH`.
-- **Tool-Quellen** (in `tools.ts` gemerged): built-in (`llm/handlers/*.ts`,
-  registriert in `executor.ts`), dynamic (`tools/`), MCP (`mcp.json`).
+  Hono-API. Support-Module: `maintenance.ts` (Cron), `sync/` (Microsoft Graph /
+  Outlook — fliegt im Zuge des Firmenserver-Umbaus).
 - **Data-Layer:** `src/data/index.ts` ist die **einzige** Import-Fläche.
   Repos sind hybrid `dbRepo` (Postgres) / `fsRepo` (Markdown), Auswahl per
-  `DB_ENABLED`. **Chat liegt in der DB** (`chatRepo = DB_ENABLED ? dbChat :
-  fsChat`); **nur Agent-Logs sind immer FS** (JSONL). Bautagebuch, Meetings,
-  Time-Entries sind **DB-only**. Nie direkt aus `db-*`/`fs-*` importieren.
+  `DB_ENABLED`; die `fs-*`-Hälfte entfällt mit dem Firmenserver-Umbau.
+  Bautagebuch, Meetings, Time-Entries und die Suche sind **DB-only**. Nie
+  direkt aus `db-*`/`fs-*` importieren.
+- **Volltextsuche:** `src/data/db-search.ts` — sucht über Notizen, Aufgaben,
+  Projekte und Dateien und **filtert nach sichtbaren Projekten** (die alte
+  Suche tat das nicht). Sucht derzeit per `ILIKE`; der Umbau auf `tsvector`
+  ist ein eigenes Arbeitspaket und tauscht nur die WHERE-Klauseln aus.
+  **Typ-Casts sind Pflicht:** `project_id` ist `uuid`, die Scope-IDs kommen als
+  Strings — ohne `::uuid[]` wirft Postgres `operator does not exist: uuid =
+  text`, und zwar nur bei Nicht-Admins (siehe `tests/api-search-acl.test.ts`).
 - **Migrationen:** plain SQL in `src/db/migrations/`, `NNN_name.sql`,
   forward-only, idempotent (`IF NOT EXISTS` / DO-Block-Guards). Runner
   (`src/db/migrate.ts`) trackt per Dateiname in `_migrations` (keine
@@ -119,8 +138,7 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   `dbUser`). Routes in `src/api/routes/` spiegeln die Tool-Fläche. Vue-SPA
   in `web/` — App-Shell `web/src/components/AppLayout.vue` (3-Spalten-Grid
   `.app-v2`: NavRail + ListPane + Detail).
-- **Config:** `src/config.ts` — alle Tunables als Konstanten. Laufzeit-
-  Modell-Override via `setRuntimeMainModel` (nur `Main`-Agent).
+- **Config:** `src/config.ts` — alle Tunables als Konstanten.
 
 ## Frontend / PATIO Design System v2 (WICHTIG bei UI-Arbeit)
 
@@ -146,29 +164,6 @@ Das gesamte Frontend wurde auf das **PATIO Design System v2** umgestellt
   ListPane), Module über die kontext-wechselnde Sidebar.
 - **Keine Emojis in der UI.** Stattdessen Line-Icons über `BIcon.vue` (Glyph in
   `BIcon.vue` ergänzen) oder schlichten Text.
-
-## Bot-Sicherheitsmodell (WICHTIG — nicht aufweichen)
-
-Der Bot/Chat darf **nur Daten befüllen**, nichts Destruktives oder
-Systemrelevantes. Folgende Tools wurden bewusst **entfernt** (Schema **und**
-Handler) — nicht wieder hinzufügen ohne Rücksprache:
-
-- `befehl_ausfuehren`, `code_ausfuehren` (Shell/JS)
-- `tool_erstellen`, `tool_loeschen` (dynamische Tools)
-- `mcp_server_verbinden`, `mcp_server_trennen`
-- `projekt_loeschen`, `team_entfernen` (destruktiv)
-- `agent_erstellen`, `agent_datei_schreiben` (Agent-Config)
-
-Erlaubt bleiben Lesen/Befüllen: Notizen, Aufgaben (inkl. Zuweisung), Termine,
-Meetings/Protokolle, Projekte anlegen+aktualisieren, Bautagebuch, Stunden,
-Team anlegen/zuordnen, `datei_projekt_zuordnen`, read-only Listings.
-
-Telegram-**Systembefehle** (`/model`, `/fast`, `/restart`, `/config`,
-`/logs`) sind über `requireAdmin` in `bot.ts` auf `role === "admin"`
-beschränkt (FS-/Legacy-Modus = de-facto Admin). Wenn neue Telegram-Tools/
-Befehle dazukommen: gegen dieses Modell prüfen.
-
-Manuelle Abnahme: `docs/telegram-smoke-test.md`.
 
 ## Commit- & Verifikations-Strategie
 

@@ -1253,7 +1253,6 @@ type SettingsSection =
   | "profil"
   | "email"
   | "microsoft"
-  | "modelle"
   | "praeferenzen"
   | "branding"
   | "vorlagen"
@@ -1265,7 +1264,6 @@ const SETTINGS_NAV: { id: SettingsSection; label: string; icon: string; group: s
   { id: "profil", label: "Profil & Sicherheit", icon: "user", group: "Konto" },
   { id: "email", label: "Email & 2FA", icon: "mail", group: "Konto" },
   { id: "microsoft", label: "Microsoft Outlook", icon: "calendar", group: "Konto" },
-  { id: "modelle", label: "KI-Modelle", icon: "cpu", group: "System" },
   { id: "praeferenzen", label: "Präferenzen", icon: "sliders", group: "System" },
   { id: "branding", label: "Branding", icon: "image", group: "Vorlagen" },
   { id: "vorlagen", label: "Vorlagen", icon: "file-text", group: "Vorlagen" },
@@ -1777,99 +1775,6 @@ onMounted(() => {
           </section>
         </template>
 
-        <!-- ── LLM / Laufzeit ─────────────────────────────────────────── -->
-        <template v-if="activeSection === 'modelle'">
-          <section>
-            <h3 class="settings-h3 mb-3">LLM</h3>
-            <div class="settings-card settings-divide">
-              <div class="settings-row flex items-center gap-3 px-4 py-3">
-                <label class="text-sm settings-label w-40 flex-shrink-0">Aktives Modell</label>
-                <input
-                  v-model="modelInput"
-                  type="text"
-                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
-                  :placeholder="data.system.defaultModel"
-                />
-                <button
-                  @click="applyModel"
-                  :disabled="savingModel || !modelInput.trim() || modelInput.trim() === data.runtime.currentModel"
-                  class="settings-ghost-btn px-3 py-1.5 text-sm font-medium rounded disabled:opacity-50 transition"
-                >
-                  Setzen
-                </button>
-              </div>
-              <div class="settings-row px-4 py-3">
-                <p class="text-xs settings-label mb-2">Lokale Modelle (eigenes Ollama):</p>
-                <div class="flex flex-wrap gap-2">
-                  <button
-                    v-for="m in LOCAL_MODELS"
-                    :key="m.id"
-                    @click="pickModel(m.id)"
-                    :title="m.desc"
-                    :class="[
-                      'settings-chip px-2.5 py-1 text-xs rounded transition text-left',
-                      modelInput === m.id ? 'settings-chip-active' : '',
-                    ]"
-                  >
-                    <span class="font-mono">{{ m.label }}</span>
-                  </button>
-                </div>
-                <p class="text-[11px] mt-2" style="color: var(--color-text-tertiary)">
-                  Laufen vollstaendig auf der eigenen Maschine — keine Kosten. Das Modell muss vorher per
-                  <code class="font-mono">ollama pull &lt;name&gt;</code> installiert sein.
-                </p>
-              </div>
-              <div class="settings-row px-4 py-3">
-                <p class="text-xs settings-label mb-2">Cloud-Modelle (Ollama Cloud):</p>
-                <div class="flex flex-wrap gap-2">
-                  <button
-                    v-for="m in CLOUD_MODELS"
-                    :key="m.id"
-                    @click="pickModel(m.id)"
-                    :title="m.desc"
-                    :class="[
-                      'settings-chip px-2.5 py-1 text-xs rounded transition text-left',
-                      modelInput === m.id ? 'settings-chip-active' : '',
-                    ]"
-                  >
-                    <span class="font-mono">{{ m.label }}</span>
-                  </button>
-                </div>
-                <p class="text-[11px] mt-2" style="color: var(--color-text-tertiary)">
-                  Klick waehlt das Modell vor — mit "Setzen" wird es aktiv. Braucht einen Ollama-Cloud-Account (<code
-                    class="font-mono"
-                    >ollama signin</code
-                  >) und <code class="font-mono">OLLAMA_BASE_URL=https://ollama.com</code> in der .env.
-                </p>
-              </div>
-              <div class="settings-row flex items-center justify-between px-4 py-3">
-                <div>
-                  <p class="text-sm" style="color: var(--color-text-secondary)">Fast-Mode</p>
-                  <p class="text-xs" style="color: var(--color-text-tertiary)">
-                    Nutzt das Schnell-Modell ({{ data.system.fastModel }}) statt {{ data.system.defaultModel }}
-                  </p>
-                </div>
-                <button
-                  @click="toggleFast"
-                  :class="[
-                    'px-3 py-1 text-xs font-medium rounded transition',
-                    data.runtime.fastMode ? 'primary-btn' : 'settings-ghost-btn',
-                  ]"
-                >
-                  {{ data.runtime.fastMode ? "An" : "Aus" }}
-                </button>
-              </div>
-              <div
-                class="settings-row flex items-center justify-between px-4 py-3 text-xs"
-                style="color: var(--color-text-tertiary)"
-              >
-                <span>Subagent-Modell</span>
-                <span class="font-mono">{{ data.system.subagentModel }}</span>
-              </div>
-            </div>
-          </section>
-        </template>
-
         <!-- ── Praeferenzen ───────────────────────────────────────────── -->
         <template v-if="activeSection === 'praeferenzen'">
           <section>
@@ -2072,59 +1977,8 @@ onMounted(() => {
                 </div>
               </div>
             </div>
-
-            <h3 class="settings-h3 mb-3" style="margin-top: 28px">Telegram-Benachrichtigungen</h3>
-            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 8px">
-              Welche Events sollen via Telegram gesendet werden?
-            </p>
-            <div class="settings-card settings-divide" v-if="serverPrefs">
-              <label
-                v-for="t in [
-                  { key: 'termine', label: 'Termine', desc: 'Neue Einladungen, Änderungen' },
-                  { key: 'tasks', label: 'Aufgaben', desc: 'Zugewiesene To-Dos' },
-                  { key: 'meetings', label: 'Meetings', desc: 'Neue Action-Items' },
-                  { key: 'bautagebuch', label: 'Bautagebuch', desc: 'Tägliche Erinnerung' },
-                ] as const"
-                :key="t.key"
-                class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer"
-              >
-                <div>
-                  <p class="text-sm" style="color: var(--color-text-secondary)">{{ t.label }}</p>
-                  <p class="text-xs" style="color: var(--color-text-tertiary)">{{ t.desc }}</p>
-                </div>
-                <input
-                  type="checkbox"
-                  :checked="serverPrefs.telegramNotifications[t.key]"
-                  :disabled="prefsBusy"
-                  @change="
-                    patchPreferences({
-                      telegramNotifications: { [t.key]: ($event.target as HTMLInputElement).checked },
-                    })
-                  "
-                />
-              </label>
-            </div>
-
             <h3 class="settings-h3 mb-3" style="margin-top: 28px">Sonstiges</h3>
             <div class="settings-card settings-divide">
-              <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
-                <div>
-                  <p class="text-sm" style="color: var(--color-text-secondary)">Globale Telegram-Benachrichtigungen</p>
-                  <p class="text-xs" style="color: var(--color-text-tertiary)">
-                    Master-Schalter — wenn aus, werden keine Telegram-Toasts gesendet
-                  </p>
-                </div>
-                <input v-model="notificationsEnabled" type="checkbox" class="settings-checkbox" />
-              </label>
-              <label class="settings-row flex items-center justify-between gap-3 px-4 py-3 cursor-pointer">
-                <div>
-                  <p class="text-sm" style="color: var(--color-text-secondary)">Dateisuche im Chat standardmäßig an</p>
-                  <p class="text-xs" style="color: var(--color-text-tertiary)">
-                    Der Chat startet mit aktiver Vault-Suche (+-Menü)
-                  </p>
-                </div>
-                <input v-model="chatSearchMode" type="checkbox" class="settings-checkbox" />
-              </label>
               <div class="settings-row flex items-center gap-3 px-4 py-3">
                 <label class="text-sm settings-label w-40 flex-shrink-0">Standard-Projekt</label>
                 <select v-model="defaultProject" class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none">

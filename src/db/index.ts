@@ -6,25 +6,6 @@
 export { getDb, checkDbHealth, checkPgVector, getPoolStats, closeDb, withRetry } from "./client.js";
 export { runMigrations, migrationStatus } from "./migrate.js";
 
-// Embeddings & Semantische Suche
-export {
-  generateEmbedding,
-  generateEmbeddings,
-  embedNote,
-  embedFile,
-  embedAllNotes,
-  embedAllFiles,
-  embeddingStats,
-  checkEmbeddingHealth,
-  checkEmbeddingSchemaDims,
-} from "./embeddings.js";
-export {
-  semanticSearch,
-  searchHybrid,
-  searchNotesSemantic,
-  searchFilesSemantic,
-  searchFilesHybrid,
-  searchNotesText,
-  searchFilesText,
-} from "./semantic-search.js";
-export type { SemanticResult } from "./semantic-search.js";
+// Volltextsuche: die frueheren Embedding-/pgvector-Exporte sind mit der
+// LLM-Laufzeit entfallen. Der Ersatz auf Postgres-Volltext (tsvector) kommt
+// als eigenes Arbeitspaket — bis dahin hat die Suche keinen Unterbau.

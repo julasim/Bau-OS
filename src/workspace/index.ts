@@ -13,29 +13,3 @@ export { editFile, globFiles, grepFiles } from "./fileops.js";
 export type { EditResult, GrepMatch, GrepResult } from "./fileops.js";
 export { searchWorkspace } from "./search.js";
 export type { SearchResult } from "./search.js";
-export {
-  PROTECTED_AGENTS,
-  estimateTokens,
-  getAgentPath,
-  isProtectedAgent,
-  listAgents,
-  workspaceExists,
-  getWorkspacePath,
-  isMainWorkspaceConfigured,
-  finalizeMainWorkspace,
-  loadAgentWorkspace,
-  createAgentWorkspace,
-  inspectAgentWorkspace,
-  appendAgentConversation,
-  loadAgentHistory,
-  loadAgentHistoryByDate,
-  listAgentSessions,
-  clearAgentToday,
-  appendAgentMemory,
-  readAgentFile,
-  writeAgentFile,
-  shouldCompact,
-  getLogForCompaction,
-  writeCompactedLog,
-} from "./agents.js";
-export type { ConversationEntry, SessionInfo, SetupAnswers, WorkspaceFileInfo } from "./agents.js";

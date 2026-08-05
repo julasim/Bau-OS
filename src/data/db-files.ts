@@ -1,8 +1,6 @@
 // Datenbank-Implementation: files Tabelle (PostgreSQL)
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import { embedFile } from "../db/embeddings.js";
-import { logError } from "../logger.js";
 import type { FileEntry, FileRepository, FileShareEntry } from "./types.js";
 
 function rowToFile(row: Record<string, unknown>): FileEntry {
@@ -70,13 +68,6 @@ export const dbFiles: FileRepository = {
     `;
 
     if (!row) throw new Error("Datei konnte nicht gespeichert werden");
-
-    // Auto-Embed wenn Text vorhanden (fire-and-forget). Nutzt den
-    // bereits gesaeuberten Text — sonst wuerde das Embedding-Modell
-    // den NUL-haltigen Original sehen.
-    if (safeContentText) {
-      embedFile(id, safeContentText).catch((err) => logError("[Embedding]", err));
-    }
 
     return rowToFile(row);
   },
@@ -197,9 +188,6 @@ export const dbFiles: FileRepository = {
       UPDATE files SET content_text = ${contentText}, analyzed = true, updated_at = ${now}
       WHERE id = ${id}
     `;
-    if (result.count > 0) {
-      embedFile(id, contentText).catch((err) => logError("[Embedding]", err));
-    }
     return result.count > 0;
   },
 

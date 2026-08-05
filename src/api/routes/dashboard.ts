@@ -1,5 +1,4 @@
 import { Hono } from "hono";
-import { listAgents } from "../../workspace/index.js";
 import { noteRepo, taskRepo, terminRepo, projectRepo } from "../../data/index.js";
 import { getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import { DB_ENABLED } from "../../config.js";
@@ -15,12 +14,11 @@ dashboardRoutes.get("/dashboard", async (c) => {
   const ctx = userCtx(c);
   const visible = await getVisibleProjectIds(ctx);
 
-  const [notes, tasks, termine, projects, agents] = await Promise.all([
+  const [notes, tasks, termine, projects] = await Promise.all([
     noteRepo.list(),
     taskRepo.list(),
     terminRepo.list(),
     projectRepo.list(visible),
-    Promise.resolve(listAgents()),
   ]);
 
   // Phase-4-Filter fuer Aggregate. Admin: alles; User: nach sichtbaren
@@ -67,7 +65,6 @@ dashboardRoutes.get("/dashboard", async (c) => {
     todayTermine: todayTermine.map((t) => (t.uhrzeit ? `${t.uhrzeit} – ${t.text}` : t.text)),
     termine: visibleTermine.length,
     projects: projects.length,
-    agents,
   });
 });
 
@@ -77,50 +74,23 @@ dashboardRoutes.get("/dashboard/db-status", async (c) => {
     return c.json({ enabled: false, mode: "filesystem" });
   }
   try {
-    const [{ checkDbHealth, checkPgVector, migrationStatus }, { getPoolStats }, embeddingsMod] = await Promise.all([
+    const [{ checkDbHealth, migrationStatus }, { getPoolStats }] = await Promise.all([
       import("../../db/index.js"),
       import("../../db/client.js"),
-      import("../../db/embeddings.js"),
     ]);
     const healthy = await checkDbHealth();
-    const hasVector = healthy ? await checkPgVector() : false;
     const migrations = healthy ? await migrationStatus() : [];
-
-    // Parallele Health-Checks fuer optionale Subsysteme
-    const [embeddingHealth, schemaDims, poolStats, coverage] = await Promise.all([
-      healthy ? embeddingsMod.checkEmbeddingHealth() : Promise.resolve({ ok: false, model: "", dimensions: 0 }),
-      healthy
-        ? embeddingsMod.checkEmbeddingSchemaDims()
-        : Promise.resolve({ ok: false, configured: 0, schema: { notes: null, files: null } }),
-      Promise.resolve(getPoolStats()),
-      // Coverage: wieviele Notizen/Dateien haben ueberhaupt ein Embedding?
-      // Wenn < 100 %, findet semantisch_suchen sie nicht — Banner soll warnen
-      // und der User kann /api/search/reindex triggern.
-      healthy
-        ? embeddingsMod.embeddingStats()
-        : Promise.resolve({ notes: { total: 0, embedded: 0 }, files: { total: 0, embedded: 0 } }),
-    ]);
 
     return c.json({
       enabled: true,
       mode: "database",
       healthy,
-      pgvector: hasVector,
       migrations: migrations.map((m) => ({
         name: m.name,
         applied: m.applied,
         appliedAt: m.appliedAt,
       })),
-      embedding: embeddingHealth,
-      embeddingSchema: schemaDims,
-      embeddingCoverage: {
-        notes: coverage.notes,
-        files: coverage.files,
-        ok:
-          (coverage.notes.total === 0 || coverage.notes.embedded === coverage.notes.total) &&
-          (coverage.files.total === 0 || coverage.files.embedded === coverage.files.total),
-      },
-      pool: poolStats,
+      pool: getPoolStats(),
     });
   } catch (err) {
     return c.json({

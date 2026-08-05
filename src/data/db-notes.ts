@@ -1,8 +1,6 @@
 // Datenbank-Implementation: PostgreSQL via postgres.js
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import { embedNote } from "../db/embeddings.js";
-import { logError } from "../logger.js";
 import type { NoteRepository } from "./types.js";
 
 export const dbNotes: NoteRepository = {
@@ -26,9 +24,6 @@ export const dbNotes: NoteRepository = {
       INSERT INTO notes (id, title, content, project_id, source, created_at, updated_at)
       VALUES (${id}, ${title}, ${content}, ${projectId}, 'bot', ${now}, ${now})
     `;
-
-    // Auto-Embed im Hintergrund (fire-and-forget)
-    embedNote(id, content).catch((err) => logError("[Embedding]", err));
 
     return id;
   },
@@ -113,7 +108,6 @@ export const dbNotes: NoteRepository = {
       UPDATE notes SET content = ${content}, updated_at = ${now}
       WHERE id = ${found.id}
     `;
-    embedNote(String(found.id), content).catch((err) => logError("[Embedding]", err));
     return true;
   },
 

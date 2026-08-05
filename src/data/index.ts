@@ -12,8 +12,6 @@ import type {
   ProjectRepository,
   TeamRepository,
   FileRepository,
-  ChatRepository,
-  AgentLogRepository,
   BautagebuchRepository,
   MeetingRepository,
   TimeEntryRepository,
@@ -40,15 +38,11 @@ import { dbTimeEntries } from "./db-time-entries.js";
 import { dbPhases } from "./db-phases.js";
 import { dbInvoices } from "./db-invoices.js";
 import { dbPortfolio } from "./db-portfolio.js";
-import { fsChat } from "./fs-chat.js";
-import { dbChat } from "./db-chat.js";
-import { fsAgentLogs } from "./fs-agent-logs.js";
+import { dbSearch } from "./db-search.js";
 
 // ── Repos basierend auf Config wählen ────────────────────────
 // User-Daten: DB wenn verfuegbar, sonst FS-Fallback.
-// Chat + Agent-Logs: immer FS (bewusste Design-Entscheidung —
-// haengt nicht an der DB-Verfuegbarkeit, einfache Wartung via
-// tail/grep auf JSONL-Dateien).
+// Chat und Agent-Logs sind mit der LLM-Laufzeit entfallen.
 
 export const taskRepo: TaskRepository = DB_ENABLED ? dbTasks : fsTasks;
 export const terminRepo: TerminRepository = DB_ENABLED ? dbTermine : fsTermine;
@@ -65,8 +59,10 @@ export const timeEntryRepo: TimeEntryRepository | null = DB_ENABLED ? dbTimeEntr
 export const phaseRepo: PhaseRepository | null = DB_ENABLED ? dbPhases : null;
 export const invoiceRepo: InvoiceRepository | null = DB_ENABLED ? dbInvoices : null;
 export const portfolioRepo: PortfolioRepository | null = DB_ENABLED ? dbPortfolio : null;
-export const chatRepo: ChatRepository = DB_ENABLED ? dbChat : fsChat;
-export const agentLogRepo: AgentLogRepository = fsAgentLogs;
+// Volltextsuche — nur im DB-Modus. Ersetzt die frueheren Vault- und
+// Embedding-Suchwege (siehe db-search.ts).
+export const searchRepo: typeof dbSearch | null = DB_ENABLED ? dbSearch : null;
+export type { SearchHit } from "./db-search.js";
 
 /** Gibt den aktuellen Modus zurueck */
 export function dataMode(): "database" | "filesystem" {
@@ -86,9 +82,6 @@ export type {
   Company,
   MemberType,
   ContactLogEntry,
-  ChatSession,
-  ChatMessage,
-  AgentLog,
   BautagebuchEntry,
   BautagebuchPersonnel,
   BautagebuchUpsertInput,
@@ -115,8 +108,6 @@ export type {
   ProjectRepository,
   TeamRepository,
   FileRepository,
-  ChatRepository,
-  AgentLogRepository,
   BautagebuchRepository,
   MeetingRepository,
   TimeEntryRepository,

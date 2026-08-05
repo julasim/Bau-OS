@@ -8,25 +8,31 @@
 // Stundenerfassung, Bautagebuch und Meetings dienen der Doku IM BUERO,
 // retrospektiv (abends, nach der Begehung, am Schreibtisch). Echtzeit-
 // Schnelleingabe vom Bauwagen ist nicht das Designziel.
+//
+// Startreihenfolge: .env → Datenbank (Healthcheck + Migrationen) → Web-API.
+// Frueher stand hier der Telegram-Bot an erster Stelle und die API kam
+// nebenbei; seit dem Umbau zum Firmenserver ist die API der einzige Dienst.
 // ============================================================
 
 import "dotenv/config";
-import { createBot } from "./bot.js";
-import { startHeartbeat } from "./heartbeat.js";
 import { logInfo, logWarn, logError, flushLogsSync } from "./logger.js";
-import { Bot } from "grammy";
-import { DB_ENABLED, DB_AUTO_MIGRATE, ENCRYPTION_KEY_SET, ENCRYPTION_KEY_OK } from "./config.js";
+import {
+  DB_ENABLED,
+  DB_AUTO_MIGRATE,
+  ENCRYPTION_KEY_SET,
+  ENCRYPTION_KEY_OK,
+  API_ENABLED,
+  JWT_SECRET_OK,
+  IS_PRODUCTION,
+} from "./config.js";
 
-const token = process.env.BOT_TOKEN;
 const workspacePath = process.env.WORKSPACE_PATH ?? process.env.VAULT_PATH;
-
-if (!token) throw new Error("BOT_TOKEN fehlt in .env");
 if (!workspacePath) throw new Error("WORKSPACE_PATH fehlt in .env");
 
 // ── Datenbank initialisieren (wenn DATABASE_URL gesetzt) ─────────────────────
 if (DB_ENABLED) {
   try {
-    const { checkDbHealth, checkPgVector, runMigrations } = await import("./db/index.js");
+    const { checkDbHealth, runMigrations } = await import("./db/index.js");
     const healthy = await checkDbHealth();
     if (!healthy) {
       logError(
@@ -36,22 +42,7 @@ if (DB_ENABLED) {
       process.exit(1);
     }
     logInfo("[DB] PostgreSQL verbunden");
-    const hasVector = await checkPgVector();
-    if (hasVector) {
-      logInfo("[DB] pgvector Extension aktiv");
-      const { checkEmbeddingSchemaDims } = await import("./db/index.js");
-      const dimsResult = await checkEmbeddingSchemaDims();
-      if (!dimsResult.ok) {
-        logError(
-          "[DB] Embedding-Dimensionen stimmen nicht ueberein — Embeddings koennen fehlschlagen",
-          new Error(
-            `Konfiguriert: ${dimsResult.configured}, Schema: notes=${dimsResult.schema?.notes ?? "n/a"}, files=${dimsResult.schema?.files ?? "n/a"}${dimsResult.error ? ` (${dimsResult.error})` : ""}`,
-          ),
-        );
-      }
-    } else {
-      logInfo("[DB] pgvector Extension nicht gefunden — Embeddings deaktiviert");
-    }
+
     // Auto-Migrate beim Start — per DB_AUTO_MIGRATE=false abschaltbar
     if (DB_AUTO_MIGRATE) {
       await runMigrations();
@@ -79,23 +70,6 @@ if (DB_ENABLED) {
   logInfo("[DB] Kein DATABASE_URL gesetzt — nur Filesystem-Modus");
 }
 
-const bot = createBot(token) as Bot;
-
-// Default-Bot bei Bot-Manager registrieren — Notifications-Modul nutzt
-// ihn als Fallback fuer User ohne eigenen Bot. setDefaultBot ruft auch
-// getMe() auf, damit der Username fuers UI bekannt ist.
-const { setDefaultBot } = await import("./bot-manager.js");
-await setDefaultBot(bot);
-
-const { fmt } = await import("./format.js");
-
-// MCP-Server verbinden (wenn mcp.json vorhanden)
-import { initMcp } from "./mcp.js";
-await initMcp();
-
-bot.start();
-logInfo("PATIO gestartet");
-
 // SEC-4: Hinweis, wenn die Feld-Verschluesselung noch am JWT_SECRET haengt.
 // Kein harter Abbruch — der Rueckfall funktioniert, ist aber nicht das Ziel.
 if (DB_ENABLED && !ENCRYPTION_KEY_SET) {
@@ -114,29 +88,7 @@ if (DB_ENABLED && ENCRYPTION_KEY_SET && !ENCRYPTION_KEY_OK) {
   logWarn("ENCRYPTION_KEY ist zu kurz (<32 Zeichen) — schwacher Schluessel, bitte >=32 Zeichen setzen.", "SEC-4");
 }
 
-// Heartbeat NACH bot.start() starten — bot.api.sendMessage() braucht eine aktive Verbindung
-startHeartbeat(async (chatId, text) => {
-  try {
-    await bot.api.sendMessage(chatId, fmt(text), { parse_mode: "HTML" });
-  } catch {
-    await bot.api.sendMessage(chatId, text);
-  }
-});
-
-// Phase 6: per-User-Bots aus DB starten (parallel zum env-Bot).
-// Wirft nur Logs, kein process.exit — wenn ein User-Bot kaputt ist,
-// soll der Rest weiterlaufen.
-if (DB_ENABLED) {
-  try {
-    const { startBotManager } = await import("./bot-manager.js");
-    await startBotManager();
-  } catch (err) {
-    logError("[BotManager]", err);
-  }
-}
-
-// Web-API starten (nur wenn JWT_SECRET gesetzt)
-import { API_ENABLED, API_PORT, JWT_SECRET_OK, IS_PRODUCTION } from "./config.js";
+// ── Web-API starten (nur wenn JWT_SECRET gesetzt) ────────────────────────────
 if (API_ENABLED) {
   // Production-Hardening: schwaches Secret = harter Stop. Dev-Modus warnt nur,
   // damit lokale Smoke-Tests mit Default-Configs noch starten.
@@ -153,6 +105,7 @@ if (API_ENABLED) {
   }
   const { startApi } = await import("./api/server.js");
   startApi();
+  logInfo("PATIO gestartet");
 } else {
   logInfo("[API] Web-API deaktiviert (JWT_SECRET nicht gesetzt)");
 }
@@ -167,17 +120,6 @@ if (DB_ENABLED) {
 // Graceful Shutdown
 async function shutdown(signal: string): Promise<void> {
   logInfo(`${signal} empfangen — fahre herunter...`);
-  try {
-    bot.stop();
-  } catch {
-    /* ignore */
-  }
-  const { disconnectAll } = await import("./mcp.js");
-  try {
-    await disconnectAll();
-  } catch {
-    /* ignore */
-  }
   // Datenbank-Verbindung schliessen
   if (DB_ENABLED) {
     try {
@@ -200,9 +142,9 @@ process.on("SIGINT", () => shutdown("SIGINT"));
 process.on("exit", flushLogsSync);
 
 // Prozess-Level-Fehlerhandler: eine unbehandelte Promise-Rejection oder Exception
-// (z.B. ein fehlgeschlagener Bot-Init) darf den Dienst nicht STILL runterreissen.
-// Ursache mit Stack loggen, dann kontrolliert beenden — restart:always (Compose)
-// faehrt den Prozess sauber wieder hoch. Kein Weiterlaufen in undefiniertem Zustand.
+// darf den Dienst nicht STILL runterreissen. Ursache mit Stack loggen, dann
+// kontrolliert beenden — restart:always (Compose) faehrt den Prozess sauber
+// wieder hoch. Kein Weiterlaufen in undefiniertem Zustand.
 process.on("unhandledRejection", (reason) => {
   logError("[FATAL] Unhandled Promise Rejection — Prozess wird beendet", reason);
   process.exit(1);
