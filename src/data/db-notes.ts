@@ -77,7 +77,7 @@ async function findeNotiz(nameOrPath: string): Promise<{ id: string; title: stri
 }
 
 export const dbNotes: NoteRepository = {
-  async save(content, project) {
+  async save(content, project, createdById = null) {
     const db = getDb();
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -93,9 +93,12 @@ export const dbNotes: NoteRepository = {
       projectId = p?.id ?? null;
     }
 
+    // `source` stand hier auf 'bot' — ein Rest aus der Telegram-Aera, die mit
+    // AP0 entfallen ist. Alles, was heute eine Notiz anlegt, kommt ueber die
+    // Weboberflaeche; die Spalte hat dafuer bereits 'web' als Vorgabe.
     await db`
-      INSERT INTO notes (id, title, content, project_id, source, created_at, updated_at)
-      VALUES (${id}, ${title}, ${content}, ${projectId}, 'bot', ${now}, ${now})
+      INSERT INTO notes (id, title, content, project_id, source, created_by, created_at, updated_at)
+      VALUES (${id}, ${title}, ${content}, ${projectId}, 'web', ${createdById}, ${now}, ${now})
     `;
 
     return id;

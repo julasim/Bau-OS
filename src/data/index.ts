@@ -39,6 +39,7 @@ import { dbTimeEntries } from "./db-time-entries.js";
 import { dbPhases } from "./db-phases.js";
 import { dbInvoices } from "./db-invoices.js";
 import { dbPositionskatalog } from "./db-positionskatalog.js";
+import { dbAktivitaet } from "./db-aktivitaet.js";
 import { dbPortfolio } from "./db-portfolio.js";
 import { dbSearch } from "./db-search.js";
 
@@ -55,6 +56,8 @@ export const timeEntryRepo: TimeEntryRepository = dbTimeEntries;
 export const phaseRepo: PhaseRepository = dbPhases;
 export const invoiceRepo: InvoiceRepository = dbInvoices;
 export const positionskatalogRepo: PositionskatalogRepository = dbPositionskatalog;
+export const aktivitaetRepo = dbAktivitaet;
+export type { AktivitaetsEintrag } from "./db-aktivitaet.js";
 export const portfolioRepo: PortfolioRepository = dbPortfolio;
 export const searchRepo = dbSearch;
 export type { SearchHit } from "./db-search.js";

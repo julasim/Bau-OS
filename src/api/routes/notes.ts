@@ -89,7 +89,7 @@ notesRoutes.post("/notes", async (c) => {
   if (project && !(await canSeeProjectByName(userCtx(c), project))) {
     return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
   }
-  const path = await noteRepo.save(content, project);
+  const path = await noteRepo.save(content, project, c.var.userId);
   emitForProjectName({ type: "note", action: "created" }, project, { actorId: c.var.userId });
   return c.json({ path }, 201);
 });

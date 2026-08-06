@@ -657,7 +657,10 @@ export interface NoteSummary {
 }
 
 export interface NoteRepository {
-  save(content: string, project?: string): Promise<string>;
+  /** `createdById` haelt fest, wer die Notiz angelegt hat. Ohne ihn blieb
+   *  `notes.created_by` leer — im Aktivitaets-Feed stand dann „—", und bei
+   *  jeder Rueckfrage „von wem ist das?" half nur Raten. */
+  save(content: string, project?: string, createdById?: string | null): Promise<string>;
   list(limit?: number): Promise<string[]>;
   listDetailed?(limit?: number): Promise<NoteSummary[]>;
   read(nameOrPath: string): Promise<string | null>;
