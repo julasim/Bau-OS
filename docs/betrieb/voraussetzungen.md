@@ -1,73 +1,110 @@
-# Voraussetzungen
+# Voraussetzungen und Kaufliste
 
-Was gebraucht wird, bevor PATIO im Büro installiert wird.
+Was beschafft sein muss, bevor PATIO im Büro aufgesetzt wird.
+
+::: danger Der Server ist ab jetzt der einzige Ausfallpunkt
+Vor dem Umbau konnte man bei einer Störung im Explorer weiterarbeiten. Das ist
+vorbei. **Vier Dinge gehören von Tag eins dazu und dürfen nicht nachgereicht
+werden** — sie stehen unten in der Kaufliste:
+
+nächtliche Sicherung auf eine externe Platte · eine **geprobte**
+Rücksicherung mit Zeitmessung · ein zweites identisches Gerät im Schrank ·
+eine USV.
+:::
 
 ## Der Rechner
 
-PATIO läuft auf **einem Rechner im Büronetz**. Ein Mini-PC genügt — die
-Anwendung ist ein Node-Prozess neben einer PostgreSQL-Datenbank, es läuft
-kein Sprachmodell und keine Bildverarbeitung mit.
+Ein gebrauchter Business-Kleinrechner genügt. PATIO ist ein Node-Prozess
+neben einer PostgreSQL-Datenbank — es läuft **kein Sprachmodell**, keine
+Bildverarbeitung, nichts Rechenintensives.
 
-| Komponente | Minimum | Empfohlen |
+| | Minimum | Empfohlen |
 |---|---|---|
 | **CPU** | 2 Kerne | 4 Kerne |
-| **RAM** | 4 GB | 8 GB |
-| **Speicher** | 64 GB SSD | 256 GB SSD oder mehr |
-| **Betriebssystem** | Ubuntu 22.04 LTS | Ubuntu 24.04 LTS |
+| **Arbeitsspeicher** | 8 GB | **16 GB** |
+| **Datenträger** | 256 GB SSD | **500 GB NVMe** |
+| **Netzwerk** | — | **Kabel**, kein WLAN |
+| **Betriebssystem** | Ubuntu Server 24.04 LTS | |
 
-::: tip Speicher ist der begrenzende Faktor
-Hochgeladene Dateien liegen in der Datenbank. Ein Büro mit vielen Plänen und
-Fotos füllt eine Platte deutlich schneller als es CPU oder RAM auslastet.
-Die Backups kommen dazu — planen Sie den Ablageort dafür getrennt.
+Bewährte Geräte, gebraucht für 150–300 €:
+
+- **Dell OptiPlex Micro** (7050 / 7080 / 7090)
+- **HP EliteDesk 800 Mini** (G4 / G5 / G6)
+- **Lenovo ThinkCentre Tiny** (M720q / M920q)
+
+Neu als Alternative: ein Mini-PC mit **Intel N100 oder N150**, 16 GB, ab
+etwa 200 €.
+
+::: warning Von Einplatinenrechnern wird abgeraten
+Ein Raspberry Pi wirkt verlockend, aber: SD-Karten sterben unter
+Datenbanklast, der Arbeitsspeicher ist knapp, und es gibt keinen Weg, das
+Gerät im Fehlerfall schnell durch ein baugleiches zu ersetzen.
 :::
 
-Der Rechner sollte durchlaufen und nicht der Arbeitsplatz einer Person sein.
-Er braucht eine feste IP im Netz oder einen festen DNS-Namen; die
-Arbeitsplätze erreichen ihn ausschließlich über den Browser.
+Die 16 GB sind kein Luxus — die Compose-Datei stellt Postgres auf
+`shared_buffers=2GB` ein, was auf 8 GB ebenfalls läuft, aber weniger Luft für
+das Zwischenspeichern von Dateien lässt.
 
-## Software auf dem Rechner
+## Kaufliste
 
-Zwei Wege, je nachdem wie tief man einsteigen will:
+| Was | Warum | Grob |
+|---|---|---|
+| **Server** (siehe oben) | | 150–300 € |
+| **Zweites, baugleiches Gerät** | Bei einem Hardwaredefekt ist das Büro sonst tagelang blind. Mit Ersatzgerät ist es eine Rücksicherung. | 150–300 € |
+| **Externe Festplatte, 2 TB** | Ziel der nächtlichen Sicherung. Fest angesteckt, mit **ext4** formatiert. | 60–90 € |
+| **USV** (ca. 650 VA) | Ein Stromausfall mitten in einem Datenbankschreibvorgang beschädigt Daten. Die USV muss den Rechner selbst herunterfahren können — reine Überbrückung genügt nicht. | 80–150 € |
 
-| Weg | Was gebraucht wird |
-|---|---|
-| **Docker Compose** (empfohlen) | Docker Engine und das Compose-Plugin |
-| **Bare Metal** | Node.js 24, PostgreSQL 16, Git, `build-essential` |
+::: tip Zum zweiten Gerät gehört, dass es einmal durchgespielt wird
+Aus der Sicherung hochziehen, Zeit notieren, wieder wegstellen. Ein
+Ersatzgerät, auf dem nie etwas lief, ist ein Karton.
+:::
 
-Details: [Software installieren](/betrieb/software).
+### Zur Größe der Sicherungsplatte
+
+Die Staffelung hält 23 Stände (7 Tage, 4 Wochen, 12 Monate), aber
+Wochen- und Monatsstände sind **harte Links** auf den jeweiligen Tagesstand
+und kosten keinen zusätzlichen Platz. Als Faustregel: das Fünffache des
+erwarteten Datenbestands. Für ein Büro dieser Größe reichen 2 TB reichlich.
+
+**ext4, nicht exFAT oder NTFS** — harte Links gibt es nur auf einem
+Linux-Dateisystem, und Eigentümer und Rechte überleben dort ebenfalls.
 
 ## Netz
 
 | Punkt | Anforderung |
 |---|---|
-| **Erreichbarkeit** | Die Arbeitsplätze müssen den Rechner über HTTP(S) erreichen |
-| **Feste Adresse** | Feste IP oder DNS-Eintrag im internen Netz |
-| **Zertifikat** | Eigenes Zertifikat der internen CA oder ein selbst signiertes; Let's Encrypt funktioniert ohne öffentlich erreichbaren Namen nicht |
-| **SMTP** | Ein Mailserver, der aus dem Büronetz erreichbar ist |
-| **Internet** | Nicht erforderlich für den Betrieb — nur für Updates aus dem Git-Repository und für Container-Images beim ersten Aufsetzen |
+| **Kabel** | Der Server hängt am Kabel, nicht am WLAN |
+| **Feste Adresse** | Feste IP im internen Netz |
+| **Namensauflösung** | `patio.<intern>` muss auf den Server zeigen — Router-DNS oder `hosts`-Datei je Arbeitsplatz |
+| **Internet** | **Für den Betrieb nicht nötig.** Einmalig beim Aufsetzen, um Ubuntu und Docker zu installieren |
 
-::: warning Der Login braucht E-Mail
-Die Anmeldung verlangt nach Benutzername und Passwort einen 6-stelligen
-Code, der per E-Mail zugestellt wird. Ohne erreichbaren SMTP-Server kann
-sich **niemand** anmelden. Steht kein Mailserver im Haus, muss dieser Punkt
-vor der Inbetriebnahme geklärt sein.
+::: tip Kein Mailserver nötig
+Frühere Fassungen verlangten hier SMTP, weil die Anmeldung 6-stellige Codes
+per E-Mail verschickte. Das ist entfallen: die Anmeldung läuft über
+**Benutzername und Passwort**. PATIO verschickt nichts mehr.
 :::
 
-## Backup-Ziel
+## Was NICHT gebraucht wird
 
-Ein Backup, das auf demselben Rechner liegt, ist bei dessen Ausfall
-mitverloren. Vorzusehen ist ein zweiter Ablageort im Haus — ein NAS, eine
-Netzfreigabe oder eine Wechselplatte. Details:
-[Sicherung](/betrieb/sicherung).
+- **Kein Mailserver** — siehe oben
+- **Keine öffentliche Domain und kein Let's Encrypt** — das Zertifikat kommt
+  aus einer eigenen Zertifizierungsstelle auf dem Server
+  ([Zertifikat](/betrieb/zertifikat))
+- **Kein Internet im Betrieb** — Updates kommen als Datei über einen
+  USB-Stick ([Updates](/betrieb/updates))
+- **Kein zweiter Faktor / keine Authenticator-App** — im geschlossenen
+  Büronetz trägt Passwort plus Ratebremse. Das ändert sich, sobald es einen
+  Zugang von außen gibt.
 
-## Checkliste
+## Checkliste vor dem Aufsetzen
 
-- [ ] Rechner beschafft, Ubuntu installiert, läuft durch
-- [ ] Feste IP oder DNS-Name vergeben
-- [ ] Docker Engine + Compose-Plugin installiert (oder Node und PostgreSQL)
-- [ ] Zertifikat für den Reverse-Proxy vorhanden
-- [ ] SMTP-Zugangsdaten vorhanden und aus dem Netz erreichbar
-- [ ] Backup-Ziel festgelegt
+- [ ] Server beschafft, Ubuntu Server 24.04 installiert
+- [ ] Zweites, baugleiches Gerät vorhanden
+- [ ] Externe Festplatte vorhanden (wird beim Aufsetzen mit ext4 formatiert)
+- [ ] USV angeschlossen und mit dem Server verbunden
+- [ ] Feste IP vergeben, Kabelnetzwerk
+- [ ] Rechnername im Router-DNS eingetragen
+- [ ] Auslieferungspaket vom Entwicklungsrechner auf einem USB-Stick
 
 ## Nächster Schritt
 

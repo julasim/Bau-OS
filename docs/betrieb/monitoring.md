@@ -166,10 +166,18 @@ Stündlich per Cron:
 
 ## Alarmierung
 
-Ein Prüfskript, dessen Ausgabe niemand liest, meldet keinen Ausfall. Im
-Büronetz genügt in der Regel eine Mail an die Administration, sobald das
-Skript etwas anderes als „OK" liefert — der SMTP-Server steht ohnehin schon
-für die Anmeldecodes bereit.
+Ein Prüfskript, dessen Ausgabe niemand liest, meldet keinen Ausfall.
+
+**Eine Mail scheidet aus** — PATIO verschickt seit dem Umbau nichts mehr, und
+ein Mailserver steht dafür auch nicht bereit. Die Meldungen gehen deshalb
+dorthin, wo sie beim nächsten Anmelden am Server auffallen: ins Journal, in
+eine Datei unter `/opt/patio/logs/` und als Nachricht an alle angemeldeten
+Terminals. So macht es der Sicherungslauf über `OnFailure=`
+(siehe `deploy/patio-backup-fehler@.service`).
+
+Die erste Bildschirmseite von `patio status` zeigt außerdem, wann die
+Sicherung zuletzt vollständig durchlief — und warnt, wenn das über 30 Stunden
+her ist.
 
 Externe Überwachungsdienste scheiden aus: der Rechner ist von außen nicht
 erreichbar, und das soll er auch nicht sein.

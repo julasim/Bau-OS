@@ -37,7 +37,7 @@ liegen daneben als echte Dateien im Dateisystem.
 ```
 
 Es gibt **keine ausgehende Verbindung** im Betrieb — abgesehen vom
-SMTP-Server für die Anmeldecodes, der im eigenen Netz stehen sollte.
+Kein Mailserver, kein Sprachmodell, kein Außenkontakt.
 
 ### Ablauf einer Anfrage
 
@@ -69,7 +69,6 @@ src/
 │   ├── events.ts        Event-Bus mit Rechtefilter
 │   ├── sse-tickets.ts   Einmal-Tickets für den SSE-Aufbau
 │   ├── file-validation.ts  Endung + Magic Bytes bei Uploads
-│   ├── email.ts         SMTP-Versand
 │   └── routes/          24 Route-Dateien je Domäne
 ├── data/
 │   ├── index.ts   einzige Import-Fläche für alle Repositories
@@ -149,7 +148,7 @@ entsprechenden Module wurden entfernt, nicht abgeschaltet.
 ## Was es früher gab
 
 PATIO war eine self-hosted KI-Büro-Software mit Telegram-Bot,
-LLM-Agenten, Vault-Dateien und semantischer Suche über pgvector. Mit dem
+LLM-Agenten, Vault-Dateien und semantischer Suche über pgvector (alles entfallen). Mit dem
 Umbau zum Firmenserver ist das alles ersatzlos entfallen — rund 16.000
 Zeilen. Wer auf alte Notizen, Skripte oder Konfigurationen stößt, die
 `BOT_TOKEN`, `OPENAI_API_KEY`, `OLLAMA_BASE_URL` oder Agenten-Markdown

@@ -16,7 +16,6 @@ src/
 │   ├── server.ts         — Hono-App, Login, CORS, Security-Header, Rate-Limit
 │   ├── auth.ts           — JWT, Benutzerverwaltung, Auth-Middleware
 │   ├── crypto.ts         — Feld-Verschlüsselung (AES-GCM)
-│   ├── email.ts          — SMTP-Versand und Mail-Bau
 │   ├── email-template.ts — Platzhalter-Renderer für die HTML-Vorlagen
 │   ├── events.ts         — Event-Bus für Live-Updates (mit Rechtefilter)
 │   ├── sse-tickets.ts    — Einmal-Tickets für den SSE-Verbindungsaufbau
@@ -41,7 +40,6 @@ src/
 │   └── extractor.ts      — Text aus PDF und DOCX ziehen
 ├── export/
 │   └── docx-render.ts    — DOCX-Erzeugung aus Word-Vorlagen
-└── emails/               — 4 HTML-Vorlagen für Systemmails
 
 web/                      — Vue-3-Frontend (eigenes Vite-Projekt)
 docker/                   — Standalone-Compose, Caddyfile, DB-Init
@@ -175,15 +173,14 @@ Erlaubte Endungen: `pdf`, `docx`, `doc`, `xlsx`, `xls`, `csv`, `txt`, `md`,
 
 ### `src/api/email.ts` und `email-template.ts`
 
-SMTP-Versand über `nodemailer` sowie der Aufbau der vier Systemmails aus den
-HTML-Vorlagen in `src/emails/`. Der Renderer ersetzt `{{var}}`-Platzhalter
-und escaped HTML-Variablen; URL-Variablen bleiben unescaped, weil sie aus
-dem Backend selbst stammen.
+`src/api/email.ts`, `email-template.ts` und `src/emails/` sind mit dem
+Ausbau des Mailversands entfallen — PATIO verschickt nichts mehr.
 
 ### `src/api/totp.ts`
 
 TOTP-Hilfsfunktionen aus der Zeit der App-basierten Zwei-Faktor-Anmeldung.
-Die zugehörigen Routen (`routes/auth-2fa.ts`) sind in `server.ts` bewusst
+Die zugehörigen Routen (`routes/auth-2fa.ts`) bleiben für den späteren
+Zugang von außen (VPN) unangetastet liegen und sind in `server.ts` bewusst
 **nicht eingebunden**, damit nicht zwei Verfahren parallel laufen. Beides
 bleibt als Wiederherstellungspfad im Code.
 

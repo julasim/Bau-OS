@@ -85,26 +85,32 @@ diese Werte ändern will, muss die Compose-Datei anpassen.
 
 ## Niemand kann sich anmelden
 
-Der Login verlangt nach Benutzername und Passwort einen 6-stelligen Code per
-E-Mail. Kommt keine Mail an, ist der Zugang zu.
+Die Anmeldung braucht **Benutzername und Passwort**, sonst nichts. Kein Code,
+keine E-Mail, kein zweiter Faktor.
 
 ```bash
-# Kommt die Anwendung an den Mailserver?
-docker compose exec app sh -c 'echo $SMTP_HOST'
-docker compose logs app | grep -i -E "smtp|login.email"
+patio logs 100 | grep -i "login"
+docker exec patio-postgres psql -U patio -d patio -c   "SELECT username, role FROM users ORDER BY created_at"
 ```
 
 | Symptom | Ursache |
 |---|---|
-| HTTP 502, „Login-Code konnte nicht zugestellt werden" | SMTP nicht erreichbar oder Zugangsdaten falsch |
-| Kein Code, aber Erfolgsmeldung | `SMTP_HOST` leer — der Code steht dann nur im Server-Log |
-| „Kein aktiver Code" | Der Code ist abgelaufen; der Login muss neu gestartet werden |
-| „Zu viele Fehlversuche" | Der Code wurde zu oft falsch eingegeben; Login neu starten |
+| „Benutzername oder Passwort falsch" | genau das — die Meldung ist absichtlich gleich für beide Fälle, damit sie keine Konten verrät |
+| HTTP 429 | Ratebremse: 5 Fehlversuche je IP in 15 Minuten |
+| Seite lädt nicht, Zertifikatswarnung | kein Anmeldeproblem — siehe [Zertifikat](/betrieb/zertifikat) |
+| Der Einrichtungsassistent erscheint, obwohl Konten existieren | die Anwendung sieht die Datenbank nicht; `patio status` prüfen |
 
-::: tip Notfall-Zugang
-Steht der Mailversand still, findet sich der erzeugte Code im Server-Log,
-solange `SMTP_HOST` leer ist. Das ist ein Notbehelf für die Inbetriebnahme,
-kein Betriebszustand — im Log liest ihn jeder mit, der Logzugriff hat.
+::: tip Passwort zurücksetzen
+Über einen anderen Admin unter `/admin/users`. Gibt es keinen zweiten Admin
+mehr, hilft nur der Weg über die Datenbank — dafür muss ein bcrypt-Hash
+erzeugt werden:
+
+```bash
+docker exec patio-app node -e   "require('bcrypt').hash('NeuesPasswort123', 12).then(h => console.log(h))"
+docker exec patio-postgres psql -U patio -d patio -c   "UPDATE users SET password_hash = '<hash>' WHERE username = 'admin'"
+```
+
+Deshalb: **immer zwei Administratoren.**
 :::
 
 ---

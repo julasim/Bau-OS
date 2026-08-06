@@ -350,8 +350,65 @@ projektweise Rechte.
 
 | Vorhaben | Warum |
 |---|---|
-| Anmeldung ohne E-Mail-Versand | Der Login verlangt Codes über SMTP — ohne Mailserver im Haus kann sich niemand anmelden |
 | Volltextsuche auf `tsvector` | Derzeit `ILIKE`; bei großen Beständen zu langsam |
 | Konfliktschutz bei gleichzeitiger Bearbeitung | Zwei Arbeitsplätze am selben Datensatz überschreiben einander |
 | Papierkorb | Gelöschtes ist endgültig weg |
 | Migrationen `022`–`024` abräumen | Microsoft-Tabellen ohne Code; ein `DROP` wäre unumkehrbar und wartet aufs Schema-Paket |
+
+---
+
+## Server betriebsbereit
+**06.08.2026**
+
+Der Rechner im Büro kann aufgesetzt werden: Anmeldung, Stack, Zertifikat,
+Sicherung, Netzfreigabe und der Weg für Updates stehen.
+
+### Anmeldung: ein festes Passwort je Benutzer
+
+Der Login verzweigte bis hierher **jeden** Datenbank-Benutzer in den
+E-Mail-Pfad — mit Adresse in den SMTP-Versand (der ohne Internet scheiterte
+und mit 502 antwortete), ohne Adresse in einen erzwungenen
+Einrichtungs-Fluss, der ebenfalls SMTP braucht. Auf dem Zielsystem kam
+**niemand** hinein außer über ein einstufiges Konto aus einer JSON-Datei.
+
+- Sieben Routen entfernt (`login/2fa`, `setup-email/*`, `login/magic-link/*`,
+  `forgot-password`, `reset-password`), dazu die verifizierte E-Mail-Änderung
+  in den Einstellungen
+- `src/api/email.ts`, `email-template.ts`, `src/emails/` und `nodemailer` raus
+- Anmeldeseite von sechs Schritten auf einen
+- **Mindestlänge 8 → 12, bcrypt 10 → 12**, beides zentral statt viermal
+  einzeln im Code. Bestehende Hashes bleiben gültig
+- E-Mail ist jetzt **optional** — sie war Anlege-Pflicht und hätte auf einem
+  Server ohne Mailversand verhindert, überhaupt ein Konto anzulegen
+- Toter Telegram-Code aus `auth.ts` (Pairing, Per-Benutzer-Bots)
+
+`src/api/totp.ts` und `routes/auth-2fa.ts` bleiben unangetastet liegen: der
+zweite Faktor kommt zurück, sobald es einen Zugang von außen gibt.
+
+### Betrieb
+
+- **Ein Compose-Stack** (postgres + app + caddy), in sich geschlossen. Die
+  frühere Fassung hing am externen Netz eines gemeinsamen Edge-Proxy und kam
+  ohne dieses gar nicht hoch
+- **Eigene lokale Zertifizierungsstelle** statt Let's Encrypt. Nichts
+  verlässt das Haus — bei einem öffentlichen Zertifikat stünde der interne
+  Rechnername im Certificate-Transparency-Log
+- **Sicherung auf eine externe Festplatte**, gestaffelt 7/4/12, mit
+  Selbstprüfung: jeder Lauf spielt den Dump probeweise zurück und vergleicht
+  Zeilenzahlen. Der private CA-Schlüssel ist mit drin — ohne ihn kostet ein
+  Wiederaufbau den Gang zu jedem Arbeitsplatz
+- **Netzfreigabe** mit Papierkorb; alles, was hereinkommt, gehört uid 1000
+- **Offline-Updates**: ein Paket vom Entwicklungsrechner, per USB-Stick
+  eingespielt, mit Prüfsumme, erzwungener Sicherung und Rückweg
+- **Kein Außenkontakt der Oberfläche** mehr — die Schriften kamen bis hierher
+  von Google Fonts
+
+### Zwei Fallen, die dabei aufgefallen sind
+
+- **`chown -R patio:patio` auf das Dokumentenverzeichnis** war so
+  dokumentiert und macht den Dienst schreibunfähig: der Container läuft als
+  uid 1000, der Dienstbenutzer hat eine andere. Der Fehler zeigt sich an
+  ganz anderer Stelle
+- **Eine fehlgeschlagene Sicherung belegte einen Aufbewahrungsplatz.** Nach
+  einer Woche Fehlschlägen wären alle sieben Tagesplätze mit unbrauchbaren
+  Ständen gefüllt gewesen — und der letzte gute weggerotiert

@@ -5,51 +5,54 @@ liegen.
 
 ## Anmeldung
 
-Zweistufig: Passwort, dann ein Code aus dem Postfach.
+**Einstufig: Benutzername und Passwort.**
 
 ```
-1. POST /api/auth/login            Benutzername + Passwort
-   → Ticket + 6-stelliger Code per E-Mail
-2. POST /api/auth/login/2fa        Ticket + Code
+POST /api/auth/login    Benutzername + Passwort
    → JWT
 ```
 
 | Element | Wert |
 |---|---|
-| Passwort-Hash | bcrypt, 10 Runden |
-| Mindestlänge Passwort | 8 Zeichen |
-| Code | 6 Ziffern, bcrypt-gehasht gespeichert |
-| Gültigkeit des Codes | 10 Minuten |
-| Fehlversuche je Code | 5, danach ist der Code tot |
-| Zwischenticket | JWT, 5 Minuten gültig |
+| Passwort-Hash | bcrypt, **12 Runden** |
+| Mindestlänge Passwort | **12 Zeichen** |
 | Ausgestelltes JWT | 7 Tage gültig |
+| Ratebremse | 5 Fehlversuche je IP in 15 Minuten, danach 429 |
 
-Alternativ zum Code lässt sich ein **Anmelde-Link** anfordern. Der Token
-wird als SHA-256-Hash gespeichert; nur der Klartext steht in der Mail, und
-er lässt sich genau einmal einlösen.
+Die Fehlermeldung ist bei falschem Passwort und unbekanntem Benutzer
+**dieselbe** — sonst ließen sich vorhandene Konten abfragen.
 
-Für Konten ohne hinterlegte E-Mail-Adresse erzwingt der Login einen
-**Einrichtungsschritt**: die Adresse muss gesetzt und per Code bestätigt
-werden, bevor ein JWT ausgestellt wird.
+::: warning Das Passwort ist der einzige Faktor — bewusst
+Zweistufig ging es bis zum Umbau zum Firmenserver: Passwort, dann ein
+6-stelliger Code per E-Mail. Auf einem Rechner ohne Internet ist dieser Weg
+nicht gangbar — der Versand scheiterte, und **niemand** kam mehr hinein.
 
-::: warning Der Alt-Konten-Rückfallpfad
-Konten aus `data/users.json` melden sich **ohne** zweiten Faktor an. Der Pfad
-existiert für Erstinbetriebnahme und Wiederherstellung. Beim Start zieht
-PATIO solche Konten idempotent in die Datenbank nach; danach greift für sie
-der reguläre Ablauf. Auf einem produktiven System sollte die Datei leer
-sein.
+Was das bedeutet: ein erratenes oder weitergegebenes Passwort ist voller
+Zugang. Getragen wird das von drei Dingen — dem geschlossenen Büronetz ohne
+Weg von außen, der Ratebremse, und dem Prüfprotokoll.
+
+**Sobald es einen Zugang von außen gibt (VPN), muss der zweite Faktor
+zurück.** `src/api/totp.ts` und `src/api/routes/auth-2fa.ts` liegen dafür
+unangetastet im Quellbaum.
 :::
 
-## Passwort zurücksetzen
+::: danger Passwort vergessen
+Es gibt **keinen** Selbstbedienungsweg — kein „Passwort vergessen", keinen
+Anmelde-Link, keine Reset-Mail. Zurücksetzen kann nur ein anderer
+Administrator unter `/admin/users`.
 
-```
-1. POST /api/auth/forgot-password  Benutzername oder E-Mail
-2. POST /api/auth/reset-password   Reset-Token + Code + neues Passwort
-```
+Deshalb: **immer zwei Administratoren.** Sonst hilft im Ernstfall nur der
+Weg über die Datenbank, siehe
+[Troubleshooting](/betrieb/troubleshooting).
+:::
 
-Schritt 1 antwortet **immer** mit 200 — ob es das Konto gibt, verrät die
-Antwort nicht. Ist gar kein SMTP konfiguriert, kommt stattdessen ein klarer
-503 statt eines stillen Fehlschlags.
+::: tip Der Alt-Konten-Rückfallpfad
+Konten aus `data/users.json` melden sich weiterhin an. Der Pfad existiert für
+Erstinbetriebnahme und Wiederherstellung; beim Start zieht PATIO solche
+Konten idempotent in die Datenbank nach. Er entfällt mit dem Arbeitspaket
+„Konten und Sitzungen". Auf einem produktiven System sollte die Datei leer
+sein.
+:::
 
 ## Ersteinrichtung
 
@@ -167,7 +170,7 @@ Sicherheitsrelevante Vorgänge werden protokolliert, einsehbar unter
 
 | Bereich | Ereignisse |
 |---|---|
-| Anmeldung | `login.success`, `login.fail`, `login.2fa.success`, `login.2fa.fail`, `login.email.sent`, `login.email.fail` |
+| Anmeldung | `login.success`, `login.fail` |
 | Anmelde-Link | `login.magic_link.sent`, `.success`, `.fail` |
 | E-Mail-Einrichtung | `email_setup.code_sent`, `.success`, `.code_fail` |
 | Passwort | `password_reset.request`, `.success`, `password.admin_reset` |

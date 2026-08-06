@@ -37,8 +37,8 @@ export default defineConfig({
         items: [
           { text: "Voraussetzungen", link: "/betrieb/voraussetzungen" },
           { text: "Server aufsetzen", link: "/betrieb/server" },
-          { text: "Software installieren", link: "/betrieb/software" },
-          { text: "PATIO deployen", link: "/betrieb/deployment" },
+          { text: "PATIO installieren", link: "/betrieb/installation" },
+          { text: "Zertifikat", link: "/betrieb/zertifikat" },
           { text: "Netzfreigabe", link: "/betrieb/freigabe" },
           { text: "Updates", link: "/betrieb/updates" },
           { text: "Sicherung", link: "/betrieb/sicherung" },

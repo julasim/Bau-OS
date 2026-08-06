@@ -14,12 +14,14 @@ verwalten lässt.
 sudo apt update && sudo apt upgrade -y
 ```
 
-Automatische Sicherheitsupdates einschalten:
+::: warning Keine automatischen Sicherheitsupdates
+`unattended-upgrades` braucht Internet — der Server hat keines, und das ist
+Absicht. Stattdessen ein **fester Wartungstermin**, Vorschlag
+vierteljährlich: Sicherung prüfen, Maschine kurz ans Netz, aktualisieren,
+neu starten, Probe. Bewusst so entschieden, nicht vergessen.
 
-```bash
-sudo apt install -y unattended-upgrades
-sudo dpkg-reconfigure -plow unattended-upgrades
-```
+Termin im Kalender eintragen — sonst passiert es nie.
+:::
 
 ## 3. Feste Adresse vergeben
 
@@ -90,22 +92,23 @@ Der Rechner steht im internen Netz, nicht am Internet. Offen sein müssen nur
 SSH und der Port des Reverse-Proxy:
 
 ```bash
-sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp
-sudo ufw allow from 192.168.0.0/16 to any port 443 proto tcp
+sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp    # SSH
+sudo ufw allow from 192.168.0.0/16 to any port 443 proto tcp   # PATIO
+sudo ufw allow from 192.168.0.0/16 to any port 445 proto tcp   # Netzfreigabe
 sudo ufw enable
 sudo ufw status
 ```
 
-Das Adressbereich ist an das eigene Netz anzupassen.
+Der Adressbereich ist an das eigene Netz anzupassen. SSH sollte enger stehen —
+idealerweise nur der Arbeitsplatz der Administration.
 
 ::: warning Datenbank bleibt intern
-Der PostgreSQL-Port darf nicht ins Netz. Im Compose-Aufbau hängt der
-Datenbank-Container nur im internen Docker-Netz und veröffentlicht keinen
-Port; bei einer Bare-Metal-Installation gehört `listen_addresses` auf
-`localhost`.
+Der PostgreSQL-Port darf nicht ins Netz. Der Datenbank-Container hängt nur im
+internen Docker-Netz und veröffentlicht keinen Port — in `docker-compose.yml`
+steht bei ihm bewusst kein `ports:`.
 :::
 
-## 7. Zeitzone setzen
+## 7. Zeit
 
 ```bash
 sudo timedatectl set-timezone Europe/Vienna
@@ -114,6 +117,45 @@ sudo timedatectl set-timezone Europe/Vienna
 PATIO rechnet intern mit `Europe/Vienna` (`TIMEZONE` in `src/config.ts`).
 Weicht die Systemzeit ab, stimmen die Zeitstempel in Protokollen und
 Bautagebuch nicht mit der Wanduhr überein.
+
+::: danger Zeitabgleich ohne Internet
+Ohne Internet gibt es kein NTP nach draußen. Läuft die Uhr über Monate weg,
+werden die **Zertifikate der internen Zertifizierungsstelle ungültig** — und
+niemand kommt mehr hinein.
+
+Den Router als Zeitquelle eintragen, in `/etc/systemd/timesyncd.conf`:
+
+```ini
+[Time]
+NTP=192.168.1.1
+```
+
+```bash
+sudo systemctl restart systemd-timesyncd
+timedatectl show -p NTPSynchronized --value    # muss "yes" sagen
+```
+:::
+
+## 7a. Weiteres zur Grundeinrichtung
+
+**Automatischer Start nach Stromausfall.** Im BIOS/UEFI „Power On After Power
+Loss" auf *ein*. Sonst steht das Büro, bis jemand den Knopf drückt.
+
+**USV anbinden**, sodass die Maschine bei leerem Akku selbst herunterfährt:
+
+```bash
+sudo apt install -y nut
+```
+
+Eine USV, die nur überbrückt, schützt die Zeit — nicht die Daten.
+
+**Journal begrenzen**, damit Protokolle über Jahre nicht die Platte füllen.
+In `/etc/systemd/journald.conf`:
+
+```ini
+[Journal]
+SystemMaxUse=2G
+```
 
 ## 8. Verzeichnisse anlegen
 
@@ -136,12 +178,12 @@ sudo chown -R 1000:1000 /opt/patio-workspace
 ::: danger Die häufigste Falle: `chown -R patio:patio` auf das Dokumentenverzeichnis
 Der Container läuft als `node` = **UID 1000** (`Dockerfile`, `USER node`).
 
-Der Dienst-Benutzer `patio` wird von `scripts/install.sh` mit `useradd -r`
-angelegt — also als **Systemkonto**, dessen UID per Definition **unter 1000**
-liegt (Ubuntu vergibt von 999 abwärts).
+Der Dienst-Benutzer `patio` bekommt beim Anlegen irgendeine andere UID — bei
+`adduser` die nächste freie (oft 1001, wenn schon ein Konto existiert), bei
+`useradd -r` sogar eine **unter** 1000, weil das ein Systemkonto ist.
 
-Gibt man das Dokumentenverzeichnis dem Benutzer `patio`, gehört es also UID ~999,
-während der Dienst als UID 1000 schreibt. **Er kann dann keine Datei ablegen.**
+Gibt man das Dokumentenverzeichnis diesem Benutzer, passt die UID nicht mehr
+zu der, unter der der Dienst schreibt. **Er kann dann keine Datei ablegen.**
 Der Fehler zeigt sich an ganz anderer Stelle, weil stille `catch`-Blöcke ihn
 maskieren — in einem früheren Fall trat er als „LLM nicht erreichbar" auf,
 obwohl in Wahrheit nur das Log-Schreiben scheiterte.
@@ -168,4 +210,4 @@ Nach diesen Schritten steht:
 
 ## Nächster Schritt
 
-→ [Software installieren](/betrieb/software)
+→ [PATIO installieren](/betrieb/installation)

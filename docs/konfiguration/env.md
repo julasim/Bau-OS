@@ -15,7 +15,9 @@ Vorlage: `.env.example`. Was hier nicht steht, wird nirgends ausgewertet.
 | `DATABASE_URL` | Ja | — | PostgreSQL-Verbindungsstring |
 | `JWT_SECRET` | Ja | — | Secret für die Login-Token, mind. 32 Zeichen |
 | `API_PORT` | Nein | `3000` | Port der Web-Oberfläche |
-| `APP_URL` | Nein | leer | Öffentliche Basis-URL für Links in E-Mails |
+| `PATIO_HOSTNAME` | Nein | `patio.sima.intern` | Rechnername für das Zertifikat |
+| `WORKSPACE_HOST_DIR` | Nein | `./workspace` | Dokumentenordner auf dem Host (Compose) |
+| `BACKUP_DIR` | Nein | `/mnt/patio-backup` | Ziel der nächtlichen Sicherung |
 | `CORS_ORIGINS` | Nein | `http://localhost:<API_PORT>` | Erlaubte Origins, komma-getrennt |
 | `DB_AUTO_MIGRATE` | Nein | `true` | Migrationen beim Start automatisch anwenden |
 | `ENCRYPTION_KEY` | Nein | leer | Eigener Schlüssel für verschlüsselte Felder |
@@ -26,12 +28,6 @@ Vorlage: `.env.example`. Was hier nicht steht, wird nirgends ausgewertet.
 | `API_RATE_LIMIT_WINDOW_MS` | Nein | `60000` | Zeitfenster des globalen Limits in Millisekunden |
 | `LOG_JSONL_MAX_BYTES` | Nein | `5242880` | Dateigröße, ab der das JSONL-Log rotiert |
 | `LOG_JSONL_KEEP_FILES` | Nein | `5` | Anzahl rotierter Logdateien |
-| `SMTP_HOST` | Nein | leer | SMTP-Server; leer = keine Mails |
-| `SMTP_PORT` | Nein | `587` | SMTP-Port |
-| `SMTP_USER` | Nein | leer | SMTP-Benutzername |
-| `SMTP_PASS` | Nein | leer | SMTP-Passwort |
-| `SMTP_FROM` | Nein | `PATIO <noreply@patio.local>` | Absenderadresse |
-| `SMTP_SECURE` | Nein | `auto` | TLS-Modus: `auto`, `true`, `false` |
 
 Zusätzlich wertet **Docker Compose** vier Variablen aus, die der
 Anwendungscode selbst nie liest: `POSTGRES_USER`, `POSTGRES_PASSWORD`,
@@ -97,16 +93,22 @@ kürzerem Secret den Dienst; im Entwicklungsmodus gibt es nur eine Warnung.
 
 Port, auf dem der Hono-Server hört (`0.0.0.0`). Standard `3000`.
 
-### APP_URL
+### PATIO_HOSTNAME
 
-Basis-URL für Links in E-Mails (Anmelde-Link, Passwort-Reset). Leer
-bedeutet: das Backend baut die URL aus den Request-Headern (`x-forwarded-proto`,
-`x-forwarded-host`, `host`) — der Reverse-Proxy muss diese korrekt
-weiterreichen.
+Rechnername, unter dem die Arbeitsplätze PATIO erreichen. Caddy stellt dafür
+ein Zertifikat aus seiner eigenen, lokalen Zertifizierungsstelle aus.
 
 ```bash
-APP_URL=https://patio.firma.intern
+PATIO_HOSTNAME=patio.sima.intern
 ```
+
+Bewusst keine `.local`-Endung — die ist für mDNS reserviert und macht unter
+Windows Ärger. Der Name muss im Netz auflösbar sein und das
+CA-Wurzelzertifikat auf jedem Arbeitsplatz liegen:
+[Zertifikat](/betrieb/zertifikat).
+
+*Hier stand früher `APP_URL` — eine Basis-URL für Links in E-Mails. PATIO
+verschickt keine Mails mehr.*
 
 ### CORS_ORIGINS
 
@@ -181,27 +183,37 @@ Wird das Limit überschritten, antwortet die API mit 429 und einem
 Das engere Limit für den Login (5 Versuche je IP in 15 Minuten) ist fest im
 Code hinterlegt und nicht über die `.env` steuerbar.
 
-## SMTP / E-Mail
+## Sicherung
 
-Die Anmeldung verlangt derzeit einen 6-stelligen Code per E-Mail. Ohne
-`SMTP_HOST` wird kein Code zugestellt.
+### BACKUP_DIR
+
+Ziel der nächtlichen Sicherung — die externe Festplatte.
 
 ```bash
-SMTP_HOST=mail.firma.intern
-SMTP_PORT=587
-SMTP_USER=patio@firma.intern
-SMTP_PASS=<Passwort>
-SMTP_FROM=PATIO <patio@firma.intern>
-SMTP_SECURE=auto
+BACKUP_DIR=/mnt/patio-backup
 ```
 
-`SMTP_SECURE=auto` bedeutet: TLS bei Port 465, STARTTLS bei 587 und 25.
-`true` bzw. `false` überschreiben das.
+`scripts/backup.sh` bricht ab, wenn dort **keine Platte eingehängt** ist.
+Ohne diese Prüfung schriebe die Sicherung in das leere Verzeichnis auf der
+Systemplatte, meldete Erfolg und liefe still auf. Details:
+[Sicherung](/betrieb/sicherung).
 
-::: warning Netz ohne Internet
-In einem Büronetz ohne Internetzugang muss der SMTP-Server im eigenen Netz
-stehen — sonst kann sich niemand anmelden. Die Umstellung der Anmeldung auf
-ein netzunabhängiges Verfahren ist als eigenes Arbeitspaket vorgesehen.
+## Entfallene Variablen
+
+Diese liest kein Code mehr. Stehen sie noch in einer alten `.env`, schaden
+sie nicht — sie tun aber auch nichts:
+
+| Variable | Entfallen mit |
+|---|---|
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `SMTP_SECURE` | Umstellung der Anmeldung auf Passwort — PATIO verschickt nichts mehr |
+| `APP_URL` | diente nur Links in E-Mails |
+| `OLLAMA_*`, `OPENAI_*` | LLM-Laufzeit entfallen |
+| `TELEGRAM_*`, `BOT_TOKEN` | Telegram-Bot entfallen |
+
+::: tip Kein Mailserver nötig
+Frühere Fassungen dieser Seite verlangten einen erreichbaren SMTP-Server,
+sonst könne sich „niemand anmelden". Das galt für die E-Mail-Codes und ist
+mit deren Ausbau hinfällig.
 :::
 
 ## Nur für Docker Compose
@@ -230,14 +242,10 @@ JWT_SECRET=<openssl rand -base64 48>
 
 # ── Web-Oberfläche ────────────────────────────────────────
 API_PORT=3000
-APP_URL=https://patio.firma.intern
+PATIO_HOSTNAME=patio.sima.intern
 
-# ── E-Mail (für die Anmeldecodes) ─────────────────────────
-SMTP_HOST=mail.firma.intern
-SMTP_PORT=587
-SMTP_USER=patio@firma.intern
-SMTP_PASS=
-SMTP_FROM=PATIO <patio@firma.intern>
+# ── Sicherung ─────────────────────────────────────────────
+BACKUP_DIR=/mnt/patio-backup
 
 # ── Betrieb ───────────────────────────────────────────────
 NODE_ENV=production

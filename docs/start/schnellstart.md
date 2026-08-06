@@ -94,10 +94,8 @@ Benutzer legt der Admin über die Benutzerverwaltung an.
 
 ::: warning Anmeldung braucht E-Mail-Versand
 Nach Benutzername und Passwort verlangt der Login einen 6-stelligen Code,
-der per E-Mail zugestellt wird. Ohne `SMTP_HOST` landet er nicht im
-Postfach. Für die lokale Entwicklung: SMTP-Zugangsdaten in die `.env`
-eintragen oder einen lokalen Mailcatcher verwenden.
-:::
+Benutzername und Passwort genügen. Das Passwort braucht mindestens
+12 Zeichen — es ist der einzige Faktor.
 
 ## Nützliche Befehle
 

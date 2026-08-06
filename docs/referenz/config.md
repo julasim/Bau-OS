@@ -93,20 +93,19 @@ Neustart setzt die Zähler zurück.
 | `MAX_UPLOAD_BYTES` | — | — | Abgeleitet aus `MAX_UPLOAD_MB` |
 | `EXTRACT_MAX_CHARS` | `50000` | — | Zeichenlimit bei der Text-Extraktion aus PDF/DOCX |
 
-## SMTP / E-Mail
+## Entfallene Konstanten
 
-Wird für die Zustellung der Anmelde-Codes und der Passwort-Reset-Mails
-gebraucht. Ohne `SMTP_HOST` versendet PATIO nichts.
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`,
+`SMTP_SECURE` und `APP_URL` gibt es in `src/config.ts` nicht mehr. Sie
+gehörten zum Mailversand für die Anmeldecodes; mit der Umstellung auf den
+Passwort-Login ist beides entfallen — PATIO verschickt nichts mehr.
 
-| Konstante | Standardwert | `.env`-Variable | Beschreibung |
+Neu dafür:
+
+| Konstante | Vorgabe | Env | Bedeutung |
 |---|---|---|---|
-| `SMTP_HOST` | leer | `SMTP_HOST` | Server-Hostname |
-| `SMTP_PORT` | `587` | `SMTP_PORT` | Port |
-| `SMTP_USER` | leer | `SMTP_USER` | Benutzername |
-| `SMTP_PASS` | leer | `SMTP_PASS` | Passwort |
-| `SMTP_FROM` | `PATIO <noreply@patio.local>` | `SMTP_FROM` | Absenderadresse |
-| `SMTP_SECURE` | `auto` | `SMTP_SECURE` | TLS-Modus: `auto`, `true`, `false` |
-| `SMTP_ENABLED` | — | — | Abgeleitet: `true`, wenn `SMTP_HOST` gesetzt ist |
+| `PASSWORD_MIN_LENGTH` | `12` | — | Mindestlänge; das Passwort ist der einzige Faktor |
+| `BCRYPT_ROUNDS` | `12` | — | Kostenfaktor. Bestehende Hashes tragen ihren eigenen und bleiben gültig |
 
 ## Workspace
 

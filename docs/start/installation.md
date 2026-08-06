@@ -24,62 +24,64 @@ der Datenbank, und die Backups kommen dazu.
 
 ---
 
-## Weg 1 — Docker Compose (empfohlen für den Betrieb)
+## Für den Betrieb im Büro
 
-Zwei Container: die Anwendung und PostgreSQL 16. Ein Reverse-Proxy davor
-terminiert TLS.
+Auf dem Firmenserver wird **nicht** aus dem Git-Repository installiert und
+**nicht** auf der Maschine gebaut — sie hat kein Internet. Das fertige Image
+kommt als Paket vom Entwicklungsrechner:
 
 ```bash
-git clone https://github.com/julasim/patio.git /opt/patio
-cd /opt/patio
-cp .env.example .env
-nano .env                    # JWT_SECRET, POSTGRES_*, SMTP_*, APP_URL
-docker compose build app
-docker compose up -d
+sudo bash dabei/scripts/install-server.sh patio-<version>.tar.gz
 ```
 
-Vollständig: [PATIO deployen](/betrieb/deployment).
+Vollständige Anleitung mit Sicherungsplatte, Zertifikat und Netzfreigabe:
+**[PATIO installieren](/betrieb/installation)**.
 
-::: warning Kein Reverse-Proxy im Stack
-`docker-compose.yml` gibt Port 3000 nur containerintern frei. Für HTTPS
-gehört ein Proxy davor — entweder ein gemeinsamer Edge-Proxy im externen
-Docker-Netz `proxy` oder der Standalone-Aufbau
-`docker/docker-compose.standalone.yml` mit eigenem Caddy.
+::: warning Die früheren Wege sind entfallen
+`scripts/install.sh` (Bare Metal), `install-docker.sh`, `install-customer.sh`
+und `new-customer.sh` liegen unter `_archive/scripts/saas-aera/`. Sie holten
+den Code per `git clone` von GitHub, bauten auf der Maschine und fragten
+SMTP-Zugangsdaten ab — jeder dieser Schritte setzt Internet oder abgelöste
+Technik voraus.
 :::
 
 ---
 
-## Weg 2 — Automatischer Installer (Bare Metal)
+## Für die Entwicklung
 
-Für Ubuntu-Server:
-
-```bash
-sudo bash scripts/install.sh
-```
-
-Der Installer richtet ein:
-
-- Node.js 24 LTS
-- PostgreSQL samt Rolle, Datenbank und Extensions
-- den PATIO-Build (Backend und Frontend)
-- den Dienst-Benutzer und die Verzeichnisse
-- die `.env` mit erzeugten Secrets
-- die systemd-Unit `patio` mit Autostart
-- das CLI-Werkzeug `/usr/local/bin/patio`
-
-Abgefragt werden Installations- und Workspace-Verzeichnis, Benutzername und
-Passwort des ersten Admin-Kontos sowie der Port.
-
-### Das CLI danach
+Auf dem Entwicklungsrechner, mit Internet:
 
 ```bash
-patio                   # interaktives Menü
-patio status            # Status anzeigen
-patio logs              # letzte Logs
-sudo patio restart      # Dienst neu starten
-sudo patio update       # Update aus Git einspielen
-sudo patio user add     # Benutzer anlegen
+git clone https://github.com/julasim/patio.git
+cd patio
+npm ci
+cp .env.example .env
+nano .env                    # JWT_SECRET, DATABASE_URL, WORKSPACE_PATH
+npm run dev                  # API
+npm run dev:web              # Oberfläche
 ```
+
+Oder als vollständiger Stack:
+
+```bash
+docker compose up -d
+```
+
+Das schließt Caddy mit der internen Zertifizierungsstelle ein — dieselbe
+Konstellation wie auf dem Server.
+
+### Das Verwaltungswerkzeug
+
+```bash
+patio status              # Zustand aller Dienste, Sicherung, Erreichbarkeit
+patio logs 100            # letzte Protokollzeilen
+patio dokumente           # Dokumentenordner, Belegung, Rechte
+sudo patio restart
+sudo patio update <paket> # Auslieferungspaket einspielen
+sudo patio sicherung      # Sicherung jetzt ausführen
+```
+
+Benutzer legt der Administrator in der Oberfläche unter `/admin/users` an.
 
 ---
 
@@ -155,9 +157,8 @@ Beim ersten Aufruf im Browser zeigt PATIO den Setup-Assistenten und legt das
 erste Admin-Konto an — sofern der Installer das nicht schon getan hat.
 
 ::: warning Ohne E-Mail-Versand keine Anmeldung
-Der Login verlangt einen Code per E-Mail. `SMTP_HOST` und die zugehörigen
-Werte müssen gesetzt und der Mailserver erreichbar sein.
-:::
+Die Anmeldung braucht Benutzername und Passwort — kein Code, keine
+E-Mail, kein Mailserver.
 
 ## Nächste Schritte
 

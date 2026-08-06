@@ -4,7 +4,7 @@ PATIO läuft auf einem Rechner im eigenen Netz. Es gibt **keine
 Auftragsverarbeitung durch Dritte**: kein Cloud-Dienst, kein Sprachmodell,
 keine Analytik, keine Telemetrie. Die Anwendung spricht im Betrieb
 ausschließlich mit ihrer eigenen Datenbank, mit den Browsern im Netz und —
-für die Anmeldecodes — mit dem konfigurierten SMTP-Server.
+Es gibt keine ausgehenden Verbindungen mehr.
 
 ::: tip Was sich geändert hat
 Die frühere Fassung von PATIO verarbeitete Inhalte über ein Sprachmodell
@@ -23,10 +23,9 @@ Arbeitsplatz im Büro (Browser)
 PATIO auf dem Bürorechner
         ├──► PostgreSQL (derselbe Rechner)
         ├──► Dateisystem (derselbe Rechner)
-        └──► SMTP-Server (für Anmeldecodes)
 ```
 
-Ausgehende Verbindungen gibt es außer zum SMTP-Server keine. Steht der
+**Ausgehende Verbindungen gibt es keine.** Steht der
 Mailserver im Haus, verlässt kein Datum das Gebäude.
 
 ## Welche Daten gespeichert werden
@@ -116,15 +115,9 @@ Dritte am System arbeiten:
 |---|---|
 | Externe IT-Betreuung | Wenn sie den Rechner administriert und damit Zugriff auf die Daten hat |
 | Hersteller / Support | Nur wenn er zu Wartungszwecken Zugriff erhält — im Regelbetrieb nicht der Fall |
-| E-Mail-Anbieter | Wenn der SMTP-Server nicht im Haus steht, sondern extern betrieben wird |
+| *(keine)* | PATIO überträgt keine Daten an Dritte — kein Mailversand, kein Sprachmodell, keine externen Schriften |
 
 ::: warning Externer Mailserver ist ein Datenabfluss
-Läuft der SMTP-Versand über einen externen Anbieter, gehen E-Mail-Adresse
-und Anmeldezeitpunkt der Benutzer dorthin. Das ist der einzige verbleibende
-Weg, auf dem personenbezogene Daten das Haus verlassen. Im Netz ohne
-Internetzugang stellt sich die Frage nicht.
-:::
-
 ## Technische und organisatorische Maßnahmen
 
 | Maßnahme | Umsetzung |

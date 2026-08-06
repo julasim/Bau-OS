@@ -98,7 +98,8 @@ organisatorische Entscheidung, keine technische.
   `ports`); erreichbar ist sie ausschließlich über den Proxy.
 - Der Rechner selbst ist aus dem Internet nicht erreichbar und soll es nicht
   sein.
-- Ausgehend spricht die Anwendung nur mit dem SMTP-Server.
+- **Ausgehend spricht die Anwendung mit niemandem.** Kein Mailversand,
+  kein Sprachmodell, keine externen Schriften.
 
 Bei einer Bare-Metal-Installation gilt dasselbe über andere Mittel:
 `listen_addresses` von PostgreSQL auf `localhost`, Firewall auf SSH und

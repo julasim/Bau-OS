@@ -11,29 +11,33 @@ ein Konto an, mit Admin-Rolle.
 | Feld | Anforderung |
 |---|---|
 | Benutzername | mindestens 3 Zeichen |
-| Passwort | mindestens 8 Zeichen |
-| E-Mail-Adresse | Pflicht — der Login schickt den Bestätigungscode dorthin |
+| Passwort | **mindestens 12 Zeichen** |
+| E-Mail-Adresse | optional, reine Kontaktinformation |
 
 Sobald ein Konto existiert, antwortet der Assistent mit HTTP 410 und ist
 damit dicht. Weitere Benutzer legt der Admin über die Benutzerverwaltung an.
 
-::: warning E-Mail-Versand muss stehen
-Der Login verlangt nach Benutzername und Passwort einen 6-stelligen Code per
-E-Mail. Ohne konfigurierten `SMTP_HOST` wird nichts zugestellt und **niemand
-kann sich anmelden**. Der SMTP-Server muss aus dem Büronetz erreichbar sein.
+::: warning Das Passwort ist der einzige Faktor
+Es gibt keinen Code per E-Mail und keine Authenticator-App. Deshalb die
+12 Zeichen — und deshalb gehört ein Passwort, das anderswo schon im Einsatz
+ist, hier nicht hin.
+
+Gegen Durchprobieren steht eine Ratebremse: fünf Fehlversuche je IP-Adresse
+in 15 Minuten, danach 429.
 :::
 
-Beim Installer `scripts/install.sh` wird das erste Admin-Konto bereits
-während der Installation abgefragt und angelegt — dann entfällt dieser
-Schritt.
+::: tip Immer zwei Administratoren
+Ein Passwort zurücksetzen kann nur ein anderer Admin. Gibt es keinen
+zweiten, hilft im Ernstfall nur der Weg über die Datenbank.
+:::
 
 ## 2. Weitere Benutzer anlegen
 
 Als Admin unter **Verwaltung → Benutzer**. Je Benutzer:
 
 - Benutzername (mindestens 3 Zeichen, eindeutig)
-- Passwort (mindestens 8 Zeichen)
-- E-Mail-Adresse (Pflicht, für den Anmeldecode)
+- Passwort (mindestens 12 Zeichen)
+- E-Mail-Adresse (optional, reine Kontaktinformation)
 - Anzeigename (optional)
 - Rolle: **Admin** oder **Benutzer**
 
@@ -89,8 +93,8 @@ Hochladen an.
 
 ## Checkliste
 
-- [ ] Admin-Konto angelegt, Anmeldung mit E-Mail-Code getestet
-- [ ] SMTP-Versand erreichbar und erprobt
+- [ ] Admin-Konto angelegt, Anmeldung mit Passwort getestet
+- [ ] Zweiter Admin angelegt (sonst gibt es keinen Weg zurück)
 - [ ] Benutzer angelegt und Rollen vergeben
 - [ ] Branding hinterlegt
 - [ ] Team-Mitglieder erfasst, Benutzerkonten verknüpft

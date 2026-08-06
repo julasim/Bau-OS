@@ -27,9 +27,10 @@ und der Dienst könnte sie später nicht mehr anfassen. Der Fehler zeigt sich
 dann als „Speichern fehlgeschlagen" an einer ganz anderen Stelle.
 
 ::: danger Nicht `chown -R patio:patio`
-`scripts/install.sh` legt den Dienst-Benutzer mit `useradd -r` an — ein
-**Systemkonto** mit einer UID **unter** 1000. Gibt man ihm das
-Dokumentenverzeichnis, passt es nicht mehr zur UID des Containers.
+Der Dienst-Benutzer `patio` bekommt beim Anlegen irgendeine andere UID — mit
+`adduser` die nächste freie, mit `useradd -r` sogar eine **unter** 1000.
+Gibt man ihm das Dokumentenverzeichnis, passt es nicht mehr zur UID, unter
+der der Container schreibt.
 
 Richtig: `sudo chown -R 1000:1000 /opt/patio-workspace`
 :::
