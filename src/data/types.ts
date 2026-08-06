@@ -684,8 +684,16 @@ export interface TeamMemberUpdateInput {
 }
 
 export interface TeamRepository {
-  list(): Promise<TeamMember[]>;
-  get(id: string): Promise<TeamMember | null>;
+  /** `sichtbareProjekte` begrenzt die mitgelieferten Projektzuordnungen auf
+   *  das, was der Fragende sehen darf — `"all"` fuer Admins, sonst die Liste
+   *  der sichtbaren Projekt-IDs.
+   *
+   *  Die Stammdaten selbst (Name, Rolle, Firma, Kontakt) bleiben fuer alle
+   *  lesbar: die Team-Liste ist der interne Kollegenkatalog und fuettert jeden
+   *  Zuweisungs-Dialog. Nur die ANGEHAENGTEN Projektnamen sind eine Auskunft
+   *  ueber fremde Projekte und werden gefiltert. */
+  list(sichtbareProjekte?: string[] | "all"): Promise<TeamMember[]>;
+  get(id: string, sichtbareProjekte?: string[] | "all"): Promise<TeamMember | null>;
   add(member: TeamMemberCreateInput): Promise<TeamMember>;
   update(id: string, updates: TeamMemberUpdateInput): Promise<TeamMember | null>;
   remove(nameOrId: string): Promise<boolean>;

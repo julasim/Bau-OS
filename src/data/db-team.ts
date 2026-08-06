@@ -192,17 +192,36 @@ export async function findEmailsForMembers(
   }));
 }
 
+/** Entfernt Projektzuordnungen, die der Fragende nicht sehen darf.
+ *
+ *  Die Team-Abfrage haengt jedem Mitglied seine Projekte an (Name + Rolle).
+ *  Ungefiltert liess sich damit ueber einen einzigen Aufruf die vollstaendige
+ *  Projektliste des Bueros abfragen — auch die Projekte, auf die der Fragende
+ *  keinen Zugriff hat. Bei einem Buero, das fuer konkurrierende Bauherren
+ *  arbeitet, ist schon der Projektname eine Auskunft.
+ *
+ *  Bewusst hier und nicht in der SQL-Klausel: `MEMBER_SELECT` wird von vier
+ *  Stellen benutzt, und ein zusaetzlicher Parameter in der korrelierten
+ *  Unterabfrage waere an jeder davon eine eigene Fehlerquelle. Die Zahl der
+ *  Zuordnungen je Mitglied liegt im einstelligen Bereich. */
+function nurSichtbareProjekte(member: TeamMember, sichtbar: string[] | "all"): TeamMember {
+  if (sichtbar === "all") return member;
+  const erlaubt = new Set(sichtbar);
+  return { ...member, projects: (member.projects ?? []).filter((p) => erlaubt.has(p.id)) };
+}
+
 export const dbTeam: TeamRepository = {
-  async list() {
+  async list(sichtbareProjekte = "all") {
     const db = getDb();
     const rows = await db.unsafe(`${MEMBER_SELECT} ORDER BY tm.name`);
-    return rows.map((r) => rowToMember(r as Record<string, unknown>));
+    return rows.map((r) => nurSichtbareProjekte(rowToMember(r as Record<string, unknown>), sichtbareProjekte));
   },
 
-  async get(id) {
+  async get(id, sichtbareProjekte = "all") {
     const db = getDb();
     const rows = await db.unsafe(`${MEMBER_SELECT} WHERE tm.id = $1 LIMIT 1`, [id]);
-    return rows[0] ? rowToMember(rows[0] as Record<string, unknown>) : null;
+    if (!rows[0]) return null;
+    return nurSichtbareProjekte(rowToMember(rows[0] as Record<string, unknown>), sichtbareProjekte);
   },
 
   async add(member) {

@@ -4,6 +4,7 @@ import type { MemberType, ContactLogEntry } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import { darfGeldSehen } from "../geld.js";
+import { getVisibleProjectIds } from "../../data/access.js";
 
 export const teamRoutes = new Hono<AppEnv>();
 
@@ -15,14 +16,22 @@ function normalizeMemberType(v: unknown): MemberType | null {
   return (ALLOWED_MEMBER_TYPES as string[]).includes(t) ? (t as MemberType) : null;
 }
 
-// Alle Mitglieder
+/** Sichtbare Projekte des Aufrufers — begrenzt die Projektzuordnungen, die
+ *  an den Mitgliedern haengen. */
+async function sichtbar(c: { var: { userId: string | null; userRole: "admin" | "user" } }) {
+  return getVisibleProjectIds({ userId: c.var.userId, role: c.var.userRole });
+}
+
+// Alle Mitglieder. Die Stammdaten sind fuer jeden im Buero lesbar — die Liste
+// ist der interne Kollegenkatalog und fuettert jeden Zuweisungs-Dialog.
+// Gefiltert werden nur die angehaengten Projektzuordnungen.
 teamRoutes.get("/team", async (c) => {
-  return c.json(await teamRepo.list());
+  return c.json(await teamRepo.list(await sichtbar(c)));
 });
 
 // Einzelnes Mitglied
 teamRoutes.get("/team/:id", async (c) => {
-  const member = await teamRepo.get(c.req.param("id"));
+  const member = await teamRepo.get(c.req.param("id"), await sichtbar(c));
   if (!member) return c.json({ error: "Mitglied nicht gefunden" }, 404);
   return c.json(member);
 });
