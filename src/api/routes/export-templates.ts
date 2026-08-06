@@ -31,6 +31,8 @@ import {
   type ExportKind,
 } from "../../data/db-export-templates.js";
 import { renderDocxExport, renderDocxTest, listExportVariables, DocxRenderError } from "../../export/docx-render.js";
+import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
+import { meetingRepo, bautagebuchRepo } from "../../data/index.js";
 import { logError } from "../../logger.js";
 
 export const exportTemplatesRoutes = new Hono<AppEnv>();
@@ -46,6 +48,30 @@ function userName(c: { var: { dbUser?: { displayName?: string | null; username?:
 
 function isDocxFilename(name: string): boolean {
   return /\.docx$/i.test(name);
+}
+
+type CtxTraeger = { var: { userId: string | null; userRole: "admin" | "user" } };
+
+function userCtx(c: CtxTraeger): UserCtx {
+  return { userId: c.var.userId, role: c.var.userRole };
+}
+
+/** Darf dieser Aufrufer ein Dokument zu diesem Projekt bekommen?
+ *
+ *  Die Export-Routen hatten bis hierher KEINE Rechtepruefung. Sie erzeugen den
+ *  vollen Inhalt als Word-Datei — Protokolle, Bautagebuch, Projektbericht,
+ *  Stundenlisten samt Betraegen. Damit war der Export die bequemste Umgehung
+ *  der gesamten Zugriffssteuerung: was die Listen-Routen sauber filtern, liess
+ *  sich ueber einen einzigen GET trotzdem herunterladen.
+ *
+ *  Die Pruefung steht bewusst VOR dem Rendern. Sonst verraet allein die Dauer
+ *  oder die Fehlermeldung („Kein Default-Template fuer …"), dass es den
+ *  Datensatz gibt. */
+async function darfProjekt(c: CtxTraeger, projectName: string | null | undefined) {
+  const ctx = userCtx(c);
+  if (ctx.role === "admin") return true;
+  if (!projectName) return false; // ohne Projektbezug bleibt es beim Admin
+  return canSeeProjectByName(ctx, projectName);
 }
 
 // ── Tag-Doku ─────────────────────────────────────────────────────────────────
@@ -159,6 +185,12 @@ exportTemplatesRoutes.delete("/export-templates/:id", async (c) => {
 exportTemplatesRoutes.get("/exports/meeting/:id", async (c) => {
   const id = c.req.param("id");
   const templateId = c.req.query("templateId") ?? undefined;
+
+  // 404 vor 403: sonst verraet der Statuscode, welche IDs es gibt.
+  const meeting = await meetingRepo.get(id);
+  if (!meeting) return c.json({ error: "Besprechung nicht gefunden" }, 404);
+  if (!(await darfProjekt(c, meeting.projectName))) return c.json({ error: "Kein Zugriff" }, 403);
+
   try {
     const result = await renderDocxExport({
       kind: "meeting",
@@ -178,6 +210,11 @@ exportTemplatesRoutes.get("/exports/meeting/:id", async (c) => {
 
 exportTemplatesRoutes.get("/exports/bautagebuch/:id", async (c) => {
   const id = c.req.param("id");
+
+  const eintrag = await bautagebuchRepo.getById(id);
+  if (!eintrag) return c.json({ error: "Bautagebuch-Eintrag nicht gefunden" }, 404);
+  if (!(await darfProjekt(c, eintrag.projectName))) return c.json({ error: "Kein Zugriff" }, 403);
+
   try {
     const result = await renderDocxExport({
       kind: "bautagebuch",
@@ -196,10 +233,16 @@ exportTemplatesRoutes.get("/exports/bautagebuch/:id", async (c) => {
 });
 
 exportTemplatesRoutes.get("/exports/time-entries", async (c) => {
+  // Ohne `project` umfasst der Export ALLE Projekte — daraus liesse sich die
+  // gesamte Auslastung des Bueros samt Stundensaetzen ablesen. Das bleibt dem
+  // Admin vorbehalten; mit Projektangabe entscheidet die uebliche Pruefung.
+  const projektFilter = c.req.query("project") ?? undefined;
+  if (!(await darfProjekt(c, projektFilter ?? null))) return c.json({ error: "Kein Zugriff" }, 403);
+
   try {
     const result = await renderDocxExport({
       kind: "time-entry",
-      projectName: c.req.query("project") ?? undefined,
+      projectName: projektFilter,
       memberId: c.req.query("memberId") ?? undefined,
       from: c.req.query("from") ?? undefined,
       to: c.req.query("to") ?? undefined,
@@ -217,10 +260,13 @@ exportTemplatesRoutes.get("/exports/time-entries", async (c) => {
 });
 
 exportTemplatesRoutes.get("/exports/project/:name/summary", async (c) => {
+  const projectName = decodeURIComponent(c.req.param("name"));
+  if (!(await darfProjekt(c, projectName))) return c.json({ error: "Kein Zugriff" }, 403);
+
   try {
     const result = await renderDocxExport({
       kind: "project-summary",
-      projectName: decodeURIComponent(c.req.param("name")),
+      projectName,
       templateId: c.req.query("templateId") ?? undefined,
       currentUserName: userName(c),
     });

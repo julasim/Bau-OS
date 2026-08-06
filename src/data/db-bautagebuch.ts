@@ -84,6 +84,12 @@ export const dbBautagebuch: BautagebuchRepository = {
     return rows[0] ? rowToEntry(rows[0] as Record<string, unknown>) : null;
   },
 
+  async getById(id) {
+    const db = getDb();
+    const rows = await db.unsafe(`${SELECT} WHERE b.id = $1 LIMIT 1`, [id]);
+    return rows[0] ? rowToEntry(rows[0] as Record<string, unknown>) : null;
+  },
+
   async upsert(projectId, date, patch, createdById = null) {
     if (!ISO_DATE.test(date)) return "Datum muss im Format YYYY-MM-DD sein";
 

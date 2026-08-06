@@ -327,6 +327,10 @@ export interface BautagebuchRepository {
   list(projectId: string, limit?: number): Promise<BautagebuchEntry[]>;
   /** Einzelner Eintrag per Projekt+Datum (YYYY-MM-DD). */
   get(projectId: string, date: string): Promise<BautagebuchEntry | null>;
+  /** Einzelner Eintrag per ID — samt `projectName` aus dem Join.
+   *  Gebraucht vom Word-Export, der den Eintrag nur ueber seine ID kennt und
+   *  vor dem Rendern pruefen muss, ob der Aufrufer das Projekt sehen darf. */
+  getById(id: string): Promise<BautagebuchEntry | null>;
   /** UPSERT: legt neuen Eintrag an oder aktualisiert vorhandenen. Aus dem
    *  CHECK-Constraint resultierende Validation-Fehler kommen als String
    *  zurueck (genauso wie save() bei termine). */
