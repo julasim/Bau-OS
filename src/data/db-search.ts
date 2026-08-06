@@ -19,6 +19,7 @@
 
 import { getDb } from "../db/client.js";
 import type { VisibleScope } from "./access.js";
+import { escapeLike } from "./sql-like.js";
 
 export interface SearchHit {
   type: "note" | "task" | "project" | "file";
@@ -63,21 +64,6 @@ function snippet(value: unknown): string | null {
   if (!value) return null;
   const s = String(value).replace(/\s+/g, " ").trim();
   return s.length > SNIPPET_MAX ? s.slice(0, SNIPPET_MAX) + "…" : s || null;
-}
-
-/** Macht `%`, `_` und `\` zu buchstaeblichen Zeichen.
- *
- *  Ohne das bleiben sie ILIKE-Metazeichen — und Dateinamen wie
- *  `LP3_Einreichung_01` oder `Grundriss_EG` sind in einem Planungsbuero der
- *  Normalfall, nicht der Randfall: `_` matcht sonst jedes beliebige Zeichen
- *  (`Grundriss-EG`, `GrundrissXEG`). `100%` wuerde zur Praefixsuche, `?q=%`
- *  lieferte alles im sichtbaren Bereich, und `C:\Plan` suchte nach `C:Plan`,
- *  weil der Backslash selbst das Escape-Zeichen ist.
- *
- *  Kein Injection-Schutz — die Werte gehen als Bind-Parameter raus. Es geht
- *  ausschliesslich um die Bedeutung der Zeichen INNERHALB des Musters. */
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, "\\$&");
 }
 
 /** Haelt `limit` im erlaubten Bereich und ist die EINZIGE Stelle, an der die
