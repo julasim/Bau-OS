@@ -6,7 +6,7 @@ import { WORKSPACE_PATH, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../../config.js
 import { readFile } from "../../workspace/index.js";
 import { fileRepo, projectRepo } from "../../data/index.js";
 import { getDb } from "../../db/client.js";
-import { emit, emitForProjectName } from "../events.js";
+import { emitForProjectName } from "../events.js";
 import { validateUpload } from "../file-validation.js";
 import type { AppEnv } from "../server.js";
 import { projektBezugAusQuery } from "../projekt-bezug.js";
@@ -78,13 +78,6 @@ function uploadRejection(c: Context<AppEnv>, reason: "extension" | "content-mism
       ? `Dateityp nicht erlaubt: "${filename.split(".").pop()}"`
       : `Dateiinhalt passt nicht zur Endung: "${filename}"`;
   return c.json({ error: msg }, 415);
-}
-
-// Path-Traversal-Schutz
-function safePath(userPath: string): string | null {
-  const resolved = path.resolve(WORKSPACE_PATH, userPath);
-  if (!resolved.startsWith(WORKSPACE_PATH + path.sep) && resolved !== WORKSPACE_PATH) return null;
-  return userPath;
 }
 
 // ── Dateien auflisten ───────────────────────────────────────────────────────
@@ -162,17 +155,29 @@ filesRoutes.delete("/files", async (c) => {
     const file = await fileRepo.get(body.id);
     if (!file) return c.json({ error: "Nicht gefunden" }, 404);
     if (!(await isFileOwnerOrAdmin(c, body.id))) return c.json({ error: "Zugriff verweigert" }, 403);
-    // Legacy-Eintraege hatten evtl. eine physische Datei im Vault — die wird
-    // best-effort mitgeloescht, damit keine Waisen liegen bleiben.
-    const legacyPath = path.resolve(WORKSPACE_PATH, file.filepath);
-    if (
-      (legacyPath.startsWith(WORKSPACE_PATH + path.sep) || legacyPath === WORKSPACE_PATH) &&
-      fs.existsSync(legacyPath)
-    ) {
-      try {
-        fs.unlinkSync(legacyPath);
-      } catch {
-        /* ignore — DB-Eintrag ist das was zaehlt */
+    // Alt-Eintraege aus der Vault-Zeit hatten eine echte Datei im Ordner; die
+    // wird best-effort mitgeloescht, damit keine Waisen liegen bleiben.
+    //
+    // ENTSCHEIDEND ist die Bedingung darauf: nur, wenn der Eintrag KEINEN
+    // Inhalt in der Datenbank hat. Bei einem heutigen Upload ist `filepath`
+    // schlicht der Dateiname, die Datei selbst liegt als `bytea` in der
+    // Datenbank — und `WORKSPACE_PATH` ist die Samba-Freigabe „Dokumente".
+    // Ohne diese Bedingung loeschte „Grundriss.pdf in PATIO entfernen" die
+    // gleichnamige Datei, die eine Kollegin im Explorer dort liegen hatte.
+    // Ohne Rueckfrage, ohne Spur. Nachgewiesen in
+    // tests/api-files-freigabe.test.ts.
+    const hatInhaltInDb = !!(await fileRepo.readBlob(body.id));
+    if (!hatInhaltInDb) {
+      const legacyPath = path.resolve(WORKSPACE_PATH, file.filepath);
+      if (
+        (legacyPath.startsWith(WORKSPACE_PATH + path.sep) || legacyPath === WORKSPACE_PATH) &&
+        fs.existsSync(legacyPath)
+      ) {
+        try {
+          fs.unlinkSync(legacyPath);
+        } catch {
+          /* ignore — der Datenbankeintrag ist das, was zaehlt */
+        }
       }
     }
     await fileRepo.delete(body.id);
@@ -300,7 +305,9 @@ filesRoutes.get("/files/search", async (c) => {
 // einen eigenen Schritt, nicht in eine Aufraeumrunde.
 filesRoutes.post("/files/upload", async (c) => {
   const formData = await c.req.formData();
-  const targetDir = (formData.get("path") as string) || "";
+  // Ein `path`-Feld wird nicht mehr ausgewertet: Dateien liegen in der
+  // Datenbank, es gibt keine Ordner, in die man sie legen koennte. Der
+  // Projektbezug ist der einzige Ort, an dem eine Datei „hingehoert".
   const project = (formData.get("project") as string) || undefined;
 
   const files = formData.getAll("files") as File[];
@@ -309,85 +316,52 @@ filesRoutes.post("/files/upload", async (c) => {
   const saved: string[] = [];
   const dbEntries: Array<{ id: string; filename: string }> = [];
 
-  // ── DB-Modus: Blob in die DB, kein Vault-Write ─────────────────────────────
-  if (fileRepo) {
-    for (const file of files) {
-      if (!file.name || file.size === 0) continue;
-      if (file.size > MAX_UPLOAD_BYTES) {
-        return c.json({ error: `Datei "${file.name}" ist zu groß (max ${MAX_UPLOAD_MB} MB)` }, 413);
-      }
-      const safeName = file.name.replace(/[<>:"|?*]/g, "_");
-      const buffer = Buffer.from(await file.arrayBuffer());
-      // SEC-3b: Endung + Magic Bytes pruefen (getarnte Uploads abweisen).
-      const check = await validateUpload(buffer, file.name);
-      if (!check.ok) return uploadRejection(c, check.reason, file.name);
-
-      // Text aus Buffer extrahieren (kein Temp-File noetig)
-      let contentText: string | undefined;
-      try {
-        const { extractDocumentFromBuffer } = await import("../../workspace/extractor.js");
-        const result = await extractDocumentFromBuffer(buffer, safeName, file.type || "");
-        if (result.format !== "unsupported" && result.text) {
-          contentText = result.text;
-        }
-      } catch {
-        // Extraktion fehlgeschlagen — Datei trotzdem speichern
-      }
-
-      try {
-        const entry = await fileRepo.save({
-          filename: safeName,
-          // filepath bleibt als logischer Anzeigename drin; kein Disk-Pfad.
-          filepath: safeName,
-          filesize: file.size,
-          mimeType: file.type || undefined,
-          contentText,
-          project,
-          blob: buffer,
-        });
-        dbEntries.push({ id: entry.id, filename: entry.filename });
-        saved.push(safeName);
-      } catch {
-        // DB-Fehler — Datei geht verloren (kein Vault-Fallback mehr, weil der
-        // User explizit "alles in die DB" wollte).
-      }
-    }
-
-    if (saved.length > 0)
-      emitForProjectName({ type: "file", action: "created", id: saved.join(", ") }, project, {
-        actorId: c.get("userId"),
-      });
-    return c.json({ success: true, uploaded: saved, dbEntries });
-  }
-
-  // ── Unerreichbar (siehe Kopfkommentar der Route) ───────────────────────────
-  if (targetDir && !safePath(targetDir)) {
-    return c.json({ error: "Zugriff verweigert" }, 403);
-  }
-  const destDir = targetDir ? path.resolve(WORKSPACE_PATH, targetDir) : WORKSPACE_PATH;
-  if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-
   for (const file of files) {
     if (!file.name || file.size === 0) continue;
     if (file.size > MAX_UPLOAD_BYTES) {
       return c.json({ error: `Datei "${file.name}" ist zu groß (max ${MAX_UPLOAD_MB} MB)` }, 413);
     }
     const safeName = file.name.replace(/[<>:"|?*]/g, "_");
-    const destPath = path.join(destDir, safeName);
-    if (!destPath.startsWith(WORKSPACE_PATH + path.sep) && destPath !== WORKSPACE_PATH) continue;
     const buffer = Buffer.from(await file.arrayBuffer());
     // SEC-3b: Endung + Magic Bytes pruefen (getarnte Uploads abweisen).
     const check = await validateUpload(buffer, file.name);
     if (!check.ok) return uploadRejection(c, check.reason, file.name);
-    fs.writeFileSync(destPath, buffer);
-    const relativePath = targetDir ? `${targetDir}/${safeName}` : safeName;
-    saved.push(relativePath);
+
+    // Text aus Buffer extrahieren (kein Temp-File noetig)
+    let contentText: string | undefined;
+    try {
+      const { extractDocumentFromBuffer } = await import("../../workspace/extractor.js");
+      const result = await extractDocumentFromBuffer(buffer, safeName, file.type || "");
+      if (result.format !== "unsupported" && result.text) {
+        contentText = result.text;
+      }
+    } catch {
+      // Extraktion fehlgeschlagen — Datei trotzdem speichern
+    }
+
+    try {
+      const entry = await fileRepo.save({
+        filename: safeName,
+        // filepath bleibt als logischer Anzeigename drin; kein Disk-Pfad.
+        filepath: safeName,
+        filesize: file.size,
+        mimeType: file.type || undefined,
+        contentText,
+        project,
+        blob: buffer,
+      });
+      dbEntries.push({ id: entry.id, filename: entry.filename });
+      saved.push(safeName);
+    } catch {
+      // DB-Fehler — Datei geht verloren (kein Vault-Fallback mehr, weil der
+      // User explizit "alles in die DB" wollte).
+    }
   }
 
-  // Legacy-FS-Zweig: hier gibt es keine Projektzuordnung, das Ereignis bleibt
-  // projektlos (Admins + Ausloeser).
   if (saved.length > 0)
-    emit({ type: "file", action: "created", id: saved.join(", "), projectId: null }, { actorId: c.get("userId") });
+    emitForProjectName({ type: "file", action: "created", id: saved.join(", ") }, project, {
+      actorId: c.get("userId"),
+    });
   return c.json({ success: true, uploaded: saved, dbEntries });
 });
 

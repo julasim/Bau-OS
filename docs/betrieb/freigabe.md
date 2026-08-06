@@ -1,19 +1,48 @@
 # Netzfreigabe „Dokumente"
 
-Die Projektdokumente liegen als **echte Dateien** unter
-`/opt/patio-workspace`. Auf dasselbe Verzeichnis greifen zwei Wege zu:
+`/opt/patio-workspace` ist ein **ganz normaler Netzordner** für alles, was
+nicht in eine Datenbank gehört: Pläne, CAD-Dateien, große Scans, Fotomappen.
+Erreichbar im Explorer unter `\\patio.sima.intern\Dokumente`.
 
-1. der **PATIO-Dienst** im Container — beim Hochladen und beim Erzeugen von
-   Belegen,
-2. die **Kolleginnen und Kollegen im Explorer** über diese Freigabe.
+## Zwei Ablagen, mit Absicht getrennt
 
-Aus diesen zwei Wegen folgt praktisch alles, was auf dieser Seite steht.
+Das ist die wichtigste Seite dieser Doku, weil es sonst zu Missverständnissen
+führt:
+
+| | **Freigabe „Dokumente"** | **In PATIO hochgeladen** |
+|---|---|---|
+| Wo es liegt | im Ordner auf dem Server | in der Datenbank |
+| Wofür | Pläne, CAD, große Scans | Verträge, Protokolle, Schriftverkehr |
+| Projektbezug | nur der Ordnername | echt, samt Rechten |
+| Rechte | die der Freigabe (Gruppe) | projektweise wie im ganzen Programm |
+| Suche | Windows-Suche | Volltext samt Inhalt |
+| In der Sicherung | ja (Dateien) | ja (Datenbank) |
+| Obergrenze je Datei | keine | 50 MB (`MAX_UPLOAD_MB`) |
+
+**Die Anwendung liest und schreibt in diesem Ordner nichts.** Sie zeigt ihn
+auch nicht an. Wer eine Datei in PATIO hochlädt, legt sie in die Datenbank;
+wer sie in den Ordner kopiert, legt sie in die Freigabe. Beides ist richtig —
+nur eben für verschiedene Dinge.
+
+::: tip Warum nicht alles in einer Ablage
+Ein 800-MB-Plansatz gehört nicht in eine Datenbank: er bläht jede Sicherung
+auf und muss durch HTTP hindurch. Umgekehrt kann ein Ordner keine
+projektweisen Rechte, keine Volltextsuche und keinen Papierkorb — und genau
+das braucht ein Vertrag. Deshalb zwei Ablagen und eine klare Aufteilung.
+:::
+
+::: warning Die Freigabe ist über PATIO NICHT erreichbar
+Das ist Absicht. Frühere Fassungen boten `GET /api/files/read?path=…`,
+`POST /api/files/mkdir` und ein Löschen über einen Pfad an — alle drei ohne
+Rechteprüfung. Wer ein Konto hatte, kam damit an jedes Dokument. Diese Wege
+sind entfernt; die Freigabe wird ausschließlich über SMB bedient, und dort
+gelten die Rechte von Samba.
+:::
 
 ## Die eine Zeile, an der es hängt
 
-Der Container läuft als `node` = **UID 1000**. Damit der Dienst eine Datei
-ändern kann, die jemand über die Freigabe angelegt hat, muss sie ebenfalls
-UID 1000 gehören. Dafür sorgt:
+Damit Kolleginnen und Kollegen die Dateien der jeweils anderen ändern können,
+landen alle Dateien unter derselben Kennung. Dafür sorgt:
 
 ```ini
 force user = patio-dateien      # ein Konto mit UID 1000
@@ -26,13 +55,15 @@ Ohne `force user` legte jede Person Dateien unter ihrer eigenen Kennung an —
 und der Dienst könnte sie später nicht mehr anfassen. Der Fehler zeigt sich
 dann als „Speichern fehlgeschlagen" an einer ganz anderen Stelle.
 
-::: danger Nicht `chown -R patio:patio`
-Der Dienst-Benutzer `patio` bekommt beim Anlegen irgendeine andere UID — mit
-`adduser` die nächste freie, mit `useradd -r` sogar eine **unter** 1000.
-Gibt man ihm das Dokumentenverzeichnis, passt es nicht mehr zur UID, unter
-der der Container schreibt.
+Ohne `force user` legte jede Person Dateien unter ihrer eigenen Kennung an —
+und die Kollegin könnte sie danach nicht mehr ändern.
 
-Richtig: `sudo chown -R 1000:1000 /opt/patio-workspace`
+::: tip UID 1000 bleibt, ist aber kein Muss mehr
+Frühere Fassungen des Dienstes schrieben selbst in diesen Ordner; deshalb
+musste er der Container-Kennung (`node` = UID 1000) gehören. Das tut er nicht
+mehr — die Anwendung fasst den Ordner nicht an. Die Einrichtung unten behält
+UID 1000 trotzdem bei: sie ist erprobt, und ein Alt-Bestand aus der Zeit davor
+bleibt damit lesbar.
 :::
 
 ## Einrichtung
@@ -73,8 +104,7 @@ Am Arbeitsplatz verbinden: `\\patio.sima.intern\Dokumente`
 
 ## Der Papierkorb der Freigabe
 
-Ein im Explorer gelöschter Projektordner wäre sonst **sofort weg** — und die
-Datensätze in der Datenbank zeigten ins Leere.
+Ein im Explorer gelöschter Projektordner wäre sonst **sofort weg**.
 
 Gelöschtes landet daher unter `.papierkorb/<benutzername>/` und behält dabei
 seine ursprüngliche Ordnerstruktur (`recycle:keeptree`). Der Ordner trägt das
@@ -84,11 +114,12 @@ versehentlich als Projektordner benutzt.
 **Zum Wiederherstellen** im Explorer „Ausgeblendete Elemente" einschalten und
 die Datei aus `.papierkorb/<eigener Name>/…` zurückkopieren.
 
-::: warning Der Papierkorb ist eine Zwischenlösung
-Er ist bis zur Fertigstellung des Papierkorbs **in der Anwendung** (eigenes
-Arbeitspaket) die einzige Rückholmöglichkeit zwischen zwei nächtlichen
-Sicherungen. Er wird **nicht** automatisch geleert — den Füllstand
-gelegentlich ansehen:
+::: warning Er ist die einzige Rückholmöglichkeit für die Freigabe
+Der Papierkorb **in der Anwendung** (Verwaltung → Papierkorb) gilt für
+Projekte in der Datenbank — er reicht nicht in diesen Ordner hinein. Für
+alles, was im Explorer gelöscht wird, ist dieser Papierkorb hier zwischen zwei
+nächtlichen Sicherungen die einzige Rettung. Er wird **nicht** automatisch
+geleert — den Füllstand gelegentlich ansehen:
 
 ```bash
 du -sh /opt/patio-workspace/.papierkorb/*

@@ -172,29 +172,32 @@ sudo chown -R 1000:1000 /opt/patio-workspace
 | Verzeichnis | Inhalt | Eigentümer |
 |---|---|---|
 | `/opt/patio` | Anwendung, `.env`, Compose-Datei | `patio` |
-| `/opt/patio-workspace` | Dokumente (`WORKSPACE_PATH`, zugleich Samba-Freigabe) | **UID 1000** |
+| `/opt/patio-workspace` | Netzfreigabe „Dokumente" (`WORKSPACE_PATH`) — Pläne, CAD, große Scans | **UID 1000** |
 | `/mnt/patio-backup` | externe Sicherungsplatte | `root` (systemd hängt ein) |
 
-::: danger Die häufigste Falle: `chown -R patio:patio` auf das Dokumentenverzeichnis
-Der Container läuft als `node` = **UID 1000** (`Dockerfile`, `USER node`).
+::: tip Die Anwendung legt hier nichts ab
+Was in PATIO hochgeladen wird, landet in der **Datenbank**, nicht in diesem
+Ordner. Er ist die Netzfreigabe für alles, was nicht in eine Datenbank gehört
+— Pläne, CAD, große Scans. Die Aufteilung steht in
+[Netzfreigabe „Dokumente"](/betrieb/freigabe).
 
-Der Dienst-Benutzer `patio` bekommt beim Anlegen irgendeine andere UID — bei
-`adduser` die nächste freie (oft 1001, wenn schon ein Konto existiert), bei
-`useradd -r` sogar eine **unter** 1000, weil das ein Systemkonto ist.
-
-Gibt man das Dokumentenverzeichnis diesem Benutzer, passt die UID nicht mehr
-zu der, unter der der Dienst schreibt. **Er kann dann keine Datei ablegen.**
-Der Fehler zeigt sich an ganz anderer Stelle, weil stille `catch`-Blöcke ihn
-maskieren — in einem früheren Fall trat er als „LLM nicht erreichbar" auf,
-obwohl in Wahrheit nur das Log-Schreiben scheiterte.
-
-Prüfen:
+Für den Ordner zählen deshalb die Rechte von **Samba**, nicht die des
+Containers. UID 1000 bleibt trotzdem die Vorgabe: die Einrichtung ist erprobt,
+und ein Bestand aus der Zeit, als der Dienst hier ablegte, bleibt damit
+lesbar.
 
 ```bash
-stat -c '%u %g %n' /opt/patio-workspace     # muss 1000 1000 zeigen
-docker exec patio-app touch /workspace/.probe && echo "Dienst kann schreiben"
-docker exec patio-app rm /workspace/.probe
+stat -c '%u %g %n' /opt/patio-workspace     # sollte 1000 1000 zeigen
 ```
+:::
+
+::: danger Nicht `chown -R patio:patio`
+Der Dienst-Benutzer `patio` bekommt beim Anlegen irgendeine andere UID — bei
+`adduser` die nächste freie, bei `useradd -r` sogar eine **unter** 1000. Damit
+passt sie weder zur Container-Kennung noch zu der, unter der Samba schreibt,
+und ein Bestand aus der Vault-Zeit wäre für niemanden mehr änderbar.
+
+Richtig: `sudo chown -R 1000:1000 /opt/patio-workspace`
 :::
 
 ## Zusammenfassung

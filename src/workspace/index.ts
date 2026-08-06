@@ -1,6 +1,14 @@
-// Dateizugriff auf den Workspace. Alles Uebrige (Notizen, Aufgaben, Termine,
-// Projekte, Team, Vault-Suche) liegt seit dem Umbau zum Firmenserver in der
-// Datenbank — siehe src/data/. Was hier bleibt, betrifft echte Dateien:
-// Dokumente werden weiterhin im Dateisystem abgelegt und im Explorer geoeffnet.
-export { readFile, createFile, listFolder } from "./files.js";
-export type { FolderEntry } from "./files.js";
+// Lesender Zugriff auf den Dokumentenordner — der letzte Rest der Vault-Zeit.
+//
+// Hochgeladene Dateien liegen seit dem Umbau als `bytea` in der Datenbank;
+// `WORKSPACE_PATH` ist heute die Samba-Freigabe „Dokumente" und wird von der
+// Anwendung NICHT beschrieben. `readFile` bedient nur noch einen einzigen
+// Fall: Alt-Eintraege, deren Datei damals wirklich im Ordner lag und deren
+// Datenbankzeile keinen Inhalt hat (siehe den Download-Rueckfall in
+// src/api/routes/files.ts). Der Zugriff ist dadurch immer ueber eine
+// Datenbankzeile gedeckt und damit von der Rechtepruefung erfasst.
+//
+// `createFile` und `listFolder` sind mit den pfadbasierten Routen entfallen:
+// sie boten einen Weg in den geteilten Ordner, den niemand mehr braucht und
+// den keine Rechtepruefung deckte.
+export { readFile } from "./files.js";
