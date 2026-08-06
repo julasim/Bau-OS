@@ -40,6 +40,7 @@ export default defineConfig({
           { text: "Software installieren", link: "/betrieb/software" },
           { text: "PATIO deployen", link: "/betrieb/deployment" },
           { text: "systemd Service", link: "/betrieb/systemd" },
+          { text: "Netzfreigabe", link: "/betrieb/freigabe" },
           { text: "Updates", link: "/betrieb/updates" },
           { text: "Sicherung", link: "/betrieb/sicherung" },
           { text: "Monitoring", link: "/betrieb/monitoring" },

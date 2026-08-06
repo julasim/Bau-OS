@@ -118,21 +118,41 @@ Bautagebuch nicht mit der Wanduhr überein.
 ## 8. Verzeichnisse anlegen
 
 ```bash
-sudo mkdir -p /opt/patio /opt/patio-workspace /opt/patio-backups
-sudo chown -R patio:patio /opt/patio /opt/patio-workspace /opt/patio-backups
+sudo mkdir -p /opt/patio /opt/patio-workspace /mnt/patio-backup
+
+# Anwendungsverzeichnis: dem Dienst-Benutzer.
+sudo chown -R patio:patio /opt/patio
+
+# Dokumente: der UID 1000 — NICHT dem Benutzer `patio`. Begründung unten.
+sudo chown -R 1000:1000 /opt/patio-workspace
 ```
 
-| Verzeichnis | Inhalt |
-|---|---|
-| `/opt/patio` | Anwendung, `.env`, Compose-Datei |
-| `/opt/patio-workspace` | hochgeladene Dokumente (`WORKSPACE_PATH`) |
-| `/opt/patio-backups` | Tagesbackups |
+| Verzeichnis | Inhalt | Eigentümer |
+|---|---|---|
+| `/opt/patio` | Anwendung, `.env`, Compose-Datei | `patio` |
+| `/opt/patio-workspace` | Dokumente (`WORKSPACE_PATH`, zugleich Samba-Freigabe) | **UID 1000** |
+| `/mnt/patio-backup` | externe Sicherungsplatte | `root` (systemd hängt ein) |
 
-::: warning Rechte bei Bind-Mounts
-Läuft der Container als Benutzer mit UID 1000, gehören die gemounteten
-Verzeichnisse auf dem Host auch dieser UID. Sonst scheitert das Schreiben
-mit `EACCES` — und der Fehler zeigt sich an unerwarteter Stelle, etwa als
-fehlschlagender Upload.
+::: danger Die häufigste Falle: `chown -R patio:patio` auf das Dokumentenverzeichnis
+Der Container läuft als `node` = **UID 1000** (`Dockerfile`, `USER node`).
+
+Der Dienst-Benutzer `patio` wird von `scripts/install.sh` mit `useradd -r`
+angelegt — also als **Systemkonto**, dessen UID per Definition **unter 1000**
+liegt (Ubuntu vergibt von 999 abwärts).
+
+Gibt man das Dokumentenverzeichnis dem Benutzer `patio`, gehört es also UID ~999,
+während der Dienst als UID 1000 schreibt. **Er kann dann keine Datei ablegen.**
+Der Fehler zeigt sich an ganz anderer Stelle, weil stille `catch`-Blöcke ihn
+maskieren — in einem früheren Fall trat er als „LLM nicht erreichbar" auf,
+obwohl in Wahrheit nur das Log-Schreiben scheiterte.
+
+Prüfen:
+
+```bash
+stat -c '%u %g %n' /opt/patio-workspace     # muss 1000 1000 zeigen
+docker exec patio-app touch /workspace/.probe && echo "Dienst kann schreiben"
+docker exec patio-app rm /workspace/.probe
+```
 :::
 
 ## Zusammenfassung
@@ -144,7 +164,7 @@ Nach diesen Schritten steht:
 - [x] Dienst-Benutzer `patio` mit SSH-Schlüssel, Root-Login gesperrt
 - [x] Firewall: nur SSH und HTTPS aus dem eigenen Netz
 - [x] Zeitzone `Europe/Vienna`
-- [x] Verzeichnisse angelegt und dem Dienst-Benutzer zugeordnet
+- [x] Verzeichnisse angelegt — Dokumente gehören **UID 1000**, nicht `patio`
 
 ## Nächster Schritt
 
