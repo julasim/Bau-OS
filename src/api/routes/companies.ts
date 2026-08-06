@@ -6,8 +6,27 @@ import { Hono } from "hono";
 import { teamRepo } from "../../data/index.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
+import { adminMiddleware } from "../auth.js";
 
 export const companiesRoutes = new Hono<AppEnv>();
+
+// ── Wer darf hier schreiben? ─────────────────────────────────────────────────
+//
+// Diese Daten gelten fuer das ganze Buero. Wer sie aendert, aendert sie fuer
+// alle — bis hin zum Loeschen der einzigen Word-Vorlage, mit der Rechnungen
+// erzeugt werden. Bis hierher konnte das JEDER angemeldete Nutzer.
+//
+// Lesen bleibt offen: ohne diese Daten laesst sich die Oberflaeche nicht
+// aufbauen, und ein Rechte-Dialog fuer Textbausteine waere Buerokratie ohne
+// Gegenwert. Geschrieben wird nur vom Admin.
+//
+// Der Guard steht bewusst VOR den Routen — Hono wendet Middleware in
+// Registrierungsreihenfolge an; danach eingehaengt wuerde er die darueber
+// stehenden Handler nicht mehr erfassen.
+// Firmen anlegen und pflegen ist Tagesgeschaeft (Bauherren, Fachplaner)
+// und bleibt offen. Nur das Loeschen ist Admin-Sache: eine geloeschte
+// Firma haengt an Projekten und Besprechungen.
+companiesRoutes.on(["DELETE"], "/companies/*", adminMiddleware);
 
 companiesRoutes.get("/companies", async (c) => {
   if (!teamRepo.listCompanies) return c.json([]);

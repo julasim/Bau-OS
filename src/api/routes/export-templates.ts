@@ -34,8 +34,24 @@ import { renderDocxExport, renderDocxTest, listExportVariables, DocxRenderError 
 import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
 import { meetingRepo, bautagebuchRepo } from "../../data/index.js";
 import { logError } from "../../logger.js";
+import { adminMiddleware } from "../auth.js";
 
 export const exportTemplatesRoutes = new Hono<AppEnv>();
+
+// ── Wer darf hier schreiben? ─────────────────────────────────────────────────
+//
+// Diese Daten gelten fuer das ganze Buero. Wer sie aendert, aendert sie fuer
+// alle — bis hin zum Loeschen der einzigen Word-Vorlage, mit der Rechnungen
+// erzeugt werden. Bis hierher konnte das JEDER angemeldete Nutzer.
+//
+// Lesen bleibt offen: ohne diese Daten laesst sich die Oberflaeche nicht
+// aufbauen, und ein Rechte-Dialog fuer Textbausteine waere Buerokratie ohne
+// Gegenwert. Geschrieben wird nur vom Admin.
+//
+// Der Guard steht bewusst VOR den Routen — Hono wendet Middleware in
+// Registrierungsreihenfolge an; danach eingehaengt wuerde er die darueber
+// stehenden Handler nicht mehr erfassen.
+exportTemplatesRoutes.on(["POST", "PATCH", "DELETE"], ["/export-templates", "/export-templates/*"], adminMiddleware);
 
 const VALID_KINDS: ExportKind[] = ["meeting", "bautagebuch", "time-entry", "project-summary"];
 const MAX_DOCX_BYTES = 10 * 1024 * 1024; // 10 MB

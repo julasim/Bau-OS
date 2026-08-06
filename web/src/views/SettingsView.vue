@@ -126,6 +126,7 @@ async function changePassword() {
 // ── Theme + UI-Praeferenzen (Phase 6f) ─────────────────────────────────────
 import { useTheme } from "../composables/useTheme";
 import { useWorkspaceShell } from "../composables/useWorkspaceShell";
+import { useCurrentUser } from "../composables/useCurrentUser";
 
 const themeApi = useTheme();
 const shell = useWorkspaceShell();
@@ -933,15 +934,24 @@ type SettingsSection =
   | "projekt-module"
   | "system";
 
-const SETTINGS_NAV: { id: SettingsSection; label: string; icon: string; group: string }[] = [
+const { isAdmin } = useCurrentUser();
+
+// `adminOnly` deckt sich mit dem Serverstand: diese vier Bereiche gelten fuers
+// ganze Buero (Logo, Textbausteine, Word-Vorlagen, Modul-Voreinstellungen) und
+// duerfen seit der Rechte-Runde nur noch vom Verwalter geaendert werden.
+// Ohne diese Kennzeichnung saehe ein normaler Nutzer weiterhin alle Knoepfe —
+// und liefe beim Klick in ein unerklaertes „Kein Zugriff".
+const SETTINGS_NAV: { id: SettingsSection; label: string; icon: string; group: string; adminOnly?: boolean }[] = [
   { id: "profil", label: "Profil & Sicherheit", icon: "user", group: "Konto" },
   { id: "praeferenzen", label: "Präferenzen", icon: "sliders", group: "System" },
-  { id: "branding", label: "Branding", icon: "image", group: "Vorlagen" },
-  { id: "vorlagen", label: "Vorlagen", icon: "file-text", group: "Vorlagen" },
-  { id: "word-export", label: "Word-Export", icon: "download", group: "Vorlagen" },
-  { id: "projekt-module", label: "Projekt-Module", icon: "layers", group: "Vorlagen" },
+  { id: "branding", label: "Branding", icon: "image", group: "Vorlagen", adminOnly: true },
+  { id: "vorlagen", label: "Vorlagen", icon: "file-text", group: "Vorlagen", adminOnly: true },
+  { id: "word-export", label: "Word-Export", icon: "download", group: "Vorlagen", adminOnly: true },
+  { id: "projekt-module", label: "Projekt-Module", icon: "layers", group: "Vorlagen", adminOnly: true },
   { id: "system", label: "System-Info", icon: "info", group: "System" },
 ];
+
+const sichtbareNav = computed(() => SETTINGS_NAV.filter((n) => isAdmin.value || !n.adminOnly));
 
 const SECTION_KEY = "patio-settings-section";
 const activeSection = ref<SettingsSection>(
@@ -954,12 +964,25 @@ const activeSection = ref<SettingsSection>(
 
 watch(activeSection, (v) => localStorage.setItem(SECTION_KEY, v));
 
+// Der zuletzt gewaehlte Bereich steht im localStorage. Wurde ein Konto
+// zwischenzeitlich herabgestuft — oder teilt sich jemand einen Rechner —,
+// landet es sonst auf einer Seite, die es nicht mehr sehen darf. `isAdmin`
+// kommt asynchron aus /auth/me, deshalb ein Watcher statt einer Pruefung
+// beim Aufbau.
+watch(
+  isAdmin,
+  () => {
+    if (!sichtbareNav.value.some((n) => n.id === activeSection.value)) activeSection.value = "profil";
+  },
+  { immediate: true },
+);
+
 const WIDE_SECTIONS = new Set(["vorlagen", "word-export", "branding", "projekt-module"]);
 const isWideSection = computed(() => WIDE_SECTIONS.has(activeSection.value));
 
 const settingsNavGroups = computed(() => {
   const map = new Map<string, typeof SETTINGS_NAV>();
-  for (const item of SETTINGS_NAV) {
+  for (const item of sichtbareNav.value) {
     if (!map.has(item.group)) map.set(item.group, []);
     map.get(item.group)!.push(item);
   }

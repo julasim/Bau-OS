@@ -16,8 +16,24 @@ import { Hono } from "hono";
 import type { AppEnv } from "../server.js";
 import { getBranding, updateBranding, setLogo, loadLogo } from "../../data/db-branding.js";
 import { logError } from "../../logger.js";
+import { adminMiddleware } from "../auth.js";
 
 export const brandingRoutes = new Hono<AppEnv>();
+
+// ── Wer darf hier schreiben? ─────────────────────────────────────────────────
+//
+// Diese Daten gelten fuer das ganze Buero. Wer sie aendert, aendert sie fuer
+// alle — bis hin zum Loeschen der einzigen Word-Vorlage, mit der Rechnungen
+// erzeugt werden. Bis hierher konnte das JEDER angemeldete Nutzer.
+//
+// Lesen bleibt offen: ohne diese Daten laesst sich die Oberflaeche nicht
+// aufbauen, und ein Rechte-Dialog fuer Textbausteine waere Buerokratie ohne
+// Gegenwert. Geschrieben wird nur vom Admin.
+//
+// Der Guard steht bewusst VOR den Routen — Hono wendet Middleware in
+// Registrierungsreihenfolge an; danach eingehaengt wuerde er die darueber
+// stehenden Handler nicht mehr erfassen.
+brandingRoutes.on(["POST", "PATCH", "DELETE"], ["/branding", "/branding/*"], adminMiddleware);
 
 const MAX_LOGO_BYTES = 2 * 1024 * 1024; // 2 MB
 const ALLOWED_LOGO_MIMES = new Set(["image/png", "image/jpeg", "image/svg+xml", "image/webp"]);

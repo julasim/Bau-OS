@@ -23,8 +23,40 @@ import {
   updateCustomModule,
   deleteCustomModule,
 } from "../../data/db-custom-modules.js";
+import { adminMiddleware } from "../auth.js";
+import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
 
 export const projectModulesRoutes = new Hono<AppEnv>();
+
+// ── Wer darf hier was? ───────────────────────────────────────────────────────
+//
+// Die Datei bedient zwei Dinge, die verschiedenen Regeln folgen — bis hierher
+// beide ohne jede Pruefung:
+//
+//   * `/project-modules(/custom)` sind die Voreinstellungen fuers ganze Buero.
+//     Lesen muss jeder duerfen (die Oberflaeche baut sich daraus auf),
+//     schreiben nur der Admin.
+//   * `/projects/:name/modules` gehoert zum Projekt und folgt dessen
+//     Sichtbarkeit. Ein Fremder konnte hier nicht nur mitlesen, sondern einem
+//     Projekt Module abschalten, das er gar nicht sehen darf.
+//
+// Der Guard steht vor den Routen, weil Hono Middleware in
+// Registrierungsreihenfolge anwendet.
+projectModulesRoutes.on(["POST", "PATCH", "DELETE"], ["/project-modules", "/project-modules/*"], adminMiddleware);
+
+/** Sichtbarkeit des Projekts aus dem Pfad. Liefert die fertige Antwort, wenn
+ *  der Aufrufer es nicht sehen darf — sonst `null`. */
+async function projektGesperrt(c: {
+  var: { userId: string | null; userRole: "admin" | "user" };
+  json: (o: unknown, s: 403) => Response;
+  req: { param: (k: string) => string };
+}): Promise<Response | null> {
+  const ctx: UserCtx = { userId: c.var.userId, role: c.var.userRole };
+  if (ctx.role === "admin") return null;
+  const name = decodeURIComponent(c.req.param("name"));
+  if (await canSeeProjectByName(ctx, name)) return null;
+  return c.json({ error: "Kein Zugriff" }, 403);
+}
 
 // ── Custom Modules CRUD ──────────────────────────────────────────────────
 // Muss VOR den generischen Routen stehen um Kollisionen zu vermeiden.
@@ -94,12 +126,16 @@ projectModulesRoutes.patch("/project-modules", async (c) => {
 });
 
 projectModulesRoutes.get("/projects/:name/modules", async (c) => {
+  const gesperrt = await projektGesperrt(c);
+  if (gesperrt) return gesperrt;
   const name = decodeURIComponent(c.req.param("name"));
   const result = await getProjectEffectiveModules(name);
   return c.json(result);
 });
 
 projectModulesRoutes.patch("/projects/:name/modules", async (c) => {
+  const gesperrt = await projektGesperrt(c);
+  if (gesperrt) return gesperrt;
   const name = decodeURIComponent(c.req.param("name"));
   let body: Partial<ProjectModuleFlags>;
   try {
@@ -113,6 +149,8 @@ projectModulesRoutes.patch("/projects/:name/modules", async (c) => {
 });
 
 projectModulesRoutes.delete("/projects/:name/modules", async (c) => {
+  const gesperrt = await projektGesperrt(c);
+  if (gesperrt) return gesperrt;
   const name = decodeURIComponent(c.req.param("name"));
   await setProjectModulesOverride(name, null);
   const result = await getProjectEffectiveModules(name);
