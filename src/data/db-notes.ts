@@ -61,9 +61,10 @@ async function findeNotiz(nameOrPath: string): Promise<{ id: string; title: stri
                 WHEN title = ${nameOrPath} THEN 1
                 ELSE 2 END AS rang
       FROM notes
-     WHERE id::text = ${nameOrPath}
+     WHERE deleted_at IS NULL
+       AND (id::text = ${nameOrPath}
         OR title = ${nameOrPath}
-        OR title LIKE ${escapeLike(nameOrPath) + "%"}
+        OR title LIKE ${escapeLike(nameOrPath) + "%"})
      ORDER BY rang, created_at DESC
   `;
   if (rows.length === 0) return null;
@@ -108,6 +109,7 @@ export const dbNotes: NoteRepository = {
     const db = getDb();
     const rows = await db`
       SELECT title, created_at FROM notes
+      WHERE deleted_at IS NULL
       ORDER BY created_at DESC
       LIMIT ${limit}
     `;
@@ -121,6 +123,7 @@ export const dbNotes: NoteRepository = {
              n.created_at, n.updated_at, length(n.content) as size
       FROM notes n
       LEFT JOIN projects p ON n.project_id = p.id
+      WHERE n.deleted_at IS NULL
       ORDER BY n.updated_at DESC
       LIMIT ${limit}
     `;
@@ -145,7 +148,7 @@ export const dbNotes: NoteRepository = {
     const [row] = await db`
       SELECT n.id, n.title, n.created_by, n.rev, p.name AS project_name
         FROM notes n LEFT JOIN projects p ON p.id = n.project_id
-       WHERE n.id = ${treffer.id}
+       WHERE n.id = ${treffer.id} AND n.deleted_at IS NULL
        LIMIT 1
     `;
     if (!row) return null;
@@ -160,7 +163,7 @@ export const dbNotes: NoteRepository = {
 
   async readById(id) {
     const db = getDb();
-    const [row] = await db`SELECT content, rev FROM notes WHERE id = ${id}`;
+    const [row] = await db`SELECT content, rev FROM notes WHERE id = ${id} AND deleted_at IS NULL`;
     return row ? { content: String(row.content), rev: Number(row.rev ?? 1) } : null;
   },
 
@@ -190,10 +193,58 @@ export const dbNotes: NoteRepository = {
     return true;
   },
 
+  /** Legt die Notiz in den Papierkorb (Migration 049) — sie verschwindet aus
+   *  allen Listen und aus der Aufloesung, bleibt aber liegen. Endgueltig
+   *  entfernt wird sie erst mit `purge()`. */
   async deleteById(id) {
     const db = getDb();
-    const [row] = await db`DELETE FROM notes WHERE id = ${id} RETURNING title`;
+    const [row] = await db`
+      UPDATE notes SET deleted_at = now()
+       WHERE id = ${id} AND deleted_at IS NULL
+      RETURNING title
+    `;
     return row ? String(row.title) : null;
+  },
+
+  async listDeleted(sichtbareProjekte) {
+    const db = getDb();
+    const eingeschraenkt = Array.isArray(sichtbareProjekte);
+    if (eingeschraenkt && sichtbareProjekte.length === 0) return [];
+    const rows = eingeschraenkt
+      ? await db`
+          SELECT n.id, n.title AS titel, p.name AS project_name, n.deleted_at, n.created_by
+            FROM notes n LEFT JOIN projects p ON p.id = n.project_id
+           WHERE n.deleted_at IS NOT NULL
+             AND (n.project_id = ANY(${db.array(sichtbareProjekte)}::uuid[])
+                  -- Datensaetze OHNE Projekt sind persoenlich. Sie muessen hier
+                  -- durch, damit die Route sie ihrem Verfasser zeigen kann; wem
+                  -- sie NICHT gehoeren, den filtert die Route heraus.
+                  OR n.project_id IS NULL)
+           ORDER BY n.deleted_at DESC`
+      : await db`
+          SELECT n.id, n.title AS titel, p.name AS project_name, n.deleted_at, n.created_by
+            FROM notes n LEFT JOIN projects p ON p.id = n.project_id
+           WHERE n.deleted_at IS NOT NULL
+           ORDER BY n.deleted_at DESC`;
+    return rows.map((r) => ({
+      id: String(r.id),
+      titel: String(r.titel),
+      projectName: r.project_name ? String(r.project_name) : null,
+      geloeschtAm: String(r.deleted_at),
+      createdById: r.created_by ? String(r.created_by) : null,
+    }));
+  },
+
+  async restore(id) {
+    const db = getDb();
+    const res = await db`UPDATE notes SET deleted_at = NULL WHERE id = ${id} AND deleted_at IS NOT NULL`;
+    return res.count > 0;
+  },
+
+  async purge(id) {
+    const db = getDb();
+    const res = await db`DELETE FROM notes WHERE id = ${id} AND deleted_at IS NOT NULL`;
+    return res.count > 0;
   },
 
   async read(nameOrPath) {
@@ -265,7 +316,11 @@ export const dbNotes: NoteRepository = {
     const db = getDb();
     // Ueber die ID — die vorherige Fassung loeschte JEDE passende Zeile und
     // gab nur die erste zurueck.
-    const [row] = await db`DELETE FROM notes WHERE id = ${treffer.id} RETURNING title`;
+    const [row] = await db`
+      UPDATE notes SET deleted_at = now()
+       WHERE id = ${treffer.id} AND deleted_at IS NULL
+      RETURNING title
+    `;
     return row ? String(row.title) : null;
   },
 };

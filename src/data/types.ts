@@ -621,7 +621,32 @@ export interface AgentLog {
 
 // ── Repository Interfaces ────────────────────────────────────
 
-export interface TaskRepository {
+/** Ein Eintrag im Papierkorb (Migration 049). Bewusst schmal: die Liste soll
+ *  zeigen, WAS geloescht wurde und wann — der Inhalt kommt beim
+ *  Zurueckholen von selbst wieder. */
+export interface PapierkorbEintrag {
+  id: string;
+  titel: string;
+  projectName: string | null;
+  geloeschtAm: string;
+  /** Wer den Datensatz angelegt hat — entscheidet bei Eintraegen ohne Projekt
+   *  darueber, wer sie im Papierkorb sieht. */
+  createdById: string | null;
+}
+
+/** Papierkorb-Faehigkeiten, die sich Aufgaben, Termine und Notizen teilen.
+ *
+ *  `sichtbareProjekte` ist derselbe Massstab wie ueberall: `"all"` fuer
+ *  Admins, sonst die Liste der sichtbaren Projekt-IDs. */
+export interface PapierkorbFaehig {
+  listDeleted?(sichtbareProjekte: string[] | "all"): Promise<PapierkorbEintrag[]>;
+  restore?(id: string): Promise<boolean>;
+  /** Endgueltig entfernen — greift NUR bei Datensaetzen, die im Papierkorb
+   *  liegen. Endgueltiges Loeschen soll nie ein Einzelschritt sein. */
+  purge?(id: string): Promise<boolean>;
+}
+
+export interface TaskRepository extends PapierkorbFaehig {
   /** @param createdById users.id des Erstellers — noetig, damit er seine
    *  eigene Aufgabe spaeter auch ohne Projekt und ohne Zuweisung noch
    *  bearbeiten darf. */
@@ -634,7 +659,7 @@ export interface TaskRepository {
   delete(id: string, project?: string): Promise<boolean>;
 }
 
-export interface TerminRepository {
+export interface TerminRepository extends PapierkorbFaehig {
   save(
     datum: string,
     text: string,
@@ -677,7 +702,7 @@ export interface NoteMeta {
   rev: number;
 }
 
-export interface NoteRepository {
+export interface NoteRepository extends PapierkorbFaehig {
   /** `createdById` haelt fest, wer die Notiz angelegt hat. Ohne ihn blieb
    *  `notes.created_by` leer — im Aktivitaets-Feed stand dann „—", und bei
    *  jeder Rueckfrage „von wem ist das?" half nur Raten. */

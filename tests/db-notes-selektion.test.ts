@@ -96,8 +96,19 @@ describe.skipIf(!HAS_DB)("db-notes — welche Notiz wird getroffen", () => {
 
     expect(await noteRepo.delete(kurz)).toBe(kurz);
 
-    const rest = await db`SELECT title FROM notes WHERE title LIKE ${PRAEFIX + "%"} ORDER BY title`;
+    // Seit Migration 049 landet Geloeschtes im Papierkorb statt weg zu sein —
+    // „geloescht" heisst jetzt `deleted_at IS NOT NULL`. Die Aussage des Tests
+    // bleibt dieselbe: es ist GENAU EINE Notiz betroffen.
+    const rest = await db`
+      SELECT title FROM notes
+       WHERE title LIKE ${PRAEFIX + "%"} AND deleted_at IS NULL
+       ORDER BY title`;
     expect(rest.map((r) => String(r.title))).toEqual([`${PRAEFIX} Abnahme Fenster`, `${PRAEFIX} Abnahme Rohbau`]);
+
+    // Und die eine liegt im Papierkorb — nicht im Nichts.
+    const imKorb = await db`
+      SELECT title FROM notes WHERE title LIKE ${PRAEFIX + "%"} AND deleted_at IS NOT NULL`;
+    expect(imKorb.map((r) => String(r.title))).toEqual([kurz]);
   });
 
   // ── 3. Zugriff per ID und per Praefix ────────────────────────────────────

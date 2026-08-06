@@ -48,7 +48,11 @@ const TERMIN_SELECT = `
         WHERE tm.id = ANY(COALESCE(t.assignee_ids, '{}'::uuid[]))),
       '[]'::json
     ) as assignees_resolved
-  FROM termine t
+  -- Der Papierkorb (Migration 049) wird HIER ausgefiltert, in der gemeinsamen
+  -- Abfrage, und nicht an den sieben Aufrufstellen. Eine neue Abfrage, die
+  -- diese Konstante benutzt, ist damit von sich aus richtig; eine, die den
+  -- Filter selbst mitbringen muesste, waere die naechste vergessene Stelle.
+  FROM (SELECT * FROM termine WHERE deleted_at IS NULL) t
   LEFT JOIN projects p ON t.project_id = p.id
 `;
 
@@ -167,14 +171,63 @@ export const dbTermine: TerminRepository = {
     return this.get(id);
   },
 
-  async delete(textOrId) {
+  /** Legt den Termin in den Papierkorb (Migration 049).
+   *
+   *  Frueher stand hier ein `DELETE … WHERE id::text = $1 OR text LIKE '%$1%'`.
+   *  Das ist derselbe Fehler, der in `db-notes` schon einmal zugeschlagen hat:
+   *  die Bedingung trifft ALLE Termine, deren Text die Angabe enthaelt, und
+   *  geloescht wurden sie alle — gemeldet nur, dass „mindestens einer"
+   *  betroffen war. Wer „Abnahme" loeschte, verlor jeden Termin mit „Abnahme"
+   *  im Text.
+   *
+   *  Jetzt nur noch ueber die ID. Die Route loest ohnehin vorher ueber `get()`
+   *  auf, um die Rechte zu pruefen — der Textweg war unerreichbar und trotzdem
+   *  gefaehrlich. */
+  async delete(id) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return false;
     const db = getDb();
-    // id::text verhindert "invalid input syntax for type uuid" wenn ein
-    // Text-Match statt einer UUID uebergeben wird.
-    const result = await db`
-      DELETE FROM termine
-      WHERE id::text = ${textOrId} OR text LIKE ${"%" + textOrId + "%"}
-    `;
+    const result = await db`UPDATE termine SET deleted_at = now() WHERE id = ${id} AND deleted_at IS NULL`;
     return result.count > 0;
+  },
+
+  async listDeleted(sichtbareProjekte) {
+    const db = getDb();
+    const eingeschraenkt = Array.isArray(sichtbareProjekte);
+    if (eingeschraenkt && sichtbareProjekte.length === 0) return [];
+    const rows = eingeschraenkt
+      ? await db`
+          SELECT t.id, t.text AS titel, p.name AS project_name, t.deleted_at, t.created_by
+            FROM termine t LEFT JOIN projects p ON p.id = t.project_id
+           WHERE t.deleted_at IS NOT NULL
+             AND (t.project_id = ANY(${db.array(sichtbareProjekte)}::uuid[])
+                  -- Datensaetze OHNE Projekt sind persoenlich. Sie muessen hier
+                  -- durch, damit die Route sie ihrem Verfasser zeigen kann; wem
+                  -- sie NICHT gehoeren, den filtert die Route heraus.
+                  OR t.project_id IS NULL)
+           ORDER BY t.deleted_at DESC`
+      : await db`
+          SELECT t.id, t.text AS titel, p.name AS project_name, t.deleted_at, t.created_by
+            FROM termine t LEFT JOIN projects p ON p.id = t.project_id
+           WHERE t.deleted_at IS NOT NULL
+           ORDER BY t.deleted_at DESC`;
+    return rows.map((r) => ({
+      id: String(r.id),
+      titel: String(r.titel),
+      projectName: r.project_name ? String(r.project_name) : null,
+      geloeschtAm: String(r.deleted_at),
+      createdById: r.created_by ? String(r.created_by) : null,
+    }));
+  },
+
+  async restore(id) {
+    const db = getDb();
+    const r = await db`UPDATE termine SET deleted_at = NULL WHERE id = ${id} AND deleted_at IS NOT NULL`;
+    return r.count > 0;
+  },
+
+  async purge(id) {
+    const db = getDb();
+    const r = await db`DELETE FROM termine WHERE id = ${id} AND deleted_at IS NOT NULL`;
+    return r.count > 0;
   },
 };
