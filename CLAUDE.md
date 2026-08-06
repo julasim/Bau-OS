@@ -35,6 +35,21 @@
 > `../../PATIO-Umbau-Firmenserver.md` (dessen Zeile 24 ist überholt — Basis ist
 > **dieses** Projekt, nicht `apps/patio-app-lokal`).
 
+> ## ⇥ Woran gerade gearbeitet wird
+>
+> **Abschnitt 0 des Plans (`~/.claude/plans/dynamic-floating-pearl.md`) ist die
+> Warteschlange.** Den obersten offenen Punkt nehmen — nicht auswählen, nicht
+> springen.
+>
+> **Vor jeder Messung `DATABASE_URL` setzen** (WSL-IP, siehe unten). Ohne sie
+> überspringt die Testsuite still 156 von 267 Prüfungen und vier weitere
+> schlagen fehl — wer das übersieht, repariert die falschen Dinge.
+>
+> Als Nächstes offen: **Stufe 1 — Datenverlust verhindern.** `db-notes`
+> selektiert per `title LIKE` und trifft womöglich den falschen Datensatz;
+> einen Konfliktschutz gibt es nicht, zwei Arbeitsplätze überschreiben
+> einander wortlos.
+
 **AP0 abgeschlossen.** Entfernt: Telegram-Bot, LLM-/Agenten-Laufzeit,
 MCP-Client, Embeddings, DuckDuckGo-Websuche, Outlook-Abgleich und die
 Filesystem-Repos — rund **16.000 Zeilen**. Der Einstiegspunkt `src/index.ts`
