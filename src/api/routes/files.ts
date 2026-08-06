@@ -9,7 +9,7 @@ import { getDb } from "../../db/client.js";
 import { emit, emitForProjectName } from "../events.js";
 import { validateUpload } from "../file-validation.js";
 import type { AppEnv } from "../server.js";
-import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
+import { projektBezugAusQuery } from "../projekt-bezug.js";
 
 export const filesRoutes = new Hono<AppEnv>();
 

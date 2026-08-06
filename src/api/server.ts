@@ -33,7 +33,6 @@ import {
 import { logInfo, logError } from "../logger.js";
 import {
   authMiddleware,
-  findUser,
   loadUsers,
   verifyPassword,
   createToken,
@@ -300,25 +299,12 @@ app.post("/api/auth/login", async (c) => {
   //   2. JSON-User (legacy) bleibt als Fallback solange noch nichts in
   //      der DB steht. Danach kann der Admin ihn via /admin/users in die
   //      DB nachimportieren (Phase 2).
-  const dbUser = DB_ENABLED ? await findDbUserByUsername(usernameInput) : null;
+  const dbUser = await findDbUserByUsername(usernameInput);
 
-  let pwHash: string | undefined;
-  let username: string | undefined;
-  let role: string | undefined;
-  let userId: string | undefined;
-  if (dbUser) {
-    pwHash = dbUser.passwordHash;
-    username = dbUser.username;
-    role = dbUser.role;
-    userId = dbUser.id;
-  } else {
-    const jsonUser = findUser(usernameInput);
-    if (jsonUser) {
-      pwHash = jsonUser.passwordHash;
-      username = jsonUser.username;
-      role = jsonUser.role;
-    }
-  }
+  const pwHash = dbUser?.passwordHash;
+  const username = dbUser?.username;
+  const role = dbUser?.role;
+  const userId = dbUser?.id;
 
   const meta = reqMeta(c);
   const failLogin = (reason: string) => {
@@ -450,11 +436,7 @@ app.use("/api/*", geldFilter);
 // displayName kommt aus user.settings.displayName — falls nicht gesetzt,
 // faellt die UI auf den Username zurueck.
 app.get("/api/auth/me", (c) => {
-  const jwtUser = c.get("user") as JwtPayload;
   const dbUser = c.get("dbUser") as DbUser | null;
-  const userId = c.get("userId") as string | null;
-  // DB-User hat Vorrang fuer alle Felder. Fallback ist der Legacy-JSON-User
-  // (nur solange kein DB-User existiert).
   if (dbUser) {
     return c.json({
       id: dbUser.id,
@@ -467,17 +449,10 @@ app.get("/api/auth/me", (c) => {
       canSeeMoney: dbUser.role === "admin" || dbUser.canSeeMoney,
     });
   }
-  const json = findUser(jwtUser.username);
-  return c.json({
-    // Fallback fuer Legacy-JSON-Konten: Username als id (eindeutig). Sobald
-    // der Account in die DB migriert ist, kommt eine echte UUID zurueck.
-    id: userId ?? jwtUser.username,
-    username: jwtUser.username,
-    role: jwtUser.role,
-    displayName: json?.settings?.displayName ?? null,
-    isProtected: false,
-    hasTelegram: false,
-  });
+  // Kein Datenbank-Konto zu einem gueltigen Token: das Konto wurde
+  // geloescht, waehrend die Sitzung noch lief. Frueher fiel die Antwort hier
+  // auf einen JSON-Eintrag zurueck; den gibt es nicht mehr.
+  return c.json({ error: "Konto nicht gefunden" }, 401);
 });
 
 // ── API-Routes ───────────────────────────────────────────────────────────────

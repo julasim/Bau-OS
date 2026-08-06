@@ -11,7 +11,6 @@
 
 import { Hono } from "hono";
 import {
-  findUser,
   updateUser,
   hashPassword,
   verifyPassword,
@@ -48,10 +47,10 @@ const ALLOWED_SETTING_KEYS = new Set<keyof UserSettings>([
 // ── GET /settings — Profil + Settings + Runtime-Info ─────────────────────────
 settingsRoutes.get("/settings", (c) => {
   const dbUser = c.get("dbUser");
-  const jwtUser = c.get("user");
 
-  // DB-User hat Vorrang — Profil/Settings kommen aus der DB. Nur wenn kein
-  // DB-User da ist (FS-Mode oder Legacy-JSON-Konto), faellt's auf JSON zurueck.
+  // Profil und Einstellungen kommen aus der Datenbank. Der frueher hier
+  // stehende Rueckfall auf ein JSON-Konto ist entfallen — es gibt nur noch
+  // Datenbank-Konten.
   let profile: { username: string; role: string; createdAt: string; email: string | null };
   let settings: UserSettings;
   if (dbUser) {
@@ -63,10 +62,8 @@ settingsRoutes.get("/settings", (c) => {
     };
     settings = dbUser.settings ?? {};
   } else {
-    const user = findUser(jwtUser.username);
-    if (!user) return c.json({ error: "User nicht gefunden" }, 404);
-    profile = { username: user.username, role: user.role, createdAt: user.createdAt, email: null };
-    settings = user.settings ?? {};
+    // Gueltiges Token, aber kein Konto mehr — dazwischen wurde es geloescht.
+    return c.json({ error: "Konto nicht gefunden" }, 401);
   }
 
   return c.json({
@@ -123,8 +120,6 @@ settingsRoutes.patch("/settings", async (c) => {
 
 // ── POST /auth/password — Passwort aendern ───────────────────────────────────
 settingsRoutes.post("/auth/password", async (c) => {
-  const jwtUser = c.get("user");
-
   let body: { oldPassword: string; newPassword: string };
   try {
     body = await c.req.json<{ oldPassword: string; newPassword: string }>();
@@ -173,12 +168,7 @@ settingsRoutes.post("/auth/password", async (c) => {
     return c.json({ ok: true });
   }
 
-  const user = findUser(jwtUser.username);
-  if (!user) return c.json({ error: "User nicht gefunden" }, 404);
-  const valid = await verifyPassword(body.oldPassword, user.passwordHash);
-  if (!valid) return c.json({ error: "Altes Passwort falsch" }, 401);
-  const newHash = await hashPassword(body.newPassword);
-  updateUser(jwtUser.username, { passwordHash: newHash });
-  logInfo(`[Settings] ${jwtUser.username} hat Passwort geaendert`);
-  return c.json({ ok: true });
+  // Bis hierher kommt nur, wer kein Datenbank-Konto hat — das gibt es seit
+  // dem Ausbau der JSON-Konten nicht mehr.
+  return c.json({ error: "Konto nicht gefunden" }, 401);
 });

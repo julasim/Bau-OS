@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { searchRepo } from "../../data/index.js";
 import { getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
-import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
+import { projektBezugAusQuery } from "../projekt-bezug.js";
 
 export const searchRoutes = new Hono<AppEnv>();
 

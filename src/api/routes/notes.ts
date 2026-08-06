@@ -3,7 +3,7 @@ import { noteRepo, projectRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
-import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
+import { projektBezug } from "../projekt-bezug.js";
 
 export const notesRoutes = new Hono<AppEnv>();
 
