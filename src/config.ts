@@ -92,28 +92,14 @@ export const ENCRYPTION_KEY_OK = ENCRYPTION_KEY.length >= 32;
 export const NODE_ENV = process.env.NODE_ENV || "development";
 export const IS_PRODUCTION = NODE_ENV === "production";
 
-// Public-Base-URL fuer Links in Emails (Magic-Link, Password-Reset, Welcome).
-// Default leer → Backend nimmt Host aus dem Request-Header (Reverse-Proxy
-// muss Host korrekt forwarden). Setzbar via Env, falls die App hinter
-// einem CDN sitzt oder die Public-URL anders ist als der Request-Host.
-//   Beispiel: APP_URL=https://app.patio.at
-export const APP_URL = process.env.APP_URL || "";
-
-// ── SMTP / Mail (Migration 020 — Email-2FA) ─────────────────────────────────
-// Wird fuer den Versand der Login-Codes via Email genutzt. Ohne SMTP_HOST
-// sind 2FA-Mails deaktiviert — der Code wird dann ins Server-Log geschrieben
-// (Dev-Modus). In Production verweigert der Boot wenn SMTP nicht konfiguriert
-// und Users mit Email-Adresse existieren.
+// APP_URL und der gesamte SMTP-Block standen hier, solange der Login
+// 6-stellige Codes und Anmelde-Links per Mail verschickte. Beides ist mit dem
+// Umbau zum Firmenserver entfallen — dort gibt es kein Internet und damit
+// keinen Zustellweg. PATIO verschickt heute nichts mehr.
 //
-// Tested: Office365, Gmail (mit App-Password), Mailgun, eigene Postfix-Server.
-// Default Port 587 mit STARTTLS, secure=true bei 465.
-export const SMTP_HOST = process.env.SMTP_HOST || "";
-export const SMTP_PORT = parseInt(process.env.SMTP_PORT || "587", 10);
-export const SMTP_USER = process.env.SMTP_USER || "";
-export const SMTP_PASS = process.env.SMTP_PASS || "";
-export const SMTP_FROM = process.env.SMTP_FROM || "PATIO <noreply@patio.local>";
-export const SMTP_SECURE = (process.env.SMTP_SECURE ?? "auto").toLowerCase();
-export const SMTP_ENABLED = !!SMTP_HOST;
+// Der frueher hier dokumentierte Boot-Check ("verweigert den Start, wenn SMTP
+// fehlt und Nutzer mit Email existieren") hat uebrigens nie existiert; die
+// Behauptung stand nur im Kommentar und in .env.example.
 
 // ── Datenbank (PostgreSQL) ───────────────────────────────────────────────────
 // PFLICHT. PATIO laeuft ausschliesslich gegen PostgreSQL — einen

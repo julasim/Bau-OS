@@ -1,43 +1,41 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# PATIO Docker Compose — 2-Service-Architektur (Edge-Proxy uebernimmt TLS)
+# PATIO — Firmenserver-Stack (in sich geschlossen)
 #
-#   postgres  postgres:16              — Datenbank
-#   app       (Build aus Dockerfile)  — PATIO Web-API + WebUI
+#   postgres  postgres:16        — Datenbank, nur im internen Netz
+#   app       (Build aus Dockerfile) — Web-API + Weboberflaeche
+#   caddy     caddy:2-alpine     — TLS, einziger Dienst mit Ports nach aussen
 #
-# Der frueher hier definierte Service `ollama` ist entfallen: seit AP0 gibt es
-# weder LLM-Laufzeit noch Embeddings, kein Code liest OLLAMA_BASE_URL mehr.
-# Auf einem Firmenserver ohne Internet liess sich das Image nicht ziehen — und
-# weil `app` per depends_on daran haengt, kam der GESAMTE Stack nicht hoch.
+# Ein Rechner, eine Anwendung, kein Aussenkontakt. Der frueher hier stehende
+# Stack haing am externen Docker-Netz `proxy` (gemeinsamer Edge-Caddy der VPS,
+# an dem mehrere Projekte hingen) — auf einem Buerorechner mit genau einer
+# Anwendung ist das unnoetige Kopplung: ohne das fremde Netz kam der Stack
+# gar nicht erst hoch. Die VPS-Variante liegt weiterhin unter
+# docker/docker-compose.vps.yml.
+#
+# TLS: Caddy betreibt eine EIGENE Zertifizierungsstelle auf diesem Rechner
+# (`tls internal`, siehe docker/Caddyfile) und erneuert selbstaendig — ohne
+# Internet, ohne Let's Encrypt, ohne dass der interne Rechnername irgendwo
+# oeffentlich auftaucht. Einmalig muss das CA-Wurzelzertifikat auf die
+# Arbeitsplaetze; wie, steht in docs/betrieb/zertifikat.md.
+#
+# ACHTUNG bei der Sicherung: der private Schluessel dieser CA liegt im Volume
+# `caddy_data`. Geht es verloren, erzeugt Caddy eine NEUE CA — und jeder
+# Arbeitsplatz zeigt wieder eine Warnung, bis das neue Wurzelzertifikat
+# ueberall eingespielt ist. scripts/backup.sh sichert das Volume deshalb mit.
 #
 # Zum DB-Image: hier stand `pgvector/pgvector:pg16`. Dieses Spezial-Image ist
 # im internetlosen Buero nicht zu beschaffen, und PATIO braucht es seit AP0
-# nicht mehr. Das Schema haengt nicht laenger an pgvector — 001 legt keine
-# Vektor-Objekte mehr an, 040 raeumt sie aus Bestandsdatenbanken, 041 entfernt
-# dort die Extension-Registrierung. Benoetigt werden nur uuid-ossp, pg_trgm
-# und unaccent; alle drei sind contrib und im offiziellen postgres:16 dabei.
+# nicht mehr. Benoetigt werden nur uuid-ossp, pg_trgm und unaccent — alle drei
+# contrib und im offiziellen postgres:16 enthalten.
 #
-# BEI EINER BESTEHENDEN INSTALLATION die Reihenfolge einhalten: zuerst die App
-# aktualisieren (Migrationen laufen, 041 entfernt die Extension noch mit
-# vorhandener Library), erst danach das DB-Image wechseln. Das Datenverzeichnis
-# selbst ist kompatibel — beide Images sind PostgreSQL 16.
+# Auf dem Server wird NIE gebaut. Das fertige Image kommt per
+# scripts/release-offline.sh vom Entwicklungsrechner und wird mit
+# scripts/update-offline.sh eingespielt. Der `build`-Block gilt nur fuer den
+# Entwicklungsrechner.
 #
-# TLS + Reverse-Proxy: zentral via /opt/proxy (julasim/Proxy auf GitHub).
-# PATIO haengt sich ueber das externe Docker-Netzwerk `proxy` an den
-# Edge-Caddy. Der Edge-Caddy kuemmert sich um TLS + Routing fuer alle Apps
-# die im proxy-Netzwerk sind.
-#
-# Vorbereitung (einmalig pro Server):
-#   cd /opt/proxy && docker compose up -d
-#   → legt das Docker-Netzwerk `proxy` an + startet edge-caddy auf 80/443.
-#
-# Start PATIO:
-#   docker compose up -d
-# Logs:
-#   docker compose logs -f
-# Update:
-#   git pull && docker compose build app && docker compose up -d app
-# Stop:
-#   docker compose down
+# Start:  docker compose up -d
+# Logs:   docker compose logs -f
+# Stop:   docker compose down
 # ─────────────────────────────────────────────────────────────────────────────
 
 name: patio
@@ -52,8 +50,26 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-patio}
       POSTGRES_DB: ${POSTGRES_DB:-patio}
       PGDATA: /var/lib/postgresql/data/pgdata
+    # Auf 16 GB abgestimmt. Die Vorgabewerte von Postgres sind fuer einen
+    # Buerorechner zu klein: shared_buffers steht per Default auf 128 MB,
+    # also einem Prozent des vorhandenen Speichers.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=2GB
+      - -c
+      - effective_cache_size=6GB
+      - -c
+      - work_mem=32MB
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - max_connections=50
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Guertel zum Hosentraeger: legt die Extensions schon beim ersten Start
+      # an, damit die Datenbank auch ohne Migrationslauf brauchbar ist.
+      # Migration 001 legt dieselben noch einmal mit IF NOT EXISTS an.
       - ./docker/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-patio} -d ${POSTGRES_DB:-patio}"]
@@ -61,13 +77,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    # Postgres bleibt intern. Wer von aussen debuggen will, kann
-    # ports: ["127.0.0.1:5432:5432"] zusetzen, sollte das aber bewusst tun.
-    networks:
-      - default
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    networks: [internal]
 
   app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     image: patio-app:latest
     container_name: patio-app
     restart: always
@@ -80,27 +98,55 @@ services:
       postgres:
         condition: service_healthy
     volumes:
+      # WORKSPACE_HOST_DIR ist zugleich die Samba-Freigabe "Dokumente".
+      # Das Verzeichnis muss uid 1000 gehoeren — der Container laeuft als
+      # `node` (Dockerfile: USER node). Gehoert es root, kann der Dienst nicht
+      # schreiben, und der Fehler zeigt sich an ganz anderer Stelle:
+      #   sudo chown -R 1000:1000 /opt/patio-workspace
       - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
       - ./logs:/opt/patio/logs
       - ./data:/opt/patio/data
       - ./tools:/opt/patio/tools
-    # Port 3000 nur container-intern — Edge-Caddy proxied via proxy-Netzwerk.
+    # Kein `ports:` — erreichbar nur ueber Caddy.
     expose:
       - "3000"
-    networks:
-      - proxy    # externes Netzwerk vom zentralen Edge-Caddy
-      - default  # internes Netzwerk fuer postgres
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    networks: [internal]
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: patio-caddy
+    restart: always
+    # Der einzige Dienst mit Ports nach aussen. 80 bleibt offen, damit Caddy
+    # auf HTTPS umleiten kann — wer patio.sima.intern ohne Schema eintippt,
+    # landet sonst im Nichts.
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Rechnername, unter dem die Arbeitsplaetze PATIO erreichen. Muss im
+      # Router-DNS (oder ersatzweise in der hosts-Datei je Platz) auf diesen
+      # Rechner zeigen — sonst nuetzt das beste Zertifikat nichts.
+      PATIO_HOSTNAME: ${PATIO_HOSTNAME:-patio.sima.intern}
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Enthaelt den privaten Schluessel der internen CA — siehe Kopf.
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    logging:
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+    networks: [internal]
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:
 
 networks:
-  # Externes Docker-Netzwerk vom zentralen Edge-Proxy (/opt/proxy).
-  # Wird vom edge-caddy + jeder externen App geteilt. Muss VOR dem
-  # ersten PATIO-Start existieren — wird vom Edge-Proxy-Stack angelegt.
-  proxy:
-    external: true
-  # Internes PATIO-Netzwerk fuer postgres + app.
-  # Compose erstellt das automatisch — Definition hier rein zur
-  # Klarheit, damit alle Services explizit ein Netzwerk referenzieren.
-  default:
+  internal:
+    driver: bridge

@@ -1,0 +1,106 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PATIO Docker Compose — 2-Service-Architektur (Edge-Proxy uebernimmt TLS)
+#
+#   postgres  postgres:16              — Datenbank
+#   app       (Build aus Dockerfile)  — PATIO Web-API + WebUI
+#
+# Der frueher hier definierte Service `ollama` ist entfallen: seit AP0 gibt es
+# weder LLM-Laufzeit noch Embeddings, kein Code liest OLLAMA_BASE_URL mehr.
+# Auf einem Firmenserver ohne Internet liess sich das Image nicht ziehen — und
+# weil `app` per depends_on daran haengt, kam der GESAMTE Stack nicht hoch.
+#
+# Zum DB-Image: hier stand `pgvector/pgvector:pg16`. Dieses Spezial-Image ist
+# im internetlosen Buero nicht zu beschaffen, und PATIO braucht es seit AP0
+# nicht mehr. Das Schema haengt nicht laenger an pgvector — 001 legt keine
+# Vektor-Objekte mehr an, 040 raeumt sie aus Bestandsdatenbanken, 041 entfernt
+# dort die Extension-Registrierung. Benoetigt werden nur uuid-ossp, pg_trgm
+# und unaccent; alle drei sind contrib und im offiziellen postgres:16 dabei.
+#
+# BEI EINER BESTEHENDEN INSTALLATION die Reihenfolge einhalten: zuerst die App
+# aktualisieren (Migrationen laufen, 041 entfernt die Extension noch mit
+# vorhandener Library), erst danach das DB-Image wechseln. Das Datenverzeichnis
+# selbst ist kompatibel — beide Images sind PostgreSQL 16.
+#
+# TLS + Reverse-Proxy: zentral via /opt/proxy (julasim/Proxy auf GitHub).
+# PATIO haengt sich ueber das externe Docker-Netzwerk `proxy` an den
+# Edge-Caddy. Der Edge-Caddy kuemmert sich um TLS + Routing fuer alle Apps
+# die im proxy-Netzwerk sind.
+#
+# Vorbereitung (einmalig pro Server):
+#   cd /opt/proxy && docker compose up -d
+#   → legt das Docker-Netzwerk `proxy` an + startet edge-caddy auf 80/443.
+#
+# Start PATIO:
+#   docker compose up -d
+# Logs:
+#   docker compose logs -f
+# Update:
+#   git pull && docker compose build app && docker compose up -d app
+# Stop:
+#   docker compose down
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: patio
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: patio-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-patio}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-patio}
+      POSTGRES_DB: ${POSTGRES_DB:-patio}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-patio} -d ${POSTGRES_DB:-patio}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Postgres bleibt intern. Wer von aussen debuggen will, kann
+    # ports: ["127.0.0.1:5432:5432"] zusetzen, sollte das aber bewusst tun.
+    networks:
+      - default
+
+  app:
+    build: .
+    image: patio-app:latest
+    container_name: patio-app
+    restart: always
+    env_file: .env
+    environment:
+      # Service-zu-Service-URLs ueberschreiben alles aus .env.
+      DATABASE_URL: postgres://${POSTGRES_USER:-patio}:${POSTGRES_PASSWORD:-patio}@postgres:5432/${POSTGRES_DB:-patio}
+      WORKSPACE_PATH: /workspace
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
+      - ./logs:/opt/patio/logs
+      - ./data:/opt/patio/data
+      - ./tools:/opt/patio/tools
+    # Port 3000 nur container-intern — Edge-Caddy proxied via proxy-Netzwerk.
+    expose:
+      - "3000"
+    networks:
+      - proxy    # externes Netzwerk vom zentralen Edge-Caddy
+      - default  # internes Netzwerk fuer postgres
+
+volumes:
+  postgres_data:
+
+networks:
+  # Externes Docker-Netzwerk vom zentralen Edge-Proxy (/opt/proxy).
+  # Wird vom edge-caddy + jeder externen App geteilt. Muss VOR dem
+  # ersten PATIO-Start existieren — wird vom Edge-Proxy-Stack angelegt.
+  proxy:
+    external: true
+  # Internes PATIO-Netzwerk fuer postgres + app.
+  # Compose erstellt das automatisch — Definition hier rein zur
+  # Klarheit, damit alle Services explizit ein Netzwerk referenzieren.
+  default:

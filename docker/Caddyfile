@@ -1,47 +1,80 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# PATIO Caddyfile
+# PATIO Caddyfile — Firmenserver, eigene lokale Zertifizierungsstelle
 #
-# Zwei Modi:
-#   1) CADDY_DOMAIN gesetzt → automatisches Let's-Encrypt + HTTPS-Redirect
-#   2) CADDY_DOMAIN leer    → nur HTTP auf Port 80 (fuer interne Netze / lokale
-#      Entwicklung / hinter einem anderen Reverse-Proxy)
+# Hier stand bis zum Umbau Let's Encrypt (`email` + Domain aus CADDY_DOMAIN).
+# Das setzt einen aus dem Internet erreichbaren Rechner und eine oeffentliche
+# Domain voraus — beides gibt es hier nicht. Zwei weitere Gruende sprechen
+# dagegen, selbst wenn es ginge:
 #
-# Beide Modi proxen auf app:3000 (Docker-Compose-Netzwerk).
+#   1. Jedes oeffentlich ausgestellte Zertifikat landet im Certificate-
+#      Transparency-Log. Der interne Rechnername waere damit weltweit
+#      nachlesbar.
+#   2. Die Erneuerung braucht alle 90 Tage Internet. Faellt sie aus, steht
+#      irgendwann das ganze Buero — und zwar an einem Dienstagmorgen.
+#
+# `tls internal` laesst Caddy stattdessen eine eigene Zertifizierungsstelle
+# auf DIESEM Rechner betreiben und selbst erneuern. Nichts verlaesst das Haus.
+#
+# Damit die Arbeitsplaetze keine Warnung zeigen, sind drei Dinge noetig
+# (Anleitung: docs/betrieb/zertifikat.md):
+#   1. PATIO_HOSTNAME in der .env setzen (Vorgabe: patio.sima.intern).
+#      Bewusst KEINE .local-Endung — die ist fuer mDNS reserviert und macht
+#      unter Windows Aerger.
+#   2. Der Name muss aufloesbar sein: Eintrag im Router-DNS, ersatzweise die
+#      hosts-Datei je Arbeitsplatz.
+#   3. Das CA-Wurzelzertifikat einmalig auf jeden Arbeitsplatz. Es liegt im
+#      Volume caddy_data unter
+#        /data/caddy/pki/authorities/local/root.crt
+#      und gilt zehn Jahre. Firefox bringt einen EIGENEN Zertifikatspeicher
+#      mit und muss getrennt bedacht werden.
+#
+# Die Blattzertifikate der internen CA sind absichtlich kurzlebig (Stunden)
+# und werden laufend erneuert. Das setzt voraus, dass Caddy durchlaeuft und
+# die Uhr des Servers stimmt — ohne Internet gibt es kein NTP nach draussen,
+# als Zeitquelle dient der Router (siehe docs/betrieb/server.md).
 # ─────────────────────────────────────────────────────────────────────────────
-
 {
-    email {$CADDY_EMAIL:admin@patio.local}
+	# Alle Zertifikate von der internen CA ausstellen, nie von aussen holen.
+	# Ohne diese Zeile wuerde Caddy fuer einen oeffentlich aussehenden Namen
+	# doch einen ACME-Versuch starten — und beim Fehlschlag nicht ausliefern.
+	local_certs
+	# Kein ACME-Kontakt noetig, also auch keine Mailadresse.
+	admin off
 }
 
-{$CADDY_DOMAIN} {
-    encode gzip zstd
+{$PATIO_HOSTNAME:patio.sima.intern} {
+	tls internal
 
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        X-Content-Type-Options "nosniff"
-        X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
-        Permissions-Policy "camera=(), microphone=(), geolocation=()"
-        -Server
-    }
+	encode gzip zstd
 
-    # SSE-Streaming fuer /api/events und /api/chat darf nicht gepuffert werden
-    @sse {
-        path /api/events /api/events/* /api/chat /api/chat/*
-    }
-    reverse_proxy @sse app:3000 {
-        flush_interval -1
-        transport http {
-            read_timeout 24h
-            write_timeout 24h
-        }
-    }
+	header {
+		# HSTS ist hier unkritisch: der Name wird ohnehin nur intern aufgeloest,
+		# und es gibt keinen HTTP-Weg, auf den ein Browser zurueckfallen sollte.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
 
-    # Default fuer alle uebrigen Routes (alles was nicht @sse matched)
-    reverse_proxy app:3000
+	# Der Live-Kanal darf NICHT gepuffert werden. Wird er es doch, sieht
+	# niemand mehr die Aenderungen der Kollegen — die Oberflaeche wirkt dann
+	# nicht kaputt, sondern nur seltsam traege, und man sucht lange.
+	# `/api/chat` ist mit der LLM-Laufzeit entfallen und steht hier nicht mehr.
+	@sse path /api/events /api/events/*
+	reverse_proxy @sse app:3000 {
+		flush_interval -1
+		transport http {
+			read_timeout 24h
+			write_timeout 24h
+		}
+	}
 
-    log {
-        output stdout
-        format console
-    }
+	reverse_proxy app:3000
+
+	log {
+		output stdout
+		format console
+	}
 }
