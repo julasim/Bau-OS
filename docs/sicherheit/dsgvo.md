@@ -93,7 +93,7 @@ docker compose down -v          # löscht auch das Datenvolume
 rm -rf /opt/patio-workspace/*
 
 # Backups verwerfen
-rm -rf /opt/patio-backups/*
+rm -rf /mnt/patio-backup/*
 ```
 
 ::: danger Backups nicht vergessen

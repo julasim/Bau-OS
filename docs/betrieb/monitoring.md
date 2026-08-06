@@ -89,7 +89,7 @@ docker stats --no-stream
 # Speicherplatz
 df -h /
 du -sh /opt/patio-workspace
-du -sh /opt/patio-backups
+du -sh /mnt/patio-backup
 
 # Größe der Datenbank
 docker compose exec postgres \
@@ -147,10 +147,12 @@ elif [ "$DISK" -lt 90 ]; then echo "WARNUNG (${DISK}% belegt)"
 else echo "KRITISCH (${DISK}% belegt)"
 fi
 
-echo -n "Backup:      "
-NEUESTES=$(find /opt/patio-backups -name 'patio-backup-*.tar.gz' -mtime -1 | wc -l)
-[ "$NEUESTES" -gt 0 ] && echo "OK (Backup aus den letzten 24 h)" \
-                      || echo "WARNUNG (kein aktuelles Backup)"
+echo -n "Sicherung:   "
+# Gezaehlt werden nur VOLLSTAENDIGE Staende: ein abgebrochener Lauf hinterlaesst
+# ein Verzeichnis, das aussieht wie eine Sicherung, aber keine ist.
+NEUESTES=$(find /mnt/patio-backup/taeglich -maxdepth 2 -name VOLLSTAENDIG -mtime -1 2>/dev/null | wc -l)
+[ "$NEUESTES" -gt 0 ] && echo "OK (vollstaendiger Stand aus den letzten 24 h)" \
+                      || echo "WARNUNG (kein aktueller vollstaendiger Stand)"
 ```
 
 ```bash

@@ -68,6 +68,11 @@ const router = createRouter({
         { path: "aktivitaet", name: "aktivitaet", component: () => import("./views/AktivitaetView.vue") },
         { path: "admin/audit", name: "admin-audit", component: () => import("./views/AdminAuditView.vue") },
         {
+          path: "admin/sicherung",
+          name: "admin-sicherung",
+          component: () => import("./views/AdminSicherungView.vue"),
+        },
+        {
           path: "admin/papierkorb",
           name: "admin-papierkorb",
           component: () => import("./views/AdminPapierkorbView.vue"),

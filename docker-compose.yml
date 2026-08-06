@@ -107,6 +107,15 @@ services:
       - ./logs:/opt/patio/logs
       - ./data:/opt/patio/data
       - ./tools:/opt/patio/tools
+      # Sicherungsverzeichnis, NUR LESEND. Der Dienst zeigt damit unter
+      # „Verwaltung -> Sicherung", wann zuletzt gesichert wurde und ob es
+      # geklappt hat. Schreiben darf er dort nichts: die Sicherung selbst
+      # laeuft als systemd-Timer auf dem Host (deploy/patio-backup.timer).
+      #
+      # Ohne diese Anzeige faellt eine seit Wochen still scheiternde Sicherung
+      # erst auf, wenn man sie braucht — `OnFailure=` schreibt ins Journal, und
+      # dort schaut niemand hinein.
+      - ${BACKUP_DIR:-/mnt/patio-backup}:/opt/patio/backup:ro
     # Kein `ports:` — erreichbar nur ueber Caddy.
     expose:
       - "3000"

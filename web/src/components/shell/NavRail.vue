@@ -39,7 +39,8 @@ const NAV_ITEMS: NavItem[] = [
 const ADMIN_ITEMS: NavItem[] = [
   { to: "/admin/users", label: "Nutzer", icon: "user", adminOnly: true },
   { to: "/admin/audit", label: "Audit-Log", icon: "lock", adminOnly: true },
-  { to: "/admin/papierkorb", label: "Papierkorb", icon: "archive", adminOnly: true },
+  { to: "/admin/papierkorb", label: "Papierkorb", icon: "trash", adminOnly: true },
+  { to: "/admin/sicherung", label: "Sicherung", icon: "archive", adminOnly: true },
 ];
 
 const visibleNav = computed(() => NAV_ITEMS);

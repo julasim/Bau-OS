@@ -256,14 +256,17 @@ ist ein natives Modul und wird gegen die installierte Version kompiliert.
 
 ```bash
 df -h /
-du -sh /opt/patio-backups /opt/patio-workspace /opt/patio/logs
+du -sh /mnt/patio-backup /opt/patio-workspace /opt/patio/logs
 
 # Datenbankgröße
 docker compose exec postgres \
   psql -U patio -d patio -c "SELECT pg_size_pretty(pg_database_size('patio'));"
 
 # Alte Backups
-find /opt/patio-backups -name 'patio-backup-*.tar.gz' -mtime +30 -delete
+# Alte Staende raeumt `scripts/backup.sh` selbst auf (7 Tage / 4 Wochen /
+# 12 Monate). Von Hand nur, wenn die Platte akut voll ist — und dann NIE den
+# juengsten vollstaendigen Stand. Abgebrochene Staende sind immer entbehrlich:
+find /mnt/patio-backup/taeglich -maxdepth 1 -type d -name '*.UNVOLLSTAENDIG' -exec rm -rf {} +
 
 # Journal begrenzen
 sudo journalctl --vacuum-size=200M
@@ -283,6 +286,6 @@ echo "Health:    $(curl -s localhost:3000/api/health || echo 'keine Antwort')"
 echo "Node:      $(node --version 2>/dev/null || echo 'nicht installiert')"
 echo "RAM:       $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
 echo "Disk:      $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
-echo "Backup:    $(find /opt/patio-backups -name 'patio-backup-*.tar.gz' -mtime -1 | wc -l) aus 24 h"
+echo "Sicherung: $(find /mnt/patio-backup/taeglich -maxdepth 2 -name VOLLSTAENDIG -mtime -1 2>/dev/null | wc -l) vollstaendige Staende aus 24 h"
 echo "Fehler:    $(grep -c '\"level\":\"error\"' /opt/patio/logs/patio.jsonl 2>/dev/null || echo '?') im JSONL-Log"
 ```
