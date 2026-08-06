@@ -8,7 +8,7 @@
     "setup": "tsx scripts/setup.ts",
     "dev": "tsx watch src/index.ts",
     "build": "tsc && node -e \"const f=require('fs'); f.cpSync('src/db/migrations','dist/db/migrations',{recursive:true})\"",
-    "build:all": "npm run build && vite build --config web/vite.config.ts",
+    "build:all": "npm run build && vite build --config web/vite.config.ts && npm run docs:build",
     "typecheck:web": "vue-tsc --noEmit -p web/tsconfig.json",
     "dev:web": "vite dev --config web/vite.config.ts",
     "start": "node dist/index.js",

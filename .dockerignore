@@ -24,7 +24,10 @@ Thumbs.db
 
 # Dokumentation — wird vom Dienst NICHT ausgeliefert (geprueft: kein
 # serveStatic darauf in src/api/server.ts), gehoert also nicht ins Image.
-docs/
+# Die Doku-QUELLE wird im Image gebraucht (build:all baut sie nach dist/docs
+# und der Server liefert sie unter /docs/ aus). Nur Cache und Altausgabe raus.
+docs/.vitepress/cache/
+docs/.vitepress/dist/
 
 # Auslieferungspakete. OHNE diese Zeile schickt jeder `docker build` die
 # gespeicherten Images als Bau-Kontext mit — gemessen 169 von 172 MB, und es

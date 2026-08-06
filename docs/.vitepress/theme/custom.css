@@ -1,4 +1,14 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,300..700;1,14..32,300..700&family=JetBrains+Mono:wght@400;500&display=swap');
+/* Kein Web-Font-Import. Hier stand bis 2026-08-06 ein @import auf
+   fonts.googleapis.com — derselbe Aussenkontakt, den AP1 Teil H aus der
+   Oberflaeche entfernt hat. Er faellt auf, seit der Server die Doku unter
+   /docs/ ausliefert: auf einem Rechner ohne Internet laeuft jeder Seitenaufruf
+   erst in einen Timeout, und der Zeitpunkt jedes Doku-Aufrufs waere nach
+   draussen sichtbar.
+
+   Inter braucht den Import nicht — das VitePress-Standardthema liefert die
+   Schnitte als lokale woff2 mit (dist/docs/assets/inter-*.woff2). JetBrains
+   Mono liegt nirgends und kann offline nie aufloesen; dafuer steht unten die
+   System-Kette, wie in der Oberflaeche auch. */
 
 /* ──────────────────────────────────────────────────────────────────────────
    PATIO Docs — Design-System-Mapping auf VitePress CSS-Variablen
@@ -14,7 +24,7 @@
 
   /* Fonts */
   --vp-font-family-base: 'Inter', -apple-system, system-ui, sans-serif;
-  --vp-font-family-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --vp-font-family-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Backgrounds */
   --vp-c-bg: #ffffff;

@@ -1,6 +1,15 @@
 import { defineConfig } from "vitepress";
 
 export default defineConfig({
+  // Die Doku wird vom PATIO-Server unter /docs/ ausgeliefert (Menue "Hilfe →
+  // Dokumentation", F1 im Arbeitsplatz-Programm). Beides ist Pflicht:
+  //   base   — sonst zeigen die erzeugten Verweise auf /assets/… und kollidieren
+  //            mit den gleichnamigen Dateien der Vue-Oberflaeche.
+  //   outDir — landet in dist/, denn nur dist/ wandert ins Laufzeit-Image
+  //            (Dockerfile Stufe 2 kopiert genau diesen Ordner).
+  base: "/docs/",
+  outDir: "../dist/docs",
+
   title: "PATIO",
   description: "Büro-Software für Architektur- und Planungsbüros — im eigenen Netz betrieben",
   lang: "de-DE",

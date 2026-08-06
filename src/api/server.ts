@@ -491,6 +491,24 @@ app.route("/api", uiPreferencesRoutes);
 // am Parsen statt am Statuscode. Muss VOR serveStatic stehen.
 app.all("/api/*", (c) => c.json({ error: "Unbekannter Endpunkt." }, 404));
 
+// ── Offline-Dokumentation ────────────────────────────────────────────────────
+// Die gebaute VitePress-Seite (npm run docs:build → dist/docs). Aufgerufen wird
+// sie ueber "Hilfe → Dokumentation" (F1) im Arbeitsplatz-Programm.
+//
+// `root: "./dist"` und nicht `"./dist/docs"`: serveStatic haengt den ANFRAGEPFAD
+// an die Wurzel, aus /docs/index.html wuerde sonst ./dist/docs/docs/index.html.
+//
+// Muss VOR dem SPA-Fallback stehen — der beantwortet sonst jeden Doku-Pfad mit
+// der Vue-Oberflaeche.
+//
+// Bewusst OEFFENTLICH: die Route liegt vor der Auth-Middleware, die nur auf
+// /api/* greift. Die Betriebsdoku enthaelt keine Geheimnisse, und das Netz ist
+// geschlossen. Sollte das je stoeren, kommt sie hinter die Middleware.
+app.use("/docs/*", serveStatic({ root: "./dist" }));
+// Eine Doku-Seite, die es nicht gibt, ist ein 404 — ohne diese Zeile faellt sie
+// in den SPA-Fallback und der Benutzer bekommt kommentarlos die Anwendung.
+app.all("/docs/*", (c) => c.text("Diese Seite der Dokumentation gibt es nicht.", 404));
+
 // ── Statische Dateien (Vue SPA in Production) ────────────────────────────────
 app.use("/*", serveStatic({ root: "./dist/web" }));
 
