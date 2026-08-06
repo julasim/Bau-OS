@@ -41,7 +41,7 @@ export default defineConfig({
           { text: "PATIO deployen", link: "/betrieb/deployment" },
           { text: "systemd Service", link: "/betrieb/systemd" },
           { text: "Updates", link: "/betrieb/updates" },
-          { text: "Backup", link: "/betrieb/backup" },
+          { text: "Sicherung", link: "/betrieb/sicherung" },
           { text: "Monitoring", link: "/betrieb/monitoring" },
           { text: "Troubleshooting", link: "/betrieb/troubleshooting" },
         ],

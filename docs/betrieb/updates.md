@@ -11,7 +11,7 @@ Ein Update kann Migrationen mitbringen, und Migrationen sind
 sudo bash /opt/patio/scripts/backup.sh
 ```
 
-Details: [Backup](/betrieb/backup).
+Details: [Sicherung](/betrieb/sicherung).
 
 ## Docker Compose
 
@@ -143,4 +143,4 @@ PATIO kommt danach von selbst wieder hoch — über systemd beziehungsweise
 
 ## Nächster Schritt
 
-→ [Backup](/betrieb/backup)
+→ [Sicherung](/betrieb/sicherung)

@@ -1,0 +1,33 @@
+[Unit]
+Description=PATIO — naechtliche Sicherung auf die externe Festplatte
+Documentation=file:///opt/patio/docs/betrieb/sicherung.md
+# Die Sicherung braucht Docker (pg_dump laeuft im Container) UND die
+# eingehaengte Platte. Ohne die Platte bricht backup.sh ab — das ist Absicht,
+# aber es soll gar nicht erst dazu kommen.
+After=docker.service mnt-patio\x2dbackup.mount
+Requires=docker.service
+Wants=mnt-patio\x2dbackup.mount
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/patio/scripts/backup.sh
+# Die Selbstpruefung faehrt einen Postgres-Container hoch und spielt den Dump
+# ein — bei grossen Datenbestaenden dauert das. Eine Stunde ist reichlich
+# bemessen; laeuft es laenger, stimmt etwas nicht.
+TimeoutStartSec=1h
+
+# Die Umgebung kommt aus derselben .env wie der Dienst (BACKUP_DIR,
+# POSTGRES_USER, POSTGRES_DB). systemd liest sie als reine KEY=VALUE-Datei.
+EnvironmentFile=-/opt/patio/.env
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=patio-backup
+
+# Schlaegt die Sicherung fehl, MUSS es auffallen. Ohne diese Zeile scheitert
+# der Lauf still im Journal — und man merkt es erst, wenn man die Sicherung
+# braucht.
+OnFailure=patio-backup-fehler@%n.service
+
+[Install]
+WantedBy=multi-user.target

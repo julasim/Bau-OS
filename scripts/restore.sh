@@ -1,131 +1,167 @@
 #!/bin/bash
-# ============================================================
-# PATIO Restore — Tarball + DB-Dump zurueckspielen
-# ============================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# PATIO — Ruecksicherung
 #
 # Aufruf:
-#   sudo bash scripts/restore.sh \
-#     /opt/patio-backups/patio-backup-20260420-030000.tar.gz \
-#     /opt/patio-backups/patio-db-20260420-030000.sql.gz
+#   sudo bash /opt/patio/scripts/restore.sh /mnt/patio-backup/taeglich/20260806-030000
 #
-# Schritt 1: Tarball entpacken (Vault + .env + data/ + tools/)
-# Schritt 2: Postgres-Dump in laufenden Container einspielen
-# Schritt 3: patio-app Container neu starten
+# Ohne Argument wird der juengste Tagesstand genommen:
+#   sudo bash /opt/patio/scripts/restore.sh
 #
-# WICHTIGE REGELN:
-#   - Tarball + DB-Dump aus DEM SELBEN Tag verwenden. Sonst kann es zu
-#     Schema-Drift kommen.
-#   - VOR Restore: aktuellen Stand sichern (`bash scripts/backup.sh`).
-#   - Bei Restore wird die existierende DB GELOESCHT (DROP + CREATE).
+# Was zurueckgespielt wird — genau das, was backup.sh ablegt:
+#   datenbank.sql.gz     → in den laufenden Postgres-Container
+#   dokumente.tar.gz     → /opt/patio-workspace
+#   konfiguration.tar.gz → .env, data/, tools/
+#   caddy-daten.tar.gz   → Volume mit dem privaten CA-Schluessel
 #
-# Restore prueft NICHT, ob die DB schon mit Daten gefuellt ist —
-# der Operator entscheidet bewusst.
-# ============================================================
+# ZEITMESSUNG: Das Skript misst und meldet die Dauer. Diese Zahl gehoert ins
+# Betriebshandbuch — sie ist die Antwort auf die einzige Frage, die im
+# Ernstfall gestellt wird: "Wie lange stehen wir?"
+#
+# WARNUNG: Bestehende Daten werden ueberschrieben. Vorher sichern.
+# ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-if [ $# -lt 1 ]; then
-  echo "Aufruf: $0 <backup-tarball> [db-dump]"
-  echo ""
-  echo "Beispiel:"
-  echo "  sudo bash $0 \\"
-  echo "    /opt/patio-backups/patio-backup-20260420-030000.tar.gz \\"
-  echo "    /opt/patio-backups/patio-db-20260420-030000.sql.gz"
-  exit 1
-fi
-
-TARBALL="$1"
-DB_DUMP="${2:-}"
-
 INSTALL_DIR="${INSTALL_DIR:-/opt/patio}"
-# Gleicher Pfad wie in backup.sh und install.sh.
-VAULT_DIR="${VAULT_DIR:-/opt/patio-workspace}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-/opt/patio-workspace}"
+BACKUP_DIR="${BACKUP_DIR:-/mnt/patio-backup}"
 DB_CONTAINER="${DB_CONTAINER:-patio-postgres}"
 APP_CONTAINER="${APP_CONTAINER:-patio-app}"
+CADDY_VOLUME="${CADDY_VOLUME:-patio_caddy_data}"
+POSTGRES_USER="${POSTGRES_USER:-patio}"
+POSTGRES_DB="${POSTGRES_DB:-patio}"
 
-if [ ! -f "$TARBALL" ]; then
-  echo "FEHLER: Backup-Tarball nicht gefunden: $TARBALL"
-  exit 1
+# Ohne Rueckfrage durchlaufen (fuer die geprobte Ruecksicherung).
+ASSUME_YES="${ASSUME_YES:-false}"
+
+log()  { echo "[$(date '+%H:%M:%S')] $*"; }
+fehl() { echo "FEHLER: $*" >&2; exit 1; }
+
+STAND="${1:-}"
+if [ -z "$STAND" ]; then
+  # NUR Staende mit der Marke VOLLSTAENDIG. backup.sh schreibt sie erst, wenn
+  # die Selbstpruefung bestanden ist. Ohne diese Einschraenkung waere hier der
+  # juengste Stand genommen worden — und das kann ausgerechnet der sein, der
+  # gerade wegen eines unvollstaendigen Dumps fehlgeschlagen ist, oder einer,
+  # den ein Stromausfall mittendrin abgeschnitten hat.
+  STAND=$(find "$BACKUP_DIR"/{taeglich,woechentlich,monatlich} -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+          | while read -r d; do [ -f "$d/VOLLSTAENDIG" ] && echo "$d"; done \
+          | sort | tail -1)
+  [ -n "$STAND" ] || fehl "Kein vollstaendiger Sicherungsstand gefunden unter $BACKUP_DIR.
+       Vorhandene Staende ohne Marke VOLLSTAENDIG sind unbrauchbar — pruefen mit:
+         ls -la $BACKUP_DIR/taeglich/"
+  log "Juengster vollstaendiger Stand: $STAND"
+fi
+[ -d "$STAND" ] || fehl "Sicherungsstand nicht gefunden: $STAND"
+[ -f "$STAND/datenbank.sql.gz" ] || fehl "Kein Datenbank-Dump in $STAND"
+
+# Bei ausdruecklich angegebenem Stand nur warnen, nicht abbrechen — der
+# Operator kann Gruende haben, einen unvollstaendigen Stand anzusehen.
+if [ ! -f "$STAND/VOLLSTAENDIG" ]; then
+  log "WARNUNG: Dieser Stand traegt KEINE Marke VOLLSTAENDIG."
+  log "         Entweder ist die Selbstpruefung fehlgeschlagen oder die"
+  log "         Sicherung wurde mittendrin abgebrochen. Inhalt pruefen!"
 fi
 
-# DB-Dump-Auto-Detection: wenn nicht uebergeben, vom Tarball-Namen ableiten.
-if [ -z "$DB_DUMP" ]; then
-  GUESS="${TARBALL/patio-backup-/patio-db-}"
-  GUESS="${GUESS%.tar.gz}.sql.gz"
-  if [ -f "$GUESS" ]; then
-    DB_DUMP="$GUESS"
-    echo "[$(date)] DB-Dump automatisch erkannt: $DB_DUMP"
-  fi
+# ── Pruefsummen zuerst ───────────────────────────────────────────────────────
+# Eine beschaedigte Sicherung soll VOR dem Loeschen der bestehenden Daten
+# auffallen, nicht mittendrin.
+if [ -f "$STAND/pruefsummen.sha256" ]; then
+  log "Pruefsummen kontrollieren..."
+  ( cd "$STAND" && sha256sum -c pruefsummen.sha256 --quiet ) \
+    || fehl "Pruefsummen stimmen nicht — die Sicherung ist beschaedigt."
+  log "Pruefsummen in Ordnung."
+else
+  log "WARNUNG: keine Pruefsummen-Datei — Sicherung stammt aus einer aelteren Fassung."
 fi
 
-# ── Bestaetigung ────────────────────────────────────────────────────────────
-echo ""
-echo "============================================================"
-echo "PATIO Restore"
-echo "============================================================"
-echo "Tarball:   $TARBALL"
-echo "DB-Dump:   ${DB_DUMP:-<keiner>}"
-echo "Install:   $INSTALL_DIR"
-echo "Vault:     $VAULT_DIR"
-echo ""
-echo "WARNUNG: Bestehende Daten werden ueberschrieben."
-read -p "Fortfahren? (yes/no) " -r
-if [ "$REPLY" != "yes" ]; then
-  echo "Abgebrochen."
-  exit 0
+echo
+echo "════════════════════════════════════════════════════════"
+echo "PATIO — Ruecksicherung"
+echo "════════════════════════════════════════════════════════"
+echo "Stand:        $STAND"
+echo "Datum:        $(date -r "$STAND" '+%d.%m.%Y %H:%M' 2>/dev/null || echo unbekannt)"
+echo "Ziel-DB:      $DB_CONTAINER / $POSTGRES_DB"
+echo "Dokumente:    $WORKSPACE_DIR"
+echo
+echo "Bestehende Daten werden ueberschrieben."
+if [ "$ASSUME_YES" != "true" ]; then
+  read -r -p "Fortfahren? (ja/nein) " antwort
+  [ "$antwort" = "ja" ] || { echo "Abgebrochen."; exit 0; }
 fi
 
-# ── Schritt 1: Tarball entpacken ────────────────────────────────────────────
-echo "[$(date)] Tarball entpacken..."
-# tar wurde mit "-C $(dirname $VAULT_DIR) basename" + "-C $INSTALL_DIR .env data/ tools/"
-# erstellt. Beim Restore landen die zwei Sets in / (root), damit /opt/patio/.env
-# und /opt/patio-workspace wieder am richtigen Platz sind.
-tar -xzf "$TARBALL" -C / 2>&1 | tail -10
+BEGINN=$(date +%s)
 
-# Permissions auf .env wieder absichern (sonst lesbar fuer alle).
-if [ -f "$INSTALL_DIR/.env" ]; then
-  chmod 600 "$INSTALL_DIR/.env"
+# ── 1. Dienst anhalten ───────────────────────────────────────────────────────
+# Sonst schreibt die laufende App waehrend des Einspielens weiter.
+if docker ps --format '{{.Names}}' | grep -qx "$APP_CONTAINER"; then
+  log "Dienst anhalten..."
+  docker stop "$APP_CONTAINER" >/dev/null
+  APP_LIEF=true
+else
+  APP_LIEF=false
 fi
 
-# ── Schritt 2: Postgres restoren ────────────────────────────────────────────
-if [ -n "$DB_DUMP" ]; then
-  if [ ! -f "$DB_DUMP" ]; then
-    echo "FEHLER: DB-Dump nicht gefunden: $DB_DUMP"
-    exit 1
-  fi
+# ── 2. Datenbank ─────────────────────────────────────────────────────────────
+docker ps --format '{{.Names}}' | grep -qx "$DB_CONTAINER" \
+  || fehl "Postgres-Container laeuft nicht: $DB_CONTAINER — erst 'docker compose up -d postgres'"
 
-  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${DB_CONTAINER}$"; then
-    echo "FEHLER: Postgres-Container '${DB_CONTAINER}' laeuft nicht."
-    echo "Erst PATIO hochfahren, dann Restore wiederholen:"
-    echo "  cd $INSTALL_DIR && docker compose up -d patio-postgres"
-    exit 1
-  fi
+log "Datenbank einspielen..."
+gunzip -c "$STAND/datenbank.sql.gz" \
+  | docker exec -i "$DB_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1 -q \
+  || fehl "Einspielen der Datenbank fehlgeschlagen."
 
-  echo "[$(date)] Postgres-Dump einspielen..."
-  # Der Dump wurde mit --clean --if-exists erstellt — DROP + CREATE ist
-  # schon enthalten. Wir piepen ihn entpackt direkt in psql.
-  if gunzip -c "$DB_DUMP" | docker exec -i "$DB_CONTAINER" psql \
-    -U "${POSTGRES_USER:-patio}" \
-    -d "${POSTGRES_DB:-patio}" \
-    -v ON_ERROR_STOP=1 -q 2>&1 | tail -20; then
-    echo "[$(date)] DB-Restore abgeschlossen"
-  else
-    echo "FEHLER: DB-Restore fehlgeschlagen"
-    exit 1
-  fi
+# ── 3. Dokumente ─────────────────────────────────────────────────────────────
+log "Dokumente einspielen..."
+tar -xzf "$STAND/dokumente.tar.gz" -C "$(dirname "$WORKSPACE_DIR")"
+# Der Container laeuft als node = uid 1000. Ohne das kann der Dienst nach der
+# Ruecksicherung nicht schreiben — und der Fehler zeigt sich woanders.
+chown -R 1000:1000 "$WORKSPACE_DIR"
+
+# ── 4. Konfiguration ─────────────────────────────────────────────────────────
+if [ -f "$STAND/konfiguration.tar.gz" ]; then
+  log "Konfiguration einspielen..."
+  tar -xzf "$STAND/konfiguration.tar.gz" -C "$INSTALL_DIR"
+  [ -f "$INSTALL_DIR/.env" ] && chmod 600 "$INSTALL_DIR/.env"
 fi
 
-# ── Schritt 3: App neu starten ──────────────────────────────────────────────
-if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${APP_CONTAINER}$"; then
-  echo "[$(date)] App-Container '${APP_CONTAINER}' neu starten..."
-  docker restart "$APP_CONTAINER" >/dev/null
+# ── 5. CA-Schluessel ─────────────────────────────────────────────────────────
+# Ohne diesen Schritt erzeugt Caddy eine NEUE Zertifizierungsstelle, und jeder
+# Arbeitsplatz zeigt wieder eine Warnung.
+if [ -f "$STAND/caddy-daten.tar.gz" ]; then
+  log "CA-Schluessel einspielen..."
+  docker volume create "$CADDY_VOLUME" >/dev/null
+  docker run --rm -v "$CADDY_VOLUME":/ziel -v "$STAND":/quelle:ro alpine:latest \
+    sh -c 'rm -rf /ziel/* && tar -xzf /quelle/caddy-daten.tar.gz -C /ziel'
+else
+  log "WARNUNG: kein CA-Schluessel in der Sicherung. Caddy erzeugt eine neue"
+  log "         Zertifizierungsstelle — das neue Wurzelzertifikat muss dann auf"
+  log "         JEDEN Arbeitsplatz. Siehe docs/betrieb/zertifikat.md."
 fi
 
-echo ""
-echo "============================================================"
-echo "Restore erfolgreich."
-echo "============================================================"
-echo "Naechste Schritte:"
-echo "  1. Login pruefen: https://<host>/login"
-echo "  2. Admin-User-Liste pruefen: /admin/users"
-echo "  3. Audit-Log pruefen: /admin/audit (sollte 'login.success' zeigen)"
-echo ""
+# ── 6. Dienst wieder starten ─────────────────────────────────────────────────
+if [ "$APP_LIEF" = "true" ]; then
+  log "Dienst starten..."
+  docker start "$APP_CONTAINER" >/dev/null
+  for _ in $(seq 1 30); do
+    docker exec "$APP_CONTAINER" curl -fsS -o /dev/null http://localhost:3000/api/health 2>/dev/null && break
+    sleep 1
+  done
+fi
+
+DAUER=$(( $(date +%s) - BEGINN ))
+
+echo
+echo "════════════════════════════════════════════════════════"
+echo "Ruecksicherung abgeschlossen in ${DAUER} Sekunden"
+echo "  (= $((DAUER / 60)) Minuten $((DAUER % 60)) Sekunden)"
+echo "════════════════════════════════════════════════════════"
+echo
+echo "Diese Dauer gehoert ins Betriebshandbuch — sie ist die Antwort auf"
+echo "\"wie lange stehen wir?\"."
+echo
+echo "Jetzt pruefen:"
+echo "  1. Anmelden an https://\${PATIO_HOSTNAME}/ — ohne Zertifikatswarnung"
+echo "  2. Ein Projekt oeffnen, eine Datei herunterladen"
+echo "  3. Pruefprotokoll ansehen: /admin/audit"
+echo

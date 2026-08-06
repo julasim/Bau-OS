@@ -1,111 +1,236 @@
 #!/bin/bash
-# ============================================================
-# PATIO Backup — Vault + .env + data/ + tools/ + PostgreSQL
-# Taeglich via Cron ausfuehren, 14-Tage-Rotation by default
-# ============================================================
+# ─────────────────────────────────────────────────────────────────────────────
+# PATIO — Naechtliche Sicherung auf die externe Festplatte
 #
-# WICHTIG: Wenn .env (mit JWT_SECRET) und der DB-Dump getrennt verloren
-# gehen, sind verschluesselte Bot-Tokens nicht mehr lesbar — der
-# JWT_SECRET ist der Master-Key fuer AES-256-GCM (siehe src/api/crypto.ts).
-# Beide IMMER zusammen sichern. .env steckt im Tarball (siehe unten).
+# Gesichert wird alles, was nach einem Totalausfall gebraucht wird:
 #
-# Bei Restore: Tarball + DB-Dump aus DEM SELBEN Tag verwenden — sonst
-# kann es zu Schema-Drift zwischen .env-erwarteten Migrationen und
-# tatsaechlich gefahrenen kommen.
-# ============================================================
+#   1. Die Datensaetze          pg_dump aus dem Container patio-postgres
+#   2. Die Dokumente            /opt/patio-workspace (echte Dateien)
+#   3. .env                     enthaelt JWT_SECRET und ENCRYPTION_KEY
+#   4. data/, tools/            Legacy-Konten und Werkzeuge
+#   5. Volume caddy_data        der private Schluessel der internen CA
+#
+# Punkt 5 ist neu und der teuerste, wenn er fehlt: geht der CA-Schluessel
+# verloren, erzeugt Caddy beim Neuaufbau eine NEUE Zertifizierungsstelle — und
+# dann muss jemand an JEDEN Arbeitsplatz, um das neue Wurzelzertifikat
+# einzuspielen. Die Sicherung waere formal vollstaendig und der Wiederanlauf
+# trotzdem ein Tagesprojekt.
+#
+# Punkt 3 gehoert zwingend zu Punkt 1: der ENCRYPTION_KEY entschluesselt Felder
+# in der Datenbank. Dump ohne .env ist unvollstaendig.
+#
+# Aufbewahrung gestaffelt (Grossvater-Vater-Sohn):
+#   7 Tagesstaende · 4 Wochenstaende · 12 Monatsstaende
+# Wochen- und Monatsstaende sind HARTE LINKS auf den jeweiligen Tagesstand und
+# kosten damit keinen zusaetzlichen Platz. Das setzt ein Linux-Dateisystem auf
+# der externen Platte voraus (ext4) — exFAT und NTFS koennen das nicht.
+#
+# Aufruf (normalerweise ueber den systemd-Timer patio-backup.timer):
+#   sudo bash /opt/patio/scripts/backup.sh
+#
+# Rueckweg: scripts/restore.sh
+# ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-INSTALL_DIR="${1:-/opt/patio}"
-# Muss zum Installer passen (install.sh: WORKSPACE_DIR_DEFAULT).
-# Vorher stand hier /opt/patio-vault aus der Vault-Aera — ein Aufruf
-# ohne zweites Argument brach damit mit "Verzeichnis nicht gefunden" ab,
-# und zwar genau beim naechtlichen Backup, das niemand zusieht.
-VAULT_DIR="${2:-/opt/patio-workspace}"
-BACKUP_DIR="${3:-/opt/patio-backups}"
-RETENTION_DAYS="${RETENTION_DAYS:-14}"
+INSTALL_DIR="${INSTALL_DIR:-/opt/patio}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-/opt/patio-workspace}"
+BACKUP_DIR="${BACKUP_DIR:-/mnt/patio-backup}"
 
-# Container-Name: in der aktuellen docker-compose.yml ist es
-# patio-postgres. Aelter Versionen hatten "patio-db" — beide werden
-# durchprobiert, damit das Script auch auf Legacy-Installationen laeuft.
+# Muss die Sicherungsplatte eingehaengt sein? Standard: ja.
+# Nur fuer Probelaeufe auf einem gewoehnlichen Verzeichnis abschaltbar.
+REQUIRE_MOUNT="${REQUIRE_MOUNT:-true}"
+
 DB_CONTAINER="${DB_CONTAINER:-patio-postgres}"
+CADDY_VOLUME="${CADDY_VOLUME:-patio_caddy_data}"
+POSTGRES_USER="${POSTGRES_USER:-patio}"
+POSTGRES_DB="${POSTGRES_DB:-patio}"
 
-TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-BACKUP_FILE="${BACKUP_DIR}/patio-backup-${TIMESTAMP}.tar.gz"
-DB_DUMP_FILE="${BACKUP_DIR}/patio-db-${TIMESTAMP}.sql.gz"
+# Staffelung
+KEEP_DAILY="${KEEP_DAILY:-7}"
+KEEP_WEEKLY="${KEEP_WEEKLY:-4}"
+KEEP_MONTHLY="${KEEP_MONTHLY:-12}"
 
-# Backup-Verzeichnis erstellen
-mkdir -p "$BACKUP_DIR"
+# Ab diesem Fuellstand der Zielplatte wird gewarnt (Prozent).
+DISK_WARN_PERCENT="${DISK_WARN_PERCENT:-80}"
 
-# Pruefen ob Vault existiert
-if [ ! -d "$VAULT_DIR" ]; then
-  echo "[$(date)] FEHLER: Vault-Verzeichnis nicht gefunden: $VAULT_DIR"
-  exit 1
+STAMP=$(date +%Y%m%d-%H%M%S)
+
+log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"; }
+fehl() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] FEHLER: $*" >&2; exit 1; }
+
+# ── 1. Ziel pruefen ──────────────────────────────────────────────────────────
+#
+# DIE wichtigste Pruefung des ganzen Skripts. Ist die externe Platte nicht
+# eingehaengt, existiert das Einhaenge-Verzeichnis trotzdem — es liegt dann auf
+# der SYSTEMPLATTE. Ohne diese Pruefung schreibt die Sicherung dorthin, meldet
+# Erfolg, fuellt ueber Wochen das Wurzel-Dateisystem, und auffallen wuerde es
+# erst in dem Moment, in dem man die Sicherung braucht. Genau dieser stille
+# Fehlschlag soll hier unmoeglich sein.
+if [ "$REQUIRE_MOUNT" = "true" ]; then
+  if ! mountpoint -q "$BACKUP_DIR"; then
+    fehl "Die Sicherungsplatte ist nicht eingehaengt: $BACKUP_DIR
+       Ohne sie wuerde die Sicherung auf die Systemplatte schreiben und dort
+       still auflaufen. Pruefen mit:  lsblk -f   und   systemctl status $(systemd-escape -p --suffix=mount "$BACKUP_DIR" 2>/dev/null || echo '<mount-unit>')
+       Der Einhaenge-Eintrag arbeitet mit der UUID der Platte, nicht mit
+       /dev/sdX — der Geraetename wandert, sobald etwas anderes angesteckt wird."
+  fi
+  log "Sicherungsplatte eingehaengt: $BACKUP_DIR"
 fi
 
-# Backup erstellen: Vault + .env + data/ + tools/
-echo "[$(date)] Starte Backup..."
+[ -d "$WORKSPACE_DIR" ] || fehl "Dokumentenverzeichnis nicht gefunden: $WORKSPACE_DIR"
+[ -d "$INSTALL_DIR" ]   || fehl "Installationsverzeichnis nicht gefunden: $INSTALL_DIR"
 
-tar -czf "$BACKUP_FILE" \
-  -C "$(dirname "$VAULT_DIR")" "$(basename "$VAULT_DIR")" \
-  -C "$INSTALL_DIR" .env data/ tools/ 2>/dev/null || {
-  # Fallback: Nur Vault + .env wenn data/ oder tools/ nicht existiert
-  tar -czf "$BACKUP_FILE" \
-    -C "$(dirname "$VAULT_DIR")" "$(basename "$VAULT_DIR")" \
-    -C "$INSTALL_DIR" .env 2>/dev/null || true
+mkdir -p "$BACKUP_DIR"/{taeglich,woechentlich,monatlich}
+
+# Platz pruefen, bevor etwas geschrieben wird.
+BELEGT=$(df --output=pcent "$BACKUP_DIR" | tail -1 | tr -dc '0-9')
+if [ "${BELEGT:-0}" -ge "$DISK_WARN_PERCENT" ]; then
+  log "WARNUNG: Sicherungsplatte zu ${BELEGT}% belegt (Schwelle ${DISK_WARN_PERCENT}%)."
+fi
+
+ZIEL="$BACKUP_DIR/taeglich/$STAMP"
+mkdir -p "$ZIEL"
+
+# ── 2. Datenbank ─────────────────────────────────────────────────────────────
+docker ps --format '{{.Names}}' | grep -qx "$DB_CONTAINER" \
+  || fehl "Postgres-Container laeuft nicht: $DB_CONTAINER"
+
+log "Datenbank sichern..."
+# --clean --if-exists --no-owner --no-privileges: direkt einspielbar, ohne
+# dass Eigentuemer-Rollen auf dem Zielsystem existieren muessen.
+docker exec "$DB_CONTAINER" pg_dump -U "$POSTGRES_USER" \
+  --clean --if-exists --no-owner --no-privileges "$POSTGRES_DB" \
+  | gzip > "$ZIEL/datenbank.sql.gz"
+
+[ -s "$ZIEL/datenbank.sql.gz" ] || fehl "Datenbank-Dump ist leer."
+
+# ── 3. Dokumente, Konfiguration, CA-Schluessel ───────────────────────────────
+log "Dokumente sichern..."
+tar -czf "$ZIEL/dokumente.tar.gz" -C "$(dirname "$WORKSPACE_DIR")" "$(basename "$WORKSPACE_DIR")"
+
+log "Konfiguration sichern..."
+# .env, data/, tools/ — jedes nur, wenn vorhanden.
+TAR_TEILE=()
+[ -f "$INSTALL_DIR/.env" ] && TAR_TEILE+=(".env")
+[ -d "$INSTALL_DIR/data" ] && TAR_TEILE+=("data")
+[ -d "$INSTALL_DIR/tools" ] && TAR_TEILE+=("tools")
+if [ ${#TAR_TEILE[@]} -gt 0 ]; then
+  tar -czf "$ZIEL/konfiguration.tar.gz" -C "$INSTALL_DIR" "${TAR_TEILE[@]}"
+else
+  log "WARNUNG: weder .env noch data/ noch tools/ gefunden."
+fi
+
+log "CA-Schluessel sichern (Volume $CADDY_VOLUME)..."
+if docker volume inspect "$CADDY_VOLUME" >/dev/null 2>&1; then
+  # Ueber einen Wegwerf-Container, weil das Volume dem Docker-Daemon gehoert.
+  docker run --rm -v "$CADDY_VOLUME":/quelle:ro -v "$ZIEL":/ziel alpine:latest \
+    tar -czf /ziel/caddy-daten.tar.gz -C /quelle . 2>/dev/null
+  [ -s "$ZIEL/caddy-daten.tar.gz" ] || log "WARNUNG: caddy-daten.tar.gz ist leer."
+else
+  log "WARNUNG: Volume $CADDY_VOLUME nicht gefunden — der CA-Schluessel fehlt in dieser Sicherung."
+fi
+
+# ── 4. Rechte + Pruefsummen ──────────────────────────────────────────────────
+# konfiguration.tar.gz enthaelt .env mit JWT_SECRET und ENCRYPTION_KEY.
+chmod 600 "$ZIEL"/*.gz
+( cd "$ZIEL" && sha256sum ./*.gz > pruefsummen.sha256 )
+
+# ── 5. Selbstpruefung: die Sicherung einmal zurueck lesen ────────────────────
+#
+# Eine Sicherung, die nie gelesen wurde, ist keine. Der frische Dump wird in
+# einen Wegwerf-Container eingespielt und die Zeilen der Kerntabellen werden
+# gegen die Quelle gehalten. Weicht etwas ab, schlaegt der Lauf fehl — lieber
+# eine Fehlermeldung um 3 Uhr nachts als eine Ueberraschung im Ernstfall.
+log "Selbstpruefung: Dump probeweise zurueckspielen..."
+PRUEF_CONTAINER="patio-backup-pruefung-$$"
+TABELLEN="users projects notes tasks termine team_members"
+
+pruefung_aufraeumen() { docker rm -f "$PRUEF_CONTAINER" >/dev/null 2>&1 || true; }
+trap pruefung_aufraeumen EXIT
+
+docker run -d --name "$PRUEF_CONTAINER" \
+  -e POSTGRES_USER="$POSTGRES_USER" -e POSTGRES_PASSWORD=pruefung \
+  -e POSTGRES_DB="$POSTGRES_DB" postgres:16 >/dev/null
+
+for _ in $(seq 1 30); do
+  docker exec "$PRUEF_CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1 && break
+  sleep 1
+done
+docker exec "$PRUEF_CONTAINER" pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1 \
+  || fehl "Pruef-Datenbank kam nicht hoch."
+
+gunzip -c "$ZIEL/datenbank.sql.gz" \
+  | docker exec -i "$PRUEF_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -q >/dev/null 2>&1 \
+  || fehl "Der Dump liess sich nicht einspielen — die Sicherung ist unbrauchbar."
+
+ABWEICHUNGEN=0
+for t in $TABELLEN; do
+  soll=$(docker exec "$DB_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+          "SELECT count(*) FROM $t" 2>/dev/null || echo "-")
+  ist=$(docker exec "$PRUEF_CONTAINER" psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tAc \
+          "SELECT count(*) FROM $t" 2>/dev/null || echo "-")
+  if [ "$soll" != "$ist" ]; then
+    log "  ABWEICHUNG $t: Quelle $soll, Sicherung $ist"
+    ABWEICHUNGEN=$((ABWEICHUNGEN + 1))
+  else
+    log "  $t: $ist Zeilen"
+  fi
+done
+pruefung_aufraeumen
+trap - EXIT
+
+if [ "$ABWEICHUNGEN" -ne 0 ]; then
+  # Den unbrauchbaren Stand kenntlich machen, statt ihn liegen zu lassen.
+  # Ohne das nimmt `restore.sh` ohne Argument den JUENGSTEN Stand — und das
+  # waere ausgerechnet dieser hier. Im Ernstfall wuerde also die kaputte
+  # Sicherung eingespielt. Umbenennen statt loeschen: der Stand ist Beweis-
+  # material fuer die Fehlersuche.
+  mv "$ZIEL" "${ZIEL}.UNVOLLSTAENDIG"
+  fehl "$ABWEICHUNGEN Tabelle(n) weichen ab — die Sicherung ist nicht vollstaendig.
+       Der Stand liegt als ${ZIEL}.UNVOLLSTAENDIG und wird von restore.sh
+       nicht angeboten."
+fi
+log "Selbstpruefung bestanden."
+
+# Erst JETZT gilt der Stand als brauchbar. restore.sh sucht nach dieser Marke
+# und ueberspringt jeden Stand ohne sie — auch einen, der mittendrin
+# abgebrochen ist (Stromausfall waehrend der Sicherung).
+date --iso-8601=seconds > "$ZIEL/VOLLSTAENDIG"
+
+# ── 6. Staffelung ────────────────────────────────────────────────────────────
+#
+# Wochen- und Monatsstand sind harte Links auf den Tagesstand: derselbe
+# Datenblock, nur ein zweiter Verzeichniseintrag. Erst wenn der Tagesstand
+# wegrotiert, kostet der Wochenstand ueberhaupt Platz.
+verlinken() {
+  local kategorie="$1" name="$2"
+  local ordner="$BACKUP_DIR/$kategorie/$name"
+  [ -e "$ordner" ] && return 0
+  mkdir -p "$ordner"
+  cp -al "$ZIEL"/. "$ordner"/ 2>/dev/null || cp -a "$ZIEL"/. "$ordner"/
+  log "$kategorie: $name angelegt"
 }
 
-# Pruefen ob Backup erstellt wurde
-if [ ! -f "$BACKUP_FILE" ]; then
-  echo "[$(date)] FEHLER: Backup konnte nicht erstellt werden"
-  exit 1
-fi
+# Montag = Wochenstand, Monatserster = Monatsstand.
+[ "$(date +%u)" = "1" ] && verlinken woechentlich "$(date +%G-W%V)"
+[ "$(date +%d)" = "01" ] && verlinken monatlich "$(date +%Y-%m)"
 
-# Permissions: nur root lesbar — Tarball enthaelt .env mit Secrets.
-chmod 600 "$BACKUP_FILE"
+aufraeumen() {
+  local kategorie="$1" behalten="$2"
+  local anzahl
+  anzahl=$(find "$BACKUP_DIR/$kategorie" -mindepth 1 -maxdepth 1 -type d | wc -l)
+  [ "$anzahl" -le "$behalten" ] && return 0
+  find "$BACKUP_DIR/$kategorie" -mindepth 1 -maxdepth 1 -type d | sort \
+    | head -n -"$behalten" | while read -r alt; do
+        rm -rf "$alt"
+        log "$kategorie: $(basename "$alt") entfernt"
+      done
+}
 
-BACKUP_SIZE=$(du -h "$BACKUP_FILE" | cut -f1)
+aufraeumen taeglich "$KEEP_DAILY"
+aufraeumen woechentlich "$KEEP_WEEKLY"
+aufraeumen monatlich "$KEEP_MONTHLY"
 
-# PostgreSQL Dump (wenn Docker laeuft)
-# Container-Name probieren: zuerst patio-postgres, dann legacy patio-db.
-ACTUAL_DB_CONTAINER=""
-if command -v docker &>/dev/null; then
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^${DB_CONTAINER}$"; then
-    ACTUAL_DB_CONTAINER="$DB_CONTAINER"
-  elif docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^patio-db$"; then
-    ACTUAL_DB_CONTAINER="patio-db"
-  fi
-fi
-
-if [ -n "$ACTUAL_DB_CONTAINER" ]; then
-  echo "[$(date)] PostgreSQL Dump erstellen aus Container '${ACTUAL_DB_CONTAINER}'..."
-  # --clean --if-exists --no-owner --no-privileges fuer einen restoreablen Dump,
-  # der ohne Permission-Wackeleien direkt eingespielt werden kann.
-  if docker exec "$ACTUAL_DB_CONTAINER" pg_dump \
-    -U "${POSTGRES_USER:-patio}" \
-    --clean --if-exists --no-owner --no-privileges \
-    "${POSTGRES_DB:-patio}" 2>/dev/null | gzip > "$DB_DUMP_FILE"; then
-    if [ -s "$DB_DUMP_FILE" ]; then
-      chmod 600 "$DB_DUMP_FILE"
-      DB_SIZE=$(du -h "$DB_DUMP_FILE" | cut -f1)
-      echo "[$(date)] DB-Dump erstellt: ${DB_DUMP_FILE} (${DB_SIZE})"
-    else
-      rm -f "$DB_DUMP_FILE"
-      echo "[$(date)] WARNUNG: DB-Dump leer — pg_dump hat nichts geliefert"
-    fi
-  else
-    rm -f "$DB_DUMP_FILE"
-    echo "[$(date)] WARNUNG: DB-Dump fehlgeschlagen"
-  fi
-else
-  echo "[$(date)] HINWEIS: Kein laufender Postgres-Container gefunden — DB-Dump uebersprungen"
-fi
-
-# Rotation: Backups aelter als RETENTION_DAYS loeschen.
-DELETED=$(find "$BACKUP_DIR" -name "patio-backup-*.tar.gz" -mtime +${RETENTION_DAYS} -delete -print | wc -l)
-DELETED_DB=$(find "$BACKUP_DIR" -name "patio-db-*.sql.gz" -mtime +${RETENTION_DAYS} -delete -print 2>/dev/null | wc -l)
-DELETED=$((DELETED + DELETED_DB))
-
-echo "[$(date)] Backup erstellt: ${BACKUP_FILE} (${BACKUP_SIZE})"
-if [ "$DELETED" -gt 0 ]; then
-  echo "[$(date)] ${DELETED} alte Backup-Dateien geloescht (aelter als ${RETENTION_DAYS} Tage)"
-fi
+GROESSE=$(du -sh "$ZIEL" | cut -f1)
+log "Sicherung abgeschlossen: $ZIEL ($GROESSE)"
+log "Bestand: $(find "$BACKUP_DIR/taeglich" -mindepth 1 -maxdepth 1 -type d | wc -l) taeglich, $(find "$BACKUP_DIR/woechentlich" -mindepth 1 -maxdepth 1 -type d | wc -l) woechentlich, $(find "$BACKUP_DIR/monatlich" -mindepth 1 -maxdepth 1 -type d | wc -l) monatlich"

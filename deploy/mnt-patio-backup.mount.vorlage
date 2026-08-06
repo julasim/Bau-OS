@@ -1,0 +1,63 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# PATIO — Einhaenge-Einheit fuer die externe Sicherungsplatte
+#
+# VORLAGE. Vor dem Einsatz die UUID eintragen und die Datei unter dem Namen
+# ablegen, der zum Einhaengepunkt passt — systemd verlangt das:
+#
+#   /mnt/patio-backup   →   mnt-patio\x2dbackup.mount
+#
+# Den Namen nicht raten, sondern erzeugen lassen:
+#   systemd-escape -p --suffix=mount /mnt/patio-backup
+#
+# ── Einrichtung (einmalig) ───────────────────────────────────────────────────
+#
+# 1. Platte anstecken und finden:
+#      lsblk -f
+#
+# 2. Formatieren — ext4, NICHT exFAT oder NTFS.
+#    Grund: die Staffelung der Sicherung spart Platz ueber harte Links, und die
+#    gibt es nur auf einem Linux-Dateisystem. Eigentuemer und Rechte
+#    ueberleben dort ebenfalls.
+#      sudo mkfs.ext4 -L PATIO-SICHERUNG /dev/sdX1
+#
+#    ACHTUNG: Das loescht die Platte. Vorher zweimal auf den Geraetenamen sehen.
+#
+# 3. UUID ablesen und unten eintragen:
+#      sudo blkid /dev/sdX1
+#
+# 4. Einhaengepunkt anlegen und Einheit aktivieren:
+#      sudo mkdir -p /mnt/patio-backup
+#      sudo cp mnt-patio\\x2dbackup.mount /etc/systemd/system/
+#      sudo systemctl daemon-reload
+#      sudo systemctl enable --now mnt-patio\\x2dbackup.mount
+#
+# 5. Pruefen, dass es wirklich eingehaengt ist:
+#      mountpoint /mnt/patio-backup   # muss "is a mountpoint" sagen
+#
+# ── Warum UUID und nicht /dev/sdb1 ───────────────────────────────────────────
+#
+# Geraetenamen werden in der Reihenfolge vergeben, in der der Kernel die
+# Datentraeger findet. Steckt jemand einen USB-Stick an und startet neu, kann
+# aus /dev/sdb1 ploetzlich /dev/sdc1 werden. Die Sicherung liefe dann entweder
+# ins Leere oder — schlimmer — auf den falschen Datentraeger.
+#
+# Die UUID klebt am Dateisystem und aendert sich nur beim Neuformatieren.
+# ─────────────────────────────────────────────────────────────────────────────
+
+[Unit]
+Description=PATIO — externe Sicherungsplatte
+Documentation=file:///opt/patio/docs/betrieb/sicherung.md
+
+[Mount]
+# HIER die UUID aus Schritt 3 eintragen:
+What=/dev/disk/by-uuid/BITTE-UUID-EINTRAGEN
+Where=/mnt/patio-backup
+Type=ext4
+# nofail: Fehlt die Platte, startet der Rechner trotzdem durch. Ohne das
+# bleibt der Server beim Hochfahren haengen, nur weil ein USB-Kabel lose ist —
+# und dann steht das ganze Buero. Dass die Sicherung dann nicht laeuft, faengt
+# backup.sh mit seiner Einhaenge-Pruefung ab.
+Options=defaults,nofail,noatime
+
+[Install]
+WantedBy=multi-user.target

@@ -95,4 +95,4 @@ Hochladen an.
 - [ ] Branding hinterlegt
 - [ ] Team-Mitglieder erfasst, Benutzerkonten verknüpft
 - [ ] Erstes Projekt angelegt, Module und Zugriff gesetzt
-- [ ] Backup eingerichtet ([Anleitung](/betrieb/backup))
+- [ ] Sicherung eingerichtet ([Anleitung](/betrieb/sicherung))

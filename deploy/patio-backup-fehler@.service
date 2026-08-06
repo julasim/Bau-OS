@@ -1,0 +1,27 @@
+[Unit]
+Description=PATIO — Meldung, wenn die Sicherung fehlgeschlagen ist
+
+# Wird von patio-backup.service ueber OnFailure= aufgerufen.
+#
+# Warum es das ueberhaupt gibt: eine Sicherung, die scheitert, ohne dass es
+# jemand merkt, ist schlimmer als gar keine — man glaubt, geschuetzt zu sein.
+# Genau dieses Muster hat in diesem Projekt schon einmal zugeschlagen (der
+# naechtliche Lauf brach monatelang mit "Verzeichnis nicht gefunden" ab, und
+# niemand sah zu).
+#
+# Ohne Internet gibt es keine Mail. Die Meldung landet deshalb dort, wo sie
+# beim naechsten Anmelden am Server auffaellt:
+#   1. als Wall-Nachricht an alle angemeldeten Terminals
+#   2. in /var/log/patio-sicherung-fehler.log
+#   3. als Datei /opt/patio/logs/SICHERUNG-FEHLGESCHLAGEN — die Weboberflaeche
+#      kann sie spaeter anzeigen (AP14 Benachrichtigungen)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c '\
+  MELDUNG="PATIO: Die naechtliche Sicherung ist FEHLGESCHLAGEN ($(date +%%d.%%m.%%Y\\ %%H:%%M)). \
+Ursache im Protokoll:  journalctl -u %i -n 50"; \
+  echo "$MELDUNG" >> /var/log/patio-sicherung-fehler.log; \
+  echo "$MELDUNG" > /opt/patio/logs/SICHERUNG-FEHLGESCHLAGEN; \
+  echo "$MELDUNG" | systemd-cat -t patio-backup -p err; \
+  wall "$MELDUNG" 2>/dev/null || true'

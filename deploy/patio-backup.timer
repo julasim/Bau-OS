@@ -1,0 +1,16 @@
+[Unit]
+Description=PATIO — Sicherung taeglich um 03:00
+Documentation=file:///opt/patio/docs/betrieb/sicherung.md
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+# Holt den Lauf nach, wenn die Maschine um 03:00 aus war. Ohne diese Zeile
+# faellt die Sicherung nach jedem Stromausfall und jeder Wartung still aus —
+# und niemand merkt es, weil nichts scheitert, sondern schlicht nichts
+# passiert.
+Persistent=true
+# Streut den Start um bis zu 5 Minuten, damit nicht alles gleichzeitig anlaeuft.
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

@@ -58,7 +58,7 @@ vor der Inbetriebnahme geklärt sein.
 Ein Backup, das auf demselben Rechner liegt, ist bei dessen Ausfall
 mitverloren. Vorzusehen ist ein zweiter Ablageort im Haus — ein NAS, eine
 Netzfreigabe oder eine Wechselplatte. Details:
-[Backup](/betrieb/backup).
+[Sicherung](/betrieb/sicherung).
 
 ## Checkliste
 

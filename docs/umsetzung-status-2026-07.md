@@ -77,7 +77,7 @@
   OpenRouter via `.env`; dafür neuer `OPENAI_BASE_URL`-Override in `client.ts`).
   *(Die Datei ist mit dem Umbau zum Firmenserver entfallen — VPS-Betrieb und
   LLM-Fallback gibt es nicht mehr. Backup und Monitoring stehen jetzt unter
-  [Betrieb](/betrieb/backup).)*
+  [Betrieb](/betrieb/sicherung).)*
 
 **Bewusst nicht geändert (mit Begründung)**
 - **INF-1** Healthcheck (kein Bug), **SEC-6** JWT-Dev-Warnung (DX), Audit-F:
