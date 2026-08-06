@@ -91,11 +91,63 @@
 > je Anfrage und leistet dasselbe; alle zwölf Repos auf IDs umzustellen wäre
 > ein Umbau quer durch den Baum ohne Gewinn für irgendjemanden.
 >
-> **Was als Nächstes ansteht** — nichts davon steht mehr in der Warteschlange,
-> das sind die großen Pakete aus dem Plan: **AP9** Oberfläche aus PATIO
-> Desktop übernehmen · **AP12** Arbeitsplatz-Programm (Electron-Hülle) ·
-> **AP10** MCP-Dossiers · **AP11** Datenübernahme · **AP13** Export/PDF ·
-> **AP14** Benachrichtigungen · **AP15** Board · **AP17** VPN.
+> **Danach AP12 — das Arbeitsplatz-Programm.** Am Arbeitsplatz läuft kein
+> Browser, sondern ein Programm. Die Electron-Hülle ist aus PATIO Desktop
+> **kopiert** (`apps/patio-app-lokal` bleibt unangetastet) und entkernt: aus
+> „Programm startet Server" wird „Programm findet Server". Die Oberfläche
+> musste dafür nicht angefasst werden — sie spricht durchgehend relative
+> Pfade, ihr ist die Herkunft gleich.
+>
+> | | Was |
+> |---|---|
+> | Gestrichen | `boot()` mit den drei dynamischen `import()`, die lokale API, Vault-Verwaltung, MCP-Dossiers, Shared-Secret, `process.chdir` |
+> | Übernommen | Fenster, Tray mit Autostart, „Schließen minimiert", Menü, Symbol |
+> | Neu | `electron/adresse.ts` (reine Logik, 13 Tests) · `server-store.ts` · `einrichtung.html` als Ersteinrichtung **und** Fehlerseite · Einzelinstanz-Sperre · Download-Rückmeldung |
+> | Dazu | Der Server liefert die Doku unter `/docs/` aus — F1 war vorher tot |
+>
+> **Drei Befunde beim Bauen:** `normalisiereAdresse()` verbog jedes fremde
+> Schema zu einem Unsinns-Rechnernamen (`file:///C:/Windows` → `https://file`);
+> der harte `app.setPath("userData", …)` hebelte `--user-data-dir` aus und
+> machte das gepackte Programm unprüfbar; und die Doku zog per `@import`
+> **Inter von Google Fonts** — derselbe Außenkontakt, den AP1 Teil H aus der
+> Oberfläche entfernt hat, nur eben in der Datei, die ab jetzt mit ausgeliefert
+> wird.
+>
+> **Das Paket enthielt den kompletten Server-Baum.** `files:` steuert nur die
+> App-Dateien; Produktions-Abhängigkeiten packt electron-builder von sich aus
+> dazu — 2896 Einträge im Archiv, davon sechs eigene, inklusive nativ neu
+> übersetztem bcrypt. Mit `!node_modules/**/*`: **8 Einträge, 86 statt 105 MB**.
+>
+> **Verifiziert, nicht behauptet:** `scripts/pruefe-arbeitsplatz.mjs` fährt das
+> Programm wirklich und liest über das Chrome-DevTools-Protokoll aus, was im
+> Fenster steht. **28/28 gegen die gepackte `.exe`** — Erststart, Fehleingabe
+> (deutscher Klartext statt `net::ERR_*`), Serverabriss mitten in der Arbeit
+> (die `/login`-Navigation der Oberfläche landet auf der eigenen Seite, nicht
+> auf Chromiums Fehlerseite), Einzelinstanz-Sperre. Auf der Maschine belegt:
+> `%APPDATA%/PATIO-Arbeitsplatz` entsteht **neben** dem unberührten
+> `%APPDATA%/PATIO` von PATIO Desktop.
+>
+> **`PATIO-Arbeitsplatz-0.1.0-portable.exe` ist gebaut und signiert**
+> (`CN=Julius Sima`). Vorerst nur portabel: NSIS leitet das
+> Installationsverzeichnis aus `productName` ab und liefe sonst über die
+> bestehende PATIO-Desktop-Installation.
+>
+> ⚠ **Der Prozessname kollidiert ebenfalls.** Beide Programme heißen im
+> Prozessbaum `PATIO`. Ein `Get-Process PATIO | Stop-Process` beendet PATIO
+> Desktop mit — unterschieden wird nur über den Pfad
+> (`%LOCALAPPDATA%\Programs\PATIO` gegen `%TEMP%`). Steht als Warnung im
+> Prüfstand; sauber gelöst wäre es erst, wenn PATIO Desktop bei seinem nächsten
+> eigenen Bau auf `productName: PATIO Desktop` geht.
+>
+> **Offen und nur am Arbeitsplatz prüfbar** (Plan AP12 Teil A): ob Electron dem
+> Zertifikat der internen CA nach dem Import traut. Dafür braucht es einen
+> Server mit interner CA und einen echten Windows-Arbeitsplatz — hier **nicht**
+> geprüft.
+>
+> **Was als Nächstes ansteht:** **AP9** Oberfläche aus PATIO Desktop
+> übernehmen · **AP10** MCP-Dossiers · **AP11** Datenübernahme · **AP13**
+> Export/PDF · **AP14** Benachrichtigungen (bringt auch die Erinnerungen
+> zurück, die die Hülle bewusst nicht hat) · **AP15** Board · **AP17** VPN.
 >
 > **Bewusst offen geblieben**, mit Begründung im jeweiligen Commit:
 > - Ein **Papierkorb für einzelne Datensätze** (Notizen, Aufgaben, Termine).
@@ -200,10 +252,14 @@ DB-Migrationen laufen beim Start automatisch (`DB_AUTO_MIGRATE`, default an).
 npm run dev          # tsx watch src/index.ts (API)
 npm run dev:web      # Vite Dev-Server fürs Frontend
 npm run build        # tsc → dist/ (kopiert db/migrations/ mit)
-npm run build:all    # tsc + Vite-Build von web/
+npm run build:all    # tsc + Vite-Build von web/ + VitePress-Doku nach dist/docs
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 399 — nur MIT Datenbank, siehe unten)
+npm run build:electron   # Arbeitsplatz-Huelle nach dist-electron/
+npm run electron:dev     # Huelle lokal starten
+npm run dist             # portable .exe bauen (signiert, braucht das Zertifikat)
+
+npm test             # vitest run (alle Tests, 410 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -215,22 +271,30 @@ npm run db:status    # Migrations-Status anzeigen
 Husky + lint-staged formatieren/linten gestagte `.ts`/`.vue`-Dateien beim
 Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 
-> **Prüfbereiche:** `npm run lint` deckt seit dieser Runde `src/`, `tests/`,
-> `scripts/` **und** `web/src` ab — vorher nur die ersten beiden. `.vue`-Dateien
+> **Prüfbereiche:** `npm run lint` deckt `src/`, `tests/`, `scripts/`,
+> `web/src` **und** `electron/` ab. `.vue`-Dateien
 > bleiben aussen vor (kein `eslint-plugin-vue`), dafür greift `vue-tsc`.
 > Für `scripts/` gibt es jetzt `tsconfig.scripts.json`: `npx tsc --noEmit -p
 > tsconfig.scripts.json`. Grund: in `scripts/migrate-vault-to-db.ts` stand
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 290 von 399 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 290 von 412 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
 > 34 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
-> Von den 109, die dann laufen, **scheitern vier** — seit `tests/db.test.ts`
-> dazukam, meldet die Suite ohne Datenbank also nicht mehr grün, sondern rot.
-> Das ist eine Verbesserung: vorher sah ein halber Lauf wie ein voller aus.
-> **Diese Zahl beim Hinzufügen von Tests mitpflegen** — sie war schon einmal
-> veraltet, ausgerechnet die Warnung vor stiller Nicht-Prüfung. Die
+> Gemessen am 2026-08-06: `12 passed | 33 skipped (45)` Dateien,
+> `122 passed | 290 skipped (412)` Prüfungen.
+>
+> ⚠ **Und dieser Lauf meldet wieder GRÜN.** Hier stand bis eben, seit
+> `tests/db.test.ts` dazukam scheitere die Suite ohne Datenbank — das stimmt
+> nicht mehr, gemessen scheitert keine einzige. Damit ist die Falle zurück,
+> die der Absatz eigentlich schließen sollte: **ein halber Lauf sieht aus wie
+> ein voller.** Ob dagegen ein Wächter-Test gebaut wird (der ohne
+> `DATABASE_URL` bewusst rot meldet) oder ob das für DB-lose Läufe stören
+> würde, ist eine offene Entscheidung — bis dahin gilt: **auf die Zahl der
+> übersprungenen Prüfungen sehen, nicht auf die Farbe.**
+>
+> **Diese Zahlen beim Hinzufügen von Tests mitpflegen.** Die
 > Test-Datenbank ist der Container `patio-test-db` in **WSL Ubuntu-24.04**; von
 > Windows aus ist sie **nicht** über `localhost` erreichbar, es braucht die
 > WSL-IP (`wsl -d Ubuntu-24.04 -- hostname -I`, ändert sich bei jedem Start):
