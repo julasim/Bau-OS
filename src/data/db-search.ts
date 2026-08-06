@@ -5,12 +5,26 @@
 // sind: das rekursive grep ueber Vault-Markdown (workspace/search.ts) und die
 // pgvector-Aehnlichkeitssuche (db/semantic-search.ts).
 //
-// ZWISCHENSTAND: sucht per ILIKE. Das findet Teilwoerter und ist fuer die
-// heutigen Datenmengen schnell genug, kennt aber keine Wortstaemme
-// ("Bauherren" findet "Bauherr" nicht) und nutzt keinen Index. Der Ersatz
-// durch Postgres-Volltext (tsvector + GIN, Textkonfiguration 'german') ist
-// ein eigenes Arbeitspaket — es tauscht nur die WHERE-Klauseln der vier
-// UNION-Zweige aus; Reihenfolge, Auszug-Kuerzung und Rechtefilter bleiben.
+// Zwei Wege, bewusst kombiniert (Migration 048):
+//
+//   1. **Volltext** ueber `tsvector` mit deutscher Textkonfiguration, GIN-
+//      indiziert. Kennt Wortstaemme („Einreichung" findet „Einreichungen")
+//      und liefert mit `ts_rank` eine echte Relevanz statt einer Sortierung
+//      nach Datum.
+//   2. **Teilwort** per ILIKE, aber nur noch auf den KURZEN Feldern: Titel,
+//      Aufgabentext, Projektname, Dateiname. Dort ist es richtig — wer
+//      „2026-01" tippt, meint einen Nummernanfang, keinen Wortstamm. Diese
+//      Felder sind ueber `pg_trgm` indiziert.
+//
+// Der Volltext allein waere ein Rueckschritt gewesen: er findet keine
+// Wortmitte, und „schmid" faende „Schmidbauer" nicht mehr — im Buero der
+// haeufigste Griff. Das ILIKE allein kannte keine Stammformen. Beides
+// zusammen deckt beide Erwartungen ab.
+//
+// Die Reihenfolge ist jetzt: Relevanz zuerst, bei Gleichstand das juengere
+// Datum. Ein Titeltreffer zaehlt dabei mehr als eine Fundstelle im Text —
+// wer „Bauverhandlung" sucht, meint eher das gleichnamige Protokoll als die
+// Notiz, in der das Wort einmal vorkommt.
 //
 // Rechte: Nicht-Admins bekommen `visibleProjectIds` uebergeben und sehen nur
 // Treffer aus diesen Projekten. Datensaetze ohne Projektbezug bleiben fuer
@@ -20,6 +34,14 @@
 import { getDb } from "../db/client.js";
 import type { VisibleScope } from "./access.js";
 import { escapeLike } from "./sql-like.js";
+
+/** Gewicht eines Titeltreffers gegenueber `ts_rank`.
+ *
+ *  `ts_rank` liefert Werte weit unter 1 (bei einem Treffer typisch 0,06).
+ *  Der Zuschlag muss deutlich darueber liegen, damit ein Titeltreffer sicher
+ *  vor einer beilaeufigen Fundstelle im Text landet — aber nicht so hoch,
+ *  dass mehrere Volltexttreffer gar nicht mehr ins Gewicht fallen. */
+const TITEL_BONUS = 1;
 
 export interface SearchHit {
   type: "note" | "task" | "project" | "file";
@@ -143,39 +165,56 @@ export const dbSearch = {
       // eine verstaendliche Antwort statt eines nackten 500.
       await tx`SELECT set_config('statement_timeout', ${String(STATEMENT_TIMEOUT_MS)}, true)`;
       const hits = await tx`
-        WITH treffer AS (
+        WITH frage AS (
+          -- websearch_to_tsquery statt plainto_: es versteht Anfuehrungs-
+          -- zeichen fuer Wortgruppen und ein vorangestelltes Minus als
+          -- Ausschluss — das erwarten Leute von einem Suchfeld. Und es wirft
+          -- bei kaputter Eingabe keinen Fehler, sondern liefert eine leere
+          -- Frage.
+          SELECT websearch_to_tsquery('german', ${q}) AS tsq
+        ),
+        treffer AS (
           SELECT 'note'::text AS typ, n.id::text AS id, n.title AS titel,
                  left(n.content, ${SNIPPET_SOURCE_MAX}::int) AS auszug,
-                 p.name AS project_name, n.updated_at AS updated_at
-            FROM notes n LEFT JOIN projects p ON n.project_id = p.id
-           WHERE (n.title ILIKE ${like} OR n.content ILIKE ${like})
+                 p.name AS project_name, n.updated_at AS updated_at,
+                 ts_rank(n.such_text, frage.tsq) +
+                   CASE WHEN n.title ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END AS rang
+            FROM notes n LEFT JOIN projects p ON n.project_id = p.id, frage
+           WHERE (n.such_text @@ frage.tsq OR n.title ILIKE ${like})
              AND (${all} OR n.project_id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR n.project_id = ${projectId}::uuid)
           UNION ALL
           SELECT 'task'::text, t.id::text, t.text,
-                 NULL, p.name, t.updated_at
-            FROM tasks t LEFT JOIN projects p ON t.project_id = p.id
-           WHERE t.text ILIKE ${like}
+                 NULL, p.name, t.updated_at,
+                 ts_rank(t.such_text, frage.tsq) +
+                   CASE WHEN t.text ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END
+            FROM tasks t LEFT JOIN projects p ON t.project_id = p.id, frage
+           WHERE (t.such_text @@ frage.tsq OR t.text ILIKE ${like})
              AND (${all} OR t.project_id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR t.project_id = ${projectId}::uuid)
           UNION ALL
           SELECT 'project'::text, pr.id::text, pr.name,
-                 left(pr.description, ${SNIPPET_SOURCE_MAX}::int), pr.name, pr.updated_at
-            FROM projects pr
-           WHERE (pr.name ILIKE ${like} OR pr.description ILIKE ${like})
+                 left(pr.description, ${SNIPPET_SOURCE_MAX}::int), pr.name, pr.updated_at,
+                 ts_rank(pr.such_text, frage.tsq) +
+                   CASE WHEN pr.name ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END
+            FROM projects pr, frage
+           WHERE (pr.such_text @@ frage.tsq OR pr.name ILIKE ${like})
+             AND pr.deleted_at IS NULL
              AND (${all} OR pr.id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR pr.id = ${projectId}::uuid)
           UNION ALL
           SELECT 'file'::text, f.id::text, f.filename,
-                 left(f.content_text, ${SNIPPET_SOURCE_MAX}::int), p.name, f.updated_at
-            FROM files f LEFT JOIN projects p ON f.project_id = p.id
-           WHERE (f.filename ILIKE ${like} OR f.content_text ILIKE ${like})
+                 left(f.content_text, ${SNIPPET_SOURCE_MAX}::int), p.name, f.updated_at,
+                 ts_rank(f.such_text, frage.tsq) +
+                   CASE WHEN f.filename ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END
+            FROM files f LEFT JOIN projects p ON f.project_id = p.id, frage
+           WHERE (f.such_text @@ frage.tsq OR f.filename ILIKE ${like})
              AND (${all} OR f.project_id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR f.project_id = ${projectId}::uuid)
         )
         SELECT typ, id, titel, auszug, project_name
           FROM treffer
-         ORDER BY updated_at DESC, id
+         ORDER BY rang DESC, updated_at DESC, id
          LIMIT ${max}
       `;
       // Kopie statt RowList: db.begin() spiegelt den Rueckgabetyp seines

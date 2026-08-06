@@ -259,20 +259,95 @@ describe.skipIf(!HAS_DB)("API — Volltextsuche: Treffer und Rechte", () => {
     expect(await hits(await search(fx.a.token, LIMIT_BEGRIFF, undefined, "abc"))).toHaveLength(6);
   });
 
-  // ── Sortierung ───────────────────────────────────────────────────────────
-  // Frueher wurde blockweise nach Typ zusammengesetzt (notes → tasks →
-  // projects → files): eine Jahre alte Notiz stand immer vor einer gerade
-  // geaenderten Datei, und Dateien fielen bei knappem limit als erste weg.
-  it("sortiert global nach updated_at, nicht blockweise nach Typ", async () => {
+  // ── Reihenfolge ──────────────────────────────────────────────────────────
+  //
+  // Zwei Fassungen liegen hinter dieser Stelle. Ganz frueher wurde blockweise
+  // nach Typ zusammengesetzt (notes → tasks → projects → files): eine Jahre
+  // alte Notiz stand immer vor einer gerade geaenderten Datei, und Dateien
+  // fielen bei knappem limit als erste weg. Danach galt „global nach Datum".
+  //
+  // Seit dem Umbau auf `tsvector` (Migration 048) entscheidet die RELEVANZ,
+  // und erst bei Gleichstand das Datum. Das ist der Zweck des Umbaus: wer
+  // „Bauverhandlung" sucht, will das gleichnamige Protokoll, nicht die
+  // zufaellig juengere Notiz, in der das Wort einmal vorkommt.
+  it("beide Treffer kommen, unabhaengig vom Typ", async () => {
+    // Der urspruengliche Kern dieser Pruefung: kein Typ faellt heraus.
     const treffer = await hits(await search(fx.a.token, SORT_BEGRIFF));
     expect(treffer.length).toBe(2);
-    expect(treffer[0]?.type).toBe("file");
-    expect(treffer[1]?.type).toBe("note");
+    expect(new Set(treffer.map((h) => h.type))).toEqual(new Set(["file", "note"]));
   });
 
-  it("Datei faellt bei knappem limit nicht systematisch hinten runter", async () => {
-    const treffer = await hits(await search(fx.a.token, SORT_BEGRIFF, undefined, "1"));
+  it("der treffendere Datensatz steht vorne, nicht der juengere", async () => {
+    // Die Notiz traegt den Begriff im Titel UND im Text, die Datei nur im
+    // Dateinamen — sie ist aber die juengere. Nach Datum sortiert stuende die
+    // Datei vorne; nach Relevanz die Notiz. Genau das wird hier festgehalten.
+    const treffer = await hits(await search(fx.a.token, SORT_BEGRIFF));
+    expect(treffer[0]?.type).toBe("note");
+  });
+
+  it("bei knappem limit bleibt der beste Treffer uebrig, nicht der erste UNION-Zweig", async () => {
+    // Der Sinn der alten Pruefung bleibt: es darf kein Budget je Typ geben.
+    // Nachgewiesen ueber einen Begriff, bei dem die DATEI die bessere
+    // Uebereinstimmung hat — kaeme trotzdem die Notiz, waere die Reihenfolge
+    // wieder an den Typ gekoppelt.
+    const treffer = await hits(await search(fx.a.token, DATEI_BEGRIFF, undefined, "1"));
     expect(treffer.map((h) => h.type)).toEqual(["file"]);
+  });
+
+  // ── Wortstämme (Migration 048) ───────────────────────────────────────────
+  //
+  // Der eigentliche Gewinn des Umbaus. Vorher fand „Einreichung" nur genau
+  // dieses Wort — im Büro schreibt aber jeder anders: „Einreichungen",
+  // „einreichen", „Einreichplanung".
+  it("findet die Wortform, die im Text steht — nicht nur die getippte", async () => {
+    // Der Zeitstempel steht als EIGENES Wort daneben. Klebt er am Suchwort,
+    // ist das Ergebnis kein deutsches Wort mehr, der Stemmer kann es nicht
+    // zurückführen — und der Test prüfte den Zeitstempel statt die Stammform.
+    await notiz(`Kennung${STAMP} Die Einreichungen sind beim Magistrat`, fx.projectName);
+
+    // Gesucht wird der Singular, im Text steht der Plural.
+    const treffer = await hits(await search(fx.a.token, `Kennung${STAMP} Einreichung`));
+    expect(treffer.some((h) => h.title.includes(`Kennung${STAMP}`))).toBe(true);
+  });
+
+  it("findet weiterhin Wortteile in kurzen Feldern", async () => {
+    // Der Volltext allein wäre ein Rückschritt: er kennt keine Wortmitte.
+    // Deshalb bleibt ILIKE auf Titel, Aufgabentext, Projektname und
+    // Dateiname — „schmid" muss „Schmidbauer" finden.
+    await notiz(`Schmidbauer${STAMP} Angebot geprueft`, fx.projectName);
+    const treffer = await hits(await search(fx.a.token, `Schmidbauer${STAMP}`.slice(0, 8)));
+    expect(treffer.some((h) => h.title.includes(`Schmidbauer${STAMP}`))).toBe(true);
+  });
+
+  it("mehrere Wörter werden UND-verknüpft, nicht ODER", async () => {
+    // Sonst liefert jede Suche mit zwei Begriffen mehr statt weniger.
+    await notiz(`Abnahme${STAMP} Rohbau fertiggestellt`, fx.projectName);
+    await notiz(`Abnahme${STAMP} Fenster offen`, fx.projectName);
+
+    const treffer = await hits(await search(fx.a.token, `Abnahme${STAMP} Fenster`));
+    const titel = treffer.map((h) => h.title);
+    expect(titel.some((t) => t.includes("Fenster"))).toBe(true);
+    expect(titel.some((t) => t.includes("Rohbau"))).toBe(false);
+  });
+
+  it("ein Projekt im Papierkorb erscheint nicht mehr in der Suche", async () => {
+    // Sonst wäre die Suche der Weg, an dem der Papierkorb vorbeiführt.
+    const vorher = await hits(await search(fx.admin.token, fx.projectName));
+    expect(vorher.some((h) => h.type === "project")).toBe(true);
+
+    await fx.app.request(`/api/projects/${encodeURIComponent(fx.projectName)}`, {
+      method: "DELETE",
+      headers: authHeader(fx.admin.token),
+    });
+    try {
+      const nachher = await hits(await search(fx.admin.token, fx.projectName));
+      expect(nachher.some((h) => h.type === "project")).toBe(false);
+    } finally {
+      await fx.app.request(`/api/projects/${encodeURIComponent(fx.projectName)}/wiederherstellen`, {
+        method: "POST",
+        headers: { ...authHeader(fx.admin.token), "Content-Type": "application/json" },
+      });
+    }
   });
 
   // ── ILIKE-Metazeichen ────────────────────────────────────────────────────
