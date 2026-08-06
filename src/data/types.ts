@@ -848,6 +848,18 @@ export interface TeamRepository {
     updates: Partial<Omit<Company, "id" | "createdAt" | "updatedAt" | "memberCount">>,
   ): Promise<Company | null>;
   deleteCompany?(id: string): Promise<boolean>;
+  /** Fuehrt zwei Firmen zusammen: alle Mitglieder von `vonId` wechseln zu
+   *  `nachId`, danach faellt `vonId` weg.
+   *
+   *  Der Grund ist der Alltag: Firmen entstehen beim Anlegen eines
+   *  Teammitglieds automatisch aus einem Freitextfeld. „Müller GmbH",
+   *  „Mueller GmbH" und „Müller Gmbh" sind dann drei Firmen, und ohne
+   *  Zusammenfuehren bleiben sie das fuer immer. Umbenennen allein hilft
+   *  nicht — es macht aus drei Eintraegen drei gleichnamige.
+   *
+   *  Liefert die Zahl der umgehaengten Mitglieder, oder `null`, wenn eine der
+   *  beiden Firmen nicht existiert. */
+  mergeCompany?(vonId: string, nachId: string): Promise<number | null>;
 }
 
 export interface FileRepository {

@@ -27,6 +27,11 @@ export const companiesRoutes = new Hono<AppEnv>();
 // und bleibt offen. Nur das Loeschen ist Admin-Sache: eine geloeschte
 // Firma haengt an Projekten und Besprechungen.
 companiesRoutes.on(["DELETE"], "/companies/*", adminMiddleware);
+// Zusammenfuehren entfernt eine Firma — dieselbe Huerde wie beim Loeschen.
+// Als eigener `.on()`-Eintrag und nicht als drittes Argument am Handler:
+// mit Middleware in der Signatur verliert Hono den Pfad-Generic, und
+// `c.req.param("id")` waere ploetzlich `string | undefined`.
+companiesRoutes.on(["POST"], "/companies/:id/zusammenfuehren", adminMiddleware);
 
 companiesRoutes.get("/companies", async (c) => {
   if (!teamRepo.listCompanies) return c.json([]);
@@ -94,6 +99,25 @@ companiesRoutes.patch("/companies/:id", async (c) => {
     }
     return c.json({ error: "Update fehlgeschlagen: " + msg }, 500);
   }
+});
+
+companiesRoutes.post("/companies/:id/zusammenfuehren", async (c) => {
+  if (!teamRepo.mergeCompany) return c.json({ error: "Nicht unterstuetzt" }, 501);
+  let body: { zielId?: string };
+  try {
+    body = await c.req.json<{ zielId?: string }>();
+  } catch {
+    return c.json({ error: "Ungueltiger Request-Body" }, 400);
+  }
+  const zielId = body.zielId;
+  if (!zielId) return c.json({ error: "zielId erforderlich" }, 400);
+  if (zielId === c.req.param("id")) {
+    return c.json({ error: "Eine Firma kann nicht mit sich selbst zusammengefuehrt werden" }, 400);
+  }
+  const umgehaengt = await teamRepo.mergeCompany(c.req.param("id"), zielId);
+  if (umgehaengt === null) return c.json({ error: "Firma nicht gefunden" }, 404);
+  emit({ type: "team", action: "updated", id: zielId }, { actorId: c.var.userId });
+  return c.json({ umgehaengt });
 });
 
 companiesRoutes.delete("/companies/:id", async (c) => {

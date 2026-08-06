@@ -33,6 +33,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/notes", label: "Notizen", icon: "pencil" },
   { to: "/files", label: "Dateien", icon: "file" },
   { to: "/team", label: "Team", icon: "users" },
+  { to: "/firmen", label: "Firmen", icon: "layers" },
   { to: "/aktivitaet", label: "Aktivität", icon: "clock" },
 ];
 

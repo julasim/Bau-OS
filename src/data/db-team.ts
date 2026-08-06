@@ -488,6 +488,31 @@ export const dbTeam: TeamRepository = {
     return this.getCompany!(id);
   },
 
+  async mergeCompany(vonId, nachId) {
+    if (vonId === nachId) return null;
+    const db = getDb();
+    const [von] = await db`SELECT id FROM companies WHERE id = ${vonId}`;
+    const [nach] = await db`SELECT id, name FROM companies WHERE id = ${nachId}`;
+    if (!von || !nach) return null;
+
+    // In EINER Transaktion, sonst haengen die Mitglieder bei einem Abbruch
+    // zwischen zwei Firmen — oder an einer, die es nicht mehr gibt.
+    return db.begin(async (tx) => {
+      const umgehaengt = await tx`
+        UPDATE team_members
+           SET company_id = ${nachId},
+               -- Das Freitextfeld company wird mitgezogen: es ist der
+               -- Altbestand, aus dem die Dubletten ueberhaupt entstanden
+               -- sind, und aeltere Ansichten lesen noch daraus.
+               company = ${String(nach.name)}
+         WHERE company_id = ${vonId}
+        RETURNING id
+      `;
+      await tx`DELETE FROM companies WHERE id = ${vonId}`;
+      return umgehaengt.length;
+    });
+  },
+
   async deleteCompany(id) {
     const db = getDb();
     // ON DELETE SET NULL in team_members.company_id sorgt dafuer, dass
