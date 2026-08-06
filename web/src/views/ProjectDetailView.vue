@@ -11,7 +11,7 @@ import ProjectInvoicesTab from "./projects-v2/ProjectInvoicesTab.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 
-const { isAdmin } = useCurrentUser();
+const { isAdmin, darfGeld } = useCurrentUser();
 const { confirm } = useConfirm();
 
 interface ProjectInfo {
@@ -2754,7 +2754,14 @@ async function deleteMeeting() {
 
     <!-- Rechnungen (Teilrechnungen + Honorarsicht) -->
     <div v-if="tab === 'rechnungen'">
-      <ProjectInvoicesTab :project-name="projectName" />
+      <ProjectInvoicesTab v-if="darfGeld" :project-name="projectName" />
+      <!-- Der Reiter ist ohne Geld-Recht gar nicht in der Leiste. Hierher
+           kommt nur, wer die Adresse direkt aufruft oder ein altes Lesezeichen
+           hat — dann eine Erklaerung statt einer Fehlermeldung vom Server. -->
+      <div v-else class="empty-hint">
+        Rechnungen und Honorar sind für dein Konto nicht freigegeben. Die Verwaltung kann das in den Benutzerkonten
+        ändern.
+      </div>
     </div>
 
     <!-- Notes -->

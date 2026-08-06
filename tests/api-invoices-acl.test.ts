@@ -15,7 +15,10 @@ describe.skipIf(!HAS_DB)("API — invoices ACL-Durchsetzung (geldrelevant)", () 
   let encBName = "";
 
   beforeAll(async () => {
-    fx = await setupAclFixture("inv");
+    // Beide Konten bekommen das Geld-Recht: diese Suite misst die PROJEKT-Rechte,
+    // nicht das Geld-Recht (das hat eine eigene Suite). Ohne diese Zeile
+    // scheiterte sie am falschen Grund.
+    fx = await setupAclFixture("inv", { geldRecht: true });
     ({ invoiceRepo } = await import("../src/data/index.js"));
     encName = encodeURIComponent(fx.projectName);
     encBName = encodeURIComponent(fx.projectBName);

@@ -12,6 +12,7 @@ import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
 import { projectRepo } from "../../data/index.js";
 import type { AppEnv } from "../server.js";
 import { emit, emitForProjectName } from "../events.js";
+import { darfGeldSehen } from "../geld.js";
 import type { ProjectPhaseUpsert } from "../../data/types.js";
 
 export const phasesRoutes = new Hono<AppEnv>();
@@ -76,6 +77,12 @@ phasesRoutes.get("/projects/:projectName/phases", async (c) => {
 phasesRoutes.get("/projects/:projectName/finance", async (c) => {
   const proj = await resolveProject(c);
   if ("error" in proj) return proj.error;
+
+  // Diese Route ist von vorne bis hinten Geld: Budget, Soll-Honorar je Phase,
+  // Fakturiertes, Offenes, Ist-Kosten, Deckungsbeitrag. Der Antwort-Filter
+  // (src/api/geld.ts) wuerde sie leerraeumen und eine sinnlose Huelle
+  // ausliefern — hier ist die ehrliche Antwort ein 403.
+  if (!darfGeldSehen(c)) return c.json({ error: "Kein Zugriff auf Betraege" }, 403);
   const info = await projectRepo.getInfo(proj.name);
   const budget = info?.budget ?? null;
   const phases = await phaseRepo.list(proj.id);

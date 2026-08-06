@@ -41,9 +41,22 @@ export interface AclFixture {
   cleanup(): Promise<void>;
 }
 
+/** Optionen des Fixtures. */
+export interface AclFixtureOpts {
+  /** Gibt A und B das Geld-Recht (Migration 043).
+   *
+   *  Voreinstellung ist **false** — genau wie in der Anwendung: neue Konten
+   *  sehen keine Betraege. Suiten, die Projekt-Rechte pruefen und dabei
+   *  zufaellig mit Rechnungen oder Honoraren arbeiten, setzen es auf `true`;
+   *  sonst faellt ihre Pruefung ueber das Geld-Recht statt ueber das, was sie
+   *  eigentlich messen wollen. Das Geld-Recht selbst hat eine eigene Suite
+   *  (`tests/api-geld-recht.test.ts`), die es ausdruecklich NICHT setzt. */
+  geldRecht?: boolean;
+}
+
 // `prefix` haelt die Testdaten pro Suite eindeutig (Nutzernamen + Projektname)
 // und ermoeglicht gezieltes LIKE-Cleanup.
-export async function setupAclFixture(prefix: string): Promise<AclFixture> {
+export async function setupAclFixture(prefix: string, opts: AclFixtureOpts = {}): Promise<AclFixture> {
   const { app } = await import("../../src/api/server.js");
   const { getDb } = await import("../../src/db/client.js");
   const { projectRepo } = await import("../../src/data/index.js");
@@ -62,6 +75,11 @@ export async function setupAclFixture(prefix: string): Promise<AclFixture> {
   const a = await mk("a", "user");
   const b = await mk("b", "user");
   const admin = await mk("admin", "admin");
+
+  if (opts.geldRecht) {
+    const db = getDb();
+    await db`UPDATE users SET can_see_money = true WHERE id IN (${a.id}, ${b.id})`;
+  }
 
   // Projekt nur A zuweisen (createdById) — bleibt bestehen, B darf es per ACL
   // nicht sehen.

@@ -14,6 +14,9 @@ interface Me {
   role: string;
   displayName: string | null;
   isProtected?: boolean;
+  /** Darf Beträge sehen (Migration 043). Der Server liefert für Admins
+   *  bereits `true` — die Oberfläche muss die Rolle hier nicht nachbauen. */
+  canSeeMoney?: boolean;
 }
 
 const user = ref<Me | null>(null);
@@ -55,6 +58,10 @@ export function useCurrentUser() {
   const userId = computed(() => user.value?.id ?? null);
   const isAdmin = computed(() => user.value?.role === "admin");
   const isProtected = computed(() => user.value?.isProtected ?? false);
+  // Ohne dieses Recht entfernt der Server die Geldfelder aus den Antworten.
+  // Die Oberfläche blendet die zugehörigen Spalten aus, statt leere Zellen zu
+  // zeigen — sonst sähe es nach einem Fehler aus statt nach einer Regel.
+  const darfGeld = computed(() => user.value?.canSeeMoney ?? false);
 
   return {
     user,
@@ -65,6 +72,7 @@ export function useCurrentUser() {
     userId,
     isAdmin,
     isProtected,
+    darfGeld,
     reload: () => {
       user.value = null;
       return load();

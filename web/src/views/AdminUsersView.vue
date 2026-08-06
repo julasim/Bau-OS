@@ -18,6 +18,9 @@ interface AdminUser {
   displayName: string | null;
   role: "admin" | "user";
   isProtected: boolean;
+  /** Darf Beträge sehen (Stundensätze, Rechnungen, Budgets). Bewusst
+   *  unabhängig von der Rolle — siehe Migration 043. */
+  canSeeMoney?: boolean;
   email: string | null;
   createdAt: string;
   updatedAt: string;
@@ -144,6 +147,29 @@ async function toggleRole(user: AdminUser) {
   }
 }
 
+/** Geld-Recht umschalten.
+ *
+ *  Bewusst getrennt von der Rolle: „Admin" heißt „verwaltet die Anwendung"
+ *  (Konten, Vorlagen, Sicherung) — wer die Zahlen des Büros sehen darf, ist
+ *  eine andere Frage. Die Buchhaltung braucht das eine ohne das andere.
+ *  Admins sind serverseitig implizit berechtigt, deshalb ist der Schalter bei
+ *  ihnen ohne Wirkung und bleibt gesperrt. */
+async function toggleGeldRecht(user: AdminUser) {
+  if (user.role === "admin") return;
+  const neu = !user.canSeeMoney;
+  const frage = neu
+    ? `"${user.username}" darf künftig Beträge sehen — Stundensätze, Rechnungen, Budgets?`
+    : `"${user.username}" die Beträge wieder entziehen?`;
+  if (!(await confirm(frage))) return;
+  try {
+    await api.patch(`/admin/users/${encodeURIComponent(user.id)}`, { canSeeMoney: neu });
+    await loadUsers();
+  } catch (e) {
+    errorBanner.value = e instanceof Error ? e.message : "Update fehlgeschlagen";
+    setTimeout(() => (errorBanner.value = null), 4000);
+  }
+}
+
 async function deleteUser(user: AdminUser) {
   if (user.isProtected) return;
   if (currentUserId.value === user.id) {
@@ -227,6 +253,7 @@ function formatDate(iso?: string) {
         <div class="users-list-header flex items-center">
           <span class="eyebrow flex-1">Name</span>
           <span class="eyebrow" style="width: 90px">Rolle</span>
+          <span class="eyebrow" style="width: 80px">Beträge</span>
           <span class="eyebrow" style="width: 100px">Angelegt</span>
           <span class="eyebrow" style="width: 148px; text-align: right">Aktionen</span>
         </div>
@@ -300,6 +327,23 @@ function formatDate(iso?: string) {
               :title="u.isProtected ? 'Geschützter Admin' : 'Rolle wechseln'"
             >
               {{ u.role === "admin" ? "Admin" : "Nutzer" }}
+            </button>
+          </div>
+          <div class="user-col-role" style="width: 80px">
+            <button
+              class="role-btn"
+              :class="u.role === 'admin' || u.canSeeMoney ? 'role-btn-admin' : 'role-btn-user'"
+              :disabled="u.role === 'admin'"
+              @click="toggleGeldRecht(u)"
+              :title="
+                u.role === 'admin'
+                  ? 'Admins sehen Beträge immer'
+                  : u.canSeeMoney
+                    ? 'Sieht Beträge — zum Entziehen klicken'
+                    : 'Sieht keine Beträge — zum Freigeben klicken'
+              "
+            >
+              {{ u.role === "admin" || u.canSeeMoney ? "Beträge" : "—" }}
             </button>
           </div>
           <div class="user-col-date font-mono" style="width: 100px; font-size: 11px; color: var(--color-text-tertiary)">

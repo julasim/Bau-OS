@@ -22,7 +22,7 @@ interface NavItem {
 
 const router = useRouter();
 const route = useRoute();
-const { initials, isAdmin } = useCurrentUser();
+const { initials, isAdmin, darfGeld } = useCurrentUser();
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Dashboard", icon: "grid" },
@@ -55,11 +55,16 @@ interface ProjNavItem {
   label: string;
   icon: string;
   adminOnly?: boolean;
+  /** Braucht das Geld-Recht (Migration 043). Der Reiter ist von vorne bis
+   *  hinten Honorar und Betrag; ohne das Recht antwortet der Server mit 403,
+   *  und ein Reiter, der nur eine Fehlermeldung zeigt, gehoert nicht in die
+   *  Leiste. */
+  geldOnly?: boolean;
 }
 const PROJECT_NAV: ProjNavItem[] = [
   { tab: "uebersicht", label: "Übersicht", icon: "grid" },
   { tab: "phasen", label: "Phasen", icon: "timeline" },
-  { tab: "rechnungen", label: "Rechnungen", icon: "archive" },
+  { tab: "rechnungen", label: "Rechnungen", icon: "archive", geldOnly: true },
   { tab: "notes", label: "Notizen", icon: "pencil" },
   { tab: "tasks", label: "Aufgaben", icon: "check" },
   { tab: "termine", label: "Termine", icon: "calendar" },
@@ -73,7 +78,9 @@ const PROJECT_NAV: ProjNavItem[] = [
 // Die Liste muss deckungsgleich mit VALID_TABS in ProjectDetailView.vue
 // bleiben — ein Eintrag ohne Gegenstueck setzt zwar ?tab=, faellt intern
 // aber auf "uebersicht" zurueck und bleibt in der Sidebar aktiv markiert.
-const visibleProjectNav = computed(() => PROJECT_NAV.filter((it) => !it.adminOnly || isAdmin.value));
+const visibleProjectNav = computed(() =>
+  PROJECT_NAV.filter((it) => (!it.adminOnly || isAdmin.value) && (!it.geldOnly || darfGeld.value)),
+);
 
 function goProjectTab(t: string) {
   router.push({

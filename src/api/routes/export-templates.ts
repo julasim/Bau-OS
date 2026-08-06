@@ -255,6 +255,14 @@ exportTemplatesRoutes.get("/exports/time-entries", async (c) => {
   const projektFilter = c.req.query("project") ?? undefined;
   if (!(await darfProjekt(c, projektFilter ?? null))) return c.json({ error: "Kein Zugriff" }, 403);
 
+  // KEINE Geld-Pruefung hier, nachgesehen statt vermutet: der Stundenzettel
+  // enthaelt Datum, Stunden, Mitarbeiter, Taetigkeit — keinen Satz und keinen
+  // Betrag (`buildTimeEntryData` in src/export/docx-render.ts baut die Zeilen
+  // Feld fuer Feld auf, `SummeStunden` sind Stunden). Ihn ans Geld-Recht zu
+  // binden wuerde die Projektleitung daran hindern, dem Bauherrn einen
+  // Stundennachweis zu geben — ohne dass dadurch irgendein Betrag geschuetzt
+  // waere.
+
   try {
     const result = await renderDocxExport({
       kind: "time-entry",

@@ -85,6 +85,7 @@ function publicUser(u: Awaited<ReturnType<typeof listDbUsers>>[number]) {
     displayName: u.displayName,
     role: u.role,
     isProtected: u.isProtected,
+    canSeeMoney: u.canSeeMoney,
     email: u.email,
     createdAt: u.createdAt,
     updatedAt: u.updatedAt,
@@ -160,7 +161,13 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
   const target = await findDbUserById(id);
   if (!target) return c.json({ error: "User nicht gefunden" }, 404);
 
-  let body: { username?: string; role?: string; displayName?: string | null; email?: string | null };
+  let body: {
+    username?: string;
+    role?: string;
+    displayName?: string | null;
+    email?: string | null;
+    canSeeMoney?: boolean;
+  };
   try {
     body = await c.req.json();
   } catch {
@@ -172,7 +179,13 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
     role?: "admin" | "user";
     displayName?: string | null;
     email?: string | null;
+    canSeeMoney?: boolean;
   } = {};
+
+  // Geld-Recht (Migration 043). Bewusst unabhaengig von der Rolle: „Admin"
+  // heisst „verwaltet die Anwendung", nicht „darf die Zahlen des Bueros
+  // sehen". Die Buchhaltung braucht das eine ohne das andere.
+  if ("canSeeMoney" in body) patch.canSeeMoney = body.canSeeMoney === true;
 
   if ("username" in body) {
     const newUsername = (body.username ?? "").trim();

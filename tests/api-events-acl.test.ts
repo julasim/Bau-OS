@@ -44,7 +44,10 @@ describe.skipIf(!HAS_DB)("API — Live-Kanal: Ereignisse und Rechte", () => {
   const settle = () => new Promise((r) => setTimeout(r, 250));
 
   beforeAll(async () => {
-    fx = await setupAclFixture("ev");
+    // Beide Konten bekommen das Geld-Recht: diese Suite misst die PROJEKT-Rechte,
+    // nicht das Geld-Recht (das hat eine eigene Suite). Ohne diese Zeile
+    // scheiterte sie am falschen Grund.
+    fx = await setupAclFixture("ev", { geldRecht: true });
     bus = await import("../src/api/events.js");
     ({ resolveScope } = await import("../src/api/routes/events.js"));
     ({ projectRepo } = await import("../src/data/index.js"));

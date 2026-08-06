@@ -7,7 +7,7 @@ import BIcon from "../components/BIcon.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 
-const { isAdmin } = useCurrentUser();
+const { isAdmin, darfGeld } = useCurrentUser();
 const { confirm } = useConfirm();
 
 // ── Typen ────────────────────────────────────────────────
@@ -583,7 +583,10 @@ onUnmounted(() => {
               { key: 'email' as const, label: 'E-Mail', type: 'email', placeholder: 'max@beispiel.at' },
               { key: 'phone' as const, label: 'Telefon', type: 'tel', placeholder: '+43 …' },
               { key: 'hourlyRate' as const, label: 'Stundensatz (€/h)', type: 'number', placeholder: 'z.B. 95' },
-            ]"
+              // Ohne Geld-Recht entfernt der Server den Satz aus der Antwort.
+              // Das Feld waere leer, und ein Speichern wuerde den echten Satz
+              // ueberschreiben — deshalb herausfiltern statt anzeigen.
+            ].filter((f) => f.key !== 'hourlyRate' || darfGeld)"
             :key="f.key"
             class="stamm-field"
           >

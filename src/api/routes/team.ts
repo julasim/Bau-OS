@@ -3,6 +3,7 @@ import { teamRepo } from "../../data/index.js";
 import type { MemberType, ContactLogEntry } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
+import { darfGeldSehen } from "../geld.js";
 
 export const teamRoutes = new Hono<AppEnv>();
 
@@ -87,7 +88,13 @@ teamRoutes.patch("/team/:id", async (c) => {
     if (key in body) updates[key] = body[key];
   }
   // Stundensatz (Migration 037): in Zahl wandeln, leer/ungueltig → null.
-  if ("hourlyRate" in body) {
+  // Ohne Geld-Recht wird der Stundensatz IGNORIERT, nicht abgelehnt: der
+  // Antwort-Filter entfernt ihn aus jeder Antwort, das Formular schickt also
+  // ein leeres Feld zurueck. Mit einer Ablehnung koennte ein Projektleiter
+  // ohne Geld-Recht keine Telefonnummer mehr aendern; mit stiller Uebernahme
+  // wuerde er beim Speichern den Satz auf null setzen. Ignorieren ist das
+  // einzige Verhalten, das beides vermeidet.
+  if ("hourlyRate" in body && darfGeldSehen(c)) {
     const n = body.hourlyRate === null || body.hourlyRate === "" ? null : Number(body.hourlyRate);
     updates.hourlyRate = n !== null && Number.isFinite(n) ? n : null;
   }

@@ -34,6 +34,10 @@ export interface DbUser {
   displayName: string | null;
   role: "admin" | "user";
   isProtected: boolean;
+  /** Darf Betraege sehen — Stundensaetze, Rechnungen, Budgets,
+   *  Deckungsbeitrag (Migration 043). Voreinstellung geschlossen; Admins sind
+   *  im Code implizit berechtigt, nicht ueber diese Spalte. */
+  canSeeMoney: boolean;
   // TOTP liegt still, bis es einen Zugang von aussen gibt (VPN). Die Spalte
   // und src/api/totp.ts bleiben dafuer unberuehrt.
   totpEnabled: boolean;
@@ -66,6 +70,7 @@ function rowToDbUser(row: Record<string, unknown>): DbUser {
     displayName: row.display_name ? String(row.display_name) : null,
     role: (row.role === "admin" ? "admin" : "user") as DbUser["role"],
     isProtected: row.is_protected === true,
+    canSeeMoney: row.can_see_money === true,
     totpEnabled: row.totp_enabled === true,
     email: row.email ? String(row.email) : null,
     settings,
@@ -185,7 +190,13 @@ export async function createDbUser(input: {
  *  geguardet. Die Route ueberprueft das Ergebnis (rows == 0 → "letzter Admin"). */
 export async function updateDbUser(
   id: string,
-  patch: { username?: string; role?: "admin" | "user"; displayName?: string | null; email?: string | null },
+  patch: {
+    username?: string;
+    role?: "admin" | "user";
+    displayName?: string | null;
+    email?: string | null;
+    canSeeMoney?: boolean;
+  },
 ): Promise<DbUser | null | "last-admin"> {
   if (!DB_ENABLED) return null;
   const db = getDb();
@@ -197,6 +208,7 @@ export async function updateDbUser(
   const displayName = "displayName" in patch ? patch.displayName : current.display_name;
   // Email normalisiert (lowercase, trimmed) damit UNIQUE-Index sauber matcht.
   const email = "email" in patch ? patch.email?.trim().toLowerCase() || null : current.email;
+  const canSeeMoney = "canSeeMoney" in patch ? patch.canSeeMoney === true : current.can_see_money === true;
 
   // Atomarer Last-Admin-Schutz: wenn das ein Admin-Demote ist, MUSS noch
   // mindestens ein anderer Admin uebrig bleiben. Sonst RETURNING bleibt leer.
@@ -207,7 +219,8 @@ export async function updateDbUser(
         username = ${username},
         role = ${role},
         display_name = ${displayName},
-        email = ${email}
+        email = ${email},
+        can_see_money = ${canSeeMoney}
       WHERE id = ${id}
         AND EXISTS (SELECT 1 FROM users WHERE role = 'admin' AND id <> ${id})
       RETURNING *
@@ -221,7 +234,8 @@ export async function updateDbUser(
       username = ${username},
       role = ${role},
       display_name = ${displayName},
-      email = ${email}
+      email = ${email},
+      can_see_money = ${canSeeMoney}
     WHERE id = ${id}
     RETURNING *
   `;

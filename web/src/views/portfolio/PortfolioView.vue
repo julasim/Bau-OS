@@ -12,6 +12,10 @@ import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../../api";
 import BIcon from "../../components/BIcon.vue";
+// Ohne Geld-Recht entfernt der Server die Betraege aus der Antwort. Die Spalte
+// wird ausgeblendet statt leer angezeigt — eine leere Zelle sieht nach einem
+// Fehler aus, eine fehlende Spalte nach einer Regel.
+import { useCurrentUser } from "../../composables/useCurrentUser";
 
 type Health = "red" | "amber" | "green";
 
@@ -29,6 +33,8 @@ interface PortfolioEntry {
   openHighPrio: number;
   health: Health;
 }
+
+const { darfGeld } = useCurrentUser();
 
 const router = useRouter();
 const rows = ref<PortfolioEntry[]>([]);
@@ -124,7 +130,7 @@ onMounted(load);
           <th>Projekt</th>
           <th>Phase</th>
           <th class="pf-col-prog">Fortschritt</th>
-          <th class="pf-col-num">Honorar (fakt. / Budget)</th>
+          <th v-if="darfGeld" class="pf-col-num">Honorar (fakt. / Budget)</th>
           <th>Nächste Frist</th>
           <th class="pf-col-num">High-Prio</th>
         </tr>
@@ -147,7 +153,9 @@ onMounted(load);
               <span class="pf-prog-val">{{ r.progress }}%</span>
             </div>
           </td>
-          <td class="pf-col-num">{{ money(r.invoiced) }} <span class="pf-sep">/</span> {{ money(r.budget) }}</td>
+          <td v-if="darfGeld" class="pf-col-num">
+            {{ money(r.invoiced) }} <span class="pf-sep">/</span> {{ money(r.budget) }}
+          </td>
           <td
             :class="{ 'pf-overdue': daysUntil(r.nextDeadline) !== null && (daysUntil(r.nextDeadline) as number) < 0 }"
           >

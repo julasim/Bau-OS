@@ -43,6 +43,7 @@ import {
 } from "./auth.js";
 import { logEvent as audit } from "../data/db-audit.js";
 import { KonfliktFehler } from "../data/konflikt.js";
+import { geldFilter } from "./geld.js";
 
 /** Liefert die Client-IP fuer Rate-Limiting und Audit-Eintraege.
  *  Wichtig: nur die ERSTE IP aus x-forwarded-for verwenden — sonst kann
@@ -428,6 +429,18 @@ app.route("/api", publicBrandingRoutes);
 // ── Auth-Middleware für alle /api/* Routes ────────────────────────────────────
 app.use("/api/*", authMiddleware);
 
+// ── Geld-Recht ───────────────────────────────────────────────────────────────
+// Direkt hinter der Anmeldung, VOR allen Routen: der Filter arbeitet auf dem
+// Rueckweg und raeumt Betraege aus jeder JSON-Antwort, solange der Aufrufer
+// das Recht nicht hat (src/api/geld.ts).
+//
+// Bewusst hier und nicht in den einzelnen Routen: Betraege kommen an neun
+// Stellen heraus (Rechnungen, Portfolio, Cockpit, Stunden, Team, Phasen,
+// Suche, Live-Kanal, Export). Neun Pruefungen sind neun Gelegenheiten, es beim
+// naechsten neuen Endpunkt zu vergessen — hier ist eine neue Route von sich
+// aus dicht.
+app.use("/api/*", geldFilter);
+
 // ── Auth-Check ───────────────────────────────────────────────────────────────
 // Liefert minimales Profil fuer die Web-UI (Avatar, Begruessung, Settings).
 // displayName kommt aus user.settings.displayName — falls nicht gesetzt,
@@ -445,6 +458,9 @@ app.get("/api/auth/me", (c) => {
       role: dbUser.role,
       displayName: dbUser.displayName ?? dbUser.settings?.displayName ?? null,
       isProtected: dbUser.isProtected,
+      // Die Oberflaeche blendet Geldspalten aus, statt leere Zellen zu zeigen
+      // — der Antwort-Filter entfernt die Felder, nicht die Tabelle.
+      canSeeMoney: dbUser.role === "admin" || dbUser.canSeeMoney,
     });
   }
   const json = findUser(jwtUser.username);

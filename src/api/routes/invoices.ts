@@ -11,6 +11,7 @@ import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../d
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import type { ProjectInvoiceInput } from "../../data/types.js";
+import { darfGeldSehen } from "../geld.js";
 
 export const invoicesRoutes = new Hono<AppEnv>();
 
@@ -44,6 +45,15 @@ invoicesRoutes.get("/projects/:projectName/invoices", async (c) => {
   const proj = await resolveProject(c);
   if ("error" in proj) return proj.error;
   return c.json(await invoiceRepo.list(proj.id));
+});
+
+// Rechnungen anlegen, aendern und loeschen ist Geldarbeit. Lesen faellt
+// ohnehin durch den Antwort-Filter (die Betraege fehlen dann), aber Schreiben
+// muss ausdruecklich verwehrt werden — sonst koennte jemand Betraege setzen,
+// die er selbst nicht sieht.
+invoicesRoutes.on(["POST", "PUT", "DELETE"], ["/projects/:projectName/invoices", "/invoices/:id"], async (c, next) => {
+  if (!darfGeldSehen(c)) return c.json({ error: "Kein Zugriff auf Betraege" }, 403);
+  await next();
 });
 
 invoicesRoutes.post("/projects/:projectName/invoices", async (c) => {
