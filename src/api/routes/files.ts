@@ -3,7 +3,7 @@ import type { Context } from "hono";
 import fs from "fs";
 import path from "path";
 import { WORKSPACE_PATH, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../../config.js";
-import { readFile, listFolder } from "../../workspace/index.js";
+import { readFile } from "../../workspace/index.js";
 import { fileRepo, projectRepo } from "../../data/index.js";
 import { getDb } from "../../db/client.js";
 import { emit, emitForProjectName } from "../events.js";
@@ -87,13 +87,13 @@ function safePath(userPath: string): string | null {
   return userPath;
 }
 
-// ── Dateien auflisten (DB oder Filesystem) ──────────────────────────────────
+// ── Dateien auflisten ───────────────────────────────────────────────────────
+//
+// Ausschliesslich aus der Datenbank. Der frueher hier stehende
+// Filesystem-Zweig (`?path=` / `?source=fs`) ist entfallen — siehe den
+// Kopfkommentar bei „Datei lesen".
 filesRoutes.get("/files", async (c) => {
-  const p = c.req.query("path") || "";
-  const source = c.req.query("source"); // ?source=fs erzwingt Filesystem
-
-  // DB-Modus: Dateien aus Datenbank laden (nur Root-Ebene, kein Pfad)
-  if (!p && source !== "fs") {
+  {
     const bezug = await projektBezugAusQuery(c);
     if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
     const project = bezug.name;
@@ -117,23 +117,29 @@ filesRoutes.get("/files", async (c) => {
     );
   }
 
-  // Filesystem-Fallback (Ordner-Navigation, Agent-Dateien)
-  // Im FS-Modus zeigt der Browser den rohen Workspace — nur Admins haben
-  // Zugriff. Non-Admins sehen keine Dateien (es gibt keine User-Trennung im FS).
-  const userRole = c.get("userRole") as string | undefined;
-  if (userRole !== "admin") return c.json([]);
-  if (p && !safePath(p)) return c.json({ error: "Zugriff verweigert" }, 403);
-  const items = listFolder(p);
-  return c.json(items);
+  return c.json([]);
 });
 
 // ── Datei lesen ─────────────────────────────────────────────────────────────
+//
+// NUR ueber die ID, und die geht durch `canAccessFile`.
+//
+// Der frueher danebenstehende Weg `?path=…` las jede Datei im
+// Dokumentenordner aus — ohne jede Rechtepruefung. Geprueft wurde allein, ob
+// der Pfad den Ordner nicht verlaesst, nicht WER da liest. Ein Konto ohne
+// einen einzigen Projektzugriff kam damit an jeden Vertrag und jede
+// Honorarvereinbarung; dieser Ordner ist die Samba-Freigabe „Dokumente".
+//
+// Er stammt aus der Vault-Zeit und war von der Oberflaeche nie erreichbar:
+// Dateien liegen seit dem Umbau als `bytea` in der Datenbank, und der
+// Dateibrowser baut seine Ordner logisch aus den Projekten. Ein Weg, den
+// niemand braucht, ist besser zu als bewacht — deshalb entfernt statt
+// abgesichert. Dasselbe gilt fuer `POST /files/mkdir` und das Loeschen ueber
+// einen Pfad; letzteres rief `rmSync(recursive)` auf ganze Baeume.
 filesRoutes.get("/files/read", async (c) => {
-  const p = c.req.query("path");
   const id = c.req.query("id");
-
-  // DB: ueber ID lesen
-  if (id) {
+  if (!id) return c.json({ error: "id erforderlich (?id=...)" }, 400);
+  {
     const file = await fileRepo.get(id);
     if (!file) return c.json({ error: "Datei nicht gefunden" }, 404);
     if (!(await canAccessFile(c, id))) return c.json({ error: "Zugriff verweigert" }, 403);
@@ -145,26 +151,6 @@ filesRoutes.get("/files/read", async (c) => {
     const content = readFile(file.filepath);
     return c.json({ path: file.filepath, content: content ?? "", filename: file.filename });
   }
-
-  // Filesystem
-  if (!p) return c.json({ error: "Pfad erforderlich (?path=...)" }, 400);
-  if (!safePath(p)) return c.json({ error: "Zugriff verweigert" }, 403);
-  const content = readFile(p);
-  if (content === null) return c.json({ error: "Datei nicht gefunden" }, 404);
-  return c.json({ path: p, content });
-});
-
-// ── Neuer Ordner ─────────────────────────────────────────────────────────────
-filesRoutes.post("/files/mkdir", async (c) => {
-  const body = await c.req.json<{ path: string }>();
-  if (!body.path || !safePath(body.path)) return c.json({ error: "Zugriff verweigert" }, 403);
-  const fullPath = path.resolve(WORKSPACE_PATH, body.path);
-  if (!fullPath.startsWith(WORKSPACE_PATH + path.sep) && fullPath !== WORKSPACE_PATH)
-    return c.json({ error: "Zugriff verweigert" }, 403);
-  if (fs.existsSync(fullPath)) return c.json({ error: "Ordner existiert bereits" }, 409);
-  fs.mkdirSync(fullPath, { recursive: true });
-  emit({ type: "file", action: "created", id: body.path, projectId: null }, { actorId: c.get("userId") });
-  return c.json({ success: true });
 });
 
 // ── Loeschen ─────────────────────────────────────────────────────────────────
@@ -196,20 +182,11 @@ filesRoutes.delete("/files", async (c) => {
     return c.json({ success: true });
   }
 
-  // Filesystem
-  if (!body.path || !safePath(body.path)) return c.json({ error: "Zugriff verweigert" }, 403);
-  const fullPath = path.resolve(WORKSPACE_PATH, body.path);
-  if (!fullPath.startsWith(WORKSPACE_PATH + path.sep) && fullPath !== WORKSPACE_PATH)
-    return c.json({ error: "Zugriff verweigert" }, 403);
-  if (!fs.existsSync(fullPath)) return c.json({ error: "Nicht gefunden" }, 404);
-  const stat = fs.statSync(fullPath);
-  if (stat.isDirectory()) {
-    fs.rmSync(fullPath, { recursive: true, force: true });
-  } else {
-    fs.unlinkSync(fullPath);
-  }
-  emit({ type: "file", action: "deleted", id: body.path, projectId: null }, { actorId: c.get("userId") });
-  return c.json({ success: true });
+  // Ohne `id` gibt es nichts zu tun: das Loeschen ueber einen PFAD ist
+  // entfallen (siehe Kopfkommentar bei „Datei lesen"). Es rief
+  // `rmSync(recursive)` auf und konnte damit einen ganzen Projektordner
+  // entfernen — von jedem angemeldeten Konto aus.
+  return c.json({ error: "id erforderlich" }, 400);
 });
 
 // ── Zuletzt bearbeitet ──────────────────────────────────────────────────────
