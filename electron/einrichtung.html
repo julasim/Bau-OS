@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <!-- Streng abgeriegelt: die Seite lädt nichts nach. Sie liegt im Paket und
+         braucht weder Netz noch externe Mittel.
+         `script-src 'unsafe-inline'` statt `'self'` mit Absicht: bei
+         `file:`-Herkunft ist `'self'` in Chromium nicht verlässlich, und die
+         Seite hätte dann stumm kein Skript. Da `default-src 'none'` gilt, kann
+         hier ohnehin nichts von außen hereinkommen — der einzige fremde Text
+         auf der Seite ist die Fehlermeldung, und die wird über `textContent`
+         gesetzt, nie über `innerHTML`. -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'"
+    />
+    <title>PATIO — Server einrichten</title>
+    <style>
+      /* Reine Systemschriften, wie im PATIO-Designsystem. Es wird nie eine
+         Schriftdatei ausgeliefert und nie eine nachgeladen. */
+      :root {
+        --grund: #14161b;
+        --flaeche: #1c1f26;
+        --rand: #2c313b;
+        --text: #e8eaee;
+        --gedaempft: #9aa1ad;
+        --warn: #e0b062;
+        --akzent: #e8eaee;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--grund);
+        color: var(--text);
+        font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+        font-size: 14px;
+        line-height: 1.5;
+      }
+      main {
+        width: 100%;
+        max-width: 480px;
+        padding: 32px;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 20px;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      p.hinweis {
+        margin: 0 0 24px;
+        color: var(--gedaempft);
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--gedaempft);
+      }
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        background: var(--flaeche);
+        border: 1px solid var(--rand);
+        border-radius: 4px;
+        color: var(--text);
+        font: inherit;
+      }
+      input:focus {
+        outline: 2px solid var(--akzent);
+        outline-offset: 1px;
+      }
+      .knoepfe {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+      }
+      button {
+        padding: 10px 16px;
+        border: 1px solid var(--rand);
+        border-radius: 4px;
+        background: var(--flaeche);
+        color: var(--text);
+        font: inherit;
+        cursor: pointer;
+      }
+      button.haupt {
+        background: var(--text);
+        border-color: var(--text);
+        color: var(--grund);
+        font-weight: 600;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #meldung {
+        margin-top: 16px;
+        padding: 12px 14px;
+        border: 1px solid var(--rand);
+        border-left: 3px solid var(--warn);
+        border-radius: 4px;
+        background: var(--flaeche);
+        color: var(--text);
+      }
+      #meldung:empty {
+        display: none;
+      }
+      .fuss {
+        margin-top: 24px;
+        color: var(--gedaempft);
+        font-size: 12px;
+      }
+      code {
+        font-family: ui-monospace, Consolas, monospace;
+        color: var(--text);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PATIO</h1>
+      <p class="hinweis">Adresse des Firmenservers eintragen.</p>
+
+      <form id="formular">
+        <label for="adresse">Serveradresse</label>
+        <input
+          id="adresse"
+          name="adresse"
+          type="text"
+          placeholder="patio.sima.intern"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="knoepfe">
+          <button type="submit" class="haupt" id="verbinden">Verbinden</button>
+          <button type="button" id="erneut" hidden>Erneut versuchen</button>
+        </div>
+      </form>
+
+      <div id="meldung" role="status" aria-live="polite"></div>
+
+      <p class="fuss">
+        Ohne <code>https://</code> davor wird eine verschlüsselte Verbindung angenommen.
+      </p>
+    </main>
+    <script>
+      (function () {
+        const brücke = window.patioEinrichtung;
+        const formular = document.getElementById("formular");
+        const feld = document.getElementById("adresse");
+        const knopfVerbinden = document.getElementById("verbinden");
+        const knopfErneut = document.getElementById("erneut");
+        const meldung = document.getElementById("meldung");
+
+        const abfrage = new URLSearchParams(location.search);
+        const adresse = abfrage.get("adresse");
+        const fehler = abfrage.get("fehler");
+
+        if (adresse) feld.value = adresse;
+        if (fehler) {
+          // Bewusst textContent: der Text stammt aus einer Chromium-Fehlermeldung
+          // und enthält die vom Benutzer eingetippte Adresse.
+          meldung.textContent = fehler;
+          knopfErneut.hidden = !adresse;
+        }
+        feld.focus();
+        feld.select();
+
+        if (!brücke) {
+          meldung.textContent = "Die Einrichtung ist nicht bedienbar (interner Fehler). Bitte PATIO neu starten.";
+          knopfVerbinden.disabled = true;
+          knopfErneut.hidden = true;
+          return;
+        }
+
+        function sperren(gesperrt, text) {
+          knopfVerbinden.disabled = gesperrt;
+          knopfErneut.disabled = gesperrt;
+          knopfVerbinden.textContent = gesperrt ? text : "Verbinden";
+        }
+
+        async function versuchen(aktion) {
+          sperren(true, "Prüfe…");
+          meldung.textContent = "";
+          try {
+            const ergebnis = await aktion();
+            // Bei Erfolg lädt der Hauptprozess die Oberfläche — diese Seite ist
+            // dann weg. Nur der Misserfolg braucht eine Anzeige.
+            if (!ergebnis || !ergebnis.ok) {
+              meldung.textContent = (ergebnis && ergebnis.grund) || "Der Server ist nicht erreichbar.";
+              sperren(false);
+            }
+          } catch (err) {
+            meldung.textContent = "Die Prüfung ist fehlgeschlagen: " + String(err);
+            sperren(false);
+          }
+        }
+
+        formular.addEventListener("submit", function (e) {
+          e.preventDefault();
+          void versuchen(() => brücke.pruefen(feld.value));
+        });
+
+        knopfErneut.addEventListener("click", function () {
+          void versuchen(() => brücke.erneut());
+        });
+      })();
+    </script>
+  </body>
+</html>

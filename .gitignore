@@ -1,5 +1,7 @@
 node_modules/
 dist/
+# Gebaute Electron-Huelle (npm run build:electron)
+dist-electron/
 
 # Auslieferungspakete (scripts/release-offline.sh). Enthalten das gespeicherte
 # Docker-Image und sind rund 170 MB gross — sie gehoeren auf den USB-Stick,

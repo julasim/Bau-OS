@@ -1,0 +1,79 @@
+# ============================================================
+# PATIO — Arbeitsplatz-Programm (AP12)
+# ============================================================
+# Verpackt NUR die Electron-Hülle. Die Oberfläche kommt zur Laufzeit vom
+# Firmenserver — auf den Arbeitsplätzen liegt kein Anwendungscode.
+#
+# ── Unterschiede zur Vorlage (apps/patio-app-lokal/electron-builder.yml) ─────
+#
+# `asar: false` FEHLT hier mit Absicht. Dort steht es, weil der Hauptprozess
+# das Backend per dynamischem import() aus `dist/` lädt und ESM aus `app.asar`
+# heikel ist. Dieses Programm lädt gar kein Backend — also darf das Paket
+# wieder in ein Archiv, was Kopieren und Virenprüfung auf den Arbeitsplätzen
+# spürbar beschleunigt.
+#
+# `files:` ist auf zwei Einträge geschrumpft. Die Vorlage packt `dist/**/*`
+# ein, also das komplette Server-Backend. Der Arbeitsplatz braucht davon
+# nichts, und Server-Code hat auf acht Bürorechnern nichts verloren.
+# ============================================================
+
+# Getrennte Kennung — beide Programme bleiben nebeneinander bestehen.
+# PATIO Desktop ist `at.sima.patio`.
+appId: at.sima.patio.arbeitsplatz
+productName: PATIO
+copyright: © Julius Sima
+
+directories:
+  output: release
+  buildResources: build
+
+# Die package.json des Repos zeigt mit `main` auf den SERVER (`dist/index.js`)
+# — das ist dort richtig und bleibt so. Für das gepackte Programm wird der
+# Einstiegspunkt hier überschrieben, statt die Repo-Datei zu verbiegen.
+extraMetadata:
+  main: dist-electron/main.js
+
+files:
+  - dist-electron/**/*
+  - package.json
+
+# Kein publish-Block: Auto-Update ist nicht vorgesehen (der Server hat kein
+# Internet, es gibt keine Feed-URL). Verteilung läuft über den geteilten
+# Ordner — Datei hinlegen, draufklicken.
+
+win:
+  icon: build/icon.ico
+  # Code-Signing selbstsigniert und store-basiert (Cert `CN=Julius Sima` in
+  # Cert:\CurrentUser\My), passwortlos, ohne .pfx. Ohne dieses Zertifikat
+  # schlägt `npm run dist` fehl — CI baut kein Paket und bleibt unberührt.
+  signtoolOptions:
+    certificateSubjectName: Julius Sima
+    publisherName: Julius Sima
+    rfc3161TimeStampServer: http://timestamp.digicert.com
+    signingHashAlgorithms:
+      - sha256
+  # ── Nur portable, mit Grund ────────────────────────────────────────────────
+  #
+  # NSIS leitet das Installationsverzeichnis aus `productName` ab. Beide
+  # Programme heißen „PATIO", also würde ein Installer hier über die
+  # bestehende PATIO-Desktop-Installation laufen. Sauber aufzulösen wäre das
+  # nur, indem PATIO Desktop bei seinem nächsten eigenen Bau auf
+  # `productName: PATIO Desktop` geht — eine Zeile, die aber in
+  # `apps/patio-app-lokal` liegt und damit ausdrücklich außerhalb dieses
+  # Pakets (der Ordner bleibt unangetastet).
+  #
+  # Für die Erprobung ist das ohnehin der bequemere Weg: die portable .exe
+  # liegt im geteilten Ordner und wird von dort gestartet — kein Installer,
+  # kein Startmenü-Eintrag, keine Kollision. Der nsis-Block unten steht
+  # vorbereitet; er wird scharf, sobald der Namenskonflikt entschieden ist.
+  target:
+    - portable
+
+portable:
+  artifactName: ${productName}-Arbeitsplatz-${version}-portable.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-Arbeitsplatz-Setup-${version}.${ext}
