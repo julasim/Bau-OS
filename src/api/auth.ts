@@ -1,7 +1,7 @@
 import fs from "fs";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { JWT_SECRET, USERS_FILE, DB_ENABLED, BCRYPT_ROUNDS } from "../config.js";
+import { JWT_SECRET, USERS_FILE, BCRYPT_ROUNDS } from "../config.js";
 import { getDb } from "../db/client.js";
 import { encryptString, decryptString } from "./crypto.js";
 import { peekTicket } from "./sse-tickets.js";
@@ -80,28 +80,24 @@ function rowToDbUser(row: Record<string, unknown>): DbUser {
 }
 
 export async function findDbUserByUsername(username: string): Promise<DbUser | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`SELECT * FROM users WHERE username = ${username} LIMIT 1`;
   return row ? rowToDbUser(row) : null;
 }
 
 export async function findDbUserById(id: string): Promise<DbUser | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`SELECT * FROM users WHERE id = ${id} LIMIT 1`;
   return row ? rowToDbUser(row) : null;
 }
 
 export async function countDbAdmins(): Promise<number> {
-  if (!DB_ENABLED) return 0;
   const db = getDb();
   const [row] = await db`SELECT count(*)::int as c FROM users WHERE role = 'admin'`;
   return Number(row?.c ?? 0);
 }
 
 export async function countDbUsers(): Promise<number> {
-  if (!DB_ENABLED) return 0;
   const db = getDb();
   const [row] = await db`SELECT count(*)::int as c FROM users`;
   return Number(row?.c ?? 0);
@@ -110,7 +106,6 @@ export async function countDbUsers(): Promise<number> {
 /** Liste aller DB-User, fuer Admin-Verwaltung. Sortiert: geschuetzte
  *  Admins zuerst, dann Admins, dann User, alphabetisch. */
 export async function listDbUsers(): Promise<DbUser[]> {
-  if (!DB_ENABLED) return [];
   const db = getDb();
   const rows = await db`
     SELECT * FROM users
@@ -140,7 +135,6 @@ export async function createDbUser(input: {
    *  ersten Login — Admin hat die Email schon hinterlegt. */
   email?: string | null;
 }): Promise<DbUser> {
-  if (!DB_ENABLED) throw new Error("DB-Modus erforderlich");
   const passwordHash = await hashPassword(input.password);
   const db = getDb();
   const normalizedEmail = input.email?.trim().toLowerCase() || null;
@@ -198,7 +192,6 @@ export async function updateDbUser(
     canSeeMoney?: boolean;
   },
 ): Promise<DbUser | null | "last-admin"> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [current] = await db`SELECT * FROM users WHERE id = ${id}`;
   if (!current) return null;
@@ -249,7 +242,6 @@ export async function updateDbUser(
  *  Returns "last-admin" wenn die Query nichts geloescht hat, weil der
  *  Last-Admin-Schutz gegriffen hat. */
 export async function deleteDbUser(id: string): Promise<boolean | "last-admin"> {
-  if (!DB_ENABLED) return false;
   const db = getDb();
   const [target] = await db`SELECT role FROM users WHERE id = ${id}`;
   if (!target) return false;
@@ -270,7 +262,6 @@ export async function deleteDbUser(id: string): Promise<boolean | "last-admin"> 
 /** Aktualisiert Settings eines DB-Users. Settings werden gemerged, nicht
  *  ueberschrieben — kompatibel zur JSON-Variante in updateUser(). */
 export async function updateDbUserSettings(userId: string, patch: UserSettings): Promise<DbUser | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [current] = await db`SELECT settings FROM users WHERE id = ${userId} LIMIT 1`;
   if (!current) return null;
@@ -285,7 +276,6 @@ export async function updateDbUserSettings(userId: string, patch: UserSettings):
 
 /** Setzt das Passwort eines DB-Users (bcrypt-Hash bereits gemacht). */
 export async function updateDbUserPassword(userId: string, hash: string): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const db = getDb();
   const result = await db`UPDATE users SET password_hash = ${hash} WHERE id = ${userId}`;
   return result.count > 0;
@@ -298,8 +288,6 @@ export async function updateDbUserPassword(userId: string, hash: string): Promis
  *  ein Admin existiert, gibt RETURNING leer zurueck → wir werfen. Der
  *  username-UNIQUE-Constraint ist eine zweite Verteidigungslinie. */
 export async function createInitialAdmin(username: string, password: string, email?: string): Promise<DbUser> {
-  if (!DB_ENABLED) throw new Error("Setup benoetigt DB-Modus");
-
   const passwordHash = await hashPassword(password);
   const normalizedEmail = email?.trim().toLowerCase() || null;
   const db = getDb();
@@ -332,7 +320,6 @@ export async function createInitialAdmin(username: string, password: string, ema
 // Fallback. Sobald ein User in DB ist, gewinnt der DB-Pfad (Login-Flow
 // in server.ts prueft DB zuerst).
 export async function importLegacyJsonUsers(): Promise<{ imported: number; skipped: number }> {
-  if (!DB_ENABLED) return { imported: 0, skipped: 0 };
   const jsonUsers = loadUsers();
   if (jsonUsers.length === 0) return { imported: 0, skipped: 0 };
 
@@ -456,14 +443,16 @@ export function verifyToken(token: string): JwtPayload {
  *   c.var.user      → JwtPayload (Legacy — nicht erweitert)
  *   c.var.userId    → string | null  (UUID, falls in JWT oder DB-Lookup ergibt eine)
  *   c.var.userRole  → 'admin' | 'user'
- *   c.var.dbUser    → DbUser | null  (vollstaendig, nur wenn DB_ENABLED + Match)
+ *   c.var.dbUser    → DbUser (immer gesetzt; ohne Konto kommt 401)
  *
  * Ablauf:
  *   1. JWT verifizieren
- *   2. Wenn JWT.sub vorhanden → DB lookup by id
- *   3. Sonst → DB lookup by username (Legacy-JWTs ohne sub)
- *   4. Wenn keine DB → JSON-User aus loadUsers()
- *   5. userId / dbUser entsprechend setzen
+ *   2. Wenn JWT.sub vorhanden → Datenbank-Suche ueber die id
+ *   3. Sonst → Datenbank-Suche ueber den Benutzernamen (aeltere JWTs ohne sub)
+ *   4. userId / dbUser entsprechend setzen
+ *
+ * Findet sich kein Konto, wird das Token abgewiesen (401). Einen Rueckfall
+ * auf `data/users.json` gibt es nicht mehr.
  */
 export async function authMiddleware(c: Context, next: Next): Promise<Response | void> {
   const header = c.req.header("Authorization");
@@ -509,47 +498,33 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   c.set("user", payload);
 
   let dbUser: DbUser | null = null;
-  // Rolle fuer den Legacy-JSON-Fallback (User existiert nur in users.json,
-  // noch nicht in die DB importiert).
-  let jsonRole: string | null = null;
-  if (DB_ENABLED) {
-    // sub ist erst seit Phase 1 gesetzt — alte JWTs ohne sub fallen sauber
-    // auf username-Lookup zurueck. Ohne diesen Guard wuerde postgres.js
-    // WHERE id = NULL ausfuehren, was zwar nicht crashed aber unnoetig ist.
-    if (payload.sub && typeof payload.sub === "string") {
-      dbUser = await findDbUserById(payload.sub);
-    }
-    if (!dbUser && payload.username) {
-      dbUser = await findDbUserByUsername(payload.username);
-    }
-    if (dbUser) {
-      c.set("userId", dbUser.id);
-      c.set("dbUser", dbUser);
-    } else {
-      // Kein DB-User trotz DB-Modus. Nur ein noch nicht importierter Legacy-
-      // JSON-User darf ueber den JSON-Fallback weiter rein. Ein Token, das auf
-      // ein NICHT (mehr) existentes Konto zeigt (geloeschter/umbenannter
-      // DB-User, dessen JWT aber noch bis zu 7 Tage gueltig ist), wird
-      // abgewiesen — sonst behielte es seine JWT-Rolle und ein geloeschter
-      // Admin haette weiter Admin-Zugriff.
-      const jsonUser = payload.username ? findUser(payload.username) : undefined;
-      if (!jsonUser) {
-        return c.json({ error: "Konto nicht mehr vorhanden" }, 401);
-      }
-      jsonRole = jsonUser.role;
-      c.set("userId", null);
-      c.set("dbUser", null);
-    }
-  } else {
-    c.set("userId", null);
-    c.set("dbUser", null);
+  // `sub` ist erst seit Phase 1 gesetzt — aeltere JWTs ohne sub fallen sauber
+  // auf die Suche ueber den Benutzernamen zurueck. Ohne diesen Guard fuehrte
+  // postgres.js ein `WHERE id = NULL` aus: kein Absturz, aber sinnlos.
+  if (payload.sub && typeof payload.sub === "string") {
+    dbUser = await findDbUserById(payload.sub);
+  }
+  if (!dbUser && payload.username) {
+    dbUser = await findDbUserByUsername(payload.username);
   }
 
-  // In DB-Mode: immer die aktuelle Rolle aus DB nehmen (bzw. aus users.json
-  // fuer noch nicht importierte Legacy-Konten), nie aus dem JWT. Sonst behaelt
-  // ein altes Admin-Token bis zu 7 Tage lang Admin-Zugriff nach einem Downgrade.
-  const effectiveRole = DB_ENABLED ? (dbUser ? dbUser.role : jsonRole) : payload.role;
-  const userRole = effectiveRole === "admin" ? "admin" : "user";
+  // Ein Token, das auf ein nicht (mehr) vorhandenes Konto zeigt, wird
+  // abgewiesen. Sonst behielte es seine im JWT eingebackene Rolle — und ein
+  // geloeschter Admin haette bis zu sieben Tage lang weiter Admin-Zugriff.
+  //
+  // Frueher stand hier ein Rueckfall auf `data/users.json`. Er ist mit den
+  // JSON-Konten entfallen; bestehende Eintraege gehen beim Start in die
+  // Datenbank ueber (`importLegacyJsonUsers()`).
+  if (!dbUser) {
+    return c.json({ error: "Konto nicht mehr vorhanden" }, 401);
+  }
+  c.set("userId", dbUser.id);
+  c.set("dbUser", dbUser);
+
+  // Die Rolle kommt IMMER aus der Datenbank, nie aus dem JWT — sonst behielte
+  // ein altes Admin-Token nach einer Herabstufung sieben Tage lang seine
+  // Rechte.
+  const userRole = dbUser.role === "admin" ? "admin" : "user";
   c.set("userRole", userRole);
 
   await next();
@@ -588,7 +563,6 @@ export async function adminMiddleware(c: Context, next: Next): Promise<Response 
  *  interne Verifikation — der Plaintext-Secret verlaesst nie die API.
  *  Liefert null wenn 2FA noch gar nicht eingerichtet wurde. */
 export async function getTotpSecretPlain(userId: string): Promise<string | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`
     SELECT totp_secret_encrypted FROM users WHERE id = ${userId} LIMIT 1
@@ -601,7 +575,6 @@ export async function getTotpSecretPlain(userId: string): Promise<string | null>
  *  das passiert erst bei der Verifikation. Falls schon einer drin war,
  *  ueberschreiben (der User klickt "Setup wiederholen"). */
 export async function storeTotpSecret(userId: string, secretBase32: string): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const db = getDb();
   const encrypted = encryptString(secretBase32);
   const result = await db`
@@ -618,7 +591,6 @@ export async function storeTotpSecret(userId: string, secretBase32: string): Pro
 /** Aktiviert 2FA. Backup-Codes als bcrypt-Hashes (jeweils $2b$10$...).
  *  Caller hat den Token bereits verifiziert. */
 export async function enableTotp(userId: string, backupCodeHashes: string[]): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const db = getDb();
   const result = await db`
     UPDATE users
@@ -633,7 +605,6 @@ export async function enableTotp(userId: string, backupCodeHashes: string[]): Pr
 
 /** Deaktiviert 2FA komplett. Caller hat Passwort + Token verifiziert. */
 export async function disableTotp(userId: string): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const db = getDb();
   const result = await db`
     UPDATE users
@@ -649,7 +620,6 @@ export async function disableTotp(userId: string): Promise<boolean> {
 /** Prueft einen Backup-Code gegen die gespeicherten Hashes. Bei Treffer
  *  wird der Hash entfernt (Einmalverwendung). Liefert true bei Erfolg. */
 export async function consumeBackupCode(userId: string, code: string): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const cleaned = code.trim().toLowerCase();
   if (!cleaned) return false;
   const db = getDb();
@@ -723,7 +693,6 @@ export function verify2faTicket(ticket: string): TwoFactorTicketPayload | null {
  *  Fuer Pre-Check beim Email-Setup, damit der UNIQUE-Constraint nicht
  *  ueberraschend kracht. */
 export async function isEmailTaken(email: string, exceptUserId?: string): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const normalized = email.trim().toLowerCase();
   const db = getDb();
   const rows = await db`

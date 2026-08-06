@@ -292,13 +292,15 @@ app.post("/api/auth/login", async (c) => {
   // Passwort bewusst NICHT trimmen — Whitespace darf Teil des Passworts sein.
   const usernameInput = body.username.trim();
 
-  // Login-Strategie:
-  //   1. DB-User (Migration 008) hat Vorrang. Sobald irgendein DB-User
-  //      existiert, ist die JSON-Datei nur noch Read-Fallback fuer
-  //      veraltete Konten — neue Logins gehen ueber DB.
-  //   2. JSON-User (legacy) bleibt als Fallback solange noch nichts in
-  //      der DB steht. Danach kann der Admin ihn via /admin/users in die
-  //      DB nachimportieren (Phase 2).
+  // Ausschliesslich gegen die Datenbank. Der frueher hier stehende Rueckfall
+  // auf `data/users.json` ist entfallen — er war kein Sicherheitsnetz, sondern
+  // ein zweiter Weg zum selben Konto, und einer, der die Rechte umging: eine
+  // JSON-Anmeldung hatte keine UUID, und ohne die liefert
+  // `getVisibleProjectIds()` fuer Nicht-Admins eine leere Liste.
+  //
+  // Bestehende JSON-Konten gehen beim Start in die Datenbank ueber
+  // (`importLegacyJsonUsers()` in src/index.ts), bevor die erste Anfrage
+  // angenommen wird.
   const dbUser = await findDbUserByUsername(usernameInput);
 
   const pwHash = dbUser?.passwordHash;
@@ -356,16 +358,15 @@ app.post("/api/auth/login", async (c) => {
 });
 
 // ── Setup-Wizard (ohne Auth) ────────────────────────────────────────────────
-// Wenn die DB leer ist UND es keine JSON-User gibt, kann der erste Aufruf
-// einen Admin via Web-Formular anlegen. Sobald irgendein User existiert,
-// kommt 410 zurueck — kein Setup mehr moeglich, alles laeuft ueber Login
-// bzw. /admin/users.
+// Ist noch kein Konto vorhanden, legt der erste Aufruf einen Admin ueber ein
+// Web-Formular an. Sobald irgendeines existiert, kommt 410 — danach laeuft
+// alles ueber die Anmeldung bzw. /admin/users.
+//
+// Gezaehlt werden weiterhin auch die Konten in `data/users.json`: sie gehen
+// beim Start in die Datenbank ueber, und waehrend eines Umstiegs von einer
+// alten Installation soll der Wizard nicht faelschlich erscheinen.
 
 app.get("/api/setup/status", async (c) => {
-  if (!DB_ENABLED) {
-    // Im FS-Mode regiert weiterhin users.json — kein Setup-Wizard noetig.
-    return c.json({ needsSetup: false, dbEnabled: false });
-  }
   const userCount = await countDbUsers();
   const jsonCount = loadUsers().length;
   return c.json({
@@ -375,9 +376,6 @@ app.get("/api/setup/status", async (c) => {
 });
 
 app.post("/api/setup/admin", async (c) => {
-  if (!DB_ENABLED) {
-    return c.json({ error: "Setup nur im DB-Modus verfuegbar" }, 503);
-  }
   const userCount = await countDbUsers();
   const jsonCount = loadUsers().length;
   if (userCount > 0 || jsonCount > 0) {
