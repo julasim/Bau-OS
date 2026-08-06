@@ -49,10 +49,32 @@ aber noch 17 `DB_ENABLED`-Abfragen (Altbestand, harmlos, aber irrefuehrend).
 Von `src/workspace/` bleibt nur der echte Dateizugriff (1.774 → 245 Zeilen) —
 Dokumente liegen weiterhin als Dateien.
 
-**Zwei Reste warten bewusst auf AP7 (Anmeldung):** der JSON-Konten-Fallback in
-`src/api/auth.ts` (34 `DB_ENABLED`-Stellen) und `src/api/email.ts`. Beide
-haengen am Login — sie jetzt anzufassen hiesse, denselben Code zweimal
-umzubauen.
+**AP1 abgeschlossen (2026-08-06).** Der Server kann aufgesetzt werden:
+Anmeldung, Compose-Stack, Zertifikat, Sicherung, Netzfreigabe, Offline-Updates
+und das Einrichtungshandbuch stehen. Fünf Commits (`01a933f`…`e82c2a3`),
+**265 Tests**.
+
+> **Die Anmeldung ist einstufig — Passwort, kein zweiter Faktor** (Entscheid
+> Julius, 2026-08-06). Der E-Mail-Zweig ist ersatzlos entfallen: er verzweigte
+> JEDEN Datenbank-Benutzer in den SMTP-Versand, der ohne Internet scheiterte —
+> niemand kam hinein außer über das einstufige JSON-Konto. Mindestlänge 12,
+> bcrypt 12, beides zentral in `src/config.ts`. `src/api/totp.ts` und
+> `routes/auth-2fa.ts` bleiben **unangetastet** liegen; der zweite Faktor
+> kommt mit dem VPN (AP17) zurück.
+
+> **Betriebsform: alles in Docker.** `docker-compose.yml` im Repo-Root ist der
+> in sich geschlossene Firmenserver-Stack (postgres + app + caddy); die
+> VPS-Variante liegt unter `docker/docker-compose.vps.yml`. Auf dem Server
+> wird **nie gebaut** — `scripts/release-offline.sh` schnürt ein Paket,
+> `scripts/update-offline.sh` spielt es ein.
+
+> **TLS aus einer eigenen lokalen CA** (`tls internal` in `docker/Caddyfile`).
+> Der private Schlüssel liegt im Volume `caddy_data` und **gehört in die
+> Sicherung** — ohne ihn muss nach einem Wiederaufbau jemand an jeden
+> Arbeitsplatz.
+
+**Der Rest des JSON-Konten-Fallbacks** in `src/api/auth.ts` wartet weiter auf
+AP7 (jetzt „Konten und Sitzungen").
 
 > Die Migrationen `022`–`024` (Microsoft-Tabellen und die `ms_*`-Spalten an
 > `termine`) bleiben vorerst stehen — forward-only, und ein `DROP` wäre
@@ -67,29 +89,36 @@ umzubauen.
 > `tests/db.test.ts` haelt das fest — der Sweep ueber alle Migrationsdateien
 > laeuft **ohne** Datenbank und greift damit auch in einer DB-losen CI.
 
-**Was als Nächstes ansteht** (Reihenfolge aus dem Plan): Server aufsetzen ·
-Volltextsuche auf `tsvector` heben · Schema ergänzen · Konfliktschutz (`rev`) ·
-Papierkorb · Rückportierung aus `apps/patio-app-lokal` · **Anmeldung auf TOTP**
-(heute erzwingt der Login E-Mail-Codes über SMTP — ohne Internet kann sich
-niemand anmelden) · Rechte scharf schalten.
+**Was als Nächstes ansteht** (Reihenfolge aus dem Plan): Volltextsuche auf
+`tsvector` heben · Schema ergänzen · Konfliktschutz (`rev`) · Papierkorb ·
+Rückportierung aus `apps/patio-app-lokal` · Konten und Sitzungen · Rechte
+scharf schalten · **Oberfläche aus PATIO Desktop übernehmen** (bestätigt
+2026-08-06 — deshalb wurde in AP1 bewusst nicht ins heutige Frontend
+investiert; das Desktop-Designsystem nutzt reine Systemschriften und ist
+damit von sich aus außenkontaktfrei).
 
 ## Stack & Deployment
 
 - **Backend:** Node.js + TypeScript + Hono (HTTP-API), PostgreSQL via
   postgres.js. Kein LLM, kein Bot, kein Außenkontakt im Betrieb.
 - **Frontend:** Vue 3 (Composition API) + Pinia + Vite + Tailwind v4 (`web/`).
-- **Deployment:** Docker Compose auf eigener VM unter `/opt/patio`.
-  Container: `patio-app`, `patio-postgres`. Davor ein **gemeinsamer Edge-Proxy**
-  `edge-caddy` (externes Docker-Netz `proxy`, `external: true`) — terminiert
-  TLS, routet per Domain, hält die DB im privaten Netz. Die SSE-Route
-  `/api/events` wird ungepuffert durchgeleitet.
-  **Für den Firmenserver ändert sich das** (siehe AP1 im Plan): eigenes
-  Zertifikat statt Let's Encrypt, `postgres:16` statt `pgvector/pgvector:pg16`.
+- **Deployment:** ein in sich geschlossener Compose-Stack unter `/opt/patio`.
+  Drei Container: `patio-postgres`, `patio-app`, `patio-caddy`. Nur Caddy hat
+  Ports nach außen (80/443) und terminiert TLS mit einem Zertifikat aus der
+  **eigenen lokalen CA**. Die SSE-Route `/api/events` wird ungepuffert
+  durchgeleitet — wird sie gepuffert, bleiben Änderungen der Kollegen
+  unsichtbar. Die frühere VPS-Fassung mit gemeinsamem `edge-caddy` liegt unter
+  `docker/docker-compose.vps.yml`.
 
-**Deploy/Update auf dem Server (der übliche Weg):**
+**Deploy/Update auf dem Server:** `git pull` gibt es dort nicht — der Rechner
+hat kein Internet, und gebaut wird auf ihm nie.
 
 ```bash
-cd /opt/patio && git pull && docker compose build app && docker compose up -d app
+# Entwicklungsrechner (DATABASE_URL ist Pflicht — sonst laufen die Tests halb)
+DATABASE_URL="postgres://patio:patio@<WSL-IP>:5432/patio"   bash scripts/release-offline.sh
+
+# Server, Paket per USB-Stick
+sudo patio update patio-<version>.tar.gz
 ```
 
 DB-Migrationen laufen beim Start automatisch (`DB_AUTO_MIGRATE`, default an).
@@ -99,11 +128,11 @@ DB-Migrationen laufen beim Start automatisch (`DB_AUTO_MIGRATE`, default an).
 ```bash
 npm run dev          # tsx watch src/index.ts (API)
 npm run dev:web      # Vite Dev-Server fürs Frontend
-npm run build        # tsc → dist/ (kopiert emails/ und db/migrations/ mit)
+npm run build        # tsc → dist/ (kopiert db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 245 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (alle Tests, 265 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -123,10 +152,12 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 142 von 247 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 156 von 267 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
 > 16 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
-> Die Suite meldet trotzdem grün, obwohl nur noch 105 Tests wirklich laufen.
+> Von den 111, die dann laufen, **scheitern vier** — seit `tests/db.test.ts`
+> dazukam, meldet die Suite ohne Datenbank also nicht mehr grün, sondern rot.
+> Das ist eine Verbesserung: vorher sah ein halber Lauf wie ein voller aus.
 > **Diese Zahl beim Hinzufügen von Tests mitpflegen** — sie war schon einmal
 > veraltet, ausgerechnet die Warnung vor stiller Nicht-Prüfung. Die
 > Test-Datenbank ist der Container `patio-test-db` in **WSL Ubuntu-24.04**; von
