@@ -37,66 +37,37 @@
 
 > ## ⇥ Woran gerade gearbeitet wird
 >
-> **Abschnitt 0 des Plans (`~/.claude/plans/dynamic-floating-pearl.md`) ist die
-> Warteschlange.** Den obersten offenen Punkt nehmen — nicht auswählen, nicht
-> springen.
+> **Die Warteschlange aus Abschnitt 0 des Plans
+> (`~/.claude/plans/dynamic-floating-pearl.md`) ist vollständig abgearbeitet —
+> Stufe 1 bis 6.** 265 → 365 Tests, 16 Commits, Migrationen 042–048.
 >
 > **Vor jeder Messung `DATABASE_URL` setzen** (WSL-IP, siehe unten). Ohne sie
-> überspringt die Testsuite still 219 von 328 Prüfungen und vier weitere
+> überspringt die Testsuite still 256 von 365 Prüfungen und vier weitere
 > schlagen fehl — wer das übersieht, repariert die falschen Dinge.
 >
-> **Stufe 1 ist abgearbeitet** (Datenverlust verhindern): `db-notes` löst
-> Notizen jetzt gestuft auf statt per `title LIKE` zu raten, und alle neun
-> bearbeitbaren Datenarten tragen einen Konflikt-Zähler (`rev`, Migration
-> 042) — zwei Arbeitsplätze überschreiben einander nicht mehr wortlos,
-> der zweite bekommt einen 409 samt aktuellem Stand.
+> | Stufe | Ergebnis |
+> |---|---|
+> | 1 Datenverlust | `db-notes` rät nicht mehr; Konflikt-Zähler `rev` auf allen neun bearbeitbaren Datenarten (042) |
+> | 2 Rechte | Word-Export war die offene Hintertür; bürointerne Konfiguration war für jeden schreibbar; **Geld-Recht** (043); Team-Liste verriet alle Projektnamen |
+> | 3 Papierkorb | Löschen setzt nur noch `deleted_at` (044); Kaskaden feuern erst beim endgültigen Entfernen |
+> | 4 Fachliches | Entscheidungslog (045) · Rechnungspositionen + Positionskatalog (046) · Aktivität · Sicherungs-Status · `?projectId=` |
+> | 5 Altbestand | 72 tote `DB_ENABLED`-Abfragen; JSON-Konten abgeschaltet; sechs Tabellen der Bot-/Outlook-Ära entfernt (047) |
+> | 6 Suche | `tsvector` mit deutschen Wortstämmen + `ts_rank`, ILIKE bleibt für Wortteile in kurzen Feldern (048) |
 >
-> **Stufe 2 ist abgearbeitet** (Rechte schließen):
+> **Was als Nächstes ansteht** — nichts davon steht mehr in der Warteschlange,
+> das sind die großen Pakete aus dem Plan: **AP9** Oberfläche aus PATIO
+> Desktop übernehmen · **AP12** Arbeitsplatz-Programm (Electron-Hülle) ·
+> **AP10** MCP-Dossiers · **AP11** Datenübernahme · **AP13** Export/PDF ·
+> **AP14** Benachrichtigungen · **AP15** Board · **AP17** VPN.
 >
-> - **Der Word-Export war die offene Hintertür.** Vier `/api/exports/*`-Routen
->   ohne jede Prüfung lieferten Protokolle, Bautagebuch, Projektbericht und
->   Stundenlisten an jeden — was die Listen-Routen sauber filterten, ließ sich
->   dort trotzdem herunterladen.
-> - **Bürointerne Konfiguration** (Textvorlagen, Word-Vorlagen, Logo,
->   Modul-Voreinstellungen) war für jeden schreibbar. Lesen bleibt offen,
->   schreiben ist Admin-Sache. `/projects/:name/modules` folgt dagegen der
->   Projekt-Sichtbarkeit, nicht der Rolle.
-> - **Das Geld-Recht** (`users.can_see_money`, Migration 043) ist neu und
->   bewusst nicht an die Rolle gebunden. Durchgesetzt an einer Stelle:
->   `src/api/geld.ts` filtert Beträge aus jeder JSON-Antwort. `…/finance` und
->   die Rechnungs-Schreibwege sind ganz gesperrt, der Stundensatz am
->   Teammitglied wird beim Speichern ignoriert statt abgelehnt.
-> - **Die Team-Liste verriet alle Projektnamen** über die Zuordnungen. Die
->   Stammdaten bleiben für alle lesbar (Kollegenkatalog), die Zuordnungen
->   folgen den Projekt-Rechten.
->
-> **Stufe 3 ist abgearbeitet** (Papierkorb, Migration 044): Löschen setzt nur
-> noch `deleted_at`. Vorher riss ein gelöschtes Projekt Bautagebuch,
-> Protokolle, Stunden, Phasen und Rechnungen mit (`ON DELETE CASCADE`) und
-> ließ Notizen, Aufgaben, Termine und Dateien ohne Bezug zurück (`SET NULL`);
-> der einzige Rückweg war die nächtliche Sicherung. Die Kaskaden bleiben
-> scharf und feuern erst beim endgültigen Entfernen — dort sind sie richtig.
-> Ansicht: **Verwaltung → Papierkorb**.
->
-> **Damit ist das Abbruchkriterium der Arbeitsschleife erreicht** (Abschnitt 0
-> des Plans: „Fertig ist die Schleife, wenn Stufe 1 bis 3 abgearbeitet sind").
-> Alles darunter ist Ausbau ohne definiertes Ende.
->
-> **Aus Stufe 4 ist 4.1 erledigt**: das **Entscheidungslog** (Migration 045,
-> portiert aus `apps/patio-app-lokal`) — Begründung, verworfene Alternativen,
-> Beteiligte, optionaler Bezug zur Besprechung. Es löst das Freitextfeld
-> `meetings.decisions` ab, das stehen bleibt.
->
-> Offen in Stufe 4: **Positionskatalog** (setzt Rechnungspositionen voraus,
-> die es hier noch nicht gibt — `ProjectInvoice` kennt nur `betrag`),
-> **Aktivität**, **Sicherungs-Route** in der Oberfläche, **`?projectId=`** als
-> rename-feste Alternative in den Routen. Danach Stufe 5 (Altbestand) und
-> Stufe 6 (Volltextsuche auf `tsvector`).
->
-> **Nicht gebaut, bewusst notiert:** ein Papierkorb für EINZELNE Datensätze
-> (Notizen, Aufgaben, Termine). Stufe 3 zielt auf Projekte, und dort ist der
-> Schaden ungleich größer. Eine Notiz zu löschen ist häufiger — das gehört
-> als eigener Punkt nachgezogen.
+> **Bewusst offen geblieben**, mit Begründung im jeweiligen Commit:
+> - Ein **Papierkorb für einzelne Datensätze** (Notizen, Aufgaben, Termine).
+>   Stufe 3 zielt auf Projekte, dort ist der Schaden größer.
+> - Der **Vault-Zweig im Datei-Upload** ist unerreichbar, aber sein Ausbau
+>   baut die Upload-Route um — eigener Schritt, keine Aufräumrunde.
+> - **`?projectId=` in den Repos.** Aufgelöst wird an einer Stelle
+>   (`src/api/projekt-bezug.ts`); alle zwölf Repos auf IDs umzustellen wäre
+>   sauberer, aber ein Umbau quer durch den Baum ohne zusätzlichen Gewinn.
 
 **AP0 abgeschlossen.** Entfernt: Telegram-Bot, LLM-/Agenten-Laufzeit,
 MCP-Client, Embeddings, DuckDuckGo-Websuche, Outlook-Abgleich und die
@@ -195,7 +166,7 @@ npm run build        # tsc → dist/ (kopiert db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 328 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (alle Tests, 365 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -215,9 +186,9 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 219 von 328 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 256 von 365 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
-> 24 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
+> 29 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
 > Von den 109, die dann laufen, **scheitern vier** — seit `tests/db.test.ts`
 > dazukam, meldet die Suite ohne Datenbank also nicht mehr grün, sondern rot.
 > Das ist eine Verbesserung: vorher sah ein halber Lauf wie ein voller aus.
@@ -249,7 +220,7 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   forward-only, idempotent (`IF NOT EXISTS` / DO-Block-Guards). Runner
   (`src/db/migrate.ts`) trackt per Dateiname in `_migrations` (keine
   Prüfsumme), jede Migration in eigener Transaktion, Advisory-Lock gegen
-  parallele Starts. Aktuellste: `045_entscheidungen.sql`. **Schema-Lektion:**
+  parallele Starts. Aktuellste: `048_volltextsuche.sql`. **Schema-Lektion:**
   Beim JOIN müssen Typen passen — `034` hat `chat_messages.session_id` von TEXT
   auf UUID umgestellt (passend zu `chat_sessions.id`), sonst
   `operator does not exist: text = uuid`.
