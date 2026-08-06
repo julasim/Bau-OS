@@ -446,6 +446,15 @@ export const dbProjects: ProjectRepository = {
     return true; // idempotent — auch ohne Treffer ist der Zustand der gewuenschte
   },
 
+  async nameById(id) {
+    // Ohne die UUID-Form waere das ein Datenbankfehler statt eines sauberen
+    // „nicht gefunden" — Clients schicken irgendwann irgendetwas.
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return null;
+    const db = getDb();
+    const [row] = await db`SELECT name FROM projects WHERE id = ${id} AND deleted_at IS NULL LIMIT 1`;
+    return row ? String(row.name) : null;
+  },
+
   async listDeleted() {
     const db = getDb();
     const rows = await db`

@@ -737,6 +737,11 @@ export interface ProjectRepository {
    *  Kaskaden und zerstoeren Bautagebuch, Besprechungen, Stunden, Phasen und
    *  Rechnungen; Notizen, Aufgaben, Termine und Dateien verlieren ihren Bezug. */
   delete(name: string): Promise<boolean>;
+  /** Loest eine Projekt-ID auf den Namen auf. Gebraucht fuer `?projectId=`:
+   *  die Repos adressieren Projekte ueber den NAMEN, Clients sollen sich aber
+   *  auf die unveraenderliche ID stuetzen koennen. Liefert `null`, wenn es das
+   *  Projekt nicht gibt oder es im Papierkorb liegt. */
+  nameById?(id: string): Promise<string | null>;
   /** Projekte im Papierkorb, zuletzt geloeschte zuerst. */
   listDeleted?(): Promise<Array<{ id: string; name: string; deletedAt: string }>>;
   /** Holt ein Projekt aus dem Papierkorb zurueck. `false`, wenn es dort nicht

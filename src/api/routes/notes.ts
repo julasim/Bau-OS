@@ -3,6 +3,7 @@ import { noteRepo, projectRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
+import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
 
 export const notesRoutes = new Hono<AppEnv>();
 
@@ -84,8 +85,12 @@ notesRoutes.get("/notes/:name", async (c) => {
 });
 
 notesRoutes.post("/notes", async (c) => {
-  const { content, project } = await c.req.json<{ content: string; project?: string }>();
+  const koerper = await c.req.json<{ content: string; project?: string; projectId?: string }>();
+  const content = koerper.content;
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
+  const bezug = await projektBezug(koerper);
+  if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
+  const project = bezug.name ?? undefined;
   if (project && !(await canSeeProjectByName(userCtx(c), project))) {
     return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
   }

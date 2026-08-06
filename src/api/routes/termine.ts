@@ -3,6 +3,7 @@ import { terminRepo, projectRepo, teamRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
+import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
 
 export const termineRoutes = new Hono<AppEnv>();
 
@@ -34,7 +35,9 @@ async function ownsPersonalTermin(
 }
 
 termineRoutes.get("/termine", async (c) => {
-  const project = c.req.query("project");
+  const bezug = await projektBezugAusQuery(c);
+  if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
+  const project = bezug.name ?? undefined;
   const all = await terminRepo.list(project);
   const ctx = userCtx(c);
   if (ctx.role === "admin") return c.json(all);
@@ -85,6 +88,9 @@ termineRoutes.post("/termine", async (c) => {
     isMilestone?: boolean;
   }>();
   if (!body.datum || !body.text) return c.json({ error: "Datum und Text erforderlich" }, 400);
+  const bezug = await projektBezug(body);
+  if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
+  body.project = bezug.name ?? undefined;
   if (body.project && !(await canSeeProjectByName(userCtx(c), body.project))) {
     return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
   }

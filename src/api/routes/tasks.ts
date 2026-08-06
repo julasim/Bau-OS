@@ -3,6 +3,7 @@ import { taskRepo, projectRepo, teamRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
+import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
 
 export const tasksRoutes = new Hono<AppEnv>();
 
@@ -69,7 +70,13 @@ function assignedToMeChecker(ctx: UserCtx): (assigneeId: string | null | undefin
 // Tasks-Liste: filtert nach sichtbaren Projekten. Tasks ohne project sind
 // "persoenlich" — User sieht die nur wenn er Ersteller oder Assignee ist.
 tasksRoutes.get("/tasks", async (c) => {
-  const project = c.req.query("project");
+  // `?projectId=` ist die umbenennungsfeste Alternative zu `?project=`.
+  // Zeigt die ID ins Leere, kommt 404 — NICHT die projektuebergreifende
+  // Liste: eine veraltete Kennung darf nicht dazu fuehren, dass jemand mehr
+  // sieht als gemeint.
+  const bezug = await projektBezugAusQuery(c);
+  if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
+  const project = bezug.name ?? undefined;
   const all = await taskRepo.list(project);
   const ctx = userCtx(c);
   if (ctx.role === "admin") return c.json(all);
@@ -119,6 +126,9 @@ tasksRoutes.post("/tasks", async (c) => {
   }>();
   if (!body.text) return c.json({ error: "Text erforderlich" }, 400);
   // Wenn Projekt gesetzt: User muss Zugriff darauf haben.
+  const bezug = await projektBezug(body);
+  if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
+  body.project = bezug.name ?? undefined;
   if (body.project && !(await canSeeProjectByName(userCtx(c), body.project))) {
     return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
   }

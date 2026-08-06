@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { searchRepo } from "../../data/index.js";
 import { getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
+import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
 
 export const searchRoutes = new Hono<AppEnv>();
 
@@ -31,7 +32,9 @@ searchRoutes.get("/search", async (c) => {
     return c.json({ error: `Suchbegriff zu lang (maximal ${SEARCH_QUERY_MAX_LENGTH} Zeichen)` }, 400);
   }
 
-  const project = c.req.query("project") ?? null;
+  const bezug = await projektBezugAusQuery(c);
+  if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
+  const project = bezug.name;
   // Rohwert durchreichen: Vorgabe und Obergrenze legt das Repo fest (eine
   // Stelle fuer alle Aufrufer). `Number("")` waere 0 und `Number(undefined)`
   // NaN — beides faengt clampLimit() dort ab und faellt auf die Vorgabe

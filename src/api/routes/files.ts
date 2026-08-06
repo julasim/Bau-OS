@@ -9,6 +9,7 @@ import { getDb } from "../../db/client.js";
 import { emit, emitForProjectName } from "../events.js";
 import { validateUpload } from "../file-validation.js";
 import type { AppEnv } from "../server.js";
+import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
 
 export const filesRoutes = new Hono<AppEnv>();
 
@@ -93,7 +94,9 @@ filesRoutes.get("/files", async (c) => {
 
   // DB-Modus: Dateien aus Datenbank laden (nur Root-Ebene, kein Pfad)
   if (DB_ENABLED && fileRepo && !p && source !== "fs") {
-    const project = c.req.query("project");
+    const bezug = await projektBezugAusQuery(c);
+    if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
+    const project = bezug.name;
     // Sicherheit: getVisibleProjectIds IMMER aufrufen. Fuer Admins liefert
     // sie undefined (kein Filter). Fuer Non-Admins wird geprueft, ob das
     // angefragte Projekt in der sichtbaren Menge liegt — sonst koennte ein
