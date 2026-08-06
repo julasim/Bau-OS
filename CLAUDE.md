@@ -39,11 +39,27 @@
 >
 > **Die Warteschlange aus Abschnitt 0 des Plans
 > (`~/.claude/plans/dynamic-floating-pearl.md`) ist vollständig abgearbeitet —
-> Stufe 1 bis 6.** 265 → 365 Tests, 16 Commits, Migrationen 042–048.
+> Stufe 1 bis 6.** 265 → 387 Tests, Migrationen 042–048.
 >
-> **Vor jeder Messung `DATABASE_URL` setzen** (WSL-IP, siehe unten). Ohne sie
-> überspringt die Testsuite still 256 von 365 Prüfungen und vier weitere
-> schlagen fehl — wer das übersieht, repariert die falschen Dinge.
+> **Danach eine eigene Analyserunde** (Abgleich aller 175 Routen gegen die
+> Oberfläche, Suche nach TODOs und toten Pfaden). Sie hat drei Dinge zutage
+> gefördert, die in keiner Warteschlange standen:
+>
+> - **Notizen: Rechteprüfung und Zugriff betrafen verschiedene Datensätze.**
+>   Zwei Auflöser mit unterschiedlicher Sortierung — bei gleichnamigen Notizen
+>   wurde die eine freigegeben und die andere ausgeliefert, auch aus einem
+>   fremden Projekt. Jetzt ein Auflöser, danach nur noch über die ID.
+>   Im selben Zug das TODO aus `notes.ts:26`: eine Notiz ohne Projekt gehört
+>   ihrem Verfasser (vorher konnte man sie anlegen und nie wieder sehen).
+> - **Der Dokumentenordner war über HTTP offen.** `GET /files/read?path=`,
+>   `POST /files/mkdir` und `DELETE /files {path}` arbeiteten ohne jede
+>   Rechteprüfung im Dateisystem — dem Samba-Verzeichnis „Dokumente". Entfernt
+>   statt bewacht: Dateien liegen als `bytea` in der Datenbank, die Wege waren
+>   von der Oberfläche nie erreichbar.
+> - **Firmenverwaltung war unerreichbar.** Die API gab es seit Migration 006
+>   vollständig, aber kein `/companies`-Aufruf im Frontend. Neu: Ansicht
+>   `Firmen` samt **Zusammenführen** von Dubletten, die durch die
+>   automatische Anlage aus Freitext entstehen.
 >
 > | Stufe | Ergebnis |
 > |---|---|
@@ -53,6 +69,13 @@
 > | 4 Fachliches | Entscheidungslog (045) · Rechnungspositionen + Positionskatalog (046) · Aktivität · Sicherungs-Status · `?projectId=` |
 > | 5 Altbestand | 72 tote `DB_ENABLED`-Abfragen; JSON-Konten abgeschaltet; sechs Tabellen der Bot-/Outlook-Ära entfernt (047) |
 > | 6 Suche | `tsvector` mit deutschen Wortstämmen + `ts_rank`, ILIKE bleibt für Wortteile in kurzen Feldern (048) |
+>
+> **Offen und für Julius zu entscheiden:** die Samba-Freigabe „Dokumente"
+> (`/opt/patio-workspace`, AP1-E) und die Dateiablage der Anwendung zeigen
+> **verschiedene Dinge**. Uploads landen in der Datenbank, die Freigabe zeigt
+> das Verzeichnis. Beides nebeneinander ist vertretbar (die Freigabe für
+> Pläne und CAD, die Anwendung für alles mit Projektbezug), aber es sollte
+> eine bewusste Entscheidung sein und in der Doku stehen.
 >
 > **Was als Nächstes ansteht** — nichts davon steht mehr in der Warteschlange,
 > das sind die großen Pakete aus dem Plan: **AP9** Oberfläche aus PATIO
@@ -166,7 +189,7 @@ npm run build        # tsc → dist/ (kopiert db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 365 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (alle Tests, 387 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -186,9 +209,9 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 256 von 365 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 278 von 387 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
-> 29 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
+> 32 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
 > Von den 109, die dann laufen, **scheitern vier** — seit `tests/db.test.ts`
 > dazukam, meldet die Suite ohne Datenbank also nicht mehr grün, sondern rot.
 > Das ist eine Verbesserung: vorher sah ein halber Lauf wie ein voller aus.
