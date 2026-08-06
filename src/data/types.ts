@@ -650,7 +650,24 @@ export interface ProjectRepository {
    *  Idempotent: gibt true zurueck, wenn das Projekt am Ende wirklich weg
    *  ist (auch wenn es vorher schon nicht existierte). false nur bei echten
    *  Fehlern (z.B. ungueltiger Name, FS-Problem). */
+  /** Legt das Projekt in den Papierkorb (Migration 044) — es verschwindet aus
+   *  allen Listen und aus der Sichtbarkeit, seine Datensaetze bleiben aber
+   *  unangetastet liegen. Endgueltig entfernt wird es erst mit `purge()`.
+   *
+   *  Der Unterschied ist nicht kosmetisch: bei einem echten DELETE feuern die
+   *  Kaskaden und zerstoeren Bautagebuch, Besprechungen, Stunden, Phasen und
+   *  Rechnungen; Notizen, Aufgaben, Termine und Dateien verlieren ihren Bezug. */
   delete(name: string): Promise<boolean>;
+  /** Projekte im Papierkorb, zuletzt geloeschte zuerst. */
+  listDeleted?(): Promise<Array<{ id: string; name: string; deletedAt: string }>>;
+  /** Holt ein Projekt aus dem Papierkorb zurueck. `false`, wenn es dort nicht
+   *  liegt. */
+  restore?(name: string): Promise<boolean>;
+  /** Entfernt ein Projekt im Papierkorb ENDGUELTIG — hier feuern die Kaskaden
+   *  wie frueher, und das ist an dieser Stelle richtig. Verweigert die Arbeit
+   *  bei Projekten, die nicht im Papierkorb liegen: endgueltiges Loeschen soll
+   *  nie ein Einzelschritt sein. */
+  purge?(name: string): Promise<boolean>;
 }
 
 /** Input-Shape fuers Anlegen — erlaubt companyName statt companyId, weil

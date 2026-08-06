@@ -66,6 +66,11 @@ const router = createRouter({
         { path: "settings", name: "settings", component: () => import("./views/SettingsView.vue") },
         { path: "admin/users", name: "admin-users", component: () => import("./views/AdminUsersView.vue") },
         { path: "admin/audit", name: "admin-audit", component: () => import("./views/AdminAuditView.vue") },
+        {
+          path: "admin/papierkorb",
+          name: "admin-papierkorb",
+          component: () => import("./views/AdminPapierkorbView.vue"),
+        },
       ],
     },
     // Auffangnetz fuer unbekannte Pfade. Ohne diese Route rendert der Router

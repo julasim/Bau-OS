@@ -112,6 +112,22 @@ projectsRoutes.post("/projects", async (c) => {
 });
 
 // Projekt-Detail — Phase 4: Zugriff pruefen.
+// ── Papierkorb (Migration 044) ───────────────────────────────────────────────
+//
+// MUSS vor `/projects/:name` stehen: Hono trifft Routen in
+// Registrierungsreihenfolge, nicht nach Genauigkeit. Darunter eingehaengt
+// verschluckt der Platzhalter den Aufruf und antwortet mit „Projekt
+// _papierkorb nicht gefunden" — das ist beim Bauen genau einmal passiert.
+//
+// Nur fuer Admins: ein geloeschtes Projekt ist fuer seinen Ersteller nicht
+// mehr sichtbar, er koennte es also gar nicht auswaehlen. Und das endgueltige
+// Entfernen ist der einzige unumkehrbare Schritt im ganzen Programm.
+projectsRoutes.get("/projects/_papierkorb", async (c) => {
+  if (c.var.userRole !== "admin") return c.json({ error: "Admin-Rechte erforderlich" }, 403);
+  if (!projectRepo.listDeleted) return c.json({ error: "Nicht unterstuetzt" }, 501);
+  return c.json(await projectRepo.listDeleted());
+});
+
 projectsRoutes.get("/projects/:name", async (c) => {
   const name = c.req.param("name");
   const info = await projectRepo.getInfo(name);
@@ -299,6 +315,38 @@ projectsRoutes.get("/projects/:name/export.md", async (c) => {
 // Projekt nicht existiert, kommt true zurueck. Semantik: "stelle sicher, dass
 // es weg ist". Wir geben 204 No Content zurueck, weil es nichts zu rendern gibt.
 // Phase-4-Schreibschutz: nur Admin oder Ersteller.
+// ── Papierkorb (Migration 044) ───────────────────────────────────────────────
+//
+// Nur fuer Admins. Loeschen darf auch der Ersteller (siehe unten), das
+// Zurueckholen und das endgueltige Entfernen sind Verwaltung: das eine, weil
+// ein geloeschtes Projekt fuer den Ersteller nicht mehr sichtbar ist und er
+// es also gar nicht auswaehlen koennte; das andere, weil es der einzige
+// unumkehrbare Schritt im ganzen Programm ist.
+//
+// Die drei Routen stehen VOR `/projects/:name`, sonst schluckt der
+// Platzhalter sie — Hono trifft in Registrierungsreihenfolge, nicht nach
+// Genauigkeit.
+projectsRoutes.post("/projects/:name/wiederherstellen", async (c) => {
+  if (c.var.userRole !== "admin") return c.json({ error: "Admin-Rechte erforderlich" }, 403);
+  if (!projectRepo.restore) return c.json({ error: "Nicht unterstuetzt" }, 501);
+  const name = decodeURIComponent(c.req.param("name"));
+  const ok = await projectRepo.restore(name);
+  if (!ok) return c.json({ error: "Liegt nicht im Papierkorb" }, 404);
+  emit({ type: "project", action: "created", id: name, projectId: null }, { actorId: c.var.userId });
+  return c.json(await projectRepo.getInfo(name));
+});
+
+projectsRoutes.delete("/projects/:name/endgueltig", async (c) => {
+  if (c.var.userRole !== "admin") return c.json({ error: "Admin-Rechte erforderlich" }, 403);
+  if (!projectRepo.purge) return c.json({ error: "Nicht unterstuetzt" }, 501);
+  const name = decodeURIComponent(c.req.param("name"));
+  // Der einzige unumkehrbare Schritt: hier feuern die Kaskaden und nehmen
+  // Bautagebuch, Besprechungen, Stunden, Phasen und Rechnungen mit.
+  const ok = await projectRepo.purge(name);
+  if (!ok) return c.json({ error: "Liegt nicht im Papierkorb" }, 404);
+  return c.body(null, 204);
+});
+
 projectsRoutes.delete("/projects/:name", async (c) => {
   const name = c.req.param("name");
   const ctx = userCtx(c);
@@ -311,10 +359,13 @@ projectsRoutes.delete("/projects/:name", async (c) => {
   }
   const ok = await projectRepo.delete(name);
   if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
-  // Bekannte Einschraenkung: das Projekt ist weg, es gibt also keine
-  // Projekt-UUID mehr, an der die Sichtbarkeit haengen koennte. Das Ereignis
-  // geht projektlos raus und erreicht damit nur Admins und den Loeschenden;
-  // die uebrigen Berechtigten merken das Verschwinden beim naechsten Laden.
+  // Das Projekt liegt jetzt im Papierkorb (Migration 044) — seine Datensaetze
+  // sind unangetastet, ein Admin kann es zurueckholen.
+  //
+  // Bekannte Einschraenkung: das Ereignis geht projektlos raus, weil das
+  // Projekt aus der Sichtbarkeit gefallen ist. Es erreicht damit nur Admins
+  // und den Loeschenden; die uebrigen Berechtigten merken das Verschwinden
+  // beim naechsten Laden.
   emit({ type: "project", action: "deleted", id: name, projectId: null }, { actorId: c.var.userId });
   return c.body(null, 204);
 });

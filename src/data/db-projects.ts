@@ -115,18 +115,21 @@ export const dbProjects: ProjectRepository = {
       if (visibleIds.length === 0) return [];
       const rows = await db`
         SELECT name FROM projects
-        WHERE status = 'aktiv' AND id = ANY(${visibleIds})
+        WHERE status = 'aktiv' AND deleted_at IS NULL AND id = ANY(${visibleIds})
         ORDER BY name
       `;
       return rows.map((r) => String(r.name));
     }
-    const rows = await db`SELECT name FROM projects WHERE status = 'aktiv' ORDER BY name`;
+    const rows = await db`SELECT name FROM projects WHERE status = 'aktiv' AND deleted_at IS NULL ORDER BY name`;
     return rows.map((r) => String(r.name));
   },
 
   async getInfo(name) {
     const db = getDb();
-    const [row] = await db`${projectInfoSelect(db)} WHERE p.name = ${name} LIMIT 1`;
+    // Projekte im Papierkorb sind nicht auffindbar — sonst liesse sich ein
+    // geloeschtes Projekt weiter bearbeiten, und die Oberflaeche zeigte es an
+    // Stellen, an denen es nicht mehr sein soll.
+    const [row] = await db`${projectInfoSelect(db)} WHERE p.name = ${name} AND p.deleted_at IS NULL LIMIT 1`;
     return row ? rowToProjectInfo(row) : null;
   },
 
@@ -140,14 +143,14 @@ export const dbProjects: ProjectRepository = {
       if (visibleIds.length === 0) return [];
       const rows = await db`
         ${projectInfoSelect(db)}
-        WHERE p.status = 'aktiv' AND p.id = ANY(${visibleIds})
+        WHERE p.status = 'aktiv' AND p.deleted_at IS NULL AND p.id = ANY(${visibleIds})
         ORDER BY p.name
       `;
       return rows.map(rowToProjectInfo);
     }
     const rows = await db`
       ${projectInfoSelect(db)}
-      WHERE p.status = 'aktiv'
+      WHERE p.status = 'aktiv' AND p.deleted_at IS NULL
       ORDER BY p.name
     `;
     return rows.map(rowToProjectInfo);
@@ -190,8 +193,20 @@ export const dbProjects: ProjectRepository = {
     // Idempotent: existiert der Name schon, ist das kein Fehler — "create"
     // heisst hier "stelle sicher dass es existiert". Falls bereits vorhanden,
     // patchen wir die Stammdaten durch (nur Felder die im Patch gesetzt sind).
-    const [existing] = await db`SELECT id FROM projects WHERE name = ${name} LIMIT 1`;
+    const [existing] = await db`SELECT id, deleted_at FROM projects WHERE name = ${name} LIMIT 1`;
     if (existing) {
+      // Liegt ein Projekt dieses Namens im Papierkorb, wird es zurueckgeholt.
+      //
+      // Begruendet, weil es zwei vertretbare Antworten gibt: „Name ist
+      // vergeben" waere fuer den Benutzer nicht nachvollziehbar — er sieht
+      // nirgends ein Projekt dieses Namens. Und `create()` heisst hier
+      // ausdruecklich „stelle sicher, dass es existiert" (die Funktion patcht
+      // bestehende Projekte durch, statt zu scheitern). Zurueckholen ist die
+      // konsequente Fortsetzung davon; im schlimmsten Fall bekommt jemand
+      // seine alten Datensaetze wieder, im besten hat er genau das gewollt.
+      if (existing.deleted_at) {
+        await db`UPDATE projects SET deleted_at = NULL WHERE id = ${String(existing.id)}`;
+      }
       const patch: ProjectUpdate = {
         description: opts.description,
         projektnummer: opts.projektnummer,
@@ -367,7 +382,10 @@ export const dbProjects: ProjectRepository = {
   async listVisibleProjectIds(userId) {
     const db = getDb();
     const rows = await db`
-      SELECT project_id FROM user_projects WHERE user_id = ${userId}
+      SELECT up.project_id
+        FROM user_projects up
+        JOIN projects p ON p.id = up.project_id
+       WHERE up.user_id = ${userId} AND p.deleted_at IS NULL
     `;
     return rows.map((r) => String(r.project_id));
   },
@@ -378,7 +396,7 @@ export const dbProjects: ProjectRepository = {
       SELECT child.id, child.name, child.status
       FROM projects parent
       JOIN projects child ON child.parent_id = parent.id
-      WHERE parent.name = ${parentName}
+      WHERE parent.name = ${parentName} AND child.deleted_at IS NULL
       ORDER BY child.name
     `;
     return rows.map((r) => ({
@@ -393,8 +411,10 @@ export const dbProjects: ProjectRepository = {
     if (!isValidName(trimmed)) return "invalid";
     if (trimmed === oldName) return "ok"; // No-op
     const db = getDb();
-    const [existing] = await db`SELECT id FROM projects WHERE name = ${oldName} LIMIT 1`;
+    const [existing] = await db`SELECT id FROM projects WHERE name = ${oldName} AND deleted_at IS NULL LIMIT 1`;
     if (!existing) return "not-found";
+    // Auch ein Projekt im Papierkorb belegt den Namen — die Spalte ist
+    // eindeutig, ein Umbenennen darauf liefe in einen Datenbankfehler.
     const [conflict] = await db`SELECT id FROM projects WHERE name = ${trimmed} LIMIT 1`;
     if (conflict) return "conflict";
     // id bleibt; FK-Konsistenz ist gewahrt, weil alle Child-Eintraege (notes,
@@ -403,15 +423,65 @@ export const dbProjects: ProjectRepository = {
     return "ok";
   },
 
+  /** Legt das Projekt in den Papierkorb (Migration 044).
+   *
+   *  Frueher stand hier ein echtes `DELETE`. Was daran haengt, wurde an den
+   *  Fremdschluesseln der laufenden Datenbank nachgemessen, nicht aus dem
+   *  Kommentar uebernommen — der stimmte naemlich nicht:
+   *
+   *    zerstoert  bautagebuch, meetings, time_entries, project_phases,
+   *               project_invoices (ON DELETE CASCADE)
+   *    verwaist   notes, tasks, termine, files, team_members.project_id
+   *               (ON DELETE SET NULL)
+   *
+   *  Der alte Kommentar behauptete das Gegenteil („notes: CASCADE") — Notizen
+   *  ueberlebten in Wahrheit ohne Projektbezug, Rechnungen und Stunden nicht.
+   *
+   *  Jetzt wird nichts geloescht, sondern nur ein Zeitstempel gesetzt. Alle
+   *  Bezuege bleiben, das Zurueckholen ist ein Federstrich. */
   async delete(name) {
     if (!isValidName(name)) return false;
-
     const db = getDb();
-    // FK-Verhalten laut migration 001_init.sql:
-    // - notes.project_id: ON DELETE CASCADE (Notizen werden mitgeloescht)
-    // - tasks / termine / files / team: ON DELETE SET NULL (werden nur entkoppelt)
-    // DELETE ist idempotent — wenn kein Eintrag da ist, passiert nichts.
-    await db`DELETE FROM projects WHERE name = ${name}`;
-    return true;
+    await db`UPDATE projects SET deleted_at = now() WHERE name = ${name} AND deleted_at IS NULL`;
+    return true; // idempotent — auch ohne Treffer ist der Zustand der gewuenschte
+  },
+
+  async listDeleted() {
+    const db = getDb();
+    const rows = await db`
+      SELECT id, name, deleted_at FROM projects
+       WHERE deleted_at IS NOT NULL
+       ORDER BY deleted_at DESC
+    `;
+    return rows.map((r) => ({
+      id: String(r.id),
+      name: String(r.name),
+      deletedAt: String(r.deleted_at),
+    }));
+  },
+
+  async restore(name) {
+    if (!isValidName(name)) return false;
+    const db = getDb();
+    const betroffen = await db`
+      UPDATE projects SET deleted_at = NULL
+       WHERE name = ${name} AND deleted_at IS NOT NULL
+       RETURNING id
+    `;
+    return betroffen.length > 0;
+  },
+
+  /** Endgueltig entfernen. HIER feuern die Kaskaden wie frueher — und das ist
+   *  an dieser Stelle richtig, denn genau das ist gemeint.
+   *
+   *  Nur aus dem Papierkorb heraus: endgueltiges Loeschen soll nie ein
+   *  Einzelschritt sein, sondern immer zwei bewusste Entscheidungen. */
+  async purge(name) {
+    if (!isValidName(name)) return false;
+    const db = getDb();
+    const betroffen = await db`
+      DELETE FROM projects WHERE name = ${name} AND deleted_at IS NOT NULL RETURNING id
+    `;
+    return betroffen.length > 0;
   },
 };
