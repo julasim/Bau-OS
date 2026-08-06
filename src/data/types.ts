@@ -971,6 +971,49 @@ export interface ProjectPhaseUpsert {
 export type InvoiceStatus = "entwurf" | "gestellt" | "bezahlt";
 
 /** Teilrechnung eines Projekts (optional einer Phase zugeordnet). */
+/** Eine Zeile auf der Rechnung (Migration 046).
+ *
+ *  `ustSatz` ist ein Prozentwert (20 = 20 %), kein Betrag — deshalb faellt er
+ *  nicht unter das Geld-Recht. `einzelpreis` sehr wohl. */
+export interface InvoicePosition {
+  text: string;
+  menge: number;
+  einheit: string | null;
+  einzelpreis: number;
+  ustSatz: number;
+}
+
+/** Wiederverwendbare Leistung aus dem Positionskatalog (Migration 046).
+ *
+ *  Der Katalog gilt fuers ganze Buero und enthaelt Preise — er haengt deshalb
+ *  am Geld-Recht (Migration 043), nicht an der Rolle. */
+export interface PositionskatalogItem {
+  id: string;
+  text: string;
+  einheit: string | null;
+  einzelpreis: number;
+  ustSatz: number;
+  sortOrder: number;
+  rev?: number;
+}
+
+export interface PositionskatalogInput {
+  text?: string;
+  einheit?: string | null;
+  einzelpreis?: number;
+  ustSatz?: number;
+  sortOrder?: number;
+  rev?: number | null;
+}
+
+export interface PositionskatalogRepository {
+  list(): Promise<PositionskatalogItem[]>;
+  get(id: string): Promise<PositionskatalogItem | null>;
+  create(input: PositionskatalogInput): Promise<PositionskatalogItem | string>;
+  update(id: string, input: PositionskatalogInput): Promise<PositionskatalogItem | null | string>;
+  delete(id: string): Promise<boolean>;
+}
+
 export interface ProjectInvoice {
   /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
    *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
@@ -982,7 +1025,13 @@ export interface ProjectInvoice {
   phaseId: string | null;
   phaseName?: string | null;
   nummer: string | null;
+  /** Netto-Gesamtbetrag. **Abgeleitet** aus `positionen` (Summe
+   *  Menge x Einzelpreis), sobald welche vorhanden sind — sonst gilt der
+   *  eingetragene Wert. Bestandsrechnungen haben keine Positionen und
+   *  behalten ihren Betrag. */
   betrag: number;
+  /** Rechnungszeilen (Migration 046). Leer bei Bestandsrechnungen. */
+  positionen: InvoicePosition[];
   datum: string | null;
   status: InvoiceStatus;
   note: string | null;
@@ -993,10 +1042,16 @@ export interface ProjectInvoice {
 export interface ProjectInvoiceInput {
   phaseId?: string | null;
   nummer?: string | null;
+  /** Nur wirksam, solange keine Positionen uebergeben werden — mit Positionen
+   *  ergibt sich der Betrag aus ihnen. Anders herum liessen sich Summe und
+   *  Zeilen auseinanderdividieren, und die Rechnung wuerde etwas anderes
+   *  behaupten als sie auflistet. */
   betrag?: number;
+  positionen?: InvoicePosition[];
   datum?: string | null;
   status?: InvoiceStatus;
   note?: string | null;
+  rev?: number | null;
 }
 
 /** Eine Zeile im Portfolio-Cockpit — projektuebergreifend aggregiert. */

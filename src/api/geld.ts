@@ -46,8 +46,11 @@ const GELD_FELDER = new Set([
   // Stundensatz — an TeamMember, TimeEntry und in den Auswertungen
   "hourlyRate",
   "hourly_rate",
-  // Rechnungen
+  // Rechnungen — `einzelpreis` steckt in den Positionen (Migration 046),
+  // also verschachtelt in der Rechnungsantwort. Genau dafuer arbeitet der
+  // Filter rekursiv.
   "betrag",
+  "einzelpreis",
   "invoiced",
   "invoicedTotal",
   "unassignedInvoiced",

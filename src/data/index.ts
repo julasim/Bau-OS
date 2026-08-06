@@ -21,6 +21,7 @@ import type {
   TimeEntryRepository,
   PhaseRepository,
   InvoiceRepository,
+  PositionskatalogRepository,
   PortfolioRepository,
 } from "./types.js";
 
@@ -37,6 +38,7 @@ import { dbEntscheidungen } from "./db-entscheidungen.js";
 import { dbTimeEntries } from "./db-time-entries.js";
 import { dbPhases } from "./db-phases.js";
 import { dbInvoices } from "./db-invoices.js";
+import { dbPositionskatalog } from "./db-positionskatalog.js";
 import { dbPortfolio } from "./db-portfolio.js";
 import { dbSearch } from "./db-search.js";
 
@@ -52,6 +54,7 @@ export const entscheidungRepo: EntscheidungRepository = dbEntscheidungen;
 export const timeEntryRepo: TimeEntryRepository = dbTimeEntries;
 export const phaseRepo: PhaseRepository = dbPhases;
 export const invoiceRepo: InvoiceRepository = dbInvoices;
+export const positionskatalogRepo: PositionskatalogRepository = dbPositionskatalog;
 export const portfolioRepo: PortfolioRepository = dbPortfolio;
 export const searchRepo = dbSearch;
 export type { SearchHit } from "./db-search.js";
@@ -81,6 +84,9 @@ export type {
   EntscheidungAlternative,
   EntscheidungInput,
   EntscheidungStatus,
+  InvoicePosition,
+  PositionskatalogItem,
+  PositionskatalogInput,
   TimeEntry,
   TimeEntryInput,
   TimeSummary,

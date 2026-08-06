@@ -12,6 +12,23 @@ const props = defineProps<{ projectName: string }>();
 
 type InvoiceStatus = "entwurf" | "gestellt" | "bezahlt";
 
+interface InvoicePosition {
+  text: string;
+  menge: number;
+  einheit: string | null;
+  einzelpreis: number;
+  ustSatz: number;
+}
+
+/** Wiederverwendbare Leistung aus dem Positionskatalog (Migration 046). */
+interface KatalogItem {
+  id: string;
+  text: string;
+  einheit: string | null;
+  einzelpreis: number;
+  ustSatz: number;
+}
+
 interface ProjectInvoice {
   id: string;
   projectId: string;
@@ -19,9 +36,11 @@ interface ProjectInvoice {
   phaseName: string | null;
   nummer: string | null;
   betrag: number;
+  positionen: InvoicePosition[];
   datum: string | null;
   status: InvoiceStatus;
   note: string | null;
+  rev?: number;
 }
 
 interface FinancePhase {
@@ -49,10 +68,12 @@ interface InvoiceDraft {
   id: string | null;
   nummer: string;
   betrag: string;
+  positionen: InvoicePosition[];
   datum: string;
   status: InvoiceStatus;
   phaseId: string | null;
   note: string;
+  rev?: number;
 }
 
 const STATUS_LABEL: Record<InvoiceStatus, string> = {
@@ -68,6 +89,30 @@ const loaded = ref(false);
 const busy = ref(false);
 const error = ref<string | null>(null);
 const draft = ref<InvoiceDraft | null>(null);
+const katalog = ref<KatalogItem[]>([]);
+
+/** Vorschau der Summe im Editor. Der Server rechnet dasselbe noch einmal —
+ *  hier steht sie nur, damit man beim Tippen sieht, was herauskommt. */
+const positionsSumme = computed(() => {
+  if (!draft.value) return 0;
+  return Math.round(draft.value.positionen.reduce((s, p) => s + p.menge * p.einzelpreis, 0) * 100) / 100;
+});
+
+function positionHinzufuegen(k?: KatalogItem) {
+  if (!draft.value) return;
+  draft.value.positionen.push(
+    k
+      ? // Aus dem Katalog wird KOPIERT, nicht referenziert: eine spaetere
+        // Preisanpassung im Katalog darf gestellte Rechnungen nicht
+        // rueckwirkend aendern.
+        { text: k.text, menge: 1, einheit: k.einheit, einzelpreis: k.einzelpreis, ustSatz: k.ustSatz }
+      : { text: "", menge: 1, einheit: null, einzelpreis: 0, ustSatz: 20 },
+  );
+}
+
+function positionEntfernen(i: number) {
+  draft.value?.positionen.splice(i, 1);
+}
 
 const encName = computed(() => encodeURIComponent(props.projectName));
 
@@ -83,16 +128,21 @@ function money(n: number | null | undefined): string {
 
 async function load() {
   try {
-    const [inv, fin, ph] = await Promise.all([
+    const [inv, fin, ph, kat] = await Promise.all([
       api.get<ProjectInvoice[]>(`/projects/${encName.value}/invoices`),
       api.get<Finance>(`/projects/${encName.value}/finance`).catch(() => null),
       api
         .get<{ phases: { id: string; name: string }[] }>(`/projects/${encName.value}/phases`)
         .then((r) => r.phases ?? [])
         .catch(() => []),
+      // Der Katalog ist ans Geld-Recht gebunden und antwortet sonst mit 403.
+      // Dieser Reiter ist ohnehin nur mit dem Recht erreichbar; das `catch`
+      // deckt den Fall ab, dass es waehrend der Sitzung entzogen wird.
+      api.get<KatalogItem[]>("/positionskatalog").catch(() => [] as KatalogItem[]),
     ]);
     invoices.value = Array.isArray(inv) ? inv : [];
     finance.value = fin;
+    katalog.value = Array.isArray(kat) ? kat : [];
     phases.value = ph.map((p) => ({ id: p.id, name: p.name }));
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Rechnungen konnten nicht geladen werden.";
@@ -102,7 +152,16 @@ async function load() {
 }
 
 function emptyDraft(): InvoiceDraft {
-  return { id: null, nummer: "", betrag: "", datum: "", status: "entwurf", phaseId: null, note: "" };
+  return {
+    id: null,
+    nummer: "",
+    betrag: "",
+    positionen: [],
+    datum: "",
+    status: "entwurf",
+    phaseId: null,
+    note: "",
+  };
 }
 function newInvoice() {
   draft.value = emptyDraft();
@@ -112,10 +171,14 @@ function selectInvoice(inv: ProjectInvoice) {
     id: inv.id,
     nummer: inv.nummer ?? "",
     betrag: String(inv.betrag ?? ""),
+    positionen: (inv.positionen ?? []).map((p) => ({ ...p })),
     datum: inv.datum ?? "",
     status: inv.status,
     phaseId: inv.phaseId,
     note: inv.note ?? "",
+    // Der beim Laden mitgelieferte Zaehler geht beim Speichern zurueck —
+    // sonst gaelte wieder „wer zuletzt speichert, gewinnt".
+    rev: inv.rev,
   };
 }
 function cancelEdit() {
@@ -127,13 +190,28 @@ async function save() {
   const d = draft.value;
   error.value = null;
   busy.value = true;
+  // Leere Zeilen fliegen raus — der Server wuerde sie sonst als Fehler
+  // zurueckweisen, obwohl der Benutzer sie nur nicht ausgefuellt hat.
+  const positionen = d.positionen
+    .filter((p) => p.text.trim())
+    .map((p) => ({
+      text: p.text.trim(),
+      menge: Number(p.menge) || 0,
+      einheit: p.einheit?.trim() || null,
+      einzelpreis: Number(p.einzelpreis) || 0,
+      ustSatz: Number(p.ustSatz) || 0,
+    }));
   const body = {
     nummer: d.nummer.trim() || null,
+    // Zaehlt nur, solange es keine Positionen gibt — sonst leitet der Server
+    // den Betrag aus ihnen ab.
     betrag: Number(d.betrag) || 0,
+    positionen,
     datum: d.datum || null,
     status: d.status,
     phaseId: d.phaseId,
     note: d.note.trim() || null,
+    ...(d.id ? { rev: d.rev } : {}),
   };
   try {
     if (d.id) await api.put(`/invoices/${d.id}`, body);
@@ -272,8 +350,70 @@ onMounted(() => void load());
               <input v-model="draft.nummer" type="text" class="stamm-input" placeholder="z. B. 2026-014" />
             </div>
             <div class="ph-field">
-              <label class="ph-label">Betrag €</label>
-              <input v-model="draft.betrag" type="number" min="0" step="0.01" class="stamm-input" placeholder="0" />
+              <label class="ph-label">
+                Betrag €
+                <span v-if="draft.positionen.length" class="pos-hint">— ergibt sich aus den Positionen</span>
+              </label>
+              <input
+                v-if="!draft.positionen.length"
+                v-model="draft.betrag"
+                type="number"
+                min="0"
+                step="0.01"
+                class="stamm-input"
+                placeholder="0"
+              />
+              <!-- Mit Positionen ist der Betrag abgeleitet und nicht mehr
+                   eingebbar: sonst könnte die Rechnung eine andere Summe
+                   behaupten als sie auflistet. -->
+              <div v-else class="pos-summe">{{ money(positionsSumme) }}</div>
+            </div>
+          </div>
+
+          <!-- Positionen (Migration 046) -->
+          <div class="ph-field">
+            <div class="pos-head">
+              <label class="ph-label">Positionen</label>
+              <div class="pos-head-actions">
+                <select
+                  v-if="katalog.length"
+                  class="stamm-input pos-katalog"
+                  @change="
+                    (e) => {
+                      const id = (e.target as HTMLSelectElement).value;
+                      const k = katalog.find((x) => x.id === id);
+                      if (k) positionHinzufuegen(k);
+                      (e.target as HTMLSelectElement).value = '';
+                    }
+                  "
+                >
+                  <option value="">Aus Katalog übernehmen…</option>
+                  <option v-for="k in katalog" :key="k.id" :value="k.id">
+                    {{ k.text }} · {{ money(k.einzelpreis) }}{{ k.einheit ? " / " + k.einheit : "" }}
+                  </option>
+                </select>
+                <button class="patio-btn ghost sm" @click="positionHinzufuegen()">
+                  <BIcon name="plus" :size="11" /> Zeile
+                </button>
+              </div>
+            </div>
+
+            <div v-if="!draft.positionen.length" class="pos-leer">
+              Ohne Positionen zählt der eingetragene Betrag. Sobald eine Zeile da ist, ergibt sich die Summe aus ihr.
+            </div>
+
+            <div v-for="(pos, i) in draft.positionen" :key="i" class="pos-row">
+              <input v-model="pos.text" type="text" class="stamm-input pos-text" placeholder="Leistung" />
+              <input v-model.number="pos.menge" type="number" min="0" step="0.01" class="stamm-input pos-num" />
+              <input v-model="pos.einheit" type="text" class="stamm-input pos-einheit" placeholder="h" />
+              <input v-model.number="pos.einzelpreis" type="number" min="0" step="0.01" class="stamm-input pos-num" />
+              <input v-model.number="pos.ustSatz" type="number" min="0" max="100" class="stamm-input pos-num" />
+              <span class="pos-zeilensumme">{{ money(pos.menge * pos.einzelpreis) }}</span>
+              <button class="patio-btn ghost sm" @click="positionEntfernen(i)"><BIcon name="x" :size="11" /></button>
+            </div>
+
+            <div v-if="draft.positionen.length" class="pos-legende">
+              Leistung · Menge · Einheit · Einzelpreis · USt % · Zeilensumme
             </div>
           </div>
           <div class="ph-field-row">
@@ -527,5 +667,69 @@ onMounted(() => void load());
   gap: 8px;
   color: var(--color-text-faint);
   font-size: 13px;
+}
+
+/* ── Positionen (Migration 046) ─────────────────────────────────────────── */
+.pos-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.pos-head-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.pos-katalog {
+  max-width: 260px;
+  font-size: 11px;
+}
+.pos-hint {
+  font-weight: 400;
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+}
+.pos-summe {
+  font-variant-numeric: tabular-nums;
+  padding: 6px 0;
+  font-size: 13px;
+}
+.pos-leer {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+  padding: 4px 0;
+}
+.pos-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.pos-text {
+  flex: 1;
+  min-width: 0;
+}
+.pos-num {
+  width: 78px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pos-einheit {
+  width: 64px;
+}
+.pos-zeilensumme {
+  width: 88px;
+  text-align: right;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+.pos-legende {
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  margin-top: 4px;
 }
 </style>

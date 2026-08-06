@@ -932,26 +932,115 @@ type SettingsSection =
   | "vorlagen"
   | "word-export"
   | "projekt-module"
+  | "positionskatalog"
   | "system";
 
-const { isAdmin } = useCurrentUser();
+const { isAdmin, darfGeld } = useCurrentUser();
 
 // `adminOnly` deckt sich mit dem Serverstand: diese vier Bereiche gelten fuers
 // ganze Buero (Logo, Textbausteine, Word-Vorlagen, Modul-Voreinstellungen) und
 // duerfen seit der Rechte-Runde nur noch vom Verwalter geaendert werden.
 // Ohne diese Kennzeichnung saehe ein normaler Nutzer weiterhin alle Knoepfe —
 // und liefe beim Klick in ein unerklaertes „Kein Zugriff".
-const SETTINGS_NAV: { id: SettingsSection; label: string; icon: string; group: string; adminOnly?: boolean }[] = [
+const SETTINGS_NAV: {
+  id: SettingsSection;
+  label: string;
+  icon: string;
+  group: string;
+  adminOnly?: boolean;
+  geldOnly?: boolean;
+}[] = [
   { id: "profil", label: "Profil & Sicherheit", icon: "user", group: "Konto" },
   { id: "praeferenzen", label: "Präferenzen", icon: "sliders", group: "System" },
   { id: "branding", label: "Branding", icon: "image", group: "Vorlagen", adminOnly: true },
   { id: "vorlagen", label: "Vorlagen", icon: "file-text", group: "Vorlagen", adminOnly: true },
   { id: "word-export", label: "Word-Export", icon: "download", group: "Vorlagen", adminOnly: true },
   { id: "projekt-module", label: "Projekt-Module", icon: "layers", group: "Vorlagen", adminOnly: true },
+  // Der Katalog haengt am Geld-Recht, nicht an der Rolle: er besteht aus
+  // Preisen. Ein Admin ohne Geld-Recht gibt es nicht (er ist implizit
+  // berechtigt), ein Buchhalter ohne Admin-Rechte sehr wohl.
+  { id: "positionskatalog", label: "Positionskatalog", icon: "archive", group: "Vorlagen", geldOnly: true },
   { id: "system", label: "System-Info", icon: "info", group: "System" },
 ];
 
-const sichtbareNav = computed(() => SETTINGS_NAV.filter((n) => isAdmin.value || !n.adminOnly));
+const sichtbareNav = computed(() =>
+  SETTINGS_NAV.filter((n) => (isAdmin.value || !n.adminOnly) && (darfGeld.value || !n.geldOnly)),
+);
+
+// ── Positionskatalog (Migration 046) ────────────────────────────────────────
+// Wiederkehrende Leistungen, damit sie nicht bei jeder Rechnung neu getippt
+// werden. Beim Uebernehmen in eine Rechnung wird KOPIERT, nicht referenziert:
+// eine spaetere Preisanpassung darf gestellte Rechnungen nicht rueckwirkend
+// aendern.
+interface KatalogItem {
+  id: string;
+  text: string;
+  einheit: string | null;
+  einzelpreis: number;
+  ustSatz: number;
+  sortOrder: number;
+  rev?: number;
+}
+
+const katalog = ref<KatalogItem[]>([]);
+const katalogFehler = ref<string | null>(null);
+const katalogEntwurf = ref({ text: "", einheit: "", einzelpreis: 0, ustSatz: 20 });
+
+async function loadKatalog() {
+  katalogFehler.value = null;
+  try {
+    katalog.value = await api.get<KatalogItem[]>("/positionskatalog");
+  } catch (e) {
+    // 403 ohne Geld-Recht ist der Normalfall — der Abschnitt ist dann gar
+    // nicht sichtbar. Alles andere gehoert gemeldet.
+    katalog.value = [];
+    katalogFehler.value = e instanceof Error ? e.message : "Katalog konnte nicht geladen werden";
+  }
+}
+
+async function katalogAnlegen() {
+  if (!katalogEntwurf.value.text.trim()) return;
+  katalogFehler.value = null;
+  try {
+    await api.post("/positionskatalog", {
+      text: katalogEntwurf.value.text.trim(),
+      einheit: katalogEntwurf.value.einheit.trim() || null,
+      einzelpreis: Number(katalogEntwurf.value.einzelpreis) || 0,
+      ustSatz: Number(katalogEntwurf.value.ustSatz) || 0,
+    });
+    katalogEntwurf.value = { text: "", einheit: "", einzelpreis: 0, ustSatz: 20 };
+    await loadKatalog();
+  } catch (e) {
+    katalogFehler.value = e instanceof Error ? e.message : "Anlegen fehlgeschlagen";
+  }
+}
+
+async function katalogSpeichern(k: KatalogItem) {
+  katalogFehler.value = null;
+  try {
+    await api.patch(`/positionskatalog/${k.id}`, {
+      text: k.text.trim(),
+      einheit: k.einheit?.trim() || null,
+      einzelpreis: Number(k.einzelpreis) || 0,
+      ustSatz: Number(k.ustSatz) || 0,
+      rev: k.rev,
+    });
+    await loadKatalog();
+  } catch (e) {
+    katalogFehler.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+  }
+}
+
+async function katalogLoeschen(k: KatalogItem) {
+  if (!(await confirm(`„${k.text}" aus dem Katalog entfernen? Bestehende Rechnungen bleiben unberührt.`))) return;
+  katalogFehler.value = null;
+  try {
+    await api.delete(`/positionskatalog/${k.id}`);
+    await loadKatalog();
+  } catch (e) {
+    katalogFehler.value = e instanceof Error ? e.message : "Löschen fehlgeschlagen";
+  }
+}
 
 const SECTION_KEY = "patio-settings-section";
 const activeSection = ref<SettingsSection>(
@@ -970,14 +1059,14 @@ watch(activeSection, (v) => localStorage.setItem(SECTION_KEY, v));
 // kommt asynchron aus /auth/me, deshalb ein Watcher statt einer Pruefung
 // beim Aufbau.
 watch(
-  isAdmin,
+  [isAdmin, darfGeld],
   () => {
     if (!sichtbareNav.value.some((n) => n.id === activeSection.value)) activeSection.value = "profil";
   },
   { immediate: true },
 );
 
-const WIDE_SECTIONS = new Set(["vorlagen", "word-export", "branding", "projekt-module"]);
+const WIDE_SECTIONS = new Set(["vorlagen", "word-export", "branding", "projekt-module", "positionskatalog"]);
 const isWideSection = computed(() => WIDE_SECTIONS.has(activeSection.value));
 
 const settingsNavGroups = computed(() => {
@@ -1000,6 +1089,7 @@ onMounted(() => {
   void loadPreferences();
   void loadCustomVars();
   void loadCustomModules();
+  void loadKatalog();
 });
 </script>
 
@@ -1881,6 +1971,66 @@ onMounted(() => {
         </template>
 
         <!-- ── Projekt-Module (Phase 6e) ──────────────────────────────── -->
+        <template v-if="activeSection === 'positionskatalog'">
+          <section>
+            <h3 class="settings-h3 mb-3">Positionskatalog</h3>
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Wiederkehrende Leistungen, die beim Schreiben einer Rechnung mit einem Klick übernommen werden. Beim
+              Übernehmen wird <strong>kopiert</strong>, nicht verknüpft — eine spätere Preisanpassung hier ändert
+              bereits gestellte Rechnungen also nicht.
+            </p>
+
+            <div v-if="katalogFehler" class="settings-card" style="padding: 8px 12px; font-size: 12px">
+              {{ katalogFehler }}
+            </div>
+
+            <div class="settings-card settings-divide">
+              <div v-for="k in katalog" :key="k.id" class="kat-row">
+                <input v-model="k.text" type="text" class="stamm-input kat-text" placeholder="Leistung" />
+                <input v-model="k.einheit" type="text" class="stamm-input kat-einheit" placeholder="h" />
+                <input v-model.number="k.einzelpreis" type="number" min="0" step="0.01" class="stamm-input kat-num" />
+                <input v-model.number="k.ustSatz" type="number" min="0" max="100" class="stamm-input kat-num" />
+                <button class="patio-btn ghost sm" @click="katalogSpeichern(k)">Speichern</button>
+                <button class="patio-btn ghost sm" @click="katalogLoeschen(k)">
+                  <BIcon name="x" :size="11" />
+                </button>
+              </div>
+              <div v-if="katalog.length === 0" class="kat-leer">Noch keine Leistung im Katalog.</div>
+            </div>
+
+            <h4 class="settings-h3 mb-3" style="margin-top: 20px">Neue Leistung</h4>
+            <div class="settings-card">
+              <div class="kat-row">
+                <input
+                  v-model="katalogEntwurf.text"
+                  type="text"
+                  class="stamm-input kat-text"
+                  placeholder="z. B. Einreichplanung"
+                />
+                <input v-model="katalogEntwurf.einheit" type="text" class="stamm-input kat-einheit" placeholder="h" />
+                <input
+                  v-model.number="katalogEntwurf.einzelpreis"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  class="stamm-input kat-num"
+                />
+                <input
+                  v-model.number="katalogEntwurf.ustSatz"
+                  type="number"
+                  min="0"
+                  max="100"
+                  class="stamm-input kat-num"
+                />
+                <button class="patio-btn ghost sm" :disabled="!katalogEntwurf.text.trim()" @click="katalogAnlegen">
+                  Hinzufügen
+                </button>
+              </div>
+              <div class="kat-legende">Leistung · Einheit · Einzelpreis € · USt %</div>
+            </div>
+          </section>
+        </template>
+
         <template v-if="activeSection === 'projekt-module'">
           <section>
             <h3 class="settings-h3 mb-3">Projekt-Module</h3>
@@ -2555,5 +2705,31 @@ onMounted(() => {
   .tpl-body-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── Positionskatalog (Migration 046) ───────────────────────────────────── */
+.kat-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+}
+.kat-text {
+  flex: 1;
+  min-width: 0;
+}
+.kat-einheit {
+  width: 70px;
+}
+.kat-num {
+  width: 86px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.kat-leer,
+.kat-legende {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
 }
 </style>

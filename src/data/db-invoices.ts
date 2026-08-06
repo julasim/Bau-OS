@@ -8,7 +8,7 @@
 
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
-import type { ProjectInvoice, InvoiceRepository } from "./types.js";
+import type { ProjectInvoice, InvoicePosition, InvoiceRepository } from "./types.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -16,6 +16,55 @@ function dateStr(v: unknown): string | null {
   if (v === null || v === undefined) return null;
   if (v instanceof Date) return v.toISOString().slice(0, 10);
   return String(v).slice(0, 10);
+}
+
+/** Liest die Positionen aus der JSONB-Spalte. Je nach Treiberpfad kommt
+ *  entweder ein fertiges Objekt oder ein String zurueck. */
+function rowToPositionen(roh: unknown): InvoicePosition[] {
+  let wert = roh;
+  if (typeof wert === "string") {
+    try {
+      wert = JSON.parse(wert);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(wert)) return [];
+  return wert
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === "object")
+    .map((p) => ({
+      text: String(p.text ?? ""),
+      menge: Number(p.menge ?? 0),
+      einheit: p.einheit ? String(p.einheit) : null,
+      einzelpreis: Number(p.einzelpreis ?? 0),
+      ustSatz: Number(p.ustSatz ?? 20),
+    }));
+}
+
+/** Der Netto-Gesamtbetrag ergibt sich aus den Positionen, sobald es welche
+ *  gibt. Ohne Positionen gilt der eingetragene Wert — so behalten
+ *  Bestandsrechnungen (Migration 035, nur `betrag`) ihre Summe.
+ *
+ *  Die Ableitung ist bewusst nicht umkehrbar: waere `betrag` neben
+ *  Positionen frei setzbar, koennte die Rechnung eine andere Summe behaupten
+ *  als sie auflistet. */
+function berechneBetrag(positionen: InvoicePosition[], fallback: number): number {
+  if (positionen.length === 0) return fallback;
+  const summe = positionen.reduce((s, p) => s + Number(p.menge) * Number(p.einzelpreis), 0);
+  return Math.round(summe * 100) / 100;
+}
+
+/** Prueft die Positionen und liefert im Fehlerfall den Text fuer den Benutzer. */
+function pruefePositionen(positionen: InvoicePosition[]): string | null {
+  for (const [i, p] of positionen.entries()) {
+    if (!p.text || !String(p.text).trim()) return `Position ${i + 1}: Text fehlt`;
+    if (!Number.isFinite(p.menge) || p.menge < 0) return `Position ${i + 1}: Menge muss eine Zahl >= 0 sein`;
+    if (!Number.isFinite(p.einzelpreis)) return `Position ${i + 1}: Einzelpreis muss eine Zahl sein`;
+    if (!Number.isFinite(p.ustSatz) || p.ustSatz < 0 || p.ustSatz > 100) {
+      return `Position ${i + 1}: Steuersatz muss zwischen 0 und 100 liegen`;
+    }
+  }
+  return null;
 }
 
 function rowToInvoice(row: Record<string, unknown>): ProjectInvoice {
@@ -27,6 +76,7 @@ function rowToInvoice(row: Record<string, unknown>): ProjectInvoice {
     phaseName: row.phase_name ? String(row.phase_name) : null,
     nummer: row.nummer ? String(row.nummer) : null,
     betrag: Number(row.betrag ?? 0),
+    positionen: rowToPositionen(row.positionen),
     datum: dateStr(row.datum),
     status: row.status as ProjectInvoice["status"],
     note: row.note ? String(row.note) : null,
@@ -61,12 +111,19 @@ export const dbInvoices: InvoiceRepository = {
     const db = getDb();
     if (input.datum && !ISO_DATE.test(input.datum)) return "Datum muss YYYY-MM-DD sein";
     if (typeof input.betrag === "number" && input.betrag < 0) return "Betrag darf nicht negativ sein";
+
+    const positionen = input.positionen ?? [];
+    const positionsFehler = pruefePositionen(positionen);
+    if (positionsFehler) return positionsFehler;
+    const betrag = berechneBetrag(positionen, input.betrag ?? 0);
+
     try {
       const [created] = await db`
-        INSERT INTO project_invoices (project_id, phase_id, nummer, betrag, datum, status, note)
+        INSERT INTO project_invoices (project_id, phase_id, nummer, betrag, positionen, datum, status, note)
         VALUES (
           ${projectId}, ${input.phaseId ?? null}, ${input.nummer ?? null},
-          ${input.betrag ?? 0}, ${input.datum ?? null}, ${input.status ?? "gestellt"}, ${input.note ?? null}
+          ${betrag}, ${JSON.stringify(positionen)}::jsonb,
+          ${input.datum ?? null}, ${input.status ?? "gestellt"}, ${input.note ?? null}
         )
         RETURNING id
       `;
@@ -99,11 +156,19 @@ export const dbInvoices: InvoiceRepository = {
     const status = "status" in input ? (input.status ?? "gestellt") : current.status;
     const note = "note" in input ? (input.note ?? null) : current.note;
 
+    const positionen = "positionen" in input ? (input.positionen ?? []) : rowToPositionen(current.positionen);
+    const positionsFehler = pruefePositionen(positionen);
+    if (positionsFehler) return positionsFehler;
+    // Der Betrag folgt den Positionen. `betrag` aus dem Body zaehlt nur,
+    // solange es keine gibt.
+    const betragEffektiv = berechneBetrag(positionen, betrag);
+
     let betroffen: readonly unknown[] = [];
     try {
       betroffen = await db`
         UPDATE project_invoices SET
-          phase_id = ${phaseId}, nummer = ${nummer}, betrag = ${betrag},
+          phase_id = ${phaseId}, nummer = ${nummer}, betrag = ${betragEffektiv},
+          positionen = ${JSON.stringify(positionen)}::jsonb,
           datum = ${datum}, status = ${status}, note = ${note},
           rev = rev + 1
         WHERE id = ${id} AND rev = ${current.rev}
