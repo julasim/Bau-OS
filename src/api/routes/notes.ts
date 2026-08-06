@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { noteRepo, projectRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
+import type { NoteMeta, NoteSummary } from "../../data/types.js";
 import { emitForProjectName } from "../events.js";
 import { projektBezug } from "../projekt-bezug.js";
 
@@ -22,10 +23,7 @@ notesRoutes.get("/notes", async (c) => {
     const visible = await getVisibleProjectIds(ctx);
     if (visible === "all") return c.json(notes);
     const visibleNames = new Set(await projectRepo.list(visible));
-    // Notizen ohne Projekt: nur Admin sieht sie. Nicht-Admin-User sehen
-    // sie aktuell nicht, weil createdBy noch nicht im DTO ist (TODO Phase 5+).
-    const filtered = notes.filter((n) => n.project && visibleNames.has(n.project));
-    return c.json(filtered);
+    return c.json(notes.filter((n) => sichtbarFuer(n, visibleNames, ctx)));
   }
 
   // Simple-Mode (nur Titel): wir muessen auch hier den User-Scope respektieren.
@@ -35,53 +33,68 @@ notesRoutes.get("/notes", async (c) => {
     if (visible !== "all") {
       const visibleNames = new Set(await projectRepo.list(visible));
       const detailed = await noteRepo.listDetailed(500);
-      return c.json(detailed.filter((n) => n.project && visibleNames.has(n.project)).map((n) => n.title));
+      return c.json(detailed.filter((n) => sichtbarFuer(n, visibleNames, ctx)).map((n) => n.title));
     }
   }
   const notes = await noteRepo.list();
   return c.json(notes);
 });
 
-// Loest das Projekt einer Notiz auf (per Titel-Match ueber listDetailed).
-// Rueckgabe: { found: true, project }, wenn die Notiz existiert, sonst null.
-// project=null heisst: Notiz hat kein verknuepftes Projekt (persoenlich/legacy).
-async function resolveNoteProject(name: string): Promise<{ project: string | null } | null> {
-  if (!noteRepo.listDetailed) return { project: null };
-  const all = await noteRepo.listDetailed(500);
-  const match = all.find((n) => n.title === name) ?? all.find((n) => n.title.startsWith(name));
-  if (!match) return null;
-  return { project: match.project };
+/** Darf dieser Aufrufer diese Notiz in seiner Liste sehen?
+ *
+ *  Zwei Faelle, wie bei Aufgaben und Terminen auch:
+ *  - MIT Projekt: sichtbar, wenn das Projekt sichtbar ist.
+ *  - OHNE Projekt: persoenlich — sichtbar nur fuer den Verfasser.
+ *
+ *  Der zweite Fall fehlte. Wer eine Notiz ohne Projekt anlegte, durfte das —
+ *  und sah sie danach nie wieder. Moeglich wurde die Unterscheidung erst,
+ *  seit `notes.created_by` beim Anlegen gesetzt wird. */
+function sichtbarFuer(n: NoteSummary, sichtbareProjekte: Set<string>, ctx: UserCtx): boolean {
+  if (n.project) return sichtbareProjekte.has(n.project);
+  return !!n.createdById && n.createdById === ctx.userId;
 }
 
-// Zentraler ACL-Check fuer Single-Note-Routes. Admin sieht alles. Andere
-// muessen Zugriff auf das verknuepfte Projekt haben; Notizen ohne Projekt
-// sind fuer Non-Admins nicht zugaenglich (analog zur GET /notes Liste).
-async function ensureNoteAccess(
-  ctxArg: UserCtx,
+/** Loest die Notiz auf UND prueft die Rechte — in einem Schritt.
+ *
+ *  Frueher standen hier zwei Funktionen, die den Namen unabhaengig
+ *  voneinander aufloesten, mit unterschiedlicher Sortierung (`updated_at`
+ *  gegen `created_at`). Bei zwei Notizen desselben Titels entschieden sie
+ *  ueber VERSCHIEDENE Zeilen: freigegeben wurde die eine, ausgeliefert die
+ *  andere — auch aus einem fremden Projekt. Nachgewiesen und in
+ *  `tests/api-notes-acl.test.ts` festgehalten.
+ *
+ *  Deshalb gibt diese Funktion die aufgeloeste Notiz ZURUECK. Die Routen
+ *  arbeiten danach ueber ihre `id`; Entscheidung und Zugriff betreffen damit
+ *  nachweislich dieselbe Zeile. */
+async function notizMitRecht(
+  ctx: UserCtx,
   name: string,
-): Promise<{ ok: true } | { ok: false; status: 403 | 404; error: string }> {
-  const ctx = ctxArg;
-  // Existenz / Projektzugehoerigkeit aufloesen.
-  const meta = await resolveNoteProject(name);
-  if (!meta) return { ok: false, status: 404, error: "Notiz nicht gefunden" };
-  if (ctx.role === "admin") return { ok: true };
-  if (!meta.project) return { ok: false, status: 403, error: "Kein Zugriff" };
-  const allowed = await canSeeProjectByName(ctx, meta.project);
-  if (!allowed) return { ok: false, status: 403, error: "Kein Zugriff" };
-  return { ok: true };
+): Promise<{ ok: true; notiz: NoteMeta } | { ok: false; status: 403 | 404; error: string }> {
+  const notiz = noteRepo.resolve ? await noteRepo.resolve(name) : null;
+  if (!notiz) return { ok: false, status: 404, error: "Notiz nicht gefunden" };
+  if (ctx.role === "admin") return { ok: true, notiz };
+
+  if (!notiz.project) {
+    // Persoenliche Notiz: nur der Verfasser.
+    if (notiz.createdById && notiz.createdById === ctx.userId) return { ok: true, notiz };
+    return { ok: false, status: 403, error: "Kein Zugriff" };
+  }
+  if (!(await canSeeProjectByName(ctx, notiz.project))) {
+    return { ok: false, status: 403, error: "Kein Zugriff" };
+  }
+  return { ok: true, notiz };
 }
 
 notesRoutes.get("/notes/:name", async (c) => {
-  const name = c.req.param("name");
-  const guard = await ensureNoteAccess(userCtx(c), name);
+  const guard = await notizMitRecht(userCtx(c), c.req.param("name"));
   if (!guard.ok) return c.json({ error: guard.error }, guard.status);
-  // Mit Zaehler ausliefern, damit die Oberflaeche ihn beim Speichern
+  // Ueber die ID, nicht ueber den Namen — sonst kaeme hier womoeglich eine
+  // andere Notiz heraus als die eben freigegebene.
+  const gelesen = await noteRepo.readById?.(guard.notiz.id);
+  if (!gelesen) return c.json({ error: "Notiz nicht gefunden" }, 404);
+  // Der Zaehler geht mit, damit die Oberflaeche ihn beim Speichern
   // zurueckschicken kann (Konfliktschutz, Migration 042).
-  const mitRev = await noteRepo.readWithRev?.(name);
-  if (mitRev) return c.json({ name, content: mitRev.content, rev: mitRev.rev });
-  const content = await noteRepo.read(name);
-  if (content === null) return c.json({ error: "Notiz nicht gefunden" }, 404);
-  return c.json({ name, content });
+  return c.json({ name: guard.notiz.title, content: gelesen.content, rev: gelesen.rev });
 });
 
 notesRoutes.post("/notes", async (c) => {
@@ -100,51 +113,53 @@ notesRoutes.post("/notes", async (c) => {
 });
 
 notesRoutes.put("/notes/:name", async (c) => {
-  const name = c.req.param("name");
-  const guard = await ensureNoteAccess(userCtx(c), name);
+  const guard = await notizMitRecht(userCtx(c), c.req.param("name"));
   if (!guard.ok) return c.json({ error: guard.error }, guard.status);
-  const existing = await noteRepo.read(name);
-  if (existing === null) return c.json({ error: "Notiz nicht gefunden" }, 404);
 
   const { content, rev } = await c.req.json<{ content: string; rev?: number }>();
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
 
   // `rev` ist der beim Laden mitgelieferte Zaehler. Fehlt er, gilt weiterhin
   // „zuletzt gewinnt" — aeltere Aufrufer bleiben damit lauffaehig.
-  const success = await noteRepo.update(name, content, rev);
-  // Projekt der Notiz erneut aufloesen — der ACL-Guard oben verwirft sein
-  // Ergebnis, und das DTO der Notiz traegt keine Projekt-UUID.
+  const success = await noteRepo.updateById?.(guard.notiz.id, content, rev);
   if (success) {
-    const meta = await resolveNoteProject(name);
-    emitForProjectName({ type: "note", action: "updated", id: name }, meta?.project, { actorId: c.var.userId });
+    emitForProjectName({ type: "note", action: "updated", id: guard.notiz.title }, guard.notiz.project, {
+      actorId: c.var.userId,
+    });
   }
-  return c.json({ success });
+  return c.json({ success: !!success });
 });
 
 notesRoutes.patch("/notes/:name/append", async (c) => {
-  const name = c.req.param("name");
-  const guard = await ensureNoteAccess(userCtx(c), name);
+  const guard = await notizMitRecht(userCtx(c), c.req.param("name"));
   if (!guard.ok) return c.json({ error: guard.error }, guard.status);
   const { content } = await c.req.json<{ content: string }>();
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
-  const success = await noteRepo.append(name, content);
+  // Ueber die ID: `append` nimmt zwar einen Namen, aber die aufgeloeste ID
+  // ist eindeutig und trifft damit garantiert die freigegebene Notiz.
+  const success = await noteRepo.append(guard.notiz.id, content);
   if (success) {
-    const meta = await resolveNoteProject(name);
-    emitForProjectName({ type: "note", action: "updated", id: name }, meta?.project, { actorId: c.var.userId });
+    emitForProjectName({ type: "note", action: "updated", id: guard.notiz.title }, guard.notiz.project, {
+      actorId: c.var.userId,
+    });
   }
   return c.json({ success });
 });
 
 notesRoutes.delete("/notes/:name", async (c) => {
-  const name = c.req.param("name");
-  const guard = await ensureNoteAccess(userCtx(c), name);
+  const guard = await notizMitRecht(userCtx(c), c.req.param("name"));
   if (!guard.ok) return c.json({ error: guard.error }, guard.status);
-  const deleted = await noteRepo.delete(name);
+  const deleted = await noteRepo.deleteById?.(guard.notiz.id);
   if (!deleted) return c.json({ error: "Notiz nicht gefunden" }, 404);
   // Bekannte Einschraenkung: die Notiz ist an dieser Stelle bereits geloescht,
   // ihr Projekt also nicht mehr aufloesbar. Das Ereignis geht deshalb
   // projektlos raus und erreicht nur Admins und den Loeschenden — die uebrigen
   // Projektberechtigten sehen das Verschwinden erst beim naechsten Laden.
-  emitForProjectName({ type: "note", action: "deleted", id: name }, null, { actorId: c.var.userId });
-  return c.json({ deleted: name });
+  // Anders als frueher ist das Projekt hier bekannt: es stammt aus der
+  // Aufloesung VOR dem Loeschen. Das Ereignis erreicht damit alle
+  // Projektberechtigten, nicht nur Admins und den Loeschenden.
+  emitForProjectName({ type: "note", action: "deleted", id: deleted }, guard.notiz.project, {
+    actorId: c.var.userId,
+  });
+  return c.json({ deleted });
 });

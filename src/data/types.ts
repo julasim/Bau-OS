@@ -654,6 +654,27 @@ export interface NoteSummary {
   createdAt: string;
   updatedAt: string;
   size: number;
+  /** Wer die Notiz angelegt hat. Ohne diese Angabe waren Notizen OHNE Projekt
+   *  fuer ihren eigenen Verfasser unsichtbar — Aufgaben und Termine behandeln
+   *  denselben Fall laengst als „persoenlich". */
+  createdById: string | null;
+}
+
+/** Was eine Notiz-Angabe eindeutig aufloest — samt allem, was die
+ *  Rechtepruefung braucht.
+ *
+ *  Der Grund fuer diesen Typ ist ein nachgewiesener Fehler: Rechtepruefung und
+ *  Lesen loesten den Namen frueher GETRENNT auf, mit unterschiedlicher
+ *  Sortierung. Bei zwei Notizen desselben Titels entschieden sie ueber
+ *  verschiedene Zeilen — freigegeben wurde die eine, ausgeliefert die andere,
+ *  auch aus einem fremden Projekt. Wer einmal aufloest und danach ueber die
+ *  `id` arbeitet, kann diesen Fehler nicht mehr machen. */
+export interface NoteMeta {
+  id: string;
+  title: string;
+  project: string | null;
+  createdById: string | null;
+  rev: number;
 }
 
 export interface NoteRepository {
@@ -663,7 +684,19 @@ export interface NoteRepository {
   save(content: string, project?: string, createdById?: string | null): Promise<string>;
   list(limit?: number): Promise<string[]>;
   listDetailed?(limit?: number): Promise<NoteSummary[]>;
+  /** Loest eine Angabe (ID, exakter Titel, eindeutiger Titelanfang) auf GENAU
+   *  EINE Notiz auf — dieselbe, die `read`/`update`/`delete` treffen wuerden.
+   *  Grundlage jeder Rechtepruefung; siehe `NoteMeta`. */
+  resolve?(nameOrPath: string): Promise<NoteMeta | null>;
   read(nameOrPath: string): Promise<string | null>;
+  /** Lesen ueber die aufgeloeste ID. Kein Raten mehr noetig. */
+  readById?(id: string): Promise<{ content: string; rev: number } | null>;
+  /** Aendern ueber die aufgeloeste ID. Wirft `KonfliktFehler`, wenn `rev`
+   *  nicht mehr stimmt. */
+  updateById?(id: string, content: string, expectedRev?: number | null): Promise<boolean>;
+  /** Loeschen ueber die aufgeloeste ID. Liefert den Titel der geloeschten
+   *  Notiz oder `null`. */
+  deleteById?(id: string): Promise<string | null>;
   /** Wie `read`, liefert aber zusaetzlich den Konflikt-Zaehler — die
    *  Oberflaeche braucht ihn, um ihn beim Speichern zurueckzuschicken. */
   readWithRev?(nameOrPath: string): Promise<{ content: string; rev: number } | null>;

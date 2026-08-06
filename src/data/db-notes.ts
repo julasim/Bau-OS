@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { escapeLike } from "./sql-like.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
-import type { NoteRepository } from "./types.js";
+import type { NoteMeta, NoteRepository } from "./types.js";
 
 /** Loest eine Angabe auf GENAU EINE Notiz auf — oder auf keine.
  *
@@ -117,7 +117,8 @@ export const dbNotes: NoteRepository = {
   async listDetailed(limit = 50) {
     const db = getDb();
     const rows = await db`
-      SELECT n.title, p.name as project_name, n.created_at, n.updated_at, length(n.content) as size
+      SELECT n.title, p.name as project_name, n.created_by,
+             n.created_at, n.updated_at, length(n.content) as size
       FROM notes n
       LEFT JOIN projects p ON n.project_id = p.id
       ORDER BY n.updated_at DESC
@@ -129,7 +130,70 @@ export const dbNotes: NoteRepository = {
       createdAt: String(r.created_at),
       updatedAt: String(r.updated_at),
       size: Number(r.size || 0),
+      createdById: r.created_by ? String(r.created_by) : null,
     }));
+  },
+
+  /** Der EINE Aufloeser. Alles, was eine Notiz ueber ihren Namen sucht, geht
+   *  hierdurch — die Rechtepruefung ebenso wie das Lesen. Vorher gab es zwei
+   *  Wege mit unterschiedlicher Sortierung, und bei gleichnamigen Notizen
+   *  entschieden sie ueber verschiedene Zeilen. */
+  async resolve(nameOrPath): Promise<NoteMeta | null> {
+    const treffer = await findeNotiz(nameOrPath);
+    if (!treffer) return null;
+    const db = getDb();
+    const [row] = await db`
+      SELECT n.id, n.title, n.created_by, n.rev, p.name AS project_name
+        FROM notes n LEFT JOIN projects p ON p.id = n.project_id
+       WHERE n.id = ${treffer.id}
+       LIMIT 1
+    `;
+    if (!row) return null;
+    return {
+      id: String(row.id),
+      title: String(row.title),
+      project: row.project_name ? String(row.project_name) : null,
+      createdById: row.created_by ? String(row.created_by) : null,
+      rev: Number(row.rev ?? 1),
+    };
+  },
+
+  async readById(id) {
+    const db = getDb();
+    const [row] = await db`SELECT content, rev FROM notes WHERE id = ${id}`;
+    return row ? { content: String(row.content), rev: Number(row.rev ?? 1) } : null;
+  },
+
+  async updateById(id, content, expectedRev) {
+    const db = getDb();
+    const [current] = await db`SELECT id, title, rev FROM notes WHERE id = ${id}`;
+    if (!current) return false;
+
+    // Konfliktschutz (Migration 042). Siehe src/data/konflikt.ts.
+    const istRev = Number(current.rev ?? 1);
+    pruefeRev({ id: String(current.id), title: String(current.title), rev: istRev }, istRev, expectedRev);
+
+    const betroffen = await db`
+      UPDATE notes SET content = ${content}, rev = rev + 1, updated_at = ${new Date().toISOString()}
+      WHERE id = ${id} AND rev = ${istRev}
+      RETURNING id
+    `;
+    if (betroffen.length === 0) {
+      const [jetzt] = await db`SELECT id, title, rev FROM notes WHERE id = ${id}`;
+      if (!jetzt) return false;
+      throw new KonfliktFehler(
+        { id: String(jetzt.id), title: String(jetzt.title), rev: Number(jetzt.rev) },
+        istRev,
+        Number(jetzt.rev),
+      );
+    }
+    return true;
+  },
+
+  async deleteById(id) {
+    const db = getDb();
+    const [row] = await db`DELETE FROM notes WHERE id = ${id} RETURNING title`;
+    return row ? String(row.title) : null;
   },
 
   async read(nameOrPath) {
