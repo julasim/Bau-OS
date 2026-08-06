@@ -42,7 +42,7 @@
 > springen.
 >
 > **Vor jeder Messung `DATABASE_URL` setzen** (WSL-IP, siehe unten). Ohne sie
-> überspringt die Testsuite still 178 von 287 Prüfungen und vier weitere
+> überspringt die Testsuite still 202 von 311 Prüfungen und vier weitere
 > schlagen fehl — wer das übersieht, repariert die falschen Dinge.
 >
 > **Stufe 1 ist abgearbeitet** (Datenverlust verhindern): `db-notes` löst
@@ -51,9 +51,28 @@
 > 042) — zwei Arbeitsplätze überschreiben einander nicht mehr wortlos,
 > der zweite bekommt einen 409 samt aktuellem Stand.
 >
-> Als Nächstes offen: **Stufe 2 — Rechte schließen.** Sieben Routendateien
-> haben keine einzige Prüfung, `team.ts` prüft nur beim Schreiben, und der
-> Stundensatz (`hourly_rate`) ist für jeden lesbar.
+> **Stufe 2 ist abgearbeitet** (Rechte schließen):
+>
+> - **Der Word-Export war die offene Hintertür.** Vier `/api/exports/*`-Routen
+>   ohne jede Prüfung lieferten Protokolle, Bautagebuch, Projektbericht und
+>   Stundenlisten an jeden — was die Listen-Routen sauber filterten, ließ sich
+>   dort trotzdem herunterladen.
+> - **Bürointerne Konfiguration** (Textvorlagen, Word-Vorlagen, Logo,
+>   Modul-Voreinstellungen) war für jeden schreibbar. Lesen bleibt offen,
+>   schreiben ist Admin-Sache. `/projects/:name/modules` folgt dagegen der
+>   Projekt-Sichtbarkeit, nicht der Rolle.
+> - **Das Geld-Recht** (`users.can_see_money`, Migration 043) ist neu und
+>   bewusst nicht an die Rolle gebunden. Durchgesetzt an einer Stelle:
+>   `src/api/geld.ts` filtert Beträge aus jeder JSON-Antwort. `…/finance` und
+>   die Rechnungs-Schreibwege sind ganz gesperrt, der Stundensatz am
+>   Teammitglied wird beim Speichern ignoriert statt abgelehnt.
+> - **Die Team-Liste verriet alle Projektnamen** über die Zuordnungen. Die
+>   Stammdaten bleiben für alle lesbar (Kollegenkatalog), die Zuordnungen
+>   folgen den Projekt-Rechten.
+>
+> Als Nächstes offen: **Stufe 3 — Papierkorb.** Löschen ist hart, und die
+> Migrationen `005`/`007`/`009`/`011` verdrahten `ON DELETE CASCADE` — ein
+> gelöschtes Projekt reißt seine Datensätze mit.
 
 **AP0 abgeschlossen.** Entfernt: Telegram-Bot, LLM-/Agenten-Laufzeit,
 MCP-Client, Embeddings, DuckDuckGo-Websuche, Outlook-Abgleich und die
@@ -152,7 +171,7 @@ npm run build        # tsc → dist/ (kopiert db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 287 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (alle Tests, 311 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -172,9 +191,9 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 178 von 287 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 202 von 311 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
-> 17 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
+> 21 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
 > Von den 109, die dann laufen, **scheitern vier** — seit `tests/db.test.ts`
 > dazukam, meldet die Suite ohne Datenbank also nicht mehr grün, sondern rot.
 > Das ist eine Verbesserung: vorher sah ein halber Lauf wie ein voller aus.
