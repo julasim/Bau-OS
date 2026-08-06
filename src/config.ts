@@ -47,6 +47,20 @@ export const LOG_JSONL_KEEP_FILES = parseInt(process.env.LOG_JSONL_KEEP_FILES ||
 // 0 = nie loeschen (manuelle Verwaltung).
 export const AUDIT_RETENTION_DAYS = parseInt(process.env.AUDIT_RETENTION_DAYS || "365", 10);
 
+// ── Passwoerter ──────────────────────────────────────────────────────────────
+// Seit dem Umbau zum Firmenserver ist das Passwort der EINZIGE Faktor: der
+// Email-Code-Zweig ist entfallen (er brauchte SMTP und war ohne Internet nicht
+// zustellbar), TOTP kommt erst mit dem Zugang von aussen zurueck. Damit traegt
+// diese Zahl mehr Gewicht als vorher — 8 Zeichen waren fuer einen zweiten
+// Faktor daneben vertretbar, allein sind sie es nicht.
+export const PASSWORD_MIN_LENGTH = 12;
+
+// bcrypt-Kostenfaktor. Jede Stufe verdoppelt die Rechenzeit — 12 liegt auf
+// heutiger Hardware bei rund 250 ms pro Pruefung. Das bremst das Anmelden
+// nicht spuerbar, verteuert aber das Durchprobieren erbeuteter Hashes um das
+// Vierfache gegenueber den vorherigen 10.
+export const BCRYPT_ROUNDS = 12;
+
 // ── Rate-Limiting ────────────────────────────────────────────────────────────
 // Login-Throttle (per-IP, schuetzt vor Brute-Force gegen das Loginformular)
 export const RATE_LIMIT_ATTEMPTS = 5;

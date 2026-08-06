@@ -21,12 +21,12 @@ import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import {
   API_PORT,
+  PASSWORD_MIN_LENGTH,
   RATE_LIMIT_ATTEMPTS,
   RATE_LIMIT_WINDOW_MS,
   API_RATE_LIMIT_REQUESTS,
   API_RATE_LIMIT_WINDOW_MS,
   DB_ENABLED,
-  SMTP_ENABLED,
   IS_PRODUCTION,
   JWT_SECRET_OK,
 } from "../config.js";
@@ -38,39 +38,10 @@ import {
   verifyPassword,
   createToken,
   findDbUserByUsername,
-  findDbUserByEmail,
-  findDbUserById,
   countDbUsers,
   createInitialAdmin,
-  create2faTicket,
-  verify2faTicket,
-  createEmailOtp,
-  verifyAndConsumeEmailOtp,
-  setUserEmail,
-  isEmailTaken,
-  createEmailSetupTicket,
-  verifyEmailSetupTicket,
-  createMagicLinkToken,
-  consumeMagicLinkToken,
-  createPasswordResetTicket,
-  verifyPasswordResetTicket,
-  updateDbUserPassword,
-  hashPassword,
 } from "./auth.js";
-import { sendMail, buildLoginOtpMail, buildEmailVerifyMail, buildMagicLinkMail } from "./email.js";
 import { logEvent as audit } from "../data/db-audit.js";
-import { APP_URL } from "../config.js";
-
-/** Bestimmt die Public-Base-URL fuer Links in Emails. APP_URL aus der
- *  Env hat Vorrang (z.B. wenn die App hinter CDN sitzt). Fallback: aus
- *  Request-Headern bauen. Caddy/Nginx muss Host + X-Forwarded-Proto
- *  korrekt forwarden — PATIO docker-compose macht das per Default. */
-function publicBaseUrl(c: { req: { header(name: string): string | undefined } }): string {
-  if (APP_URL) return APP_URL.replace(/\/$/, "");
-  const proto = c.req.header("x-forwarded-proto") ?? "http";
-  const host = c.req.header("x-forwarded-host") ?? c.req.header("host") ?? "localhost";
-  return `${proto}://${host}`;
-}
 
 /** Liefert die Client-IP fuer Rate-Limiting und Audit-Eintraege.
  *  Wichtig: nur die ERSTE IP aus x-forwarded-for verwenden — sonst kann
@@ -347,65 +318,18 @@ app.post("/api/auth/login", async (c) => {
 
   loginAttempts.delete(ip);
 
-  // ── Email-2FA-Pfad (Migration 020) ──────────────────────────────────────
-  // - DB-User MIT Email → 6-stelliger Code via SMTP, Ticket fuer Step 2.
-  // - DB-User OHNE Email (Legacy-Konten vor Migration 020) → Setup-Ticket
-  //   damit der User auf der Setup-Seite seine Email hinterlegen + verifizieren
-  //   kann. Erst nach erfolgreicher Verifikation gibt's ein JWT.
-  // - JSON-User → direkter Login ohne 2FA (Legacy-Pfad bleibt fuer Bootstrap).
-  if (dbUser) {
-    if (dbUser.email) {
-      try {
-        const { ticket: otpTicket, code } = await createEmailOtp(dbUser.id, "login");
-        const ticket = create2faTicket(dbUser);
-        const mail = buildLoginOtpMail({
-          code,
-          username: dbUser.displayName ?? dbUser.username,
-          ip: meta.ip,
-          userAgent: meta.userAgent,
-        });
-        const sent = await sendMail({ to: dbUser.email, subject: mail.subject, text: mail.text, html: mail.html });
-        void audit({
-          event: sent ? "login.email.sent" : "login.email.fail",
-          actorUserId: dbUser.id,
-          actorUsername: dbUser.username,
-          actorRole: dbUser.role,
-          ip: meta.ip,
-          userAgent: meta.userAgent,
-          details: { sent, otpTicket: otpTicket.slice(0, 8) + "…" },
-          ok: sent,
-        });
-        if (!sent) {
-          return c.json({ error: "Login-Code konnte nicht zugestellt werden. Bitte Admin kontaktieren." }, 502);
-        }
-        // emailHint: maskierte Anzeige fuer die UI ("ju***@example.com").
-        return c.json({
-          requires2fa: true,
-          ticket,
-          username: dbUser.username,
-          emailHint: maskEmail(dbUser.email),
-        });
-      } catch (err) {
-        const { logError } = await import("../logger.js");
-        logError("[Login] Email-OTP konnte nicht erstellt werden", err);
-        return c.json({ error: "Login-Code konnte nicht erstellt werden." }, 500);
-      }
-    }
-    // Kein Email gesetzt → Email-Setup-Flow erzwingen (mandatory).
-    const ticket = createEmailSetupTicket(dbUser);
-    void audit({
-      event: "login.email_setup_required",
-      actorUserId: dbUser.id,
-      actorUsername: dbUser.username,
-      actorRole: dbUser.role,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-    });
-    return c.json({ requiresEmailSetup: true, ticket, username: dbUser.username });
-  }
-
-  // Legacy-JSON-User: kein 2FA. Bleibt fuer Setup-Wizard und Recovery
-  // erhalten — neue User werden als DB-User mit Email-Pflicht angelegt.
+  // ── Ein Faktor: Benutzername + Passwort ─────────────────────────────────
+  // Hier stand bis zum Umbau auf den Firmenserver der Email-2FA-Pfad
+  // (Migration 020). Er verschickte 6-stellige Codes ueber SMTP und war damit
+  // auf einem Server ohne Internet nicht anwendbar: JEDER Datenbank-Benutzer
+  // landete entweder im Mailversand (der scheiterte → 502) oder im erzwungenen
+  // Email-Einrichtungs-Fluss (der ebenfalls SMTP braucht). Der einzige Weg
+  // hinein war das einstufige Legacy-JSON-Konto — auf einem Firmenserver
+  // genau das falsche Ergebnis.
+  //
+  // Der zweite Faktor kommt zurueck, sobald es einen Weg von aussen gibt:
+  // src/api/totp.ts und routes/auth-2fa.ts liegen dafuer unberuehrt bereit.
+  // Solange nur das Bueronetz Zugang hat, traegt Passwort + Ratebremse.
   const token = createToken(username, role, userId);
   void audit({
     event: "login.success",
@@ -414,489 +338,9 @@ app.post("/api/auth/login", async (c) => {
     actorRole: role,
     ip: meta.ip,
     userAgent: meta.userAgent,
-    details: { step: "single-factor-legacy-json" },
+    details: { step: dbUser ? "password" : "password-legacy-json" },
   });
   return c.json({ token, username, role });
-});
-
-/** Maskiert eine Email-Adresse fuer die Anzeige im Login-UI:
- *    julius@sima.or.at → ju***@sima.or.at */
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!local || !domain) return "***@***";
-  const visible = local.slice(0, Math.min(2, local.length));
-  return `${visible}${"*".repeat(Math.max(1, local.length - visible.length))}@${domain}`;
-}
-
-// ── Login Step 2: Email-OTP verifizieren und JWT ausstellen ─────────────────
-app.post("/api/auth/login/2fa", async (c) => {
-  const ip = getClientIp(c);
-  const now = Date.now();
-  const entry = loginAttempts.get(ip);
-  if (entry && now < entry.resetAt && entry.count >= RATE_LIMIT_ATTEMPTS) {
-    return c.json({ error: "Zu viele Versuche. Bitte spaeter erneut versuchen." }, 429);
-  }
-
-  let body: { ticket: string; code: string };
-  try {
-    body = await c.req.json<typeof body>();
-  } catch {
-    return c.json({ error: "Ungueltiger Request-Body" }, 400);
-  }
-  if (!body.ticket || !body.code) {
-    return c.json({ error: "Ticket und Code erforderlich" }, 400);
-  }
-
-  const claim = verify2faTicket(body.ticket);
-  if (!claim) return c.json({ error: "Ticket abgelaufen oder ungueltig" }, 401);
-
-  const user = await findDbUserById(claim.sub);
-  if (!user) return c.json({ error: "User nicht gefunden" }, 404);
-
-  const meta = reqMeta(c);
-  const trackFail = (reason: string) => {
-    loginAttempts.set(ip, {
-      count: (entry && now < entry.resetAt ? entry.count : 0) + 1,
-      resetAt: now + RATE_LIMIT_WINDOW_MS,
-    });
-    void audit({
-      event: "login.2fa.fail",
-      actorUserId: user.id,
-      actorUsername: user.username,
-      actorRole: user.role,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-      details: { reason },
-      ok: false,
-    });
-  };
-
-  // Wir suchen nach einem Email-OTP, das per createEmailOtp() angelegt
-  // wurde — der Login-Flow uebergibt das JWT-Ticket nicht das DB-Ticket
-  // direkt. Wir brauchen also den juengsten unbenutzten Login-OTP-Eintrag
-  // dieses Users.
-  const { getDb } = await import("../db/client.js");
-  const db = getDb();
-  const [otpRow] = await db`
-    SELECT ticket FROM email_otp_tokens
-     WHERE user_id = ${user.id} AND purpose = 'login' AND used = false
-       AND expires_at > now()
-     ORDER BY created_at DESC
-     LIMIT 1
-  `;
-  if (!otpRow) {
-    trackFail("no-active-otp");
-    return c.json({ error: "Kein aktiver Code. Bitte Login neu starten." }, 401);
-  }
-
-  const result = await verifyAndConsumeEmailOtp(String(otpRow.ticket), body.code, "login");
-  if (!result.ok) {
-    trackFail(result.reason);
-    const msg =
-      result.reason === "expired"
-        ? "Code abgelaufen. Bitte Login neu starten."
-        : result.reason === "too-many-attempts"
-          ? "Zu viele Fehlversuche. Bitte Login neu starten."
-          : result.reason === "used"
-            ? "Code wurde bereits verwendet."
-            : "Code ungueltig.";
-    return c.json({ error: msg }, 401);
-  }
-
-  loginAttempts.delete(ip);
-  const token = createToken(user.username, user.role, user.id);
-  void audit({
-    event: "login.2fa.success",
-    actorUserId: user.id,
-    actorUsername: user.username,
-    actorRole: user.role,
-    ip: meta.ip,
-    userAgent: meta.userAgent,
-    details: { method: "email-otp" },
-  });
-  return c.json({ token, username: user.username, role: user.role });
-});
-
-// ── Email-Setup (mandatory): Code anfordern + verifizieren ──────────────────
-// Wird nach dem Login aufgerufen, wenn der User noch keine Email hat
-// (Legacy-Konten vor Migration 020).
-//
-// Schritt 1: POST /api/auth/setup-email/start (ticket + email)
-//   - Sendet Verifikationscode an die NEUE Email
-//   - Ticket bleibt gueltig bis verify oder Ablauf
-// Schritt 2: POST /api/auth/setup-email/verify (ticket + code)
-//   - Setzt users.email auf die pending_email
-//   - Liefert reguläres JWT zurueck
-
-app.post("/api/auth/setup-email/start", async (c) => {
-  let body: { ticket: string; email: string };
-  try {
-    body = await c.req.json<typeof body>();
-  } catch {
-    return c.json({ error: "Ungueltiger Request-Body" }, 400);
-  }
-  if (!body.ticket || !body.email) return c.json({ error: "Ticket und Email erforderlich" }, 400);
-
-  const email = body.email.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return c.json({ error: "Ungueltige Email-Adresse" }, 400);
-  }
-
-  const claim = verifyEmailSetupTicket(body.ticket);
-  if (!claim) return c.json({ error: "Ticket abgelaufen oder ungueltig" }, 401);
-
-  const user = await findDbUserById(claim.sub);
-  if (!user) return c.json({ error: "User nicht gefunden" }, 404);
-
-  if (await isEmailTaken(email, user.id)) {
-    return c.json({ error: "Diese Email-Adresse ist bereits einem anderen Konto zugeordnet." }, 409);
-  }
-
-  const meta = reqMeta(c);
-  try {
-    const { code } = await createEmailOtp(user.id, "email-setup", email);
-    const mail = buildEmailVerifyMail({ code, username: user.displayName ?? user.username });
-    const sent = await sendMail({ to: email, subject: mail.subject, text: mail.text, html: mail.html });
-    void audit({
-      event: sent ? "email_setup.code_sent" : "email_setup.code_fail",
-      actorUserId: user.id,
-      actorUsername: user.username,
-      actorRole: user.role,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-      details: { email: maskEmail(email), sent },
-      ok: sent,
-    });
-    if (!sent) {
-      return c.json({ error: "Code konnte nicht zugestellt werden. Bitte Admin kontaktieren." }, 502);
-    }
-    return c.json({ ok: true, emailHint: maskEmail(email) });
-  } catch (err) {
-    const { logError } = await import("../logger.js");
-    logError("[EmailSetup] Code konnte nicht erstellt werden", err);
-    return c.json({ error: "Code konnte nicht erstellt werden." }, 500);
-  }
-});
-
-app.post("/api/auth/setup-email/verify", async (c) => {
-  let body: { ticket: string; code: string };
-  try {
-    body = await c.req.json<typeof body>();
-  } catch {
-    return c.json({ error: "Ungueltiger Request-Body" }, 400);
-  }
-  if (!body.ticket || !body.code) return c.json({ error: "Ticket und Code erforderlich" }, 400);
-
-  const claim = verifyEmailSetupTicket(body.ticket);
-  if (!claim) return c.json({ error: "Ticket abgelaufen oder ungueltig" }, 401);
-
-  const user = await findDbUserById(claim.sub);
-  if (!user) return c.json({ error: "User nicht gefunden" }, 404);
-
-  // Juengsten unbenutzten Setup-OTP des Users finden.
-  const { getDb } = await import("../db/client.js");
-  const db = getDb();
-  const [otpRow] = await db`
-    SELECT ticket FROM email_otp_tokens
-     WHERE user_id = ${user.id} AND purpose = 'email-setup' AND used = false
-       AND expires_at > now()
-     ORDER BY created_at DESC
-     LIMIT 1
-  `;
-  if (!otpRow) {
-    return c.json({ error: "Kein aktiver Code. Bitte Setup neu starten." }, 401);
-  }
-
-  const result = await verifyAndConsumeEmailOtp(String(otpRow.ticket), body.code, "email-setup");
-  if (!result.ok) {
-    const msg =
-      result.reason === "expired"
-        ? "Code abgelaufen. Bitte Setup neu starten."
-        : result.reason === "too-many-attempts"
-          ? "Zu viele Fehlversuche. Bitte Setup neu starten."
-          : "Code ungueltig.";
-    return c.json({ error: msg }, 401);
-  }
-
-  // pending_email auf die echte Spalte schreiben.
-  if (!result.pendingEmail) {
-    return c.json({ error: "Setup-Token hat keine pending Email — bitte neu starten." }, 500);
-  }
-
-  // Race-Schutz: nochmal pruefen ob die Email zwischenzeitlich anderweitig
-  // belegt wurde.
-  if (await isEmailTaken(result.pendingEmail, user.id)) {
-    return c.json({ error: "Diese Email-Adresse ist bereits einem anderen Konto zugeordnet." }, 409);
-  }
-
-  const updated = await setUserEmail(user.id, result.pendingEmail);
-  if (!updated) return c.json({ error: "Speichern fehlgeschlagen" }, 500);
-
-  const meta = reqMeta(c);
-  void audit({
-    event: "email_setup.success",
-    actorUserId: user.id,
-    actorUsername: user.username,
-    actorRole: user.role,
-    ip: meta.ip,
-    userAgent: meta.userAgent,
-    details: { email: maskEmail(result.pendingEmail) },
-  });
-
-  // JWT direkt ausstellen — der User hat sich gerade per Passwort + Email-
-  // Verifikation authentifiziert. Aequivalent zu einem 2FA-Login.
-  const token = createToken(updated.username, updated.role, updated.id);
-  return c.json({ token, username: updated.username, role: updated.role });
-});
-
-// ── Magic-Link-Login (Migration 021) ────────────────────────────────────────
-//
-// Schritt 1: POST /api/auth/login/magic-link/start (mit 2fa-Ticket)
-//   - Generiert 32-Byte URL-safe Token, hasht ihn (sha256), speichert
-//     den Hash im email_otp_tokens-Eintrag mit purpose='magic-link'.
-//   - Versendet die Mail mit URL ?magic=<plain-Token>.
-// Schritt 2: GET  /api/auth/login/magic-link/consume?token=<plain>
-//   - Hasht den uebergebenen Token, sucht Eintrag, marked used.
-//   - Liefert JWT bei Erfolg.
-//
-// Ablauf im UI:
-//   1. User loggt sich mit Username+Passwort ein → kriegt 2FA-Ticket.
-//   2. Statt Code einzutippen klickt er "Anmelde-Link statt Code".
-//   3. Frontend POST /magic-link/start → Mail wird verschickt.
-//   4. User klickt Link in Mail → Frontend nimmt ?magic-Param,
-//      ruft GET /magic-link/consume → eingeloggt.
-
-app.post("/api/auth/login/magic-link/start", async (c) => {
-  let body: { ticket: string };
-  try {
-    body = await c.req.json<typeof body>();
-  } catch {
-    return c.json({ error: "Ungueltiger Request-Body" }, 400);
-  }
-  if (!body.ticket) return c.json({ error: "Ticket fehlt" }, 400);
-
-  const claim = verify2faTicket(body.ticket);
-  if (!claim) return c.json({ error: "Ticket abgelaufen oder ungueltig" }, 401);
-
-  const user = await findDbUserById(claim.sub);
-  if (!user || !user.email) {
-    return c.json({ error: "User nicht gefunden oder keine Email hinterlegt" }, 404);
-  }
-
-  const meta = reqMeta(c);
-  try {
-    const tokenPlain = await createMagicLinkToken(user.id);
-    // URL-Aufbau: /login?magic=<token>. LoginView fischt den Param,
-    // ruft den Consume-Endpoint und ist dann eingeloggt.
-    const url = `${publicBaseUrl(c)}/login?magic=${encodeURIComponent(tokenPlain)}`;
-    const mail = buildMagicLinkMail({
-      username: user.displayName ?? user.username,
-      magicLinkUrl: url,
-    });
-    const sent = await sendMail({ to: user.email, subject: mail.subject, text: mail.text, html: mail.html });
-    void audit({
-      event: sent ? "login.magic_link.sent" : "login.magic_link.fail",
-      actorUserId: user.id,
-      actorUsername: user.username,
-      actorRole: user.role,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-      details: { sent },
-      ok: sent,
-    });
-    if (!sent) {
-      return c.json({ error: "Anmelde-Link konnte nicht zugestellt werden" }, 502);
-    }
-    return c.json({ ok: true });
-  } catch (err) {
-    const { logError } = await import("../logger.js");
-    logError("[Login] Magic-Link konnte nicht erstellt werden", err);
-    return c.json({ error: "Anmelde-Link konnte nicht erstellt werden" }, 500);
-  }
-});
-
-app.get("/api/auth/login/magic-link/consume", async (c) => {
-  const tokenPlain = c.req.query("token");
-  if (!tokenPlain) return c.json({ error: "Token fehlt" }, 400);
-
-  const meta = reqMeta(c);
-  const user = await consumeMagicLinkToken(tokenPlain);
-  if (!user) {
-    void audit({
-      event: "login.magic_link.fail",
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-      details: { reason: "invalid-or-expired" },
-      ok: false,
-    });
-    return c.json({ error: "Anmelde-Link ungueltig oder abgelaufen. Bitte neu starten." }, 401);
-  }
-
-  const token = createToken(user.username, user.role, user.id);
-  void audit({
-    event: "login.magic_link.success",
-    actorUserId: user.id,
-    actorUsername: user.username,
-    actorRole: user.role,
-    ip: meta.ip,
-    userAgent: meta.userAgent,
-  });
-  return c.json({ token, username: user.username, role: user.role });
-});
-
-// ── Passwort-Reset (ohne Auth) ──────────────────────────────────────────────
-//
-// Schritt 1: POST /api/auth/forgot-password (username)
-//   - User anhand username suchen (DB zuerst, dann JSON-Fallback).
-//   - Wenn User eine Email hat: OTP generieren (6 Stellen, 10 Min.) + per
-//     Mail senden + Reset-Ticket zurueckgeben (JWT, aud="password-reset").
-//   - Immer 200 — kein User-Enumeration-Leak.
-//
-// Schritt 2: POST /api/auth/reset-password (resetToken + code + newPassword)
-//   - Reset-Ticket verifizieren (aud-Check).
-//   - OTP-Code pruefen + konsumieren.
-//   - Passwort bcrypt-hashen + in DB schreiben.
-//   - 200 bei Erfolg.
-
-app.post("/api/auth/forgot-password", async (c) => {
-  let body: { username: string };
-  try {
-    body = await c.req.json<{ username: string }>();
-  } catch {
-    return c.json({ error: "Ungueltiger Request-Body" }, 400);
-  }
-  if (!body.username) return c.json({ error: "Benutzername oder E-Mail-Adresse erforderlich" }, 400);
-
-  // SMTP-Check zuerst — kein User-Enumeration-Leak und klarer Fehler fuer
-  // den User, statt einen silent-fail mit { ok: true } zurueckzugeben.
-  if (!SMTP_ENABLED) {
-    return c.json(
-      { error: "E-Mail-Versand ist auf diesem Server nicht konfiguriert. Bitte wende dich an deinen Administrator." },
-      503,
-    );
-  }
-
-  const usernameInput = body.username.trim();
-  const meta = reqMeta(c);
-
-  // Immer OK zurueck — kein Enumeration-Leak.
-  const genericOk = () => c.json({ ok: true, message: "Falls ein Konto existiert, wurde eine E-Mail gesendet." });
-
-  // Suche nach Username ODER E-Mail-Adresse.
-  const isEmail = usernameInput.includes("@");
-  const dbUser = DB_ENABLED
-    ? isEmail
-      ? await findDbUserByEmail(usernameInput)
-      : await findDbUserByUsername(usernameInput)
-    : null;
-  if (!dbUser || !dbUser.email) {
-    // Kein DB-User oder keine Email → still OK.
-    void audit({
-      event: "password_reset.request",
-      actorUsername: usernameInput,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-      details: { reason: dbUser ? "no-email" : "user-not-found" },
-      ok: false,
-    });
-    return genericOk();
-  }
-
-  try {
-    const { ticket: otpTicket, code } = await createEmailOtp(dbUser.id, "password-reset");
-    const resetToken = createPasswordResetTicket(dbUser);
-    // OTP-Mail: gleiches "verification"-Template wie beim Login-Code,
-    // damit HTML und Plaintext beide den 6-stelligen Code zeigen.
-    const otpMail = {
-      ...buildLoginOtpMail({ username: dbUser.displayName ?? dbUser.username, code }),
-      subject: "PATIO · Passwort zurücksetzen",
-    };
-    const sent = await sendMail({ to: dbUser.email, subject: otpMail.subject, text: otpMail.text, html: otpMail.html });
-    void audit({
-      event: sent ? "password_reset.email.sent" : "password_reset.email.fail",
-      actorUserId: dbUser.id,
-      actorUsername: dbUser.username,
-      actorRole: dbUser.role,
-      ip: meta.ip,
-      userAgent: meta.userAgent,
-      details: { sent, otpTicket: otpTicket.slice(0, 8) + "…" },
-      ok: sent,
-    });
-    if (!sent) {
-      // Keinen Fehler nach aussen leaken — trotzdem OK.
-      return genericOk();
-    }
-    return c.json({ ok: true, resetToken, emailHint: maskEmail(dbUser.email) });
-  } catch (err) {
-    const { logError } = await import("../logger.js");
-    logError("[PasswordReset] OTP konnte nicht erstellt werden", err);
-    return genericOk();
-  }
-});
-
-app.post("/api/auth/reset-password", async (c) => {
-  let body: { resetToken: string; code: string; newPassword: string };
-  try {
-    body = await c.req.json<typeof body>();
-  } catch {
-    return c.json({ error: "Ungueltiger Request-Body" }, 400);
-  }
-  if (!body.resetToken || !body.code || !body.newPassword) {
-    return c.json({ error: "resetToken, code und newPassword erforderlich" }, 400);
-  }
-  if (body.newPassword.length < 8) {
-    return c.json({ error: "Passwort muss mindestens 8 Zeichen haben" }, 400);
-  }
-
-  const claim = verifyPasswordResetTicket(body.resetToken);
-  if (!claim) return c.json({ error: "Reset-Token abgelaufen oder ungueltig" }, 401);
-
-  const user = await findDbUserById(claim.sub);
-  if (!user) return c.json({ error: "Benutzer nicht gefunden" }, 404);
-
-  const meta = reqMeta(c);
-
-  // Juengsten unbenutzten Password-Reset-OTP des Users finden.
-  const { getDb } = await import("../db/client.js");
-  const db = getDb();
-  const [otpRow] = await db`
-    SELECT ticket FROM email_otp_tokens
-     WHERE user_id = ${user.id} AND purpose = 'password-reset' AND used = false
-       AND expires_at > now()
-     ORDER BY created_at DESC
-     LIMIT 1
-  `;
-  if (!otpRow) {
-    return c.json({ error: "Kein aktiver Code. Bitte Reset neu starten." }, 401);
-  }
-
-  const result = await verifyAndConsumeEmailOtp(String(otpRow.ticket), body.code, "password-reset");
-  if (!result.ok) {
-    const msg =
-      result.reason === "expired"
-        ? "Code abgelaufen. Bitte Reset neu starten."
-        : result.reason === "too-many-attempts"
-          ? "Zu viele Fehlversuche. Bitte Reset neu starten."
-          : result.reason === "used"
-            ? "Code wurde bereits verwendet."
-            : "Code ungueltig.";
-    return c.json({ error: msg }, 401);
-  }
-
-  const hash = await hashPassword(body.newPassword);
-  const ok = await updateDbUserPassword(user.id, hash);
-  if (!ok) return c.json({ error: "Passwort konnte nicht gespeichert werden." }, 500);
-
-  void audit({
-    event: "password_reset.success",
-    actorUserId: user.id,
-    actorUsername: user.username,
-    actorRole: user.role,
-    ip: meta.ip,
-    userAgent: meta.userAgent,
-  });
-
-  return c.json({ ok: true });
 });
 
 // ── Setup-Wizard (ohne Auth) ────────────────────────────────────────────────
@@ -940,14 +384,16 @@ app.post("/api/setup/admin", async (c) => {
   if (!username || username.length < 3) {
     return c.json({ error: "Benutzername muss mindestens 3 Zeichen haben" }, 400);
   }
-  if (!password || password.length < 8) {
-    return c.json({ error: "Passwort muss mindestens 8 Zeichen haben" }, 400);
+  if (!password || password.length < PASSWORD_MIN_LENGTH) {
+    return c.json({ error: `Passwort muss mindestens ${PASSWORD_MIN_LENGTH} Zeichen haben` }, 400);
   }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return c.json({ error: "Gueltige Email-Adresse erforderlich (fuer 2FA-Login)" }, 400);
+  // Email optional — siehe POST /admin/users. Der erste Admin muss anlegbar
+  // sein, ohne dass irgendwo ein Postfach erreichbar ist.
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return c.json({ error: "Ungueltige Email-Adresse" }, 400);
   }
 
-  const admin = await createInitialAdmin(username, password, email);
+  const admin = await createInitialAdmin(username, password, email || undefined);
   const token = createToken(admin.username, admin.role, admin.id);
   return c.json({ token, username: admin.username, role: admin.role, id: admin.id }, 201);
 });
@@ -978,7 +424,6 @@ app.get("/api/auth/me", (c) => {
       role: dbUser.role,
       displayName: dbUser.displayName ?? dbUser.settings?.displayName ?? null,
       isProtected: dbUser.isProtected,
-      hasTelegram: !!dbUser.telegramChatId,
     });
   }
   const json = findUser(jwtUser.username);

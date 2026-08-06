@@ -3,6 +3,7 @@ import { formatDate } from "../utils/format";
 import { ref, onMounted, computed, watch } from "vue";
 import { api } from "../api";
 import { useConfirm } from "../composables/useConfirm";
+import { PASSWORD_MIN_LENGTH } from "../constants";
 
 const { confirm } = useConfirm();
 
@@ -41,64 +42,6 @@ const defaultProject = ref<string | null>(null);
 const oldPassword = ref("");
 const newPassword = ref("");
 const confirmPassword = ref("");
-
-// ── Email ───────────────────────────────────────────────────────────────────
-// Pflicht-Feld fuer 2FA-Login (Migration 020). Anzeige im Profil + "Aendern"-
-// Modus mit Code-Verifikation. Aequivalent zum Setup-Flow am Login: User
-// gibt neue Email ein → Code wird gesendet → User bestaetigt → users.email
-// wird ueberschrieben.
-const emailEditing = ref(false);
-const emailNew = ref("");
-const emailVerifyTicket = ref<string | null>(null);
-const emailVerifyCode = ref("");
-const emailHint = ref<string | null>(null);
-const emailBusy = ref(false);
-
-const emailNewValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNew.value.trim()));
-
-async function startEmailChange() {
-  if (!emailNewValid.value) return;
-  emailBusy.value = true;
-  try {
-    const res = await api.post<{ ticket: string; emailHint?: string }>("/settings/email/change/start", {
-      email: emailNew.value.trim().toLowerCase(),
-    });
-    emailVerifyTicket.value = res.ticket;
-    emailHint.value = res.emailHint ?? emailNew.value.trim().toLowerCase();
-    emailVerifyCode.value = "";
-    flash("success", "Code wurde an die neue Adresse gesendet");
-  } catch (e) {
-    flash("error", e instanceof Error ? e.message : "Code konnte nicht gesendet werden");
-  } finally {
-    emailBusy.value = false;
-  }
-}
-
-async function verifyEmailChange() {
-  if (!emailVerifyTicket.value || !emailVerifyCode.value) return;
-  emailBusy.value = true;
-  try {
-    const res = await api.post<{ email: string }>("/settings/email/change/verify", {
-      ticket: emailVerifyTicket.value,
-      code: emailVerifyCode.value.replace(/\s/g, ""),
-    });
-    if (data.value?.profile) data.value.profile.email = res.email;
-    cancelEmailChange();
-    flash("success", "Email-Adresse aktualisiert");
-  } catch (e) {
-    flash("error", e instanceof Error ? e.message : "Code ungueltig");
-  } finally {
-    emailBusy.value = false;
-  }
-}
-
-function cancelEmailChange() {
-  emailEditing.value = false;
-  emailNew.value = "";
-  emailVerifyTicket.value = null;
-  emailVerifyCode.value = "";
-  emailHint.value = null;
-}
 
 const dirty = computed(() => {
   if (!data.value) return false;
@@ -158,8 +101,8 @@ async function changePassword() {
     flash("error", "Neue Passwoerter stimmen nicht ueberein");
     return;
   }
-  if (newPassword.value.length < 8) {
-    flash("error", "Neues Passwort muss mindestens 8 Zeichen haben");
+  if (newPassword.value.length < PASSWORD_MIN_LENGTH) {
+    flash("error", `Neues Passwort muss mindestens ${PASSWORD_MIN_LENGTH} Zeichen haben`);
     return;
   }
 
@@ -983,7 +926,6 @@ async function deleteCustomModule(m: CustomProjectModule) {
 
 type SettingsSection =
   | "profil"
-  | "email"
   | "praeferenzen"
   | "branding"
   | "vorlagen"
@@ -993,7 +935,6 @@ type SettingsSection =
 
 const SETTINGS_NAV: { id: SettingsSection; label: string; icon: string; group: string }[] = [
   { id: "profil", label: "Profil & Sicherheit", icon: "user", group: "Konto" },
-  { id: "email", label: "Email & 2FA", icon: "mail", group: "Konto" },
   { id: "praeferenzen", label: "Präferenzen", icon: "sliders", group: "System" },
   { id: "branding", label: "Branding", icon: "image", group: "Vorlagen" },
   { id: "vorlagen", label: "Vorlagen", icon: "file-text", group: "Vorlagen" },
@@ -1148,117 +1089,6 @@ onMounted(() => {
                   :style="{ opacity: savingPassword || !oldPassword || !newPassword || !confirmPassword ? 0.5 : 1 }"
                 >
                   {{ savingPassword ? "..." : "Passwort aendern" }}
-                </button>
-              </div>
-            </div>
-          </section>
-        </template>
-
-        <!-- ── Email (2FA via Email-OTP) ────────────────────────────── -->
-        <template v-if="activeSection === 'email'">
-          <section>
-            <h3 class="settings-h3 mb-3">
-              Email (Zwei-Faktor-Login)
-              <span
-                class="ml-2 text-xs px-2 py-0.5 rounded-full"
-                :style="data.profile.email ? 'background:#dcfce7; color:#166534' : 'background:#fef3c7; color:#92400e'"
-                >{{ data.profile.email ? "Aktiv" : "Nicht gesetzt" }}</span
-              >
-            </h3>
-
-            <div v-if="!emailEditing" class="settings-card p-4">
-              <p class="text-sm" style="color: var(--color-text-muted); margin-bottom: 12px">
-                Bei jedem Login wird nach dem Passwort ein 6-stelliger Code an deine Email-Adresse gesendet.
-                Pflicht-Feld — ohne Email ist kein Login möglich.
-              </p>
-              <div class="settings-row flex items-center justify-between px-0 py-1">
-                <span class="text-sm settings-label">Aktuelle Adresse</span>
-                <span class="text-sm font-mono settings-value">
-                  {{ data.profile.email ?? "— nicht gesetzt —" }}
-                </span>
-              </div>
-              <div class="flex justify-end" style="margin-top: 12px">
-                <button
-                  @click="emailEditing = true"
-                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-                >
-                  {{ data.profile.email ? "Email ändern" : "Email hinterlegen" }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Email-Aenderung: Neue Adresse eingeben -->
-            <div v-else-if="!emailVerifyTicket" class="settings-card p-4 space-y-3">
-              <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
-                Wir senden einen Bestätigungs-Code an die neue Adresse. Erst nach erfolgreicher Bestätigung wird die
-                Adresse aktiv.
-              </p>
-              <div class="flex items-center gap-3">
-                <label class="text-sm settings-label w-40 flex-shrink-0">Neue Email</label>
-                <input
-                  v-model="emailNew"
-                  type="email"
-                  autocomplete="email"
-                  placeholder="name@firma.at"
-                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm outline-none"
-                />
-              </div>
-              <div class="flex gap-2 justify-end pt-1">
-                <button
-                  @click="cancelEmailChange"
-                  :disabled="emailBusy"
-                  class="px-4 py-1.5 text-sm rounded"
-                  style="background: transparent; border: 1px solid var(--color-border)"
-                >
-                  Abbrechen
-                </button>
-                <button
-                  @click="startEmailChange"
-                  :disabled="emailBusy || !emailNewValid"
-                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-                  :style="{ opacity: emailBusy || !emailNewValid ? 0.5 : 1 }"
-                >
-                  {{ emailBusy ? "..." : "Code senden" }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Email-Aenderung: Code aus Mail bestätigen -->
-            <div v-else class="settings-card p-4 space-y-3">
-              <p class="text-sm" style="color: var(--color-text-muted); margin: 0">
-                Wir haben einen 6-stelligen Code an
-                <strong v-if="emailHint" class="font-mono">{{ emailHint }}</strong>
-                geschickt. Code unten eingeben, um die Email-Aenderung zu bestaetigen. 10 Minuten gültig.
-              </p>
-              <div class="flex items-center gap-3">
-                <label class="text-sm settings-label w-40 flex-shrink-0">Code</label>
-                <input
-                  v-model="emailVerifyCode"
-                  type="text"
-                  inputmode="numeric"
-                  pattern="[0-9]*"
-                  maxlength="7"
-                  autocomplete="one-time-code"
-                  class="settings-input flex-1 px-3 py-1.5 rounded text-sm font-mono outline-none"
-                  style="letter-spacing: 0.15em"
-                />
-              </div>
-              <div class="flex gap-2 justify-end pt-1">
-                <button
-                  @click="cancelEmailChange"
-                  :disabled="emailBusy"
-                  class="px-4 py-1.5 text-sm rounded"
-                  style="background: transparent; border: 1px solid var(--color-border)"
-                >
-                  Abbrechen
-                </button>
-                <button
-                  @click="verifyEmailChange"
-                  :disabled="emailBusy || !emailVerifyCode"
-                  class="primary-btn px-4 py-1.5 text-sm font-medium rounded transition"
-                  :style="{ opacity: emailBusy || !emailVerifyCode ? 0.5 : 1 }"
-                >
-                  {{ emailBusy ? "..." : "Bestätigen" }}
                 </button>
               </div>
             </div>

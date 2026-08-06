@@ -1,7 +1,12 @@
 // ============================================================
 // PATIO — User-Settings-Route
-// Profil, Passwort aendern, LLM-Runtime, Praeferenzen.
+// Profil, Passwort aendern, Praeferenzen.
 // Einstellungen, die keine grossen Systemauswirkungen haben.
+//
+// Die verifizierte Email-Aenderung (Code an die neue Adresse) ist mit dem
+// Umbau zum Firmenserver entfallen — sie brauchte SMTP. Die Email-Adresse
+// ist seither reine Kontaktinformation ohne Sicherheitsfunktion und wird
+// vom Admin ueber PATCH /admin/users/:id gepflegt.
 // ============================================================
 
 import { Hono } from "hono";
@@ -16,6 +21,7 @@ import {
   type DbUser,
   type JwtPayload,
 } from "../auth.js";
+import { PASSWORD_MIN_LENGTH } from "../../config.js";
 import { logEvent as audit } from "../../data/db-audit.js";
 
 type AppEnv = {
@@ -129,8 +135,8 @@ settingsRoutes.post("/auth/password", async (c) => {
   if (!body.oldPassword || !body.newPassword) {
     return c.json({ error: "Altes und neues Passwort erforderlich" }, 400);
   }
-  if (body.newPassword.length < 8) {
-    return c.json({ error: "Neues Passwort muss mindestens 8 Zeichen haben" }, 400);
+  if (body.newPassword.length < PASSWORD_MIN_LENGTH) {
+    return c.json({ error: `Neues Passwort muss mindestens ${PASSWORD_MIN_LENGTH} Zeichen haben` }, 400);
   }
 
   const ip = c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ?? c.req.header("x-real-ip") ?? "unknown";
@@ -176,102 +182,3 @@ settingsRoutes.post("/auth/password", async (c) => {
   logInfo(`[Settings] ${jwtUser.username} hat Passwort geaendert`);
   return c.json({ ok: true });
 });
-
-// ── Email-Aenderung (mit Bestaetigungs-Code) ────────────────────────────────
-//
-// Wir senden den Verifikations-Code an die NEUE Adresse — sonst koennte ein
-// kompromittierter Login-Cookie die Email auf eine Angreifer-Adresse aendern
-// ohne dass der echte User es merkt. Erst nach erfolgreicher Verifikation
-// wird users.email umgeschrieben.
-//
-// Ticket-System: ein kurzlebiges JWT (audience='2fa-setup') referenziert den
-// User. Verify-Step nutzt dasselbe Ticket + den Code aus der Mail.
-
-settingsRoutes.post("/settings/email/change/start", async (c) => {
-  const dbUser = c.get("dbUser");
-  if (!dbUser) return c.json({ error: "Nur fuer DB-User verfuegbar" }, 400);
-
-  let body: { email: string };
-  try {
-    body = await c.req.json<{ email: string }>();
-  } catch {
-    return c.json({ error: "Ungueltiger Request-Body" }, 400);
-  }
-  const email = body.email?.trim().toLowerCase() ?? "";
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return c.json({ error: "Ungueltige Email-Adresse" }, 400);
-  }
-  if (email === (dbUser.email ?? "")) {
-    return c.json({ error: "Diese Adresse ist bereits hinterlegt." }, 400);
-  }
-
-  const { isEmailTaken, createEmailOtp, createEmailSetupTicket } = await import("../auth.js");
-  if (await isEmailTaken(email, dbUser.id)) {
-    return c.json({ error: "Diese Email-Adresse ist bereits einem anderen Konto zugeordnet" }, 409);
-  }
-
-  try {
-    const { code } = await createEmailOtp(dbUser.id, "email-setup", email);
-    const { sendMail, buildEmailVerifyMail } = await import("../email.js");
-    const mail = buildEmailVerifyMail({ code, username: dbUser.displayName ?? dbUser.username });
-    const sent = await sendMail({ to: email, subject: mail.subject, text: mail.text, html: mail.html });
-    if (!sent) {
-      return c.json({ error: "Code konnte nicht zugestellt werden. Bitte Admin kontaktieren." }, 502);
-    }
-    const ticket = createEmailSetupTicket(dbUser);
-    return c.json({ ticket, emailHint: maskEmail(email) });
-  } catch {
-    return c.json({ error: "Code konnte nicht erstellt werden" }, 500);
-  }
-});
-
-settingsRoutes.post("/settings/email/change/verify", async (c) => {
-  const dbUser = c.get("dbUser");
-  if (!dbUser) return c.json({ error: "Nur fuer DB-User verfuegbar" }, 400);
-
-  let body: { ticket: string; code: string };
-  try {
-    body = await c.req.json<{ ticket: string; code: string }>();
-  } catch {
-    return c.json({ error: "Ungueltiger Request-Body" }, 400);
-  }
-
-  const { verifyEmailSetupTicket, verifyAndConsumeEmailOtp, setUserEmail, isEmailTaken } = await import("../auth.js");
-  const claim = verifyEmailSetupTicket(body.ticket);
-  if (!claim) return c.json({ error: "Ticket abgelaufen oder ungueltig" }, 401);
-  if (claim.sub !== dbUser.id) return c.json({ error: "Ticket gehoert zu anderem User" }, 403);
-
-  const { getDb } = await import("../../db/client.js");
-  const db = getDb();
-  const [otpRow] = await db`
-    SELECT ticket FROM email_otp_tokens
-     WHERE user_id = ${dbUser.id} AND purpose = 'email-setup' AND used = false
-       AND expires_at > now()
-     ORDER BY created_at DESC
-     LIMIT 1
-  `;
-  if (!otpRow) return c.json({ error: "Kein aktiver Code. Bitte neu starten." }, 401);
-
-  const result = await verifyAndConsumeEmailOtp(String(otpRow.ticket), body.code, "email-setup");
-  if (!result.ok) {
-    return c.json({ error: "Code ungueltig oder abgelaufen." }, 401);
-  }
-  if (!result.pendingEmail) return c.json({ error: "Token hat keine pending Email" }, 500);
-
-  if (await isEmailTaken(result.pendingEmail, dbUser.id)) {
-    return c.json({ error: "Diese Email-Adresse ist bereits einem anderen Konto zugeordnet" }, 409);
-  }
-
-  const updated = await setUserEmail(dbUser.id, result.pendingEmail);
-  if (!updated) return c.json({ error: "Speichern fehlgeschlagen" }, 500);
-
-  logInfo(`[Settings] ${dbUser.username} hat Email auf ${result.pendingEmail} geaendert`);
-  return c.json({ ok: true, email: updated.email });
-});
-
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!local || !domain) return "***@***";
-  const visible = local.slice(0, Math.min(2, local.length));
-  return `${visible}${"*".repeat(Math.max(1, local.length - visible.length))}@${domain}`;
-}

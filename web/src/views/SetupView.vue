@@ -4,6 +4,7 @@
 import { ref, computed, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { api, setToken } from "../api";
+import { PASSWORD_MIN_LENGTH } from "../constants";
 
 const router = useRouter();
 const username = ref("");
@@ -16,15 +17,20 @@ const checkingStatus = ref(true);
 
 const hostname = computed(() => (typeof window !== "undefined" ? window.location.host : "patio"));
 
-const passwordTooShort = computed(() => password.value.length > 0 && password.value.length < 8);
+const passwordTooShort = computed(() => password.value.length > 0 && password.value.length < PASSWORD_MIN_LENGTH);
 const passwordsMismatch = computed(() => passwordConfirm.value.length > 0 && password.value !== passwordConfirm.value);
-const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim()));
+// Email ist optional (der Login verschickt nichts mehr). Leer = in Ordnung;
+// wenn etwas dasteht, muss es aber eine Adresse sein.
+const emailValid = computed(() => {
+  const v = email.value.trim();
+  return v.length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+});
 const canSubmit = computed(
   () =>
     !loading.value &&
     username.value.trim().length >= 3 &&
     emailValid.value &&
-    password.value.length >= 8 &&
+    password.value.length >= PASSWORD_MIN_LENGTH &&
     password.value === passwordConfirm.value,
 );
 
@@ -166,12 +172,11 @@ async function submit() {
               </div>
             </div>
             <div>
-              <label class="eyebrow" style="display: block; margin-bottom: 6px">Email-Adresse</label>
+              <label class="eyebrow" style="display: block; margin-bottom: 6px">Email-Adresse (optional)</label>
               <input
                 v-model="email"
                 type="email"
                 autocomplete="email"
-                required
                 placeholder="name@firma.at"
                 class="login-input"
               />
@@ -179,7 +184,7 @@ async function submit() {
                 v-if="email.length > 0 && !emailValid"
                 style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px"
               >
-                Bitte gültige Email-Adresse — wird für 2FA-Login per Code verwendet.
+                Bitte eine gültige Adresse eintragen oder das Feld leer lassen.
               </div>
             </div>
             <div>

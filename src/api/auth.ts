@@ -1,8 +1,7 @@
 import fs from "fs";
-import crypto from "crypto";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import { JWT_SECRET, USERS_FILE, DB_ENABLED } from "../config.js";
+import { JWT_SECRET, USERS_FILE, DB_ENABLED, BCRYPT_ROUNDS } from "../config.js";
 import { getDb } from "../db/client.js";
 import { encryptString, decryptString } from "./crypto.js";
 import { peekTicket } from "./sse-tickets.js";
@@ -35,14 +34,12 @@ export interface DbUser {
   displayName: string | null;
   role: "admin" | "user";
   isProtected: boolean;
-  telegramChatId: string | null;
-  // Phase 6: Per-User Bots
-  telegramBotToken: string | null;
-  telegramBotEnabled: boolean;
-  // Phase 7 (Pre-Production): 2FA / TOTP — wird durch Email-OTP abgeloest,
-  // Spalte bleibt als Read-Field fuer Audit/Migrations.
+  // TOTP liegt still, bis es einen Zugang von aussen gibt (VPN). Die Spalte
+  // und src/api/totp.ts bleiben dafuer unberuehrt.
   totpEnabled: boolean;
-  // Migration 020: Email fuer 2FA. NULL = User muss noch eine setzen.
+  // Reine Kontaktinformation. War bis zum Umbau auf den Firmenserver der
+  // Zustellweg fuer Login-Codes und damit Pflicht — heute optional und ohne
+  // Sicherheitsfunktion.
   email: string | null;
   settings: UserSettings;
   createdAt: string;
@@ -69,13 +66,6 @@ function rowToDbUser(row: Record<string, unknown>): DbUser {
     displayName: row.display_name ? String(row.display_name) : null,
     role: (row.role === "admin" ? "admin" : "user") as DbUser["role"],
     isProtected: row.is_protected === true,
-    telegramChatId:
-      row.telegram_chat_id !== null && row.telegram_chat_id !== undefined ? String(row.telegram_chat_id) : null,
-    // Phase-6-Cleanup: bot_token kann encrypted oder Legacy-plaintext sein.
-    // decryptString erkennt das am "enc:v1:"-Prefix und gibt im Plaintext-Fall
-    // den Wert unveraendert zurueck.
-    telegramBotToken: decryptString(row.telegram_bot_token ? String(row.telegram_bot_token) : null),
-    telegramBotEnabled: row.telegram_bot_enabled !== false,
     totpEnabled: row.totp_enabled === true,
     email: row.email ? String(row.email) : null,
     settings,
@@ -88,13 +78,6 @@ export async function findDbUserByUsername(username: string): Promise<DbUser | n
   if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`SELECT * FROM users WHERE username = ${username} LIMIT 1`;
-  return row ? rowToDbUser(row) : null;
-}
-
-export async function findDbUserByEmail(email: string): Promise<DbUser | null> {
-  if (!DB_ENABLED) return null;
-  const db = getDb();
-  const [row] = await db`SELECT * FROM users WHERE LOWER(email) = LOWER(${email}) LIMIT 1`;
   return row ? rowToDbUser(row) : null;
 }
 
@@ -294,172 +277,6 @@ export async function updateDbUserPassword(userId: string, hash: string): Promis
   return result.count > 0;
 }
 
-// ── Telegram-Pair-Tokens (Phase 5) ──────────────────────────────────────────
-
-/** Erzeugt einen 8-stelligen alphanumerischen Pair-Token mit 10-Min-Ablauf
- *  und schreibt ihn in telegram_pair_tokens. Caller muss admin sein.
- *  Rueckgabe: {token, expiresAt} fuer das UI. */
-export async function createPairToken(userId: string): Promise<{ token: string; expiresAt: string }> {
-  if (!DB_ENABLED) throw new Error("Pair-Token benoetigt DB-Modus");
-  const db = getDb();
-  // Vorhandene abgelaufene Tokens des Users gleich aufraeumen.
-  await db`DELETE FROM telegram_pair_tokens WHERE user_id = ${userId} OR expires_at < now()`;
-
-  // 8 Bytes random → 11 Base64-Zeichen → wir schneiden auf 8 ASCII-Zeichen
-  // (gross+klein+zahlen) — gut tippbar im Telegram-Chat.
-  const raw = crypto.randomBytes(6).toString("base64").replace(/[/+=]/g, "");
-  const token = raw.slice(0, 8).toUpperCase();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-
-  await db`
-    INSERT INTO telegram_pair_tokens (token, user_id, expires_at)
-    VALUES (${token}, ${userId}, ${expiresAt})
-  `;
-  return { token, expiresAt };
-}
-
-/** Result-Object fuer redeemPairToken — drei Zustaende statt nur null/User. */
-export type PairResult =
-  | { ok: true; user: DbUser }
-  | { ok: false; reason: "token-invalid" }
-  | { ok: false; reason: "chat-id-taken"; existingUsername: string };
-
-/** Loest einen Pair-Token ein: prueft Existenz + Ablauf, prueft
- *  Uniqueness der chat_id, setzt users.telegram_chat_id = chatId,
- *  loescht den Token.
- *
- *  Atomar: der gesamte Validate+UPDATE+DELETE-Zyklus laeuft in einer
- *  Transaktion. Wuerde der Lookup ausserhalb stattfinden, koennte ein
- *  paralleler Redeem desselben Tokens beide chat_ids ueberschreiben.
- *
- *  Uniqueness: jeder User braucht eine eigene Telegram-ID. Wenn die
- *  chat_id bereits einem anderen User zugewiesen ist, wird abgebrochen
- *  (chat-id-taken) — sonst koennte jemand mit eigenem Telegram-Account
- *  einen abgefangenen Pair-Code einloesen und damit den urspruenglichen
- *  User abkoppeln. */
-export async function redeemPairToken(token: string, chatId: string): Promise<PairResult> {
-  if (!DB_ENABLED) return { ok: false, reason: "token-invalid" };
-  const db = getDb();
-  // Lazy-Cleanup von abgelaufenen Tokens — eine Aufraeumstelle reicht.
-  await db`DELETE FROM telegram_pair_tokens WHERE expires_at < now()`;
-
-  // Validate + UPDATE + DELETE in einer Transaktion. Wenn der SELECT 0 Rows
-  // findet (paralleler Redeem hat den Token schon weg), brechen wir sauber ab.
-  let userId: string | null = null;
-  let conflictUsername: string | null = null;
-  try {
-    await db.begin(async (tx) => {
-      const rows = await tx`
-        SELECT user_id FROM telegram_pair_tokens
-        WHERE token = ${token} AND expires_at >= now()
-        LIMIT 1
-      `;
-      if (rows.length === 0) {
-        throw new Error("__token_invalid__");
-      }
-      userId = String(rows[0]!.user_id);
-
-      // Uniqueness-Pruefung: ist die chat_id bereits einem ANDEREN User
-      // zugewiesen? Dann brechen wir ab statt den anderen abzukoppeln.
-      const conflictRows = await tx`
-        SELECT username FROM users
-         WHERE telegram_chat_id = ${chatId} AND id <> ${userId}
-         LIMIT 1
-      `;
-      if (conflictRows.length > 0) {
-        conflictUsername = String(conflictRows[0]!.username);
-        throw new Error("__chat_id_taken__");
-      }
-
-      await tx`UPDATE users SET telegram_chat_id = ${chatId} WHERE id = ${userId}`;
-      // Alle Tokens dieses Users werden invalidiert — ein User pairt sich
-      // genau einmal, alte Codes braucht niemand.
-      await tx`DELETE FROM telegram_pair_tokens WHERE user_id = ${userId}`;
-    });
-  } catch (err) {
-    // Sentinel-Fehler aus dem Inneren der TX, andere Fehler bubblen weiter.
-    if (err instanceof Error && err.message === "__token_invalid__") {
-      return { ok: false, reason: "token-invalid" };
-    }
-    if (err instanceof Error && err.message === "__chat_id_taken__") {
-      return { ok: false, reason: "chat-id-taken", existingUsername: conflictUsername ?? "?" };
-    }
-    throw err;
-  }
-  if (!userId) return { ok: false, reason: "token-invalid" };
-  const user = await findDbUserById(userId);
-  if (!user) return { ok: false, reason: "token-invalid" };
-  return { ok: true, user };
-}
-
-/** Lookup eines Users anhand seiner verknuepften Telegram-Chat-ID.
- *  Wird vom Bot vor jeder LLM-Antwort genutzt, um nicht-gepairte Chats
- *  abzulehnen. */
-export async function findDbUserByChatId(chatId: string | number): Promise<DbUser | null> {
-  if (!DB_ENABLED) return null;
-  const db = getDb();
-  const [row] = await db`
-    SELECT * FROM users WHERE telegram_chat_id = ${String(chatId)} LIMIT 1
-  `;
-  return row ? rowToDbUser(row) : null;
-}
-
-// ── Per-User Telegram-Bots (Phase 6) ────────────────────────────────────────
-
-/** Setzt das persoenliche Telegram-Bot-Token eines Users.
- *  - token = null  → Bot wird entfernt (auch chat_id wird gewischt)
- *  - token gleich altem Wert → no-op (kein Bot-Restart noetig)
- *  - token != alter Wert → chat_id wird mit gewischt (frischer Bot, frische
- *    Zuordnung; Phase-6-D-Entscheidung)
- *
- *  Returns true bei Erfolg, false wenn kein User mit dieser id existiert.
- *  Der Bot-Manager pollt diese Aenderungen alle paar Sekunden. */
-export async function setUserBotToken(userId: string, token: string | null): Promise<boolean> {
-  if (!DB_ENABLED) return false;
-  const trimmed = token?.trim() || null;
-  const db = getDb();
-  const [current] = await db`SELECT telegram_bot_token FROM users WHERE id = ${userId} LIMIT 1`;
-  if (!current) return false;
-
-  // Vergleich auf Plaintext-Ebene (current kann encrypted sein → erst entschluesseln).
-  const oldPlain = decryptString(current.telegram_bot_token ? String(current.telegram_bot_token) : null);
-  if (oldPlain === trimmed) return true; // no-op
-
-  // Phase-6-Cleanup: ab jetzt verschluesselt in der DB. Bei null bleibt's null.
-  const encrypted = trimmed ? encryptString(trimmed) : null;
-  const result = await db`
-    UPDATE users
-       SET telegram_bot_token = ${encrypted},
-           telegram_chat_id = NULL
-     WHERE id = ${userId}
-  `;
-  return result.count > 0;
-}
-
-/** Aktiviert/deaktiviert den Bot eines Users ohne den Token zu loeschen. */
-export async function setUserBotEnabled(userId: string, enabled: boolean): Promise<boolean> {
-  if (!DB_ENABLED) return false;
-  const db = getDb();
-  const result = await db`
-    UPDATE users SET telegram_bot_enabled = ${enabled} WHERE id = ${userId}
-  `;
-  return result.count > 0;
-}
-
-/** Liefert alle User mit aktivem Bot-Token — vom Bot-Manager beim Boot
- *  und bei Refresh-Polls genutzt. */
-export async function listBotEnabledUsers(): Promise<DbUser[]> {
-  if (!DB_ENABLED) return [];
-  const db = getDb();
-  const rows = await db`
-    SELECT * FROM users
-    WHERE telegram_bot_token IS NOT NULL
-      AND telegram_bot_enabled = true
-    ORDER BY id
-  `;
-  return rows.map(rowToDbUser);
-}
-
 /** Setup: legt den Erst-Admin an. Race-sicher — selbst zwei parallele
  *  Aufrufe koennen nicht beide einen geschuetzten Admin erzeugen.
  *
@@ -587,8 +404,14 @@ export async function verifyPassword(plain: string, hash: string): Promise<boole
   return bcrypt.compare(plain, hash);
 }
 
+/** Hasht ein Passwort mit dem konfigurierten Kostenfaktor.
+ *
+ *  Bestehende Hashes tragen ihren Kostenfaktor in sich ($2b$10$...) und
+ *  bleiben gueltig — bcrypt.compare liest ihn aus dem Hash. Ein Konto von
+ *  vor der Anhebung wird also weiter angenommen und erst beim naechsten
+ *  Passwortwechsel auf den neuen Faktor gehoben. */
 export async function hashPassword(plain: string): Promise<string> {
-  return bcrypt.hash(plain, 10);
+  return bcrypt.hash(plain, BCRYPT_ROUNDS);
 }
 
 // ── JWT ──────────────────────────────────────────────────────────────────────
@@ -882,157 +705,6 @@ export function verify2faTicket(ticket: string): TwoFactorTicketPayload | null {
   }
 }
 
-// ── Email-2FA (Migration 020) ────────────────────────────────────────────────
-//
-// Lifecycle:
-//   1. POST /api/auth/login (username+password) → wenn User Email hat:
-//      createEmailOtp() generiert 6-stelligen Code, hasht ihn, speichert
-//      ihn als email_otp_tokens-Eintrag mit purpose='login', sendet Code
-//      via SMTP, gibt Ticket zurueck.
-//   2. POST /api/auth/login/2fa (ticket+code) → verifyAndConsumeEmailOtp()
-//      sucht den OTP-Eintrag, prueft Ablauf + bcrypt.compare auf code,
-//      markiert used=true. Bei Erfolg: regulaeres JWT.
-//
-// Setup (User hat noch keine Email — Legacy-Konten):
-//   1. Login liefert {requiresEmailSetup: true, ticket} statt 2FA-Ticket.
-//   2. POST /api/auth/setup-email/start (ticket+email) sendet Verifikations-
-//      code an die NEUE Email. purpose='email-setup', pending_email gefuellt.
-//   3. POST /api/auth/setup-email/verify (ticket+code) prueft, schreibt
-//      pending_email auf users.email, liefert reguläres JWT.
-//
-// Sicherheits-Punkte:
-//   - Codes sind bcrypt-gehasht — Backup-Dump leakt nichts Live-Funktionales.
-//   - max 5 Versuche pro OTP-Token (attempts-Counter). Brute-Force-Schutz.
-//   - 10 Minuten Lebensdauer.
-//   - Used = true nach erfolgreicher Verifikation = kein Replay.
-//   - Vorhandene unbenutzte Login-OTPs eines Users werden bei jedem neuen
-//     Login uebernutzt → invalidiert (verhindert paralleles Multi-Login).
-
-interface CreateOtpResult {
-  ticket: string;
-  code: string; // Plain — wird ans Mail-Template uebergeben, danach weggeworfen
-}
-
-/** Generiert 6-stelligen Code, hasht ihn, speichert mit Ticket-ID,
- *  sendet KEINE Mail (das ist Caller-Job). Existierende unbenutzte
- *  Tokens des Users mit gleichem purpose werden vorher invalidiert. */
-export async function createEmailOtp(
-  userId: string,
-  purpose: "login" | "email-setup" | "password-reset",
-  pendingEmail?: string,
-): Promise<CreateOtpResult> {
-  if (!DB_ENABLED) throw new Error("Email-OTP benoetigt DB-Modus");
-  const db = getDb();
-
-  // Alte unbenutzte Tokens dieses Users + Purpose invalidieren — pro
-  // User immer nur EIN aktiver Code dieser Art. Verhindert Konfusion und
-  // beschleunigt das aufraeumen.
-  await db`
-    DELETE FROM email_otp_tokens
-    WHERE user_id = ${userId} AND purpose = ${purpose}
-  `;
-
-  // 6-stelliger Code, fuehrende Nullen erlaubt (000123).
-  const code = String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
-  const codeHash = await bcrypt.hash(code, 8);
-  // Ticket: 16 Bytes random hex — referenziert den Token-Eintrag.
-  // Nicht zu verwechseln mit dem JWT-Ticket fuer den 2FA-Login (das
-  // identifiziert den USER, nicht den OTP-Eintrag).
-  const ticket = crypto.randomBytes(16).toString("hex");
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-
-  await db`
-    INSERT INTO email_otp_tokens (ticket, user_id, code_hash, purpose, pending_email, expires_at)
-    VALUES (${ticket}, ${userId}, ${codeHash}, ${purpose}, ${pendingEmail ?? null}, ${expiresAt})
-  `;
-
-  return { ticket, code };
-}
-
-export type VerifyOtpResult =
-  | { ok: true; userId: string; pendingEmail: string | null }
-  | { ok: false; reason: "not-found" | "expired" | "used" | "too-many-attempts" | "code-invalid" };
-
-/** Prueft den Code gegen den gespeicherten Hash und marked used.
- *  Atomarer Race-Schutz: SELECT + UPDATE in einer Transaktion, damit
- *  zwei parallele Verifikationen denselben Code nicht beide einloesen. */
-export async function verifyAndConsumeEmailOtp(
-  ticket: string,
-  code: string,
-  expectedPurpose: "login" | "email-setup" | "password-reset",
-): Promise<VerifyOtpResult> {
-  if (!DB_ENABLED) return { ok: false, reason: "not-found" };
-  const cleanCode = code.replace(/\s+/g, "");
-  if (!/^\d{6}$/.test(cleanCode)) return { ok: false, reason: "code-invalid" };
-
-  const db = getDb();
-  let result: VerifyOtpResult = { ok: false, reason: "not-found" };
-
-  await db.begin(async (tx) => {
-    const [row] = await tx`
-      SELECT ticket, user_id, code_hash, purpose, pending_email, expires_at, used, attempts
-        FROM email_otp_tokens
-       WHERE ticket = ${ticket}
-       LIMIT 1
-       FOR UPDATE
-    `;
-    if (!row) {
-      result = { ok: false, reason: "not-found" };
-      return;
-    }
-    if (String(row.purpose) !== expectedPurpose) {
-      // Token existiert, aber falscher Zweck — wirkt wie not-found.
-      result = { ok: false, reason: "not-found" };
-      return;
-    }
-    if (row.used === true) {
-      result = { ok: false, reason: "used" };
-      return;
-    }
-    const expiresAt = row.expires_at instanceof Date ? row.expires_at : new Date(String(row.expires_at));
-    if (expiresAt.getTime() < Date.now()) {
-      result = { ok: false, reason: "expired" };
-      return;
-    }
-    if (Number(row.attempts) >= 5) {
-      result = { ok: false, reason: "too-many-attempts" };
-      return;
-    }
-
-    const ok = await bcrypt.compare(cleanCode, String(row.code_hash));
-    if (!ok) {
-      // Attempts-Counter erhoehen, damit Brute-Force nach 5 Fehlversuchen
-      // den Token tot setzt.
-      await tx`UPDATE email_otp_tokens SET attempts = attempts + 1 WHERE ticket = ${ticket}`;
-      result = { ok: false, reason: "code-invalid" };
-      return;
-    }
-
-    // Erfolgreich — Token verbrauchen.
-    await tx`UPDATE email_otp_tokens SET used = true WHERE ticket = ${ticket}`;
-    result = {
-      ok: true,
-      userId: String(row.user_id),
-      pendingEmail: row.pending_email ? String(row.pending_email) : null,
-    };
-  });
-
-  return result;
-}
-
-/** Setzt die Email eines Users — wird im Email-Setup-Flow aufgerufen
- *  nachdem die Verifikation erfolgreich war. Schreibt normalisiert
- *  (lowercase + trim). UNIQUE-Konflikt wird zu Error. */
-export async function setUserEmail(userId: string, email: string): Promise<DbUser | null> {
-  if (!DB_ENABLED) return null;
-  const normalized = email.trim().toLowerCase();
-  const db = getDb();
-  const [row] = await db`
-    UPDATE users SET email = ${normalized} WHERE id = ${userId} RETURNING *
-  `;
-  return row ? rowToDbUser(row) : null;
-}
-
 /** Liefert true wenn die Email-Adresse schon einem ANDEREN User gehoert.
  *  Fuer Pre-Check beim Email-Setup, damit der UNIQUE-Constraint nicht
  *  ueberraschend kracht. */
@@ -1047,164 +719,4 @@ export async function isEmailTaken(email: string, exceptUserId?: string): Promis
      LIMIT 1
   `;
   return rows.length > 0;
-}
-
-// ── 2FA-Setup-Ticket (kurzlebig, fuer Email-Setup-Flow) ─────────────────────
-// Eigenes audience='2fa-setup' damit es NICHT als Login-Ticket benutzt
-// werden kann. Lebensdauer 10 Min — die Setup-Mail muss in der Zeit
-// ankommen + Code eingegeben werden.
-
-interface EmailSetupTicketPayload {
-  sub: string;
-  username: string;
-  role: string;
-  aud: "2fa-setup";
-}
-
-export function createEmailSetupTicket(user: DbUser): string {
-  const payload: EmailSetupTicketPayload = {
-    sub: user.id,
-    username: user.username,
-    role: user.role,
-    aud: "2fa-setup",
-  };
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "10m" });
-}
-
-export function verifyEmailSetupTicket(ticket: string): EmailSetupTicketPayload | null {
-  try {
-    const decoded = jwt.verify(ticket, JWT_SECRET, {
-      audience: "2fa-setup",
-      algorithms: ["HS256"],
-    }) as EmailSetupTicketPayload;
-    if (decoded.aud !== "2fa-setup") return null;
-    return decoded;
-  } catch {
-    return null;
-  }
-}
-
-// ── Magic-Link-Login (Migration 021) ────────────────────────────────────────
-//
-// Alternative zum 6-stelligen Login-Code: User klickt einen Link in der
-// Email, ist eingeloggt. Setzt 2FA-Ticket voraus (User muss vorher
-// Username+Passwort eingegeben haben — Link allein reicht NICHT, weil
-// jemand sonst den Empfaenger einer abgefangenen Mail einloggen koennte).
-//
-// Token-Sicherheit:
-//   - 32 Bytes random URL-safe = 256 Bit Entropie. Brute-Force unmoeglich.
-//   - DB speichert sha256-Hash → DB-Leak bringt einem Angreifer nichts,
-//     er muesste den Original-Token aus der Mail haben.
-//   - 15 Min Lebensdauer (Mail-Zustellung + Klick passt locker rein).
-//   - Einmal-Use (used-Flag) — Replay nicht moeglich.
-
-/** Erzeugt einen Magic-Link-Token fuer den User. Returns plain Token
- *  (kommt in die URL der Email) und liefert dem Caller den Plaintext —
- *  der wird sofort ans Mail-Template uebergeben und danach weggeworfen. */
-export async function createMagicLinkToken(userId: string): Promise<string> {
-  if (!DB_ENABLED) throw new Error("Magic-Link benoetigt DB-Modus");
-  const db = getDb();
-
-  // Vorhandene unbenutzte Magic-Links des Users invalidieren — pro
-  // User immer nur ein aktiver Link.
-  await db`
-    DELETE FROM email_otp_tokens
-    WHERE user_id = ${userId} AND purpose = 'magic-link'
-  `;
-
-  const tokenPlain = crypto.randomBytes(32).toString("base64url");
-  const tokenHash = crypto.createHash("sha256").update(tokenPlain).digest("hex");
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-
-  await db`
-    INSERT INTO email_otp_tokens (ticket, user_id, code_hash, purpose, expires_at)
-    VALUES (${tokenHash}, ${userId}, ${null}, 'magic-link', ${expiresAt})
-  `;
-
-  return tokenPlain;
-}
-
-// ── Password-Reset-Ticket ────────────────────────────────────────────────────
-// Kurzlebiges JWT (aud="password-reset", 10 Min.) das den User identifiziert
-// nachdem sein OTP-Code erfolgreich verifiziert wurde und das neue Passwort
-// gesetzt werden soll.
-//
-// Ablauf:
-//   1. POST /api/auth/forgot-password (username)
-//      → OTP generieren + per Mail senden + Reset-Ticket erzeugen (aud="password-reset")
-//      → Ticket direkt im Response (kein separater Verify-Step noetig).
-//   2. POST /api/auth/reset-password (resetToken + code + newPassword)
-//      → Ticket verifizieren (aud-Check verhindert Missbrauch anderer Tickets)
-//      → OTP-Code pruefen + konsumieren
-//      → Passwort hashen + in DB schreiben
-
-interface PasswordResetTicketPayload {
-  sub: string;
-  username: string;
-  role: string;
-  aud: "password-reset";
-}
-
-export function createPasswordResetTicket(user: DbUser): string {
-  const payload: PasswordResetTicketPayload = {
-    sub: user.id,
-    username: user.username,
-    role: user.role,
-    aud: "password-reset",
-  };
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: "10m" });
-}
-
-export function verifyPasswordResetTicket(ticket: string): PasswordResetTicketPayload | null {
-  try {
-    const decoded = jwt.verify(ticket, JWT_SECRET, {
-      audience: "password-reset",
-      algorithms: ["HS256"],
-    }) as PasswordResetTicketPayload;
-    if (decoded.aud !== "password-reset") return null;
-    return decoded;
-  } catch {
-    return null;
-  }
-}
-
-/** Loest den Magic-Link-Token ein und liefert den User zurueck.
- *  Race-sichere Transaktion mit FOR UPDATE damit zwei parallele
- *  Klicks nicht beide einloesen. */
-export async function consumeMagicLinkToken(tokenPlain: string): Promise<DbUser | null> {
-  if (!DB_ENABLED) return null;
-  if (!tokenPlain || typeof tokenPlain !== "string") return null;
-  const tokenHash = crypto.createHash("sha256").update(tokenPlain).digest("hex");
-
-  const db = getDb();
-  let userId: string | null = null;
-
-  try {
-    await db.begin(async (tx) => {
-      const [row] = await tx`
-        SELECT user_id, expires_at, used
-          FROM email_otp_tokens
-         WHERE ticket = ${tokenHash} AND purpose = 'magic-link'
-         LIMIT 1
-         FOR UPDATE
-      `;
-      if (!row) {
-        throw new Error("__not_found__");
-      }
-      if (row.used === true) {
-        throw new Error("__used__");
-      }
-      const expiresAt = row.expires_at instanceof Date ? row.expires_at : new Date(String(row.expires_at));
-      if (expiresAt.getTime() < Date.now()) {
-        throw new Error("__expired__");
-      }
-      userId = String(row.user_id);
-      await tx`UPDATE email_otp_tokens SET used = true WHERE ticket = ${tokenHash}`;
-    });
-  } catch {
-    return null;
-  }
-
-  if (!userId) return null;
-  return findDbUserById(userId);
 }

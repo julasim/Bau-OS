@@ -6,6 +6,7 @@ import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
+import { PASSWORD_MIN_LENGTH } from "../constants";
 
 const { confirm } = useConfirm();
 
@@ -62,14 +63,18 @@ function openCreate() {
   showCreateDialog.value = true;
 }
 
-const emailValid = computed(() => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(createForm.value.email.trim()));
+// Email ist optional — siehe SetupView. Der Server nimmt Konten ohne Adresse an.
+const emailValid = computed(() => {
+  const v = createForm.value.email.trim();
+  return v.length === 0 || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+});
 
 const createCanSubmit = computed(
   () =>
     !createSaving.value &&
     createForm.value.username.trim().length >= 3 &&
     emailValid.value &&
-    createForm.value.password.length >= 8 &&
+    createForm.value.password.length >= PASSWORD_MIN_LENGTH &&
     createForm.value.password === createForm.value.passwordConfirm,
 );
 
@@ -109,7 +114,7 @@ function openPasswordReset(user: AdminUser) {
 }
 
 async function submitPasswordReset() {
-  if (!passwordTarget.value || passwordValue.value.length < 8) return;
+  if (!passwordTarget.value || passwordValue.value.length < PASSWORD_MIN_LENGTH) return;
   passwordSaving.value = true;
   passwordError.value = null;
   try {
@@ -363,20 +368,19 @@ function formatDate(iso?: string) {
             />
           </label>
           <label class="form-field form-field-span-2">
-            <span class="eyebrow">Email * (für 2FA-Login)</span>
+            <span class="eyebrow">Email (optional)</span>
             <input
               v-model="createForm.email"
               type="email"
               autocomplete="email"
               placeholder="name@firma.at"
               class="form-input-lg"
-              required
             />
             <span
               v-if="createForm.email.length > 0 && !emailValid"
               style="font-size: 11px; color: var(--color-text-muted); margin-top: 4px"
             >
-              Bitte eine gültige Email-Adresse — wird für 2FA-Login per Code verwendet.
+              Bitte eine gültige Adresse eintragen oder das Feld leer lassen.
             </span>
           </label>
           <label class="form-field">
@@ -468,7 +472,7 @@ function formatDate(iso?: string) {
           </button>
           <button
             class="patio-btn solid"
-            :disabled="passwordValue.length < 8 || passwordSaving"
+            :disabled="passwordValue.length < PASSWORD_MIN_LENGTH || passwordSaving"
             @click="submitPasswordReset"
           >
             {{ passwordSaving ? "…" : "Zurücksetzen" }}

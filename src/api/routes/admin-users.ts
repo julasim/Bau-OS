@@ -24,6 +24,7 @@ import {
   countDbAdmins,
 } from "../auth.js";
 import type { AppEnv } from "../server.js";
+import { PASSWORD_MIN_LENGTH } from "../../config.js";
 import { emit } from "../events.js";
 import { logEvent as audit } from "../../data/db-audit.js";
 import type { Context } from "hono";
@@ -84,7 +85,6 @@ function publicUser(u: Awaited<ReturnType<typeof listDbUsers>>[number]) {
     displayName: u.displayName,
     role: u.role,
     isProtected: u.isProtected,
-    hasTelegram: !!u.telegramChatId,
     email: u.email,
     createdAt: u.createdAt,
     updatedAt: u.updatedAt,
@@ -112,11 +112,15 @@ adminUsersRoutes.post("/admin/users", async (c) => {
   if (!username || username.length < 3) {
     return c.json({ error: "Benutzername muss mindestens 3 Zeichen haben" }, 400);
   }
-  if (!password || password.length < 8) {
-    return c.json({ error: "Passwort muss mindestens 8 Zeichen haben" }, 400);
+  if (!password || password.length < PASSWORD_MIN_LENGTH) {
+    return c.json({ error: `Passwort muss mindestens ${PASSWORD_MIN_LENGTH} Zeichen haben` }, 400);
   }
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return c.json({ error: "Gueltige Email-Adresse erforderlich (Pflicht fuer 2FA-Login)" }, 400);
+  // Email ist OPTIONAL. Sie war Pflicht, solange der Login 6-stellige Codes
+  // dorthin verschickte; auf dem Firmenserver ohne Internet gibt es diesen
+  // Weg nicht mehr, und die Pflicht haette schlicht verhindert, ueberhaupt
+  // ein Konto anzulegen. Angegeben muss sie aber gueltig sein.
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return c.json({ error: "Ungueltige Email-Adresse" }, 400);
   }
   const role = body.role === "admin" ? "admin" : "user";
 
@@ -130,7 +134,7 @@ adminUsersRoutes.post("/admin/users", async (c) => {
       password,
       role,
       displayName: body.displayName?.trim() || null,
-      email,
+      email: email || null,
     });
     emit({ type: "team", action: "created", id: user.id });
     void audit({
@@ -260,8 +264,8 @@ adminUsersRoutes.patch("/admin/users/:id/password", async (c) => {
   } catch {
     return c.json({ error: "Ungueltiger Request-Body" }, 400);
   }
-  if (!body.newPassword || body.newPassword.length < 8) {
-    return c.json({ error: "Passwort muss mindestens 8 Zeichen haben" }, 400);
+  if (!body.newPassword || body.newPassword.length < PASSWORD_MIN_LENGTH) {
+    return c.json({ error: `Passwort muss mindestens ${PASSWORD_MIN_LENGTH} Zeichen haben` }, 400);
   }
 
   const hash = await hashPassword(body.newPassword);
