@@ -39,7 +39,7 @@
 >
 > **Die Warteschlange aus Abschnitt 0 des Plans
 > (`~/.claude/plans/dynamic-floating-pearl.md`) ist vollständig abgearbeitet —
-> Stufe 1 bis 6.** 265 → 387 Tests, Migrationen 042–048.
+> Stufe 1 bis 6.** 265 → 399 Tests, Migrationen 042–049.
 >
 > **Danach eine eigene Analyserunde** (Abgleich aller 175 Routen gegen die
 > Oberfläche, Suche nach TODOs und toten Pfaden). Sie hat drei Dinge zutage
@@ -70,12 +70,26 @@
 > | 5 Altbestand | 72 tote `DB_ENABLED`-Abfragen; JSON-Konten abgeschaltet; sechs Tabellen der Bot-/Outlook-Ära entfernt (047) |
 > | 6 Suche | `tsvector` mit deutschen Wortstämmen + `ts_rank`, ILIKE bleibt für Wortteile in kurzen Feldern (048) |
 >
-> **Offen und für Julius zu entscheiden:** die Samba-Freigabe „Dokumente"
-> (`/opt/patio-workspace`, AP1-E) und die Dateiablage der Anwendung zeigen
-> **verschiedene Dinge**. Uploads landen in der Datenbank, die Freigabe zeigt
-> das Verzeichnis. Beides nebeneinander ist vertretbar (die Freigabe für
-> Pläne und CAD, die Anwendung für alles mit Projektbezug), aber es sollte
-> eine bewusste Entscheidung sein und in der Doku stehen.
+> **Danach eine Aufräumrunde über alle offenen Punkte** („bitte alles
+> fixen"):
+>
+> - **Zwei Ablagen, jetzt klar getrennt.** Die Freigabe „Dokumente" ist ein
+>   normaler Netzordner für Pläne, CAD und große Scans; in PATIO Hochgeladenes
+>   liegt in der Datenbank, mit Projektbezug, Rechten und Volltextsuche. Die
+>   Anwendung fasst den Ordner nicht an. Dabei gefunden: das Löschen einer
+>   Datei nahm die **gleichnamige Datei in der Freigabe** mit.
+> - **Papierkorb für Notizen, Aufgaben und Termine** (Migration 049), für alle
+>   nutzbar statt nur für die Verwaltung. Dabei gefunden:
+>   `db-termine.delete()` löschte per `LIKE` — jeder Termin mit „Abnahme" im
+>   Text wäre mitgegangen.
+> - **Auth aufgeräumt.** Der JSON-Zweig steckte noch in der Middleware und
+>   leitete daraus die Rolle ab. Damit fielen auch die letzten 20 toten
+>   `DB_ENABLED`-Abfragen (95 von 109 insgesamt entfernt).
+>
+> **Bewusst NICHT gemacht:** `?projectId=` bis in die Repos durchziehen. Die
+> Auflösung an einer Stelle (`src/api/projekt-bezug.ts`) kostet eine Abfrage
+> je Anfrage und leistet dasselbe; alle zwölf Repos auf IDs umzustellen wäre
+> ein Umbau quer durch den Baum ohne Gewinn für irgendjemanden.
 >
 > **Was als Nächstes ansteht** — nichts davon steht mehr in der Warteschlange,
 > das sind die großen Pakete aus dem Plan: **AP9** Oberfläche aus PATIO
@@ -189,7 +203,7 @@ npm run build        # tsc → dist/ (kopiert db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 387 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (alle Tests, 399 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -209,9 +223,9 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 278 von 387 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 290 von 399 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
-> 32 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
+> 34 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
 > Von den 109, die dann laufen, **scheitern vier** — seit `tests/db.test.ts`
 > dazukam, meldet die Suite ohne Datenbank also nicht mehr grün, sondern rot.
 > Das ist eine Verbesserung: vorher sah ein halber Lauf wie ein voller aus.
@@ -243,7 +257,7 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   forward-only, idempotent (`IF NOT EXISTS` / DO-Block-Guards). Runner
   (`src/db/migrate.ts`) trackt per Dateiname in `_migrations` (keine
   Prüfsumme), jede Migration in eigener Transaktion, Advisory-Lock gegen
-  parallele Starts. Aktuellste: `048_volltextsuche.sql`. **Schema-Lektion:**
+  parallele Starts. Aktuellste: `049_papierkorb_datensaetze.sql`. **Schema-Lektion:**
   Beim JOIN müssen Typen passen — `034` hat `chat_messages.session_id` von TEXT
   auf UUID umgestellt (passend zu `chat_sessions.id`), sonst
   `operator does not exist: text = uuid`.
