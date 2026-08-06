@@ -42,7 +42,7 @@
 > springen.
 >
 > **Vor jeder Messung `DATABASE_URL` setzen** (WSL-IP, siehe unten). Ohne sie
-> überspringt die Testsuite still 202 von 311 Prüfungen und vier weitere
+> überspringt die Testsuite still 219 von 328 Prüfungen und vier weitere
 > schlagen fehl — wer das übersieht, repariert die falschen Dinge.
 >
 > **Stufe 1 ist abgearbeitet** (Datenverlust verhindern): `db-notes` löst
@@ -70,9 +70,33 @@
 >   Stammdaten bleiben für alle lesbar (Kollegenkatalog), die Zuordnungen
 >   folgen den Projekt-Rechten.
 >
-> Als Nächstes offen: **Stufe 3 — Papierkorb.** Löschen ist hart, und die
-> Migrationen `005`/`007`/`009`/`011` verdrahten `ON DELETE CASCADE` — ein
-> gelöschtes Projekt reißt seine Datensätze mit.
+> **Stufe 3 ist abgearbeitet** (Papierkorb, Migration 044): Löschen setzt nur
+> noch `deleted_at`. Vorher riss ein gelöschtes Projekt Bautagebuch,
+> Protokolle, Stunden, Phasen und Rechnungen mit (`ON DELETE CASCADE`) und
+> ließ Notizen, Aufgaben, Termine und Dateien ohne Bezug zurück (`SET NULL`);
+> der einzige Rückweg war die nächtliche Sicherung. Die Kaskaden bleiben
+> scharf und feuern erst beim endgültigen Entfernen — dort sind sie richtig.
+> Ansicht: **Verwaltung → Papierkorb**.
+>
+> **Damit ist das Abbruchkriterium der Arbeitsschleife erreicht** (Abschnitt 0
+> des Plans: „Fertig ist die Schleife, wenn Stufe 1 bis 3 abgearbeitet sind").
+> Alles darunter ist Ausbau ohne definiertes Ende.
+>
+> **Aus Stufe 4 ist 4.1 erledigt**: das **Entscheidungslog** (Migration 045,
+> portiert aus `apps/patio-app-lokal`) — Begründung, verworfene Alternativen,
+> Beteiligte, optionaler Bezug zur Besprechung. Es löst das Freitextfeld
+> `meetings.decisions` ab, das stehen bleibt.
+>
+> Offen in Stufe 4: **Positionskatalog** (setzt Rechnungspositionen voraus,
+> die es hier noch nicht gibt — `ProjectInvoice` kennt nur `betrag`),
+> **Aktivität**, **Sicherungs-Route** in der Oberfläche, **`?projectId=`** als
+> rename-feste Alternative in den Routen. Danach Stufe 5 (Altbestand) und
+> Stufe 6 (Volltextsuche auf `tsvector`).
+>
+> **Nicht gebaut, bewusst notiert:** ein Papierkorb für EINZELNE Datensätze
+> (Notizen, Aufgaben, Termine). Stufe 3 zielt auf Projekte, und dort ist der
+> Schaden ungleich größer. Eine Notiz zu löschen ist häufiger — das gehört
+> als eigener Punkt nachgezogen.
 
 **AP0 abgeschlossen.** Entfernt: Telegram-Bot, LLM-/Agenten-Laufzeit,
 MCP-Client, Embeddings, DuckDuckGo-Websuche, Outlook-Abgleich und die
@@ -171,7 +195,7 @@ npm run build        # tsc → dist/ (kopiert db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 311 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (alle Tests, 328 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -191,9 +215,9 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 202 von 311 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 219 von 328 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
-> 21 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
+> 24 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
 > Von den 109, die dann laufen, **scheitern vier** — seit `tests/db.test.ts`
 > dazukam, meldet die Suite ohne Datenbank also nicht mehr grün, sondern rot.
 > Das ist eine Verbesserung: vorher sah ein halber Lauf wie ein voller aus.
@@ -225,7 +249,7 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   forward-only, idempotent (`IF NOT EXISTS` / DO-Block-Guards). Runner
   (`src/db/migrate.ts`) trackt per Dateiname in `_migrations` (keine
   Prüfsumme), jede Migration in eigener Transaktion, Advisory-Lock gegen
-  parallele Starts. Aktuellste: `042_rev_konfliktschutz.sql`. **Schema-Lektion:**
+  parallele Starts. Aktuellste: `045_entscheidungen.sql`. **Schema-Lektion:**
   Beim JOIN müssen Typen passen — `034` hat `chat_messages.session_id` von TEXT
   auf UUID umgestellt (passend zu `chat_sessions.id`), sonst
   `operator does not exist: text = uuid`.
