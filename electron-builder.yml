@@ -36,6 +36,16 @@ extraMetadata:
 files:
   - dist-electron/**/*
   - package.json
+  # `files:` steuert nur die App-DATEIEN — die Produktions-Abhaengigkeiten aus
+  # der package.json packt electron-builder von sich aus dazu. Ohne diese Zeile
+  # landet der komplette Server-Baum (hono, postgres, bcrypt, esbuild …) auf
+  # jedem Buerorechner: gemessen 2896 Eintraege im Archiv, davon sechs eigene.
+  # Der Bau uebersetzte dafuer sogar bcrypt nativ neu.
+  #
+  # Die Huelle braucht davon NICHTS: sie importiert `electron` (liefert die
+  # Laufzeit) und node:-Builtins, sonst nichts. Nachgewiesen, indem das gepackte
+  # Programm nach dieser Zeile weiterhin startet und sich verbindet.
+  - "!node_modules/**/*"
 
 # Kein publish-Block: Auto-Update ist nicht vorgesehen (der Server hat kein
 # Internet, es gibt keine Feed-URL). Verteilung läuft über den geteilten

@@ -32,7 +32,17 @@ export default tseslint.config(
   //  schaltet die Regel fuer TypeScript ab, weil der Compiler das prueft.)
   {
     files: ["scripts/*.mjs"],
-    languageOptions: { globals: { console: "readonly", process: "readonly" } },
+    languageOptions: {
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        // Seit Node 22 global — der Pruefstand spricht damit das
+        // Chrome-DevTools-Protokoll, ohne eine Fremdbibliothek zu brauchen.
+        WebSocket: "readonly",
+      },
+    },
   },
   { ignores: ["dist/", "dist-electron/", "release/", "node_modules/", "docs/", "tools/"] },
 );
