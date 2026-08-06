@@ -5,6 +5,7 @@
 // (Notizen, Tasks, Termine, Files als bytea). Der Vault speichert nur
 // noch System-Dateien (Agenten-Workspace, users.json, Tools, Logs).
 import { getDb } from "../db/client.js";
+import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Project, ProjectAccessEntry, ProjectCreateOptions, ProjectRepository, ProjectUpdate } from "./types.js";
 
 // Mapping: camelCase-API-Feld ↔ snake_case-Spaltenname.
@@ -39,6 +40,9 @@ function isValidName(name: string): boolean {
 function rowToProjectInfo(row: Record<string, unknown>): Project {
   return {
     id: String(row.id),
+    /** Konflikt-Zaehler (Migration 042). Fehlt er im DTO, kann die Oberflaeche
+     *  ihn nicht zurueckschicken und der Schutz ist von aussen unerreichbar. */
+    rev: Number(row.rev ?? 1),
     name: String(row.name),
     description: row.description ? String(row.description) : null,
     status: String(row.status),
@@ -77,7 +81,7 @@ function rowToProjectInfo(row: Record<string, unknown>): Project {
 function projectInfoSelect(db: ReturnType<typeof getDb>) {
   return db`
     SELECT
-      p.id, p.name, p.description, p.status, p.color,
+      p.id, p.rev, p.name, p.description, p.status, p.color,
       p.projektnummer, p.bauherr, p.standort, p.projektart, p.nutzung,
       p.phase, p.start_date, p.end_date,
       p.bauherr_id, p.parent_id,
@@ -248,7 +252,7 @@ export const dbProjects: ProjectRepository = {
     return true;
   },
 
-  async update(name, patch) {
+  async update(name, patch, expectedRev) {
     if (!isValidName(name)) return false;
     const db = getDb();
 
@@ -261,8 +265,12 @@ export const dbProjects: ProjectRepository = {
     if (entries.length === 0) return false;
 
     // Existenz pruefen (sonst wuerde UPDATE stillschweigend 0 Zeilen aendern).
-    const [existing] = await db`SELECT id FROM projects WHERE name = ${name} LIMIT 1`;
+    const [existing] = await db`SELECT id, rev FROM projects WHERE name = ${name} LIMIT 1`;
     if (!existing) return false;
+
+    // Konfliktschutz (Migration 042). Siehe src/data/konflikt.ts.
+    const istRev = Number(existing.rev ?? 1);
+    pruefeRev({ id: String(existing.id), name, rev: istRev }, istRev, expectedRev);
 
     // Loop-Schutz fuer parent_id: ein Projekt darf nicht sein eigenes Parent
     // werden. Tiefer liegende Zyklen (A → B → A) werden im Frontend vor dem
@@ -287,11 +295,31 @@ export const dbProjects: ProjectRepository = {
       values.push(val == null ? null : String(val));
       setFragments.push(`${col} = $${values.length}`);
     }
-    // updated_at Trigger setzt das Feld automatisch (siehe migration 001).
-    const sql = `UPDATE projects SET ${setFragments.join(", ")} WHERE name = $${values.length + 1}`;
-    values.push(name);
+    // Kein einziges Feld war patchbar (z.B. nur unbekannte Schluessel im
+    // Body). Ohne diese Bremse entstuende `SET  WHERE …` — ein Syntaxfehler.
+    if (setFragments.length === 0) return false;
 
-    await db.unsafe(sql, values);
+    // updated_at Trigger setzt das Feld automatisch (siehe migration 001).
+    // `rev = rev + 1` und die rev-Bedingung im WHERE machen daraus EIN
+    // atomares Kommando: wer mit veraltetem Zaehler kommt, trifft keine Zeile.
+    const nameIdx = values.length + 1;
+    values.push(name);
+    const revIdx = values.length + 1;
+    values.push(String(istRev));
+    const sql =
+      `UPDATE projects SET ${setFragments.join(", ")}, rev = rev + 1 ` +
+      `WHERE name = $${nameIdx} AND rev = $${revIdx} RETURNING id`;
+
+    const betroffen = await db.unsafe(sql, values);
+    if (betroffen.length === 0) {
+      const [jetzt] = await db`SELECT id, name, rev FROM projects WHERE id = ${String(existing.id)}`;
+      if (!jetzt) return false; // in der Zwischenzeit geloescht
+      throw new KonfliktFehler(
+        { id: String(jetzt.id), name: String(jetzt.name), rev: Number(jetzt.rev) },
+        istRev,
+        Number(jetzt.rev),
+      );
+    }
     return true;
   },
 

@@ -74,6 +74,10 @@ notesRoutes.get("/notes/:name", async (c) => {
   const name = c.req.param("name");
   const guard = await ensureNoteAccess(userCtx(c), name);
   if (!guard.ok) return c.json({ error: guard.error }, guard.status);
+  // Mit Zaehler ausliefern, damit die Oberflaeche ihn beim Speichern
+  // zurueckschicken kann (Konfliktschutz, Migration 042).
+  const mitRev = await noteRepo.readWithRev?.(name);
+  if (mitRev) return c.json({ name, content: mitRev.content, rev: mitRev.rev });
   const content = await noteRepo.read(name);
   if (content === null) return c.json({ error: "Notiz nicht gefunden" }, 404);
   return c.json({ name, content });
@@ -97,10 +101,12 @@ notesRoutes.put("/notes/:name", async (c) => {
   const existing = await noteRepo.read(name);
   if (existing === null) return c.json({ error: "Notiz nicht gefunden" }, 404);
 
-  const { content } = await c.req.json<{ content: string }>();
+  const { content, rev } = await c.req.json<{ content: string; rev?: number }>();
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
 
-  const success = await noteRepo.update(name, content);
+  // `rev` ist der beim Laden mitgelieferte Zaehler. Fehlt er, gilt weiterhin
+  // „zuletzt gewinnt" — aeltere Aufrufer bleiben damit lauffaehig.
+  const success = await noteRepo.update(name, content, rev);
   // Projekt der Notiz erneut aufloesen — der ACL-Guard oben verwirft sein
   // Ergebnis, und das DTO der Notiz traegt keine Projekt-UUID.
   if (success) {

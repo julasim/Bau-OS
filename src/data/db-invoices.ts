@@ -7,6 +7,7 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
+import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { ProjectInvoice, InvoiceRepository } from "./types.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -20,6 +21,7 @@ function dateStr(v: unknown): string | null {
 function rowToInvoice(row: Record<string, unknown>): ProjectInvoice {
   return {
     id: String(row.id),
+    rev: Number(row.rev ?? 1),
     projectId: String(row.project_id),
     phaseId: row.phase_id ? String(row.phase_id) : null,
     phaseName: row.phase_name ? String(row.phase_name) : null,
@@ -83,6 +85,11 @@ export const dbInvoices: InvoiceRepository = {
     const db = getDb();
     const [current] = await db`SELECT * FROM project_invoices WHERE id = ${id}`;
     if (!current) return null;
+
+    // Konfliktschutz (Migration 042): schickt der Aufrufer einen Zaehler mit,
+    // muss er noch stimmen — sonst hat in der Zwischenzeit jemand anderes
+    // gespeichert. Ohne Zaehler gilt weiterhin „zuletzt gewinnt".
+    pruefeRev(rowToInvoice(current), current.rev, (input as { rev?: number }).rev);
     if (input.datum && !ISO_DATE.test(input.datum)) return "Datum muss YYYY-MM-DD sein";
 
     const phaseId = "phaseId" in input ? (input.phaseId ?? null) : current.phase_id;
@@ -92,12 +99,15 @@ export const dbInvoices: InvoiceRepository = {
     const status = "status" in input ? (input.status ?? "gestellt") : current.status;
     const note = "note" in input ? (input.note ?? null) : current.note;
 
+    let betroffen: readonly unknown[] = [];
     try {
-      await db`
+      betroffen = await db`
         UPDATE project_invoices SET
           phase_id = ${phaseId}, nummer = ${nummer}, betrag = ${betrag},
-          datum = ${datum}, status = ${status}, note = ${note}
-        WHERE id = ${id}
+          datum = ${datum}, status = ${status}, note = ${note},
+          rev = rev + 1
+        WHERE id = ${id} AND rev = ${current.rev}
+        RETURNING id
       `;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -105,6 +115,14 @@ export const dbInvoices: InvoiceRepository = {
         return `Ungueltige Eingabe: ${msg}`;
       }
       throw err;
+    }
+    // Keine Zeile getroffen heisst: zwischen Lesen und Schreiben hat jemand
+    // anderes gespeichert. Ohne diese Pruefung taete die Anweisung STILL
+    // nichts und meldete trotzdem Erfolg.
+    if (betroffen.length === 0) {
+      const [jetzt] = await db`SELECT * FROM project_invoices WHERE id = ${id}`;
+      if (!jetzt) return null; // in der Zwischenzeit geloescht
+      throw new KonfliktFehler(rowToInvoice(jetzt), Number(current.rev), Number(jetzt.rev));
     }
     const rows = await db.unsafe(`${SELECT} WHERE i.id = $1 LIMIT 1`, [id]);
     return rows[0] ? rowToInvoice(rows[0] as Record<string, unknown>) : null;

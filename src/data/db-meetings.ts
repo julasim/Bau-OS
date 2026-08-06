@@ -14,6 +14,7 @@
 
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Meeting, MeetingActionItem, MeetingInput, MeetingRepository } from "./types.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -78,6 +79,9 @@ function rowToMeeting(row: Record<string, unknown>): Meeting {
     createdByUsername: row.created_by_username ? String(row.created_by_username) : null,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    /** Konflikt-Zaehler (Migration 042) — die Oberflaeche schickt ihn beim
+     *  Speichern zurueck. Fehlt er im DTO, ist der Schutz von aussen unerreichbar. */
+    rev: Number(row.rev ?? 1),
   };
 }
 
@@ -233,6 +237,11 @@ export const dbMeetings: MeetingRepository = {
     const [current] = await db`SELECT * FROM meetings WHERE id = ${id}`;
     if (!current) return null;
 
+    // Konfliktschutz (Migration 042): schickt der Aufrufer einen Zaehler mit,
+    // muss er noch stimmen — sonst hat in der Zwischenzeit jemand anderes
+    // gespeichert. Ohne Zaehler gilt weiterhin „zuletzt gewinnt".
+    pruefeRev(rowToMeeting(current), current.rev, (input as { rev?: number }).rev);
+
     // Felder mit Patch-Semantik aufbauen.
     const date = "date" in norm && norm.date ? norm.date : current.meeting_date;
     const startTime = "startTime" in norm ? (norm.startTime ?? null) : current.start_time;
@@ -256,8 +265,9 @@ export const dbMeetings: MeetingRepository = {
       "actionItems" in norm ? (norm.actionItems ?? []) : ((current.action_items as MeetingActionItem[]) ?? []);
     const actionItemsJson = JSON.stringify(actionItems);
 
+    let betroffen: readonly unknown[] = [];
     try {
-      await db`
+      betroffen = await db`
         UPDATE meetings SET
           meeting_date = ${date as string},
           start_time = ${startTime as string | null},
@@ -271,8 +281,10 @@ export const dbMeetings: MeetingRepository = {
           minutes = ${minutes as string | null},
           decisions = ${decisions as string | null},
           action_items = ${actionItemsJson}::jsonb,
-          next_meeting_date = ${nextMeetingDate as string | null}
-        WHERE id = ${id}
+          next_meeting_date = ${nextMeetingDate as string | null},
+          rev = rev + 1
+        WHERE id = ${id} AND rev = ${current.rev}
+        RETURNING id
       `;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -280,6 +292,14 @@ export const dbMeetings: MeetingRepository = {
         return `Ungueltige Eingabe: ${msg}`;
       }
       throw err;
+    }
+    // Keine Zeile getroffen heisst: zwischen Lesen und Schreiben hat jemand
+    // anderes gespeichert. Ohne diese Pruefung taete die Anweisung STILL
+    // nichts und meldete trotzdem Erfolg.
+    if (betroffen.length === 0) {
+      const [jetzt] = await db`SELECT * FROM meetings WHERE id = ${id}`;
+      if (!jetzt) return null; // in der Zwischenzeit geloescht
+      throw new KonfliktFehler(rowToMeeting(jetzt), Number(current.rev), Number(jetzt.rev));
     }
 
     return this.get(id);

@@ -169,7 +169,10 @@ projectsRoutes.patch("/projects/:name", async (c) => {
     return c.json({ error: "Kein patchbares Feld im Body" }, 400);
   }
 
-  const ok = await projectRepo.update(name, patch);
+  // `rev` ist der beim Laden mitgelieferte Zaehler (Konfliktschutz). Fehlt
+  // er, gilt weiterhin „zuletzt gewinnt" — aeltere Aufrufer bleiben lauffaehig.
+  const rev = typeof body.rev === "number" ? body.rev : undefined;
+  const ok = await projectRepo.update(name, patch, rev);
   if (!ok) {
     return c.json({ error: "Projekt nicht gefunden oder Update fehlgeschlagen" }, 404);
   }

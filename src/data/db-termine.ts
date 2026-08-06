@@ -1,6 +1,7 @@
 // Datenbank-Implementation: PostgreSQL via postgres.js
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import { validateDatum, validateUhrzeit, normalizeDatum } from "./termin-validation.js";
 import type { Termin, TerminRepository } from "./types.js";
 
@@ -29,6 +30,9 @@ function rowToTermin(row: Record<string, unknown>): Termin {
     isMilestone: row.is_milestone === true,
     createdById: row.created_by ? String(row.created_by) : null,
     createdAt: String(row.created_at),
+    /** Konflikt-Zaehler (Migration 042) — die Oberflaeche schickt ihn beim
+     *  Speichern zurueck. Fehlt er im DTO, ist der Schutz von aussen unerreichbar. */
+    rev: Number(row.rev ?? 1),
   };
 }
 
@@ -102,6 +106,11 @@ export const dbTermine: TerminRepository = {
     const [current] = await db`SELECT * FROM termine WHERE id = ${id}`;
     if (!current) return null;
 
+    // Konfliktschutz (Migration 042): schickt der Aufrufer einen Zaehler mit,
+    // muss er noch stimmen — sonst hat in der Zwischenzeit jemand anderes
+    // gespeichert. Ohne Zaehler gilt weiterhin „zuletzt gewinnt".
+    pruefeRev(rowToTermin(current), current.rev, (updates as { rev?: number }).rev);
+
     if (updates.datum) {
       const err = validateDatum(updates.datum);
       if (err) return null;
@@ -136,15 +145,25 @@ export const dbTermine: TerminRepository = {
       assignees = [...memberNames, ...extra];
     }
 
-    await db`
+    const betroffen = await db`
       UPDATE termine SET
         text = ${text}, datum = ${datum}, uhrzeit = ${uhrzeit},
         endzeit = ${endzeit}, location = ${location},
         assignees = ${assignees as string[]},
         assignee_ids = ${(assigneeIds ?? []) as string[]},
-        phase_id = ${phaseId ?? null}, is_milestone = ${isMilestone ?? false}
-      WHERE id = ${id}
+        phase_id = ${phaseId ?? null}, is_milestone = ${isMilestone ?? false},
+        rev = rev + 1
+      WHERE id = ${id} AND rev = ${current.rev}
+      RETURNING id
     `;
+    // Keine Zeile getroffen heisst: zwischen Lesen und Schreiben hat jemand
+    // anderes gespeichert. Ohne diese Pruefung taete die Anweisung STILL
+    // nichts und meldete trotzdem Erfolg.
+    if (betroffen.length === 0) {
+      const [jetzt] = await db`SELECT * FROM termine WHERE id = ${id}`;
+      if (!jetzt) return null; // in der Zwischenzeit geloescht
+      throw new KonfliktFehler(rowToTermin(jetzt), Number(current.rev), Number(jetzt.rev));
+    }
     return this.get(id);
   },
 

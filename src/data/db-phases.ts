@@ -9,6 +9,7 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
+import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { ProjectPhase, PhaseRepository } from "./types.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -50,6 +51,9 @@ function rowToPhase(row: Record<string, unknown>): ProjectPhase {
     taskDone,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    /** Konflikt-Zaehler (Migration 042) — die Oberflaeche schickt ihn beim
+     *  Speichern zurueck. Fehlt er im DTO, ist der Schutz von aussen unerreichbar. */
+    rev: Number(row.rev ?? 1),
   };
 }
 
@@ -176,6 +180,11 @@ export const dbPhases: PhaseRepository = {
     const db = getDb();
     const [current] = await db`SELECT * FROM project_phases WHERE id = ${id}`;
     if (!current) return null;
+
+    // Konfliktschutz (Migration 042): schickt der Aufrufer einen Zaehler mit,
+    // muss er noch stimmen — sonst hat in der Zwischenzeit jemand anderes
+    // gespeichert. Ohne Zaehler gilt weiterhin „zuletzt gewinnt".
+    pruefeRev(rowToPhase(current), current.rev, (input as { rev?: number }).rev);
     for (const f of ["sollStart", "sollEnde", "istStart", "istEnde"] as const) {
       const v = input[f];
       if (v && !ISO_DATE.test(v)) return `Datum ${f} muss YYYY-MM-DD sein`;
@@ -203,14 +212,17 @@ export const dbPhases: PhaseRepository = {
       istEndeFinal = new Date().toISOString().slice(0, 10);
     }
 
+    let betroffen: readonly unknown[] = [];
     try {
-      await db`
+      betroffen = await db`
         UPDATE project_phases SET
           name = ${name}, status = ${status}, progress_manual = ${progressManual},
           fee_share = ${feeShare}, soll_start = ${sollStart}, soll_ende = ${sollEnde},
           ist_start = ${istStartFinal}, ist_ende = ${istEndeFinal}, sort_order = ${sortOrder},
-          depends_on_phase_id = ${dependsOnPhaseId}
-        WHERE id = ${id}
+          depends_on_phase_id = ${dependsOnPhaseId},
+          rev = rev + 1
+        WHERE id = ${id} AND rev = ${current.rev}
+        RETURNING id
       `;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -218,6 +230,14 @@ export const dbPhases: PhaseRepository = {
         return `Ungueltige Eingabe: ${msg}`;
       }
       throw err;
+    }
+    // Keine Zeile getroffen heisst: zwischen Lesen und Schreiben hat jemand
+    // anderes gespeichert. Ohne diese Pruefung taete die Anweisung STILL
+    // nichts und meldete trotzdem Erfolg.
+    if (betroffen.length === 0) {
+      const [jetzt] = await db`SELECT * FROM project_phases WHERE id = ${id}`;
+      if (!jetzt) return null; // in der Zwischenzeit geloescht
+      throw new KonfliktFehler(rowToPhase(jetzt), Number(current.rev), Number(jetzt.rev));
     }
     await syncMilestone(db, id);
     return this.get(id);

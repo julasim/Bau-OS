@@ -2,6 +2,7 @@
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { escapeLike } from "./sql-like.js";
+import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { NoteRepository } from "./types.js";
 
 /** Loest eine Angabe auf GENAU EINE Notiz auf — oder auf keine.
@@ -49,13 +50,13 @@ import type { NoteRepository } from "./types.js";
  *  adressiert — dafuer muesste `listDetailed()` die ID mitliefern, was sie
  *  heute nicht tut. Bis dahin ist der Zustand dokumentiert und durch einen
  *  Test festgehalten, statt sich zufaellig zu ergeben. */
-async function findeNotiz(nameOrPath: string): Promise<{ id: string; title: string } | null> {
+async function findeNotiz(nameOrPath: string): Promise<{ id: string; title: string; rev: number } | null> {
   const db = getDb();
   // id::text statt id — sonst wirft Postgres bei Nicht-UUID-Eingaben
   // "invalid input syntax for type uuid", und die Notiz waere weder ueber
   // ihren Titel noch ueber ihren Dateinamen erreichbar.
   const rows = await db`
-    SELECT id, title,
+    SELECT id, title, rev,
            CASE WHEN id::text = ${nameOrPath} THEN 0
                 WHEN title = ${nameOrPath} THEN 1
                 ELSE 2 END AS rang
@@ -72,7 +73,7 @@ async function findeNotiz(nameOrPath: string): Promise<{ id: string; title: stri
     const anfangsTreffer = rows.filter((r) => Number(r.rang) === 2).length;
     if (anfangsTreffer > 1) return null; // mehrdeutig → nicht raten
   }
-  return { id: String(beste.id), title: String(beste.title) };
+  return { id: String(beste.id), title: String(beste.title), rev: Number(beste.rev ?? 1) };
 }
 
 export const dbNotes: NoteRepository = {
@@ -136,6 +137,14 @@ export const dbNotes: NoteRepository = {
     return row ? String(row.content) : null;
   },
 
+  async readWithRev(nameOrPath) {
+    const treffer = await findeNotiz(nameOrPath);
+    if (!treffer) return null;
+    const db = getDb();
+    const [row] = await db`SELECT content, rev FROM notes WHERE id = ${treffer.id}`;
+    return row ? { content: String(row.content), rev: Number(row.rev ?? 1) } : null;
+  },
+
   async append(nameOrPath, content) {
     const db = getDb();
     const found = await findeNotiz(nameOrPath);
@@ -143,24 +152,43 @@ export const dbNotes: NoteRepository = {
     const now = new Date();
     const time = now.toLocaleTimeString("de-AT", { hour: "2-digit", minute: "2-digit" });
     const appendText = `\n**Nachtrag ${time}:** ${content}\n`;
+    // Bewusst OHNE Konfliktschutz: Anhaengen ist vertauschbar. Zwei
+    // gleichzeitige Nachtraege stoeren einander nicht, beide landen im Text.
+    // `rev` steigt trotzdem, damit ein parallel offener Editor merkt, dass
+    // sich etwas getan hat.
     await db`
       UPDATE notes SET
         content = content || ${appendText},
+        rev = rev + 1,
         updated_at = ${now.toISOString()}
       WHERE id = ${found.id}
     `;
     return true;
   },
 
-  async update(nameOrPath, content) {
+  async update(nameOrPath, content, expectedRev) {
     const db = getDb();
     const found = await findeNotiz(nameOrPath);
     if (!found) return false;
+
+    // Konfliktschutz (Migration 042). Siehe src/data/konflikt.ts.
+    pruefeRev({ id: found.id, title: found.title, rev: found.rev }, found.rev, expectedRev);
+
     const now = new Date().toISOString();
-    await db`
-      UPDATE notes SET content = ${content}, updated_at = ${now}
-      WHERE id = ${found.id}
+    const betroffen = await db`
+      UPDATE notes SET content = ${content}, rev = rev + 1, updated_at = ${now}
+      WHERE id = ${found.id} AND rev = ${found.rev}
+      RETURNING id
     `;
+    if (betroffen.length === 0) {
+      const [jetzt] = await db`SELECT id, title, rev FROM notes WHERE id = ${found.id}`;
+      if (!jetzt) return false; // in der Zwischenzeit geloescht
+      throw new KonfliktFehler(
+        { id: String(jetzt.id), title: String(jetzt.title), rev: Number(jetzt.rev) },
+        found.rev,
+        Number(jetzt.rev),
+      );
+    }
     return true;
   },
 

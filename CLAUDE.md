@@ -42,13 +42,18 @@
 > springen.
 >
 > **Vor jeder Messung `DATABASE_URL` setzen** (WSL-IP, siehe unten). Ohne sie
-> überspringt die Testsuite still 156 von 267 Prüfungen und vier weitere
+> überspringt die Testsuite still 178 von 287 Prüfungen und vier weitere
 > schlagen fehl — wer das übersieht, repariert die falschen Dinge.
 >
-> Als Nächstes offen: **Stufe 1 — Datenverlust verhindern.** `db-notes`
-> selektiert per `title LIKE` und trifft womöglich den falschen Datensatz;
-> einen Konfliktschutz gibt es nicht, zwei Arbeitsplätze überschreiben
-> einander wortlos.
+> **Stufe 1 ist abgearbeitet** (Datenverlust verhindern): `db-notes` löst
+> Notizen jetzt gestuft auf statt per `title LIKE` zu raten, und alle neun
+> bearbeitbaren Datenarten tragen einen Konflikt-Zähler (`rev`, Migration
+> 042) — zwei Arbeitsplätze überschreiben einander nicht mehr wortlos,
+> der zweite bekommt einen 409 samt aktuellem Stand.
+>
+> Als Nächstes offen: **Stufe 2 — Rechte schließen.** Sieben Routendateien
+> haben keine einzige Prüfung, `team.ts` prüft nur beim Schreiben, und der
+> Stundensatz (`hourly_rate`) ist für jeden lesbar.
 
 **AP0 abgeschlossen.** Entfernt: Telegram-Bot, LLM-/Agenten-Laufzeit,
 MCP-Client, Embeddings, DuckDuckGo-Websuche, Outlook-Abgleich und die
@@ -147,7 +152,7 @@ npm run build        # tsc → dist/ (kopiert db/migrations/ mit)
 npm run build:all    # tsc + Vite-Build von web/
 npm run start        # node dist/index.js (Produktion)
 
-npm test             # vitest run (alle Tests, 265 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (alle Tests, 287 — nur MIT Datenbank, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -167,10 +172,10 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 156 von 267 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 178 von 287 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
-> 16 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
-> Von den 111, die dann laufen, **scheitern vier** — seit `tests/db.test.ts`
+> 17 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
+> Von den 109, die dann laufen, **scheitern vier** — seit `tests/db.test.ts`
 > dazukam, meldet die Suite ohne Datenbank also nicht mehr grün, sondern rot.
 > Das ist eine Verbesserung: vorher sah ein halber Lauf wie ein voller aus.
 > **Diese Zahl beim Hinzufügen von Tests mitpflegen** — sie war schon einmal
@@ -201,7 +206,7 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   forward-only, idempotent (`IF NOT EXISTS` / DO-Block-Guards). Runner
   (`src/db/migrate.ts`) trackt per Dateiname in `_migrations` (keine
   Prüfsumme), jede Migration in eigener Transaktion, Advisory-Lock gegen
-  parallele Starts. Aktuellste: `039_rename_calendar_enum.sql`. **Schema-Lektion:**
+  parallele Starts. Aktuellste: `042_rev_konfliktschutz.sql`. **Schema-Lektion:**
   Beim JOIN müssen Typen passen — `034` hat `chat_messages.session_id` von TEXT
   auf UUID umgestellt (passend zu `chat_sessions.id`), sonst
   `operator does not exist: text = uuid`.

@@ -42,6 +42,7 @@ import {
   createInitialAdmin,
 } from "./auth.js";
 import { logEvent as audit } from "../data/db-audit.js";
+import { KonfliktFehler } from "../data/konflikt.js";
 
 /** Liefert die Client-IP fuer Rate-Limiting und Audit-Eintraege.
  *  Wichtig: nur die ERSTE IP aus x-forwarded-for verwenden — sonst kann
@@ -131,6 +132,26 @@ app.onError((err, c) => {
   // ohne eigenes try/catch. Das ist ein Client-Fehler, kein Serverfehler.
   if (err instanceof SyntaxError) {
     return c.json({ error: "Ungueltiger JSON-Body" }, 400);
+  }
+
+  // Jemand anderes hat in der Zwischenzeit gespeichert (Migration 042).
+  // Die Uebersetzung steht bewusst HIER und nicht in den neun Routen: so
+  // koennen sie ihre Signatur behalten, und es gibt genau eine Stelle, an der
+  // aus dem Konflikt ein HTTP-Status wird.
+  //
+  // 409 samt aktuellem Stand — die Oberflaeche kann damit zeigen, was sich
+  // geaendert hat, statt den Benutzer ins Leere laufen zu lassen.
+  if (err instanceof KonfliktFehler) {
+    return c.json(
+      {
+        error: err.message,
+        konflikt: true,
+        aktuell: err.aktuell,
+        erwarteteRev: err.erwartet,
+        aktuelleRev: err.tatsaechlich,
+      },
+      409,
+    );
   }
 
   // Postgres-SQLSTATEs, die eine sinnvolle Antwort erlauben:

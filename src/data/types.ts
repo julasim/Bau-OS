@@ -6,6 +6,11 @@
 // ── Entity Types ─────────────────────────────────────────────
 
 export interface Task {
+  /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
+   *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
+   *  anderes gespeichert und die Aenderung wird abgelehnt statt still zu
+   *  ueberschreiben. Siehe src/data/konflikt.ts. */
+  rev?: number;
   id: string;
   text: string;
   status: "open" | "in_progress" | "done";
@@ -35,6 +40,11 @@ export interface Task {
 }
 
 export interface Termin {
+  /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
+   *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
+   *  anderes gespeichert und die Aenderung wird abgelehnt statt still zu
+   *  ueberschreiben. Siehe src/data/konflikt.ts. */
+  rev?: number;
   id: string;
   text: string;
   datum: string;
@@ -64,6 +74,11 @@ export interface Termin {
 }
 
 export interface Note {
+  /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
+   *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
+   *  anderes gespeichert und die Aenderung wird abgelehnt statt still zu
+   *  ueberschreiben. Siehe src/data/konflikt.ts. */
+  rev?: number;
   id?: string;
   title?: string;
   content: string;
@@ -77,6 +92,11 @@ export interface Note {
 }
 
 export interface Project {
+  /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
+   *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
+   *  anderes gespeichert und die Aenderung wird abgelehnt statt still zu
+   *  ueberschreiben. Siehe src/data/konflikt.ts. */
+  rev?: number;
   id?: string;
   name: string;
   folderPath?: string;
@@ -206,6 +226,11 @@ export interface TeamMemberProject {
 }
 
 export interface TeamMember {
+  /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
+   *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
+   *  anderes gespeichert und die Aenderung wird abgelehnt statt still zu
+   *  ueberschreiben. Siehe src/data/konflikt.ts. */
+  rev?: number;
   id: string;
   name: string;
   role: string | null;
@@ -346,6 +371,11 @@ export interface MeetingActionItem {
 }
 
 export interface Meeting {
+  /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
+   *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
+   *  anderes gespeichert und die Aenderung wird abgelehnt statt still zu
+   *  ueberschreiben. Siehe src/data/konflikt.ts. */
+  rev?: number;
   id: string;
   projectId: string;
   projectName?: string | null;
@@ -408,6 +438,11 @@ export interface MeetingRepository {
  *  Projekt. memberId optional → externer Trupp moeglich, dann nur
  *  memberName. start/end/break optional fuer rechtskonforme Variante. */
 export interface TimeEntry {
+  /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
+   *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
+   *  anderes gespeichert und die Aenderung wird abgelehnt statt still zu
+   *  ueberschreiben. Siehe src/data/konflikt.ts. */
+  rev?: number;
   id: string;
   projectId: string;
   projectName?: string | null;
@@ -546,8 +581,13 @@ export interface NoteRepository {
   list(limit?: number): Promise<string[]>;
   listDetailed?(limit?: number): Promise<NoteSummary[]>;
   read(nameOrPath: string): Promise<string | null>;
+  /** Wie `read`, liefert aber zusaetzlich den Konflikt-Zaehler — die
+   *  Oberflaeche braucht ihn, um ihn beim Speichern zurueckzuschicken. */
+  readWithRev?(nameOrPath: string): Promise<{ content: string; rev: number } | null>;
   append(nameOrPath: string, content: string): Promise<boolean>;
-  update(nameOrPath: string, content: string): Promise<boolean>;
+  /** `expectedRev` ist der beim Laden mitgelieferte Zaehler. Stimmt er nicht
+   *  mehr, wird ein KonfliktFehler geworfen statt still zu ueberschreiben. */
+  update(nameOrPath: string, content: string, expectedRev?: number | null): Promise<boolean>;
   delete(nameOrPath: string): Promise<string | null>;
 }
 
@@ -589,7 +629,11 @@ export interface ProjectRepository {
    *  Patch gesetzt sind werden geaendert; undefined laesst unveraendert, null
    *  leert die Spalte explizit. Gibt false zurueck wenn Projekt nicht
    *  existiert oder Patch leer ist. */
-  update(name: string, patch: ProjectUpdate): Promise<boolean>;
+  /** `expectedRev` ist der beim Laden mitgelieferte Konflikt-Zaehler
+   *  (Migration 042). Bewusst ein eigener Parameter statt eines Feldes in
+   *  `ProjectUpdate`: dessen Schluessel sind ueber `UPDATE_COLUMNS` fest auf
+   *  Spalten abgebildet, `rev` ist aber keine patchbare Spalte. */
+  update(name: string, patch: ProjectUpdate, expectedRev?: number | null): Promise<boolean>;
   /** Benennt ein Projekt um. Return-Codes:
    *   - "ok": umbenannt
    *   - "invalid": ungueltiger Name (Unicode/Slashes)
@@ -775,6 +819,11 @@ export type PhaseStatus = "offen" | "aktiv" | "fertig";
 /** Eine Leistungsphase eines Projekts. progress ist abgeleitet (aus den
  *  verknuepften Aufgaben) bzw. progressManual, wenn gesetzt. */
 export interface ProjectPhase {
+  /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
+   *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
+   *  anderes gespeichert und die Aenderung wird abgelehnt statt still zu
+   *  ueberschreiben. Siehe src/data/konflikt.ts. */
+  rev?: number;
   id: string;
   projectId: string;
   projectName?: string | null;
@@ -818,6 +867,11 @@ export type InvoiceStatus = "entwurf" | "gestellt" | "bezahlt";
 
 /** Teilrechnung eines Projekts (optional einer Phase zugeordnet). */
 export interface ProjectInvoice {
+  /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
+   *  mitgeschickt; stimmt er nicht mehr, hat in der Zwischenzeit jemand
+   *  anderes gespeichert und die Aenderung wird abgelehnt statt still zu
+   *  ueberschreiben. Siehe src/data/konflikt.ts. */
+  rev?: number;
   id: string;
   projectId: string;
   phaseId: string | null;

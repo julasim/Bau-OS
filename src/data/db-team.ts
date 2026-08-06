@@ -9,6 +9,7 @@
 // Lesen:    bevorzugt companyName aus Join, projects-Array aus Junction.
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Company, ContactLogEntry, MemberType, TeamMember, TeamMemberProject, TeamRepository } from "./types.js";
 
 // ── Row-Mapper ──────────────────────────────────────────────
@@ -54,6 +55,9 @@ function rowToMember(row: Record<string, unknown>): TeamMember {
     username: row.username ? String(row.username) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
+    /** Konflikt-Zaehler (Migration 042) — die Oberflaeche schickt ihn beim
+     *  Speichern zurueck. Fehlt er im DTO, ist der Schutz von aussen unerreichbar. */
+    rev: Number(row.rev ?? 1),
   };
 }
 
@@ -76,6 +80,7 @@ function rowToCompany(row: Record<string, unknown>): Company {
 const MEMBER_SELECT = `
   SELECT
     tm.id,
+    tm.rev,
     tm.name,
     tm.role,
     tm.email,
@@ -277,6 +282,11 @@ export const dbTeam: TeamRepository = {
     const [current] = await db`SELECT * FROM team_members WHERE id = ${id}`;
     if (!current) return null;
 
+    // Konfliktschutz (Migration 042): schickt der Aufrufer einen Zaehler mit,
+    // muss er noch stimmen — sonst hat in der Zwischenzeit jemand anderes
+    // gespeichert. Ohne Zaehler gilt weiterhin „zuletzt gewinnt".
+    pruefeRev(rowToMember(current), current.rev, (updates as { rev?: number }).rev);
+
     // Company-Auflosung: explizite companyId > companyName > company-Legacy-Feld.
     // Wenn nichts spezifiziert, bleibt alles unveraendert.
     let companyId: string | null | undefined = undefined;
@@ -311,7 +321,7 @@ export const dbTeam: TeamRepository = {
     const resolvedCompanyText = companyText !== undefined ? companyText : current.company;
     const resolvedCompanyId = companyId !== undefined ? companyId : current.company_id;
 
-    await db`
+    const betroffen = await db`
       UPDATE team_members SET
         name = ${name ?? current.name},
         role = ${role},
@@ -322,9 +332,19 @@ export const dbTeam: TeamRepository = {
         project_id = ${projectId},
         company_id = ${resolvedCompanyId},
         member_type = ${memberType},
-        user_id = ${userId}
-      WHERE id = ${id}
+        user_id = ${userId},
+        rev = rev + 1
+      WHERE id = ${id} AND rev = ${current.rev}
+      RETURNING id
     `;
+    // Keine Zeile getroffen heisst: zwischen Lesen und Schreiben hat jemand
+    // anderes gespeichert. Ohne diese Pruefung taete die Anweisung STILL
+    // nichts und meldete trotzdem Erfolg.
+    if (betroffen.length === 0) {
+      const [jetzt] = await db`SELECT * FROM team_members WHERE id = ${id}`;
+      if (!jetzt) return null; // in der Zwischenzeit geloescht
+      throw new KonfliktFehler(rowToMember(jetzt), Number(current.rev), Number(jetzt.rev));
+    }
     return this.get(id);
   },
 

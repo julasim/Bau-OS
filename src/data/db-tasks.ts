@@ -1,11 +1,13 @@
 // Datenbank-Implementation: PostgreSQL via postgres.js
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Task, TaskRepository } from "./types.js";
 
 function rowToTask(row: Record<string, unknown>): Task {
   return {
     id: String(row.id),
+    rev: Number(row.rev ?? 1),
     text: String(row.text),
     status: row.status as Task["status"],
     priority: row.priority ? String(row.priority) : undefined,
@@ -91,6 +93,11 @@ export const dbTasks: TaskRepository = {
     const [current] = await db`SELECT * FROM tasks WHERE id = ${id}`;
     if (!current) return null;
 
+    // Konfliktschutz (Migration 042): schickt der Aufrufer einen Zaehler mit,
+    // muss er noch stimmen — sonst hat in der Zwischenzeit jemand anderes
+    // gespeichert. Ohne Zaehler gilt weiterhin „zuletzt gewinnt".
+    pruefeRev(rowToTask(current), current.rev, updates.rev);
+
     const text = "text" in updates ? updates.text : current.text;
     const status = "status" in updates ? updates.status : current.status;
     const assignee = "assignee" in updates ? updates.assignee : current.assignee;
@@ -113,16 +120,27 @@ export const dbTasks: TaskRepository = {
       // gesetzt hat (oder current) — erlaubt "Freitext ohne FK" als Zustand.
     }
 
-    await db`
+    // `AND rev = …` macht Lesen-Aendern-Schreiben atomar: schreibt jemand
+    // zwischen SELECT und UPDATE, trifft die Anweisung keine Zeile mehr.
+    // Das greift auch ohne mitgeschickten Zaehler — nur ist das Zeitfenster
+    // dann winzig.
+    const geschrieben = await db`
       UPDATE tasks SET
         text = ${text}, status = ${status},
         assignee = ${finalAssignee},
         assignee_id = ${assigneeId ?? null},
         date = ${date}, location = ${location}, priority = ${priority},
         phase_id = ${phaseId ?? null},
+        rev = rev + 1,
         updated_at = ${now}
-      WHERE id = ${id}
+      WHERE id = ${id} AND rev = ${current.rev}
+      RETURNING id
     `;
+    if (geschrieben.length === 0) {
+      const [jetzt] = await db`SELECT * FROM tasks WHERE id = ${id}`;
+      if (!jetzt) return null; // in der Zwischenzeit geloescht
+      throw new KonfliktFehler(rowToTask(jetzt), Number(current.rev), Number(jetzt.rev));
+    }
     return this.get(id);
   },
 
