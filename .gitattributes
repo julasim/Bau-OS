@@ -1,0 +1,46 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Zeilenenden
+#
+# Entwickelt wird unter Windows (git core.autocrlf=true), betrieben wird unter
+# Linux. Ohne diese Datei bekommt JEDE Datei im Arbeitsverzeichnis CRLF — auch
+# die Shell-Skripte, die auf dem Server laufen sollen.
+#
+# Was dann passiert: bash liest `#!/bin/bash\r` und sucht einen Interpreter
+# namens "bash\r" — das Skript startet gar nicht erst.
+#
+# Vorsorge, kein akuter Befund: die Dateien im Arbeitsverzeichnis sind heute
+# LF, weil sie hier so angelegt wurden. Bei einem frischen `git clone` unter
+# Windows wären sie es ohne diese Datei nicht mehr.
+#
+# Betroffen ist alles, was auf dem Server ausgeführt oder gelesen wird:
+# Skripte, systemd-Einheiten, Caddyfile, Samba-Konfiguration, Dockerfile.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Vorgabe: Git entscheidet, im Repo immer LF.
+* text=auto eol=lf
+
+# Muss unter allen Umständen LF behalten — läuft auf Linux.
+*.sh            text eol=lf
+*.service       text eol=lf
+*.timer         text eol=lf
+*.mount         text eol=lf
+*.vorlage       text eol=lf
+*.conf          text eol=lf
+Dockerfile      text eol=lf
+.dockerignore   text eol=lf
+docker/Caddyfile text eol=lf
+*.sql           text eol=lf
+
+# Binärdateien nicht anfassen.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.docx binary
+*.xlsx binary
+*.tar.gz binary

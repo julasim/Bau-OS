@@ -1,5 +1,10 @@
 node_modules/
 dist/
+
+# Auslieferungspakete (scripts/release-offline.sh). Enthalten das gespeicherte
+# Docker-Image und sind rund 170 MB gross — sie gehoeren auf den USB-Stick,
+# nicht ins Repo.
+release/
 .env
 .env.bak
 logs/

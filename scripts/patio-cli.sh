@@ -1,401 +1,239 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# patio — CLI Management Tool
-# Wird nach Installation verfügbar als: patio
+# patio — Verwaltungswerkzeug für den Firmenserver
+#
+# Nach der Einrichtung verfügbar als:  patio <befehl>
+#
+# Diese Fassung spricht den DOCKER-STACK an. Die vorherige arbeitete
+# durchgehend mit `systemctl patio` und `systemctl postgresql` — beides gibt es
+# auf dem Firmenserver nicht mehr, dort läuft alles als Compose-Stack
+# (postgres + app + caddy).
+#
+# Bewusst NICHT übernommen: `patio user add`. Es schrieb Konten direkt in
+# data/users.json — am Datenbank-Konto vorbei, mit eigenem bcrypt-Aufruf und
+# ohne die Passwortregeln der Anwendung. Benutzerverwaltung läuft über die
+# Weboberfläche unter /admin/users.
 # ─────────────────────────────────────────────────────────────────────────────
+set -uo pipefail
 
-INSTALL_DIR="/opt/patio"
-WORKSPACE_DIR="/opt/patio-workspace"
-SERVICE="patio"
-SERVICE_USER="patio"
+INSTALL_DIR="${INSTALL_DIR:-/opt/patio}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-/opt/patio-workspace}"
+BACKUP_DIR="${BACKUP_DIR:-/mnt/patio-backup}"
+APP="patio-app"
+DB="patio-postgres"
+PROXY="patio-caddy"
 
-# Farben
-readonly GREEN='\033[0;32m'
-readonly YELLOW='\033[1;33m'
-readonly RED='\033[0;31m'
-readonly BOLD='\033[1m'
-readonly DIM='\033[2m'
-readonly CYAN='\033[0;36m'
-readonly NC='\033[0m'
+readonly GRUEN='\033[0;32m' GELB='\033[1;33m' ROT='\033[0;31m'
+readonly FETT='\033[1m' MATT='\033[2m' AUS='\033[0m'
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Hilfsfunktionen
-# ─────────────────────────────────────────────────────────────────────────────
+dc() { (cd "$INSTALL_DIR" && docker compose "$@"); }
 
-print_logo() {
-  echo -e "${BOLD}"
-  echo '  ██████╗  █████╗ ██╗   ██╗      ██████╗ ███████╗'
-  echo '  ██╔══██╗██╔══██╗██║   ██║     ██╔═══██╗██╔════╝'
-  echo '  ██████╔╝███████║██║   ██║     ██║   ██║███████╗'
-  echo '  ██╔══██╗██╔══██║██║   ██║     ██║   ██║╚════██║'
-  echo '  ██████╔╝██║  ██║╚██████╔╝     ╚██████╔╝███████║'
-  echo '  ╚═════╝ ╚═╝  ╚═╝ ╚═════╝       ╚═════╝ ╚══════╝'
-  echo -e "${NC}"
-  echo -e "  ${DIM}Bürosoftware für Architektur- und Planungsbüros${NC}"
-  echo -e "  ${DIM}────────────────────────────────────────────────${NC}"
-  echo ""
-}
-
-need_root() {
+braucht_root() {
   if [ "$EUID" -ne 0 ]; then
-    echo -e "${RED}  ✗${NC} Dieser Befehl benötigt root: sudo patio $*"
+    echo -e "  ${ROT}✗${AUS} Dieser Befehl braucht root:  sudo patio $*"
     exit 1
   fi
 }
 
-service_status_line() {
-  if systemctl is-active --quiet "$SERVICE"; then
-    echo -e "  ${GREEN}●${NC} ${BOLD}$SERVICE${NC} läuft"
+laeuft() { docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "$1"; }
+
+zustandszeile() {
+  local name="$1" beschriftung="$2"
+  if laeuft "$name"; then
+    local gesundheit
+    gesundheit=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}—{{end}}' "$name" 2>/dev/null)
+    echo -e "  ${GRUEN}●${AUS} ${FETT}${beschriftung}${AUS}  läuft ${MATT}(${gesundheit})${AUS}"
   else
-    echo -e "  ${RED}●${NC} ${BOLD}$SERVICE${NC} gestoppt"
+    echo -e "  ${ROT}●${AUS} ${FETT}${beschriftung}${AUS}  gestoppt"
   fi
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Befehle
-# ─────────────────────────────────────────────────────────────────────────────
+# ── Befehle ──────────────────────────────────────────────────────────────────
 
-cmd_status() {
-  echo ""
-  service_status_line
-  echo ""
-  systemctl status "$SERVICE" --no-pager -l
-}
+befehl_status() {
+  echo
+  zustandszeile "$DB"    "Datenbank"
+  zustandszeile "$APP"   "PATIO"
+  zustandszeile "$PROXY" "Zugang (HTTPS)"
+  echo
 
-cmd_logs() {
-  local lines="${1:-50}"
-  echo ""
-  echo -e "  ${BOLD}Letzte $lines Log-Einträge:${NC}"
-  echo ""
-  journalctl -u "$SERVICE" -n "$lines" --no-pager
-}
-
-cmd_logs_live() {
-  echo ""
-  echo -e "  ${BOLD}Live-Logs${NC} ${DIM}(Ctrl+C zum Beenden)${NC}"
-  echo ""
-  journalctl -u "$SERVICE" -f
-}
-
-cmd_restart() {
-  need_root restart
-  echo ""
-  echo -e "  ${YELLOW}▶${NC} Neustart..."
-  systemctl restart "$SERVICE"
-  sleep 2
-  service_status_line
-  echo ""
-}
-
-cmd_start() {
-  need_root start
-  echo ""
-  echo -e "  ${YELLOW}▶${NC} Starten..."
-  systemctl start "$SERVICE"
-  sleep 2
-  service_status_line
-  echo ""
-}
-
-cmd_stop() {
-  need_root stop
-  echo ""
-  echo -e "  ${YELLOW}▶${NC} Stoppen..."
-  systemctl stop "$SERVICE"
-  sleep 1
-  service_status_line
-  echo ""
-}
-
-cmd_update() {
-  need_root update
-  echo ""
-  bash "$INSTALL_DIR/scripts/update.sh"
-}
-
-cmd_check_update() {
-  echo ""
-  echo -e "  ${BOLD}Update-Check...${NC}"
-  echo ""
-
-  if [ ! -d "$INSTALL_DIR/.git" ]; then
-    echo -e "  ${RED}Kein Git-Repository in $INSTALL_DIR${NC}"
-    return 1
-  fi
-
-  cd "$INSTALL_DIR"
-
-  # Remote-Status holen (als Service-User wegen git ownership)
-  su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git fetch origin" 2>/dev/null
-
-  LOCAL=$(su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git rev-parse HEAD")
-  REMOTE=$(su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git rev-parse origin/main")
-
-  if [ "$LOCAL" = "$REMOTE" ]; then
-    echo -e "  ${GREEN}✓${NC} PATIO ist auf dem neuesten Stand"
-    echo -e "  ${DIM}  Version: ${LOCAL:0:7}${NC}"
-    echo ""
-    return 0
-  fi
-
-  # Neue Commits anzeigen
-  BEHIND=$(su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git rev-list HEAD..origin/main --count")
-  echo -e "  ${YELLOW}!${NC} ${BOLD}$BEHIND neue(s) Update(s) verfügbar${NC}"
-  echo -e "  ${DIM}  Lokal:  ${LOCAL:0:7}${NC}"
-  echo -e "  ${DIM}  Remote: ${REMOTE:0:7}${NC}"
-  echo ""
-  echo -e "  ${BOLD}Änderungen:${NC}"
-  su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && git log HEAD..origin/main --oneline --no-decorate" | while read -r line; do
-    echo -e "    ${CYAN}•${NC} $line"
-  done
-  echo ""
-
-  # Fragen ob installiert werden soll
-  if [ "$EUID" -eq 0 ]; then
-    read -rp "  Update jetzt installieren? [j/N]: " confirm
-    if [[ "$confirm" =~ ^[jJ]$ ]]; then
-      echo ""
-      bash "$INSTALL_DIR/scripts/update.sh"
+  if laeuft "$APP"; then
+    if docker exec "$APP" curl -fsS -o /dev/null http://localhost:3000/api/health 2>/dev/null; then
+      echo -e "  ${GRUEN}✓${AUS} Der Dienst antwortet."
     else
-      echo ""
-      echo -e "  ${DIM}Update übersprungen. Manuell: sudo patio update${NC}"
-      echo ""
+      echo -e "  ${ROT}✗${AUS} Der Container läuft, aber der Dienst antwortet nicht."
+      echo -e "     ${MATT}patio logs${AUS} zeigt warum."
+    fi
+  fi
+
+  # Wann lief die Sicherung zuletzt? Auf einem Server, der der einzige
+  # Ausfallpunkt ist, gehört das auf die erste Bildschirmseite.
+  echo
+  if [ -d "$BACKUP_DIR/taeglich" ]; then
+    local letzte
+    letzte=$(find "$BACKUP_DIR/taeglich" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+             | while read -r d; do [ -f "$d/VOLLSTAENDIG" ] && echo "$d"; done | sort | tail -1)
+    if [ -n "$letzte" ]; then
+      local alter=$(( ($(date +%s) - $(stat -c %Y "$letzte")) / 3600 ))
+      if [ "$alter" -gt 30 ]; then
+        echo -e "  ${GELB}!${AUS} Letzte vollständige Sicherung vor ${alter} Stunden — das ist zu lang."
+      else
+        echo -e "  ${GRUEN}✓${AUS} Letzte Sicherung: $(basename "$letzte") ${MATT}(vor ${alter} h)${AUS}"
+      fi
+    else
+      echo -e "  ${ROT}✗${AUS} Keine vollständige Sicherung gefunden."
     fi
   else
-    echo -e "  ${DIM}Zum Installieren: sudo patio check-update${NC}"
-    echo ""
+    echo -e "  ${GELB}!${AUS} Sicherungsplatte nicht eingehängt oder nicht eingerichtet."
   fi
+
+  if [ -f "$INSTALL_DIR/logs/SICHERUNG-FEHLGESCHLAGEN" ]; then
+    echo -e "  ${ROT}✗${AUS} $(cat "$INSTALL_DIR/logs/SICHERUNG-FEHLGESCHLAGEN")"
+  fi
+  echo
 }
 
-cmd_env() {
-  echo ""
-  echo -e "  ${BOLD}Konfiguration (.env):${NC}"
-  echo ""
-  if [ -f "$INSTALL_DIR/.env" ]; then
-    # Geheimnisse maskieren. Bisher wurde nur BOT_TOKEN unkenntlich gemacht —
-    # den es gar nicht mehr gibt. JWT_SECRET, das DB-Passwort und die
-    # SMTP-Zugangsdaten standen dagegen im Klartext auf dem Bildschirm.
-    sed -E \
-      -e 's/^(JWT_SECRET|ENCRYPTION_KEY|SMTP_PASS|POSTGRES_PASSWORD)=(.{0,4}).*/\1=\2**** (maskiert)/' \
-      -e 's#^(DATABASE_URL=[a-z]+://[^:/@]+):[^@]*@#\1:****@#' \
-      "$INSTALL_DIR/.env"
+befehl_logs() {
+  if [ "${1:-}" = "-f" ] || [ "${1:-}" = "live" ]; then
+    echo -e "\n  ${FETT}Laufende Ausgabe${AUS} ${MATT}(Strg+C beendet)${AUS}\n"
+    dc logs -f app
   else
-    echo -e "  ${RED}  .env nicht gefunden${NC}"
-  fi
-  echo ""
-}
-
-cmd_workspace() {
-  echo ""
-  echo -e "  ${BOLD}Workspace ($WORKSPACE_DIR):${NC}"
-  echo ""
-  if [ -d "$WORKSPACE_DIR" ]; then
-    ls -la "$WORKSPACE_DIR"
-  else
-    echo -e "  ${RED}  Workspace nicht gefunden${NC}"
-  fi
-  echo ""
-}
-
-# Ersetzt das fruehere `cmd_ollama` (systemctl status ollama). Seit dem Umbau
-# zum Firmenserver gibt es keinen Ollama-Dienst mehr; die harte Abhaengigkeit
-# des Dienstes ist stattdessen PostgreSQL — ohne erreichbare Datenbank bricht
-# src/index.ts den Start ab. Genau das gehoert in ein Diagnose-Werkzeug.
-cmd_db() {
-  echo ""
-  echo -e "  ${BOLD}PostgreSQL:${NC}"
-  echo ""
-  if systemctl list-unit-files postgresql.service >/dev/null 2>&1; then
-    systemctl status postgresql --no-pager -l | head -12
-    echo ""
-  fi
-  echo -e "  ${BOLD}Migrationsstand:${NC}"
-  echo ""
-  if [ -d "$INSTALL_DIR" ]; then
-    su -s /bin/bash "$SERVICE_USER" -c "cd $INSTALL_DIR && npm run --silent db:status" 2>&1 || \
-      echo -e "  ${RED}Migrationsstand nicht abrufbar — DATABASE_URL in der .env pruefen${NC}"
+    echo -e "\n  ${FETT}Letzte ${1:-50} Zeilen${AUS}\n"
+    dc logs --tail "${1:-50}" app
   fi
 }
 
-cmd_user() {
-  local subcmd="${1:-}"
-  local name="${2:-}"
+befehl_start()   { braucht_root start;   echo; dc up -d;             sleep 3; befehl_status; }
+befehl_stop()    { braucht_root stop;    echo; dc stop;              sleep 1; befehl_status; }
+befehl_restart() { braucht_root restart; echo; dc restart;           sleep 3; befehl_status; }
 
-  case "$subcmd" in
-    add)
-      need_root user add
-      if [ -z "$name" ]; then
-        read -rp "  Benutzername: " name
-      fi
-      if [ -z "$name" ]; then
-        echo -e "  ${RED}Benutzername darf nicht leer sein${NC}"
-        return 1
-      fi
-      # Prüfen ob User existiert
-      if [ -f "$INSTALL_DIR/data/users.json" ]; then
-        if node -e "const u=JSON.parse(require('fs').readFileSync('$INSTALL_DIR/data/users.json','utf-8')); process.exit(u.some(x=>x.username==='$name')?0:1)" 2>/dev/null; then
-          echo -e "  ${RED}User '$name' existiert bereits${NC}"
-          return 1
-        fi
-      fi
-      read -rsp "  Passwort: " pass
-      echo ""
-      if [ -z "$pass" ]; then
-        echo -e "  ${RED}Passwort darf nicht leer sein${NC}"
-        return 1
-      fi
-      local hash
-      hash=$(cd "$INSTALL_DIR" && node -e "const b=require('bcrypt'); b.hash(process.argv[1],10).then(h=>console.log(h))" "$pass")
-      local today
-      today=$(date +%Y-%m-%d)
-      # User hinzufügen
-      mkdir -p "$INSTALL_DIR/data"
-      if [ -f "$INSTALL_DIR/data/users.json" ]; then
-        cd "$INSTALL_DIR" && node -e "
-          const fs=require('fs');
-          const u=JSON.parse(fs.readFileSync('data/users.json','utf-8'));
-          u.push({username:'$name',passwordHash:'$hash',role:'user',createdAt:'$today'});
-          fs.writeFileSync('data/users.json',JSON.stringify(u,null,2));"
-      else
-        echo "[{\"username\":\"$name\",\"passwordHash\":\"$hash\",\"role\":\"user\",\"createdAt\":\"$today\"}]" > "$INSTALL_DIR/data/users.json"
-      fi
-      chown "$SERVICE_USER:$SERVICE_USER" "$INSTALL_DIR/data/users.json"
-      echo -e "  ${GREEN}✓${NC} User '${BOLD}$name${NC}' erstellt"
-      ;;
-    list)
-      echo ""
-      echo -e "  ${BOLD}Web-Benutzer:${NC}"
-      echo ""
-      if [ -f "$INSTALL_DIR/data/users.json" ]; then
-        node -e "
-          const u=JSON.parse(require('fs').readFileSync('$INSTALL_DIR/data/users.json','utf-8'));
-          u.forEach(x=>console.log('  '+x.username.padEnd(20)+x.role.padEnd(10)+x.createdAt));"
-      else
-        echo -e "  ${DIM}Keine users.json gefunden${NC}"
-      fi
-      echo ""
-      ;;
-    delete|remove)
-      need_root user delete
-      if [ -z "$name" ]; then
-        read -rp "  Benutzername zum Löschen: " name
-      fi
-      if [ -z "$name" ] || [ ! -f "$INSTALL_DIR/data/users.json" ]; then
-        echo -e "  ${RED}User nicht gefunden${NC}"
-        return 1
-      fi
-      cd "$INSTALL_DIR" && node -e "
-        const fs=require('fs');
-        let u=JSON.parse(fs.readFileSync('data/users.json','utf-8'));
-        const before=u.length;
-        u=u.filter(x=>x.username!=='$name');
-        if(u.length===before){console.log('User nicht gefunden');process.exit(1);}
-        fs.writeFileSync('data/users.json',JSON.stringify(u,null,2));"
-      echo -e "  ${GREEN}✓${NC} User '${BOLD}$name${NC}' gelöscht"
-      ;;
-    *)
-      echo ""
-      echo -e "  ${BOLD}Verwendung:${NC}  patio user <befehl> [name]"
-      echo ""
-      echo -e "    ${BOLD}add${NC} [name]      Neuen User anlegen    ${DIM}(sudo)${NC}"
-      echo -e "    ${BOLD}list${NC}            Alle User auflisten"
-      echo -e "    ${BOLD}delete${NC} [name]   User löschen          ${DIM}(sudo)${NC}"
-      echo ""
-      ;;
-  esac
+befehl_update() {
+  braucht_root update
+  local paket="${1:-}"
+  if [ -z "$paket" ]; then
+    echo
+    echo -e "  ${FETT}Aufruf:${AUS} sudo patio update <paket.tar.gz>"
+    echo
+    echo "  Das Paket entsteht auf dem Entwicklungsrechner mit"
+    echo "  scripts/release-offline.sh und kommt per USB-Stick hierher."
+    echo "  Auf diesem Rechner wird nie gebaut — er hat kein Internet."
+    echo
+    local gefunden
+    gefunden=$(find "$INSTALL_DIR" -maxdepth 1 -name 'patio-*.tar.gz' 2>/dev/null | sort | tail -3)
+    [ -n "$gefunden" ] && { echo "  Hier liegen bereits:"; echo "$gefunden" | sed 's|^|    |'; echo; }
+    return 1
+  fi
+  bash "$INSTALL_DIR/scripts/update-offline.sh" "$paket"
 }
 
-cmd_help() {
-  echo ""
-  echo -e "  ${BOLD}Verwendung:${NC}  patio [befehl] [optionen]"
-  echo ""
-  echo -e "  ${CYAN}Befehle:${NC}"
-  echo -e "    ${BOLD}status${NC}           Service-Status anzeigen"
-  echo -e "    ${BOLD}logs${NC} [n]         Letzte n Log-Einträge (Standard: 50)"
-  echo -e "    ${BOLD}logs live${NC}        Live-Logs (Ctrl+C zum Beenden)"
-  echo -e "    ${BOLD}restart${NC}          Service neu starten  ${DIM}(sudo)${NC}"
-  echo -e "    ${BOLD}start${NC}            Service starten       ${DIM}(sudo)${NC}"
-  echo -e "    ${BOLD}stop${NC}             Service stoppen       ${DIM}(sudo)${NC}"
-  echo -e "    ${BOLD}update${NC}           Update von GitHub einspielen ${DIM}(sudo)${NC}"
-  echo -e "    ${BOLD}check-update${NC}     Auf Updates prüfen"
-  echo -e "    ${BOLD}user${NC} add|list|delete  Web-Benutzer verwalten"
-  echo -e "    ${BOLD}env${NC}              .env Konfiguration anzeigen"
-  echo -e "    ${BOLD}workspace${NC}        Workspace-Verzeichnis anzeigen"
-  echo -e "    ${BOLD}db${NC}               Datenbank-Status + Migrationsstand"
-  echo ""
-  echo -e "  ${DIM}Ohne Befehl: Interaktives Menü${NC}"
-  echo ""
+befehl_sicherung() {
+  braucht_root sicherung
+  echo
+  bash "$INSTALL_DIR/scripts/backup.sh"
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Interaktives Menü
-# ─────────────────────────────────────────────────────────────────────────────
+befehl_ruecksicherung() {
+  braucht_root ruecksicherung
+  echo
+  bash "$INSTALL_DIR/scripts/restore.sh" "${1:-}"
+}
 
-cmd_menu() {
-  while true; do
-    clear
-    print_logo
-    service_status_line
-    echo ""
-    echo -e "  ${BOLD}Was möchtest du tun?${NC}"
-    echo ""
-    echo -e "  ${CYAN}[1]${NC}  Status anzeigen"
-    echo -e "  ${CYAN}[2]${NC}  Logs anzeigen (letzte 50)"
-    echo -e "  ${CYAN}[3]${NC}  Live-Logs (Ctrl+C zum Beenden)"
-    echo -e "  ${CYAN}[4]${NC}  Service neu starten"
-    echo -e "  ${CYAN}[5]${NC}  Service starten"
-    echo -e "  ${CYAN}[6]${NC}  Service stoppen"
-    echo -e "  ${CYAN}[7]${NC}  Auf Updates prüfen"
-    echo -e "  ${CYAN}[8]${NC}  .env Konfiguration"
-    echo -e "  ${CYAN}[9]${NC}  Workspace anzeigen"
-    echo -e "  ${CYAN}[10]${NC} Datenbank-Status"
-    echo -e "  ${CYAN}[11]${NC} Web-User verwalten"
-    echo ""
-    echo -e "  ${DIM}[0]  Beenden${NC}"
-    echo ""
-    read -rp "  Auswahl: " choice
+befehl_db() {
+  echo
+  if ! laeuft "$DB"; then
+    echo -e "  ${ROT}✗${AUS} Die Datenbank läuft nicht."
+    return 1
+  fi
+  echo -e "  ${FETT}Migrationsstand:${AUS}\n"
+  docker exec "$APP" node dist/scripts/db-migrate.js status 2>/dev/null \
+    || docker exec "$DB" psql -U "${POSTGRES_USER:-patio}" -d "${POSTGRES_DB:-patio}" \
+         -c "SELECT name, applied_at FROM _migrations ORDER BY name DESC LIMIT 5;" 2>/dev/null \
+    || echo -e "  ${GELB}!${AUS} Migrationsstand nicht abrufbar."
+  echo
+  echo -e "  ${MATT}Direkte Abfrage:  docker exec -it $DB psql -U patio -d patio${AUS}"
+  echo
+}
 
-    case "$choice" in
-      1) clear; cmd_status;    read -rp "  [Enter] zurück..." ;;
-      2) clear; cmd_logs 50;   read -rp "  [Enter] zurück..." ;;
-      3) clear; cmd_logs_live ;;
-      4) clear; cmd_restart;   read -rp "  [Enter] zurück..." ;;
-      5) clear; cmd_start;     read -rp "  [Enter] zurück..." ;;
-      6) clear; cmd_stop;      read -rp "  [Enter] zurück..." ;;
-      7) clear; cmd_check_update; read -rp "  [Enter] zurück..." ;;
-      8) clear; cmd_env;       read -rp "  [Enter] zurück..." ;;
-      9) clear; cmd_workspace; read -rp "  [Enter] zurück..." ;;
-      10) clear; cmd_db;       read -rp "  [Enter] zurück..." ;;
-      11) clear; cmd_user list; read -rp "  [Enter] zurück..." ;;
-      0|q|Q) echo ""; break ;;
-      *) echo -e "\n  ${RED}Ungültige Eingabe${NC}" ; sleep 1 ;;
+befehl_env() {
+  braucht_root env
+  echo
+  echo -e "  ${FETT}Konfiguration${AUS} ${MATT}($INSTALL_DIR/.env)${AUS}\n"
+  # Geheimnisse nicht ausgeben — nur, ob sie gesetzt sind.
+  while IFS='=' read -r schluessel wert; do
+    case "$schluessel" in
+      ''|\#*) continue ;;
+      *SECRET*|*PASSWORD*|*KEY*)
+        if [ -n "$wert" ]; then
+          echo -e "    ${schluessel}=${MATT}<gesetzt, ${#wert} Zeichen>${AUS}"
+        else
+          echo -e "    ${schluessel}=${ROT}<LEER>${AUS}"
+        fi ;;
+      *) echo "    ${schluessel}=${wert}" ;;
     esac
-  done
+  done < "$INSTALL_DIR/.env"
+  echo
 }
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Einstiegspunkt
-# ─────────────────────────────────────────────────────────────────────────────
+befehl_dokumente() {
+  echo
+  echo -e "  ${FETT}Dokumente${AUS} ${MATT}($WORKSPACE_DIR)${AUS}\n"
+  echo "    Belegt:   $(du -sh "$WORKSPACE_DIR" 2>/dev/null | cut -f1)"
+  echo "    Projekte: $(find "$WORKSPACE_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.papierkorb' 2>/dev/null | wc -l)"
+  echo "    Eigentümer: $(stat -c '%u:%g' "$WORKSPACE_DIR" 2>/dev/null)  ${MATT}(muss 1000:1000 sein)${AUS}"
+  local besitzer
+  besitzer=$(stat -c '%u' "$WORKSPACE_DIR" 2>/dev/null)
+  if [ "$besitzer" != "1000" ]; then
+    echo
+    echo -e "  ${ROT}✗${AUS} Falscher Eigentümer. Der Dienst läuft im Container als uid 1000"
+    echo -e "     und kann so keine Datei ablegen. Beheben:"
+    echo -e "       ${FETT}sudo chown -R 1000:1000 $WORKSPACE_DIR${AUS}"
+  fi
+  if [ -d "$WORKSPACE_DIR/.papierkorb" ]; then
+    echo
+    echo "    Papierkorb der Freigabe: $(du -sh "$WORKSPACE_DIR/.papierkorb" 2>/dev/null | cut -f1)"
+  fi
+  echo
+}
 
-case "${1:-}" in
-  status)              cmd_status ;;
-  logs)
-    if [ "${2:-}" = "live" ]; then cmd_logs_live
-    else cmd_logs "${2:-50}"
-    fi ;;
-  restart)             cmd_restart ;;
-  start)               cmd_start ;;
-  stop)                cmd_stop ;;
-  update)              cmd_update ;;
-  check-update|check)  cmd_check_update ;;
-  user)                cmd_user "${2:-}" "${3:-}" ;;
-  env|config)          cmd_env ;;
-  workspace)           cmd_workspace ;;
-  db|database)         cmd_db ;;
-  help|--help|-h)      print_logo; cmd_help ;;
-  "")                  cmd_menu ;;
+befehl_hilfe() {
+  cat <<'HILFE'
+
+  patio — Verwaltung des Firmenservers
+
+  ANSEHEN
+    patio status              Zustand aller Dienste, Sicherung, Erreichbarkeit
+    patio logs [n]            letzte n Zeilen (Vorgabe 50)
+    patio logs -f             laufende Ausgabe
+    patio db                  Datenbank und Migrationsstand
+    patio env                 Konfiguration (Geheimnisse bleiben verdeckt)
+    patio dokumente           Dokumentenordner, Belegung, Rechte
+
+  STEUERN                     (brauchen sudo)
+    patio start | stop | restart
+    patio update <paket>      Auslieferungspaket einspielen
+    patio sicherung           Sicherung jetzt ausführen
+    patio ruecksicherung [stand]
+
+  Benutzerverwaltung läuft über die Weboberfläche: /admin/users
+
+HILFE
+}
+
+case "${1:-status}" in
+  status)                     befehl_status ;;
+  logs)                       befehl_logs "${2:-}" ;;
+  start)                      befehl_start ;;
+  stop)                       befehl_stop ;;
+  restart)                    befehl_restart ;;
+  update)                     befehl_update "${2:-}" ;;
+  sicherung|backup)           befehl_sicherung ;;
+  ruecksicherung|restore)     befehl_ruecksicherung "${2:-}" ;;
+  db|datenbank)               befehl_db ;;
+  env|config)                 befehl_env ;;
+  dokumente|workspace)        befehl_dokumente ;;
+  help|hilfe|--help|-h)       befehl_hilfe ;;
   *)
-    echo -e "${RED}  Unbekannter Befehl: $1${NC}"
-    cmd_help
+    echo -e "\n  ${ROT}Unbekannter Befehl:${AUS} $1"
+    befehl_hilfe
     exit 1 ;;
 esac

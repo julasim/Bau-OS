@@ -7,9 +7,25 @@
 
    Niveau-Referenz: Linear / Vercel / Stripe.
    Prinzip: monochrom, flach, präzise, viel Ruhe.
-   ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+   ------------------------------------------------------------
+   SCHRIFTEN: ausschliesslich vom System.
+
+   Hier stand ein @import auf fonts.googleapis.com (Inter, Inter
+   Tight, JetBrains Mono). Auf einem Firmenserver ohne Internet
+   wartet damit jeder Arbeitsplatz bei jedem Laden in einen
+   Timeout und bekommt danach ohnehin Systemschrift — und es war
+   der einzige verbliebene Aussenkontakt der Oberflaeche.
+
+   Bewusst NICHT durch gebuendelte WOFF2-Dateien ersetzt: die
+   Oberflaeche wird aus PATIO Desktop uebernommen, und deren
+   Designsystem setzt "Helvetica Neue", Helvetica, Arial und
+   ui-monospace — reine Systemschriften. Inter-Schnitte hier zu
+   buendeln waere Arbeit fuer den Papierkorb.
+
+   Bis dahin greifen die Ersatzketten unten (auf Windows also
+   Segoe UI). Gut lesbar, und naeher am Ziel als Inter.
+   ============================================================ */
 
 :root {
   /* ── Ink & Paper ─────────────────────────────────────────
