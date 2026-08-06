@@ -10,7 +10,6 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
-import { DB_ENABLED } from "../config.js";
 
 export interface BrandingPublic {
   companyName: string | null;
@@ -53,7 +52,6 @@ function rowToBranding(row: Record<string, unknown>): BrandingPublic {
 /** Liest die Branding-Felder ohne Logo-Blob — fuer Settings-View und
  *  fuer alle Stellen die das Logo als URL referenzieren wollen. */
 export async function getBranding(): Promise<BrandingPublic | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`
     SELECT id, company_name, logo_mime_type, logo_filename, primary_color,
@@ -69,7 +67,6 @@ export async function getBranding(): Promise<BrandingPublic | null> {
 
 /** Aktualisiert Stammdaten (ohne Logo). Logo geht ueber separaten Endpoint. */
 export async function updateBranding(patch: BrandingUpdate): Promise<BrandingPublic | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [current] = await db`SELECT * FROM org_branding WHERE id = 1`;
   if (!current) return null;
@@ -96,7 +93,6 @@ export async function updateBranding(patch: BrandingUpdate): Promise<BrandingPub
 
 /** Speichert ein neues Logo. Wenn buffer null ist → Logo loeschen. */
 export async function setLogo(buffer: Buffer | null, mimeType: string | null, filename: string | null): Promise<void> {
-  if (!DB_ENABLED) return;
   const db = getDb();
   if (!buffer) {
     await db`UPDATE org_branding SET logo_blob = NULL, logo_mime_type = NULL, logo_filename = NULL WHERE id = 1`;
@@ -113,7 +109,6 @@ export async function setLogo(buffer: Buffer | null, mimeType: string | null, fi
 
 /** Liefert den Logo-Blob fuer das Streaming via GET /api/branding/logo. */
 export async function loadLogo(): Promise<{ buffer: Buffer; mimeType: string; filename: string | null } | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`
     SELECT logo_blob, logo_mime_type, logo_filename FROM org_branding WHERE id = 1

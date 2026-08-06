@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { noteRepo, taskRepo, terminRepo, projectRepo } from "../../data/index.js";
 import { getVisibleProjectIds, type UserCtx } from "../../data/access.js";
-import { DB_ENABLED } from "../../config.js";
 import type { AppEnv } from "../server.js";
 
 export const dashboardRoutes = new Hono<AppEnv>();
@@ -70,9 +69,6 @@ dashboardRoutes.get("/dashboard", async (c) => {
 
 // ── DB-Status Endpoint ──────────────────────────────────────────────────────
 dashboardRoutes.get("/dashboard/db-status", async (c) => {
-  if (!DB_ENABLED) {
-    return c.json({ enabled: false, mode: "filesystem" });
-  }
   try {
     const [{ checkDbHealth, migrationStatus }, { getPoolStats }] = await Promise.all([
       import("../../db/index.js"),

@@ -8,7 +8,6 @@
 
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import { DB_ENABLED } from "../config.js";
 
 export type ExportKind = "meeting" | "bautagebuch" | "time-entry" | "project-summary";
 
@@ -40,7 +39,6 @@ function rowToPublic(row: Record<string, unknown>): ExportTemplatePublic {
 }
 
 export async function listExportTemplates(kind?: ExportKind): Promise<ExportTemplatePublic[]> {
-  if (!DB_ENABLED) return [];
   const db = getDb();
   const rows = kind
     ? await db`
@@ -58,7 +56,6 @@ export async function listExportTemplates(kind?: ExportKind): Promise<ExportTemp
 }
 
 export async function getExportTemplate(id: string): Promise<ExportTemplatePublic | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`
     SELECT id, kind, name, description, filename, is_default,
@@ -71,7 +68,6 @@ export async function getExportTemplate(id: string): Promise<ExportTemplatePubli
 /** Liefert das Default-Template fuer eine Kategorie. NULL wenn keines
  *  existiert — Caller muss dann freundlich abbrechen. */
 export async function getDefaultExportTemplate(kind: ExportKind): Promise<ExportTemplatePublic | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`
     SELECT id, kind, name, description, filename, is_default,
@@ -83,7 +79,6 @@ export async function getDefaultExportTemplate(kind: ExportKind): Promise<Export
 
 /** Internal — laedt den .docx-Blob fuer Render-Pipeline. */
 export async function loadExportTemplateBlob(id: string): Promise<{ buffer: Buffer; filename: string } | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`SELECT docx_blob, filename FROM export_templates WHERE id = ${id}`;
   if (!row) return null;
@@ -102,7 +97,6 @@ export interface CreateExportTemplateInput {
 }
 
 export async function createExportTemplate(input: CreateExportTemplateInput): Promise<ExportTemplatePublic> {
-  if (!DB_ENABLED) throw new Error("DB-Modus erforderlich");
   const db = getDb();
   const id = crypto.randomUUID();
   if (input.isDefault) {
@@ -122,7 +116,6 @@ export async function createExportTemplate(input: CreateExportTemplateInput): Pr
 }
 
 export async function setDefaultExportTemplate(id: string): Promise<ExportTemplatePublic | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [current] = await db`SELECT kind FROM export_templates WHERE id = ${id}`;
   if (!current) return null;
@@ -132,7 +125,6 @@ export async function setDefaultExportTemplate(id: string): Promise<ExportTempla
 }
 
 export async function deleteExportTemplate(id: string): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const db = getDb();
   const result = await db`DELETE FROM export_templates WHERE id = ${id}`;
   return result.count > 0;

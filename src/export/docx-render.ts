@@ -30,7 +30,6 @@ import Docxtemplater from "docxtemplater";
 // @ts-ignore -- expressions.js hat keine d.ts-Typen
 import expressionParser from "docxtemplater/expressions.js";
 import { getDb } from "../db/client.js";
-import { DB_ENABLED } from "../config.js";
 import {
   loadExportTemplateBlob,
   getDefaultExportTemplate,
@@ -90,16 +89,14 @@ async function buildBaseData(currentUserName: string | null): Promise<Record<str
     FirmenWebsite: "",
   };
 
-  if (DB_ENABLED) {
-    const db = getDb();
-    const [b] = await db`SELECT company_name, address, phone, email, website FROM org_branding WHERE id = 1`;
-    if (b) {
-      data.Firma = b.company_name ? String(b.company_name) : "";
-      data.FirmenAdresse = b.address ? String(b.address) : "";
-      data.FirmenTelefon = b.phone ? String(b.phone) : "";
-      data.FirmenEmail = b.email ? String(b.email) : "";
-      data.FirmenWebsite = b.website ? String(b.website) : "";
-    }
+  const db = getDb();
+  const [b] = await db`SELECT company_name, address, phone, email, website FROM org_branding WHERE id = 1`;
+  if (b) {
+    data.Firma = b.company_name ? String(b.company_name) : "";
+    data.FirmenAdresse = b.address ? String(b.address) : "";
+    data.FirmenTelefon = b.phone ? String(b.phone) : "";
+    data.FirmenEmail = b.email ? String(b.email) : "";
+    data.FirmenWebsite = b.website ? String(b.website) : "";
   }
   return data;
 }
@@ -107,7 +104,6 @@ async function buildBaseData(currentUserName: string | null): Promise<Record<str
 // ── Datenquellen pro Export-Kind ─────────────────────────────────────────────
 
 async function buildMeetingData(meetingId: string): Promise<Record<string, unknown>> {
-  if (!DB_ENABLED) return {};
   const db = getDb();
   const [m] = await db`
     SELECT m.*, p.name as project_name
@@ -170,7 +166,6 @@ async function buildMeetingData(meetingId: string): Promise<Record<string, unkno
 }
 
 async function buildBautagebuchData(entryId: string): Promise<Record<string, unknown>> {
-  if (!DB_ENABLED) return {};
   const db = getDb();
   const [e] = await db`
     SELECT b.*, p.name as project_name
@@ -207,7 +202,6 @@ async function buildTimeEntryData(opts: {
   from?: string;
   to?: string;
 }): Promise<Record<string, unknown>> {
-  if (!DB_ENABLED) return {};
   const db = getDb();
 
   let projectId: string | null = null;
@@ -298,7 +292,6 @@ async function buildTimeEntryData(opts: {
 }
 
 async function buildProjectSummaryData(projectName: string): Promise<Record<string, unknown>> {
-  if (!DB_ENABLED) return {};
   const db = getDb();
   const [p] = await db`
     SELECT p.*, tm.name as bauherr_name

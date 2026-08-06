@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import type { Context } from "hono";
 import fs from "fs";
 import path from "path";
-import { WORKSPACE_PATH, DB_ENABLED, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../../config.js";
+import { WORKSPACE_PATH, MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from "../../config.js";
 import { readFile, listFolder } from "../../workspace/index.js";
 import { fileRepo, projectRepo } from "../../data/index.js";
 import { getDb } from "../../db/client.js";
@@ -93,7 +93,7 @@ filesRoutes.get("/files", async (c) => {
   const source = c.req.query("source"); // ?source=fs erzwingt Filesystem
 
   // DB-Modus: Dateien aus Datenbank laden (nur Root-Ebene, kein Pfad)
-  if (DB_ENABLED && fileRepo && !p && source !== "fs") {
+  if (!p && source !== "fs") {
     const bezug = await projektBezugAusQuery(c);
     if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
     const project = bezug.name;
@@ -133,7 +133,7 @@ filesRoutes.get("/files/read", async (c) => {
   const id = c.req.query("id");
 
   // DB: ueber ID lesen
-  if (id && DB_ENABLED && fileRepo) {
+  if (id) {
     const file = await fileRepo.get(id);
     if (!file) return c.json({ error: "Datei nicht gefunden" }, 404);
     if (!(await canAccessFile(c, id))) return c.json({ error: "Zugriff verweigert" }, 403);
@@ -172,7 +172,7 @@ filesRoutes.delete("/files", async (c) => {
   const body = await c.req.json<{ path?: string; id?: string }>();
 
   // DB: ueber ID loeschen
-  if (body.id && DB_ENABLED && fileRepo) {
+  if (body.id) {
     const file = await fileRepo.get(body.id);
     if (!file) return c.json({ error: "Nicht gefunden" }, 404);
     if (!(await isFileOwnerOrAdmin(c, body.id))) return c.json({ error: "Zugriff verweigert" }, 403);
@@ -216,7 +216,6 @@ filesRoutes.delete("/files", async (c) => {
 // Gibt die 50 zuletzt geaenderten Dateien zurueck, sortiert nach updatedAt desc.
 // Nur DB-Modus — im FS-Modus gibt es kein updatedAt aus der DB.
 filesRoutes.get("/files/recent", async (c) => {
-  if (!DB_ENABLED || !fileRepo) return c.json([]);
   const visibleProjectIds = await getVisibleProjectIds(c);
   const files = await fileRepo.list(undefined, 200, visibleProjectIds);
   const sorted = [...files]
@@ -241,7 +240,6 @@ filesRoutes.get("/files/recent", async (c) => {
 // Gibt alle Dateien zurueck, die der aktuelle User markiert (starred) hat.
 // Nur DB-Modus; im FS-Modus gibt es keine user_id-Semantik.
 filesRoutes.get("/files/starred", async (c) => {
-  if (!DB_ENABLED) return c.json([]);
   const userId = c.get("userId");
   if (!userId) return c.json([]);
   const db = getDb();
@@ -274,7 +272,6 @@ filesRoutes.get("/files/starred", async (c) => {
 // ── Geteilte Dateien (Shared with me) ───────────────────────────────────────
 // Gibt Dateien zurueck, die andere User mit dem aktuellen User geteilt haben.
 filesRoutes.get("/files/shared", async (c) => {
-  if (!DB_ENABLED) return c.json([]);
   const userId = c.get("userId");
   if (!userId) return c.json([]);
   const db = getDb();
@@ -308,7 +305,6 @@ filesRoutes.get("/files/shared", async (c) => {
 filesRoutes.get("/files/search", async (c) => {
   const q = c.req.query("q");
   if (!q) return c.json({ error: "Suchbegriff erforderlich (?q=...)" }, 400);
-  if (!DB_ENABLED || !fileRepo) return c.json([]);
   // Sicherheit: wie bei GET /files den Scope IMMER ermitteln. Admin → undefined
   // (kein Filter), Non-Admin → nur Dateien aus sichtbaren Projekten. Ohne das
   // gab die Suche fremde Dateien inklusive contentText heraus; mit ?q=% sogar
@@ -319,9 +315,12 @@ filesRoutes.get("/files/search", async (c) => {
 });
 
 // ── Upload (Drag & Drop) ─────────────────────────────────────────────────────
-// DB-Modus (Standard): Datei wird als bytea in files-Tabelle gespeichert,
-// NICHTS landet auf Disk. Im Legacy-FS-Modus (kein DB_ENABLED) wird in den
-// Vault geschrieben — das ist nur noch fuer Setups ohne PostgreSQL relevant.
+// Die Datei wird als bytea in der files-Tabelle gespeichert, NICHTS landet
+// auf der Platte. Der Zweig darunter schreibt in den Vault und ist heute
+// unerreichbar: `fileRepo` ist seit dem Umbau non-nullable, und der Dienst
+// bricht ohne DATABASE_URL schon beim Start ab (src/index.ts). Er bleibt
+// vorerst stehen, weil sein Ausbau die Upload-Route umbaut — das gehoert in
+// einen eigenen Schritt, nicht in eine Aufraeumrunde.
 filesRoutes.post("/files/upload", async (c) => {
   const formData = await c.req.formData();
   const targetDir = (formData.get("path") as string) || "";
@@ -334,7 +333,7 @@ filesRoutes.post("/files/upload", async (c) => {
   const dbEntries: Array<{ id: string; filename: string }> = [];
 
   // ── DB-Modus: Blob in die DB, kein Vault-Write ─────────────────────────────
-  if (DB_ENABLED && fileRepo) {
+  if (fileRepo) {
     for (const file of files) {
       if (!file.name || file.size === 0) continue;
       if (file.size > MAX_UPLOAD_BYTES) {
@@ -384,7 +383,7 @@ filesRoutes.post("/files/upload", async (c) => {
     return c.json({ success: true, uploaded: saved, dbEntries });
   }
 
-  // ── Legacy-FS-Modus (kein DB_ENABLED) ──────────────────────────────────────
+  // ── Unerreichbar (siehe Kopfkommentar der Route) ───────────────────────────
   if (targetDir && !safePath(targetDir)) {
     return c.json({ error: "Zugriff verweigert" }, 403);
   }
@@ -419,7 +418,6 @@ filesRoutes.post("/files/upload", async (c) => {
 filesRoutes.get("/files/download", async (c) => {
   const id = c.req.query("id");
   if (!id) return c.json({ error: "id erforderlich (?id=...)" }, 400);
-  if (!DB_ENABLED || !fileRepo) return c.json({ error: "DB nicht aktiv" }, 500);
   if (!(await canAccessFile(c, id))) return c.json({ error: "Zugriff verweigert" }, 403);
 
   const result = await fileRepo.readBlob(id);
@@ -449,7 +447,6 @@ filesRoutes.get("/files/download", async (c) => {
 // ── Datei markieren (Star) ──────────────────────────────────────────────────
 // POST /files/:id/star — Datei als Favorit markieren (idempotent).
 filesRoutes.post("/files/:id/star", async (c) => {
-  if (!DB_ENABLED) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
   const userId = c.get("userId");
   if (!userId) return c.json({ error: "Nicht authentifiziert" }, 401);
   const fileId = c.req.param("id");
@@ -464,7 +461,6 @@ filesRoutes.post("/files/:id/star", async (c) => {
 
 // DELETE /files/:id/star — Markierung entfernen.
 filesRoutes.delete("/files/:id/star", async (c) => {
-  if (!DB_ENABLED) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
   const userId = c.get("userId");
   if (!userId) return c.json({ error: "Nicht authentifiziert" }, 401);
   const fileId = c.req.param("id");
@@ -478,7 +474,6 @@ filesRoutes.delete("/files/:id/star", async (c) => {
 // ── Datei-Shares verwalten ──────────────────────────────────────────────────
 // GET /files/:id/shares — Liste der User, mit denen diese Datei geteilt ist.
 filesRoutes.get("/files/:id/shares", async (c) => {
-  if (!DB_ENABLED || !fileRepo) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
   const fileId = c.req.param("id");
   if (!(await isFileOwnerOrAdmin(c, fileId))) return c.json({ error: "Zugriff verweigert" }, 403);
   const db = getDb();
@@ -503,7 +498,6 @@ filesRoutes.get("/files/:id/shares", async (c) => {
 // POST /files/:id/shares — Datei mit einem User teilen.
 // Body: { userId: string, canEdit: boolean }
 filesRoutes.post("/files/:id/shares", async (c) => {
-  if (!DB_ENABLED || !fileRepo) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
   const fileId = c.req.param("id");
   let body: { userId?: string; canEdit?: boolean };
   try {
@@ -528,7 +522,6 @@ filesRoutes.post("/files/:id/shares", async (c) => {
 
 // DELETE /files/:id/shares/:userId — Freigabe entziehen.
 filesRoutes.delete("/files/:id/shares/:userId", async (c) => {
-  if (!DB_ENABLED) return c.json({ error: "Nur im DB-Modus verfügbar" }, 503);
   const fileId = c.req.param("id");
   const targetUserId = c.req.param("userId");
   if (!(await isFileOwnerOrAdmin(c, fileId))) return c.json({ error: "Zugriff verweigert" }, 403);

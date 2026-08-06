@@ -11,7 +11,6 @@
 
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import { DB_ENABLED } from "../config.js";
 
 export type TemplateKind = "note" | "meeting" | "bautagebuch";
 
@@ -57,7 +56,6 @@ function rowToTemplate(row: Record<string, unknown>): Template {
 }
 
 export async function listTemplates(kind?: TemplateKind): Promise<Template[]> {
-  if (!DB_ENABLED) return [];
   const db = getDb();
   const rows = kind
     ? await db`SELECT * FROM templates WHERE kind = ${kind} ORDER BY is_default DESC, name`
@@ -66,21 +64,18 @@ export async function listTemplates(kind?: TemplateKind): Promise<Template[]> {
 }
 
 export async function getTemplate(id: string): Promise<Template | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`SELECT * FROM templates WHERE id = ${id}`;
   return row ? rowToTemplate(row) : null;
 }
 
 export async function getDefaultTemplate(kind: TemplateKind): Promise<Template | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [row] = await db`SELECT * FROM templates WHERE kind = ${kind} AND is_default = true LIMIT 1`;
   return row ? rowToTemplate(row) : null;
 }
 
 export async function createTemplate(input: TemplateInput, createdById: string | null): Promise<Template> {
-  if (!DB_ENABLED) throw new Error("DB-Modus erforderlich");
   const db = getDb();
   const id = crypto.randomUUID();
 
@@ -101,7 +96,6 @@ export async function createTemplate(input: TemplateInput, createdById: string |
 }
 
 export async function updateTemplate(id: string, patch: TemplateUpdate): Promise<Template | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [current] = await db`SELECT * FROM templates WHERE id = ${id}`;
   if (!current) return null;
@@ -129,7 +123,6 @@ export async function updateTemplate(id: string, patch: TemplateUpdate): Promise
 }
 
 export async function deleteTemplate(id: string): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const db = getDb();
   const result = await db`DELETE FROM templates WHERE id = ${id}`;
   return result.count > 0;
@@ -160,54 +153,50 @@ async function buildVariables(ctx: RenderContext): Promise<Record<string, string
     Projekt: ctx.project ?? "",
   };
 
-  if (DB_ENABLED) {
-    const db = getDb();
+  const db = getDb();
 
-    // Branding
-    const [brand] = await db`
-      SELECT company_name, address, phone, email, website FROM org_branding WHERE id = 1
+  // Branding
+  const [brand] = await db`
+    SELECT company_name, address, phone, email, website FROM org_branding WHERE id = 1
+  `;
+  if (brand) {
+    vars.Firma = brand.company_name ? String(brand.company_name) : "";
+    vars.FirmenAdresse = brand.address ? String(brand.address) : "";
+    vars.FirmenTelefon = brand.phone ? String(brand.phone) : "";
+    vars.FirmenEmail = brand.email ? String(brand.email) : "";
+    vars.FirmenWebsite = brand.website ? String(brand.website) : "";
+  }
+
+  // Projekt-Stammdaten + Bauherr-Name aus Join
+  if (ctx.project) {
+    const [proj] = await db`
+      SELECT p.name, p.projektnummer, p.standort, p.projektart, p.nutzung, p.phase,
+             tm.name as bauherr_name
+        FROM projects p
+        LEFT JOIN team_members tm ON tm.id = p.bauherr_id
+       WHERE p.name = ${ctx.project} LIMIT 1
     `;
-    if (brand) {
-      vars.Firma = brand.company_name ? String(brand.company_name) : "";
-      vars.FirmenAdresse = brand.address ? String(brand.address) : "";
-      vars.FirmenTelefon = brand.phone ? String(brand.phone) : "";
-      vars.FirmenEmail = brand.email ? String(brand.email) : "";
-      vars.FirmenWebsite = brand.website ? String(brand.website) : "";
-    }
-
-    // Projekt-Stammdaten + Bauherr-Name aus Join
-    if (ctx.project) {
-      const [proj] = await db`
-        SELECT p.name, p.projektnummer, p.standort, p.projektart, p.nutzung, p.phase,
-               tm.name as bauherr_name
-          FROM projects p
-          LEFT JOIN team_members tm ON tm.id = p.bauherr_id
-         WHERE p.name = ${ctx.project} LIMIT 1
-      `;
-      if (proj) {
-        vars.Projekt = String(proj.name);
-        vars.Projektnummer = proj.projektnummer ? String(proj.projektnummer) : "";
-        vars.Standort = proj.standort ? String(proj.standort) : "";
-        vars.Ort = proj.standort ? String(proj.standort) : "";
-        vars.Projektart = proj.projektart ? String(proj.projektart) : "";
-        vars.Nutzung = proj.nutzung ? String(proj.nutzung) : "";
-        vars.Phase = proj.phase ? String(proj.phase) : "";
-        vars.Bauherr = proj.bauherr_name ? String(proj.bauherr_name) : "";
-      }
+    if (proj) {
+      vars.Projekt = String(proj.name);
+      vars.Projektnummer = proj.projektnummer ? String(proj.projektnummer) : "";
+      vars.Standort = proj.standort ? String(proj.standort) : "";
+      vars.Ort = proj.standort ? String(proj.standort) : "";
+      vars.Projektart = proj.projektart ? String(proj.projektart) : "";
+      vars.Nutzung = proj.nutzung ? String(proj.nutzung) : "";
+      vars.Phase = proj.phase ? String(proj.phase) : "";
+      vars.Bauherr = proj.bauherr_name ? String(proj.bauherr_name) : "";
     }
   }
 
   // Custom Variables aus DB laden
-  if (DB_ENABLED) {
-    try {
-      const { listCustomVariables } = await import("./db-custom-placeholders.js");
-      const customVars = await listCustomVariables();
-      for (const cv of customVars) {
-        if (cv.value) vars[cv.name] = cv.value;
-      }
-    } catch {
-      /* ignore */
+  try {
+    const { listCustomVariables } = await import("./db-custom-placeholders.js");
+    const customVars = await listCustomVariables();
+    for (const cv of customVars) {
+      if (cv.value) vars[cv.name] = cv.value;
     }
+  } catch {
+    /* ignore */
   }
 
   // Caller-Overrides haben Vorrang

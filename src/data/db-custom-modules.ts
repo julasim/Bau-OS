@@ -8,7 +8,6 @@
 
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import { DB_ENABLED } from "../config.js";
 
 export interface CustomProjectModule {
   id: string;
@@ -35,7 +34,6 @@ function rowToCustomModule(row: Record<string, unknown>): CustomProjectModule {
 }
 
 export async function listCustomModules(): Promise<CustomProjectModule[]> {
-  if (!DB_ENABLED) return [];
   const db = getDb();
   const rows = await db`SELECT * FROM custom_project_modules ORDER BY sort_order, label`;
   return rows.map(rowToCustomModule);
@@ -48,7 +46,6 @@ export async function createCustomModule(input: {
   icon?: string;
   enabledByDefault?: boolean;
 }): Promise<CustomProjectModule> {
-  if (!DB_ENABLED) throw new Error("DB-Modus erforderlich");
   const db = getDb();
   const id = crypto.randomUUID();
   const [row] = await db`
@@ -76,7 +73,6 @@ export async function updateCustomModule(
     sortOrder?: number;
   },
 ): Promise<CustomProjectModule | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [current] = await db`SELECT * FROM custom_project_modules WHERE id = ${id}`;
   if (!current) return null;
@@ -102,7 +98,6 @@ export async function updateCustomModule(
 }
 
 export async function deleteCustomModule(id: string): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const db = getDb();
   const result = await db`DELETE FROM custom_project_modules WHERE id = ${id}`;
   return result.count > 0;

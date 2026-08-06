@@ -3,7 +3,6 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
-import { DB_ENABLED } from "../config.js";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type FontSize = "small" | "medium" | "large";
@@ -46,7 +45,6 @@ export const DEFAULT_PREFERENCES: UiPreferences = {
 /** Liest die Praeferenzen eines Users + merged mit Defaults damit
  *  fehlende Keys (z.B. neu hinzugefuegte Preferences) gefuellt sind. */
 export async function getUiPreferences(userId: string): Promise<UiPreferences> {
-  if (!DB_ENABLED) return DEFAULT_PREFERENCES;
   const db = getDb();
   const [row] = await db`SELECT ui_preferences FROM users WHERE id = ${userId}`;
   if (!row) return DEFAULT_PREFERENCES;
@@ -79,7 +77,6 @@ export async function updateUiPreferences(
     telegramNotifications?: Partial<UiPreferences["telegramNotifications"]>;
   },
 ): Promise<UiPreferences> {
-  if (!DB_ENABLED) return DEFAULT_PREFERENCES;
   const db = getDb();
   const current = await getUiPreferences(userId);
   const next: UiPreferences = {

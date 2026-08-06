@@ -18,13 +18,12 @@
 // ============================================================
 
 import cron from "node-cron";
-import { TIMEZONE, AUDIT_RETENTION_DAYS, DB_ENABLED } from "./config.js";
+import { TIMEZONE, AUDIT_RETENTION_DAYS } from "./config.js";
 import { logInfo, logError } from "./logger.js";
 
 /** Loescht Audit-Eintraege aelter als AUDIT_RETENTION_DAYS.
  *  Liefert die Anzahl der geloeschten Zeilen oder null bei Skip. */
 async function cleanupAuditLog(): Promise<number | null> {
-  if (!DB_ENABLED) return null;
   if (AUDIT_RETENTION_DAYS <= 0) return null; // 0 = nie loeschen
 
   const cutoff = new Date(Date.now() - AUDIT_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -35,7 +34,6 @@ async function cleanupAuditLog(): Promise<number | null> {
 /** Loescht abgelaufene Telegram-Pair-Tokens. Idempotent — wenn keine
  *  da sind, ist das ein No-op. */
 async function cleanupPairTokens(): Promise<number> {
-  if (!DB_ENABLED) return 0;
   const { getDb } = await import("./db/client.js");
   const db = getDb();
   const result = await db`DELETE FROM telegram_pair_tokens WHERE expires_at < now()`;

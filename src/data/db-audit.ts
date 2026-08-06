@@ -12,7 +12,6 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
-import { DB_ENABLED } from "../config.js";
 import { logError } from "../logger.js";
 
 export type AuditEvent =
@@ -95,7 +94,6 @@ function rowToEntry(row: Record<string, unknown>): AuditEntry {
 /** Schreibt einen Audit-Eintrag. Fehlertolerant — Probleme nur loggen,
  *  niemals werfen. Im DB-deaktivierten Modus (FS-only) ein No-op. */
 export async function logEvent(input: AuditWriteInput): Promise<void> {
-  if (!DB_ENABLED) return;
   try {
     const db = getDb();
     await db`
@@ -137,7 +135,6 @@ export interface AuditListOptions {
 /** Liefert die letzten Audit-Eintraege, sortiert absteigend nach Zeit.
  *  Filter sind alle optional und kombinierbar. */
 export async function listEvents(opts: AuditListOptions = {}): Promise<AuditEntry[]> {
-  if (!DB_ENABLED) return [];
   const limit = Math.min(opts.limit ?? 100, 500);
   const offset = Math.max(opts.offset ?? 0, 0);
   const db = getDb();
@@ -165,7 +162,6 @@ export async function listEvents(opts: AuditListOptions = {}): Promise<AuditEntr
 /** Loescht Audit-Eintraege aelter als der angegebene ISO-Timestamp.
  *  Fuer Retention-Cron. Liefert die Anzahl der geloeschten Zeilen. */
 export async function deleteOlderThan(iso: string): Promise<number> {
-  if (!DB_ENABLED) return 0;
   const db = getDb();
   const result = await db`DELETE FROM audit_log WHERE ts < ${iso}`;
   return result.count;

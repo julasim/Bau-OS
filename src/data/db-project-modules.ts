@@ -10,7 +10,6 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
-import { DB_ENABLED } from "../config.js";
 
 export interface ProjectModuleFlags {
   stammdaten: boolean;
@@ -59,7 +58,6 @@ function normalize(input: unknown): ProjectModuleFlags {
 
 /** Globale Defaults aus dem Singleton lesen. */
 export async function getGlobalModules(): Promise<ProjectModuleFlags> {
-  if (!DB_ENABLED) return DEFAULT_FLAGS;
   const db = getDb();
   const [row] = await db`SELECT modules FROM project_module_config WHERE id = 1`;
   return row ? normalize(row.modules) : DEFAULT_FLAGS;
@@ -68,7 +66,6 @@ export async function getGlobalModules(): Promise<ProjectModuleFlags> {
 /** Globale Defaults setzen. Patch wird mit existing gemerged — fehlende
  *  Keys bleiben unveraendert. */
 export async function updateGlobalModules(patch: Partial<ProjectModuleFlags>): Promise<ProjectModuleFlags> {
-  if (!DB_ENABLED) return DEFAULT_FLAGS;
   const db = getDb();
   const current = await getGlobalModules();
   const next = { ...current, ...patch };
@@ -86,9 +83,6 @@ export async function getProjectEffectiveModules(projectName: string): Promise<{
   override: Partial<ProjectModuleFlags> | null;
   global: ProjectModuleFlags;
 }> {
-  if (!DB_ENABLED) {
-    return { effective: DEFAULT_FLAGS, hasOverride: false, override: null, global: DEFAULT_FLAGS };
-  }
   const db = getDb();
   const global = await getGlobalModules();
   const [row] = await db`
@@ -116,7 +110,6 @@ export async function setProjectModulesOverride(
   projectName: string,
   override: Partial<ProjectModuleFlags> | null,
 ): Promise<void> {
-  if (!DB_ENABLED) return;
   const db = getDb();
   if (override === null) {
     await db`UPDATE projects SET modules_override = NULL WHERE name = ${projectName}`;

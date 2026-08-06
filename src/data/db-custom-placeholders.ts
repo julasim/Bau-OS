@@ -8,7 +8,6 @@
 
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
-import { DB_ENABLED } from "../config.js";
 
 export interface CustomVariable {
   id: string;
@@ -31,7 +30,6 @@ function rowToCustomVariable(row: Record<string, unknown>): CustomVariable {
 }
 
 export async function listCustomVariables(): Promise<CustomVariable[]> {
-  if (!DB_ENABLED) return [];
   const db = getDb();
   const rows = await db`SELECT * FROM custom_template_variables ORDER BY name`;
   return rows.map(rowToCustomVariable);
@@ -42,7 +40,6 @@ export async function createCustomVariable(input: {
   description?: string | null;
   value: string;
 }): Promise<CustomVariable> {
-  if (!DB_ENABLED) throw new Error("DB-Modus erforderlich");
   const db = getDb();
   const id = crypto.randomUUID();
   const [row] = await db`
@@ -57,7 +54,6 @@ export async function updateCustomVariable(
   id: string,
   patch: { name?: string; description?: string | null; value?: string },
 ): Promise<CustomVariable | null> {
-  if (!DB_ENABLED) return null;
   const db = getDb();
   const [current] = await db`SELECT * FROM custom_template_variables WHERE id = ${id}`;
   if (!current) return null;
@@ -79,7 +75,6 @@ export async function updateCustomVariable(
 }
 
 export async function deleteCustomVariable(id: string): Promise<boolean> {
-  if (!DB_ENABLED) return false;
   const db = getDb();
   const result = await db`DELETE FROM custom_template_variables WHERE id = ${id}`;
   return result.count > 0;
