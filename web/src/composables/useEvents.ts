@@ -7,7 +7,22 @@ import { ref, onMounted, onUnmounted } from "vue";
  */
 export const connectionError = ref<string | null>(null);
 
-export type EventType = "task" | "termin" | "note" | "project" | "file" | "team";
+// Deckungsgleich mit `EventType` in src/api/events.ts. Die Liste hing
+// zurueck — bautagebuch, meeting, time, phase und invoice sendet der Server
+// laengst, nur liess sich darauf nicht typsicher lauschen.
+export type EventType =
+  | "task"
+  | "termin"
+  | "note"
+  | "project"
+  | "file"
+  | "team"
+  | "bautagebuch"
+  | "meeting"
+  | "time"
+  | "phase"
+  | "invoice"
+  | "entscheidung";
 
 /**
  * Ein Live-Ereignis sagt nur, WAS sich geaendert hat — nie, wie es aussieht.

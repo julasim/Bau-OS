@@ -17,6 +17,7 @@ import type {
   FileRepository,
   BautagebuchRepository,
   MeetingRepository,
+  EntscheidungRepository,
   TimeEntryRepository,
   PhaseRepository,
   InvoiceRepository,
@@ -32,6 +33,7 @@ import { dbFiles } from "./db-files.js";
 import { dbTeam } from "./db-team.js";
 import { dbBautagebuch } from "./db-bautagebuch.js";
 import { dbMeetings } from "./db-meetings.js";
+import { dbEntscheidungen } from "./db-entscheidungen.js";
 import { dbTimeEntries } from "./db-time-entries.js";
 import { dbPhases } from "./db-phases.js";
 import { dbInvoices } from "./db-invoices.js";
@@ -46,6 +48,7 @@ export const teamRepo: TeamRepository = dbTeam;
 export const fileRepo: FileRepository = dbFiles;
 export const bautagebuchRepo: BautagebuchRepository = dbBautagebuch;
 export const meetingRepo: MeetingRepository = dbMeetings;
+export const entscheidungRepo: EntscheidungRepository = dbEntscheidungen;
 export const timeEntryRepo: TimeEntryRepository = dbTimeEntries;
 export const phaseRepo: PhaseRepository = dbPhases;
 export const invoiceRepo: InvoiceRepository = dbInvoices;
@@ -74,6 +77,10 @@ export type {
   MeetingActionItem,
   MeetingInput,
   MeetingType,
+  Entscheidung,
+  EntscheidungAlternative,
+  EntscheidungInput,
+  EntscheidungStatus,
   TimeEntry,
   TimeEntryInput,
   TimeSummary,

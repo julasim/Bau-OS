@@ -512,6 +512,82 @@ export interface TimeEntryRepository {
   costsByPhase(projectId: string): Promise<{ byPhase: Record<string, number>; unassigned: number; total: number }>;
 }
 
+export interface EntscheidungAlternative {
+  text: string;
+  /** Warum diese Moeglichkeit NICHT gewaehlt wurde. Der eigentliche Wert des
+   *  Logs: ein halbes Jahr spaeter fragt jemand „warum eigentlich nicht …?" */
+  verworfenWeil?: string | null;
+}
+
+/** „entwurf" = vorlaeufig festgehalten (z.B. in der Besprechung notiert),
+ *  „bestaetigt" = final und verbindlich. */
+export type EntscheidungStatus = "entwurf" | "bestaetigt";
+
+/** Entscheidungslog (Migration 045): strukturiertes Protokoll
+ *  projektbezogener Entscheidungen mit Begruendung, erwogenen Alternativen
+ *  und Beteiligten.
+ *
+ *  Loest das Freitextfeld `Meeting.decisions` ab — nicht weil Freitext
+ *  schlecht waere, sondern weil er nicht auffindbar ist und die Begruendung
+ *  verliert. Und weil Entscheidungen auch am Telefon fallen, nicht nur in
+ *  Besprechungen. */
+export interface Entscheidung {
+  id: string;
+  projectId: string;
+  projectName?: string | null;
+  /** YYYY-MM-DD */
+  datum: string;
+  titel: string;
+  begruendung: string | null;
+  alternativen: EntscheidungAlternative[];
+  beteiligteIds: string[];
+  /** Nur gelesen — Namen der referenzierten Teammitglieder aus dem Join. */
+  beteiligteResolved?: { id: string; name: string }[];
+  /** Beteiligte ohne Team-Eintrag (Bauherr, Behoerde, externer Fachplaner). */
+  beteiligteExtern: string[];
+  status: EntscheidungStatus;
+  relatedMeetingId: string | null;
+  /** Nur gelesen — und nur aufgeloest, wenn die Besprechung im SELBEN Projekt
+   *  liegt. Ein Bezug ueber Projektgrenzen waere ein stiller Datenabfluss. */
+  relatedMeetingResolved?: { id: string; title: string; date: string } | null;
+  createdById: string | null;
+  createdByUsername?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  rev?: number;
+}
+
+/** Eingabe fuer Anlegen und Aendern. Das Projekt kommt aus der Adresse, nicht
+ *  aus dem Body — sonst liesse sich ein Datensatz in ein fremdes Projekt
+ *  schieben. */
+export interface EntscheidungInput {
+  /** YYYY-MM-DD, Pflicht */
+  datum: string;
+  titel: string;
+  begruendung?: string | null;
+  alternativen?: EntscheidungAlternative[];
+  beteiligteIds?: string[];
+  beteiligteExtern?: string[];
+  status?: EntscheidungStatus;
+  relatedMeetingId?: string | null;
+  /** Konflikt-Zaehler der geladenen Fassung (Migration 042). */
+  rev?: number | null;
+}
+
+export interface EntscheidungRepository {
+  /** Liste fuer ein Projekt, neueste zuerst. */
+  list(projectId: string, limit?: number): Promise<Entscheidung[]>;
+  get(id: string): Promise<Entscheidung | null>;
+  /** Validierungsfehler kommen als String zurueck — wie bei `meetingRepo`. */
+  create(projectId: string, input: EntscheidungInput, createdById?: string | null): Promise<Entscheidung | string>;
+  /** Das Projekt ist nicht aenderbar. Wirft `KonfliktFehler`, wenn der
+   *  mitgeschickte `rev` nicht mehr stimmt. */
+  update(id: string, input: Partial<EntscheidungInput>): Promise<Entscheidung | null | string>;
+  delete(id: string): Promise<boolean>;
+  /** Projektuebergreifend fuers Dashboard, auf sichtbare Projekte begrenzt. */
+  listRecent(visibleProjectIds: string[] | "all", limit?: number): Promise<Entscheidung[]>;
+}
+
 export interface FileEntry {
   id: string;
   filename: string;

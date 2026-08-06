@@ -33,7 +33,8 @@ export type EventType =
   | "meeting"
   | "time"
   | "phase"
-  | "invoice";
+  | "invoice"
+  | "entscheidung";
 
 export type EventAction = "created" | "updated" | "deleted" | "completed" | "saved" | "synced";
 

@@ -66,6 +66,7 @@ const PROJECT_NAV: ProjNavItem[] = [
   { tab: "uebersicht", label: "Übersicht", icon: "grid" },
   { tab: "phasen", label: "Phasen", icon: "timeline" },
   { tab: "rechnungen", label: "Rechnungen", icon: "archive", geldOnly: true },
+  { tab: "entscheidungen", label: "Entscheidungen", icon: "check", geldOnly: false },
   { tab: "notes", label: "Notizen", icon: "pencil" },
   { tab: "tasks", label: "Aufgaben", icon: "check" },
   { tab: "termine", label: "Termine", icon: "calendar" },

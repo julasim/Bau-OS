@@ -8,6 +8,7 @@ import BIcon from "../components/BIcon.vue";
 import TeamPicker from "../components/TeamPicker.vue";
 import ProjectPhasesTab from "./projects-v2/ProjectPhasesTab.vue";
 import ProjectInvoicesTab from "./projects-v2/ProjectInvoicesTab.vue";
+import ProjectEntscheidungenTab from "./projects-v2/ProjectEntscheidungenTab.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 
@@ -187,6 +188,7 @@ type Tab =
   | "uebersicht"
   | "phasen"
   | "rechnungen"
+  | "entscheidungen"
   | "notes"
   | "tasks"
   | "termine"
@@ -203,6 +205,7 @@ const VALID_TABS: Tab[] = [
   "uebersicht",
   "phasen",
   "rechnungen",
+  "entscheidungen",
   "notes",
   "tasks",
   "termine",
@@ -2750,6 +2753,11 @@ async function deleteMeeting() {
     <!-- Phasen (Leistungsphasen) -->
     <div v-if="tab === 'phasen'">
       <ProjectPhasesTab :project-name="projectName" />
+    </div>
+
+    <!-- Entscheidungen (Entscheidungslog, Migration 045) -->
+    <div v-if="tab === 'entscheidungen'">
+      <ProjectEntscheidungenTab :project-name="projectName" />
     </div>
 
     <!-- Rechnungen (Teilrechnungen + Honorarsicht) -->
