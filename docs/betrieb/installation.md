@@ -148,7 +148,7 @@ die im Ernstfall gestellt wird: „Wie lange stehen wir?"
 
 - [ ] `patio status` zeigt alle drei Dienste und „Der Dienst antwortet."
 - [ ] Neustart der Maschine — der Stack kommt **ohne Handgriff** hoch
-- [ ] Browser zeigt ein **Schloss ohne Warnung**
+- [ ] Die Oberfläche zeigt ein **Schloss ohne Warnung** (Browser; später auch im Programmfenster)
 - [ ] Anmeldung mit Benutzername und Passwort
 - [ ] Netzfreigabe im Explorer erreichbar, Datei anlegen und löschen
 - [ ] Gelöschte Datei liegt im Papierkorb der Freigabe

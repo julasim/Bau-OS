@@ -1,14 +1,20 @@
 # Architektur
 
-PATIO besteht aus drei Schichten: der **Vue-Oberfläche** im Browser, der
-**Hono-API** als einzigem Dienst und **PostgreSQL** als Speicher. Dokumente
-liegen daneben als echte Dateien im Dateisystem.
+PATIO besteht aus drei Schichten: der **Vue-Oberfläche**, der **Hono-API** als
+einzigem Dienst und **PostgreSQL** als Speicher. Dokumente liegen daneben als
+echte Dateien im Dateisystem.
+
+Die Oberfläche läuft am Arbeitsplatz in einem eigenen Programmfenster
+(`PATIO.exe`, geplant) und im Besprechungsraum im Browser. Für die Architektur
+macht das keinen Unterschied: **sie spricht durchgehend relative Pfade**
+(`/api/…`), kennt also gar keine Serveradresse. Genau deshalb ist dieselbe
+Oberfläche in beiden Verpackungen lauffähig.
 
 ## Datenfluss
 
 ```
         Arbeitsplätze im Büro-LAN
-        (Browser, Vue-3-Anwendung)
+        (PATIO.exe bzw. Browser)
                     │
                     │  HTTPS
                     ▼
@@ -41,18 +47,28 @@ Kein Mailserver, kein Sprachmodell, kein Außenkontakt.
 
 ### Ablauf einer Anfrage
 
-1. Der Browser schickt die Anfrage mit dem JWT im `Authorization`-Header.
+1. Die Oberfläche schickt die Anfrage mit dem JWT im `Authorization`-Header.
 2. Der globale Rate-Limit prüft die IP (Standard: 600 Anfragen pro Minute).
 3. `authMiddleware` prüft das Token und legt `userId`, `userRole` und
    `dbUser` in den Hono-Kontext.
 4. Die Route lädt über `src/data/index.ts` — und nur darüber.
-5. Das Repository filtert über `getVisibleProjectIds()` auf die für diesen
-   Benutzer sichtbaren Projekte. Admins bekommen den Sentinel `"all"` und
-   damit keinen Filter.
+5. **Die Route** filtert über `getVisibleProjectIds()` auf die für diesen
+   Benutzer sichtbaren Projekte und gibt das Ergebnis ans Repository weiter.
+   Admins bekommen den Sentinel `"all"` und damit keinen Filter.
 6. Schreibende Routen melden die Änderung an den Event-Bus. Der stellt sie
    allen SSE-Abonnenten zu, deren Sichtbarkeits-Kontext sie abdeckt — ohne
-   Inhalte, nur „was hat sich geändert". Der Client lädt über die reguläre
+   Inhalte, nur „was hat sich geändert". Die Oberfläche lädt über die reguläre
    Route nach.
+
+::: warning Der Filter sitzt in den Routen, nicht in den Repositories
+Zwölf Routen rufen `getVisibleProjectIds()` auf; **kein einziges Repository**
+tut es. Das heißt: eine neue Route, die den Aufruf vergisst, liefert
+ungefiltert aus. Genau so sind in diesem Projekt vier Lücken entstanden.
+
+Die Umkehrung — Filterung als `WHERE`-Klausel im Repository, wo man sie nicht
+vergessen kann — ist als eigenes Arbeitspaket vorgesehen. Bis dahin gilt beim
+Bauen neuer Routen: **Rechtefilter nicht vergessen.**
+:::
 
 ## Modulstruktur
 

@@ -1,8 +1,9 @@
 # Was ist PATIO?
 
 PATIO ist eine Büro-Software für **Architektur-, Planungs- und
-Projektsteuerungsbüros**. Sie läuft zentral auf einem Rechner im eigenen
-Netz; alle Arbeitsplätze arbeiten im Browser damit.
+Projektsteuerungsbüros**. Sie läuft zentral auf einem Rechner im eigenen Netz.
+Am Arbeitsplatz steht ein **eigenes Programm** — `PATIO.exe`, mit Symbol in
+der Taskleiste und Eintrag im Startmenü.
 
 ::: warning Wichtige Abgrenzung
 PATIO ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe
@@ -16,21 +17,32 @@ der Baustelle.
 ## Wie es aufgebaut ist
 
 ```
-Arbeitsplätze im Büro (Browser)
-            │
-            ▼
-      Reverse-Proxy (TLS)
-            │
-            ▼
-   PATIO-Anwendung (Hono-API + Vue-Oberfläche)
-            │
-            ├──► PostgreSQL   Projekte, Notizen, Aufgaben, Termine, Team
-            └──► Dateisystem  hochgeladene Dokumente
+PATIO.exe je Arbeitsplatz       Besprechungsraum: Browser, Vollbild
+            │                              │
+            └──────────────┬───────────────┘
+                           ▼
+                    Caddy (TLS, eigene lokale CA)
+                           ▼
+             PATIO-Anwendung (Hono-API + Vue-Oberfläche)
+                           │
+       ├──► PostgreSQL     Projekte, Notizen, Aufgaben, Termine, Team
+       └──► Dateisystem    Dokumente — zugleich als Netzfreigabe
 ```
 
-Zwei Container auf einem Rechner, dazu ein Reverse-Proxy. Kein Cloud-Dienst,
-keine externe Schnittstelle, keine Telemetrie — die Anwendung spricht im
-Betrieb ausschließlich mit ihrer Datenbank und mit den Browsern im Netz.
+Drei Container auf einem Rechner: Datenbank, Anwendung und der TLS-Zugang.
+Kein Cloud-Dienst, keine externe Schnittstelle, keine Telemetrie — die
+Anwendung spricht im Betrieb ausschließlich mit ihrer eigenen Datenbank und
+mit den Arbeitsplätzen im Netz.
+
+::: info Programm oder Browser?
+Die Oberfläche ist in beiden Fällen dieselbe: `PATIO.exe` ist ein Fenster,
+das sie vom Server lädt. Der Unterschied liegt in der Verpackung — kein
+Adressfeld, keine Lesezeichen, kein versehentlich geschlossener Reiter.
+
+**Stand heute** liefert der Server die Oberfläche aus, und man erreicht sie im
+Browser. Das Arbeitsplatz-Programm ist geplant und noch nicht gebaut; die
+Hülle dafür kommt aus PATIO Desktop.
+:::
 
 ## Für wen?
 

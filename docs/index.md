@@ -24,7 +24,7 @@ features:
   - title: Projektsteuerung
     details: Leistungsphasen mit Abhängigkeiten und Zeitleiste, Honorar und Deckungsbeitrag, Rechnungen und ein Portfolio-Cockpit über alle Projekte.
   - title: Web-Oberfläche
-    details: Vue-3-Anwendung im Browser — Dashboard, Listen, Kalender und Projektakten. Änderungen erscheinen ohne Neuladen an allen Arbeitsplätzen.
+    details: Vue-3-Anwendung — Dashboard, Listen, Kalender und Projektakten. Am Arbeitsplatz in einem eigenen Programmfenster, im Besprechungsraum im Browser. Änderungen erscheinen ohne Neuladen an allen Arbeitsplätzen.
   - title: Rechte je Projekt
     details: Anmeldung mit Benutzerkonto, Rollen Admin und Benutzer. Wer kein Projekt zugewiesen bekommt, sieht es auch nicht.
   - title: Exporte im eigenen Layout

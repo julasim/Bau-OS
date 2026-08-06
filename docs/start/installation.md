@@ -153,12 +153,13 @@ Die Migrationen laufen beim ersten Start mit.
 
 ## Nach der Installation
 
-Beim ersten Aufruf im Browser zeigt PATIO den Setup-Assistenten und legt das
+Beim ersten Aufruf zeigt PATIO den Setup-Assistenten und legt das
 erste Admin-Konto an — sofern der Installer das nicht schon getan hat.
 
-::: warning Ohne E-Mail-Versand keine Anmeldung
-Die Anmeldung braucht Benutzername und Passwort — kein Code, keine
-E-Mail, kein Mailserver.
+::: tip Kein Mailserver nötig
+Die Anmeldung braucht Benutzername und Passwort — kein Code, keine E-Mail,
+kein Mailserver.
+:::
 
 ## Nächste Schritte
 

@@ -3,7 +3,7 @@
 PATIO läuft auf einem Rechner im eigenen Netz. Es gibt **keine
 Auftragsverarbeitung durch Dritte**: kein Cloud-Dienst, kein Sprachmodell,
 keine Analytik, keine Telemetrie. Die Anwendung spricht im Betrieb
-ausschließlich mit ihrer eigenen Datenbank, mit den Browsern im Netz und —
+ausschließlich mit ihrer eigenen Datenbank, mit den Arbeitsplätzen im Netz und —
 Es gibt keine ausgehenden Verbindungen mehr.
 
 ::: tip Was sich geändert hat
@@ -17,7 +17,7 @@ fallen OpenAI und Telegram als Empfänger personenbezogener Daten weg.
 ## Datenfluss
 
 ```
-Arbeitsplatz im Büro (Browser)
+Arbeitsplatz im Büro (PATIO.exe)
         │  HTTPS, internes Netz
         ▼
 PATIO auf dem Bürorechner
@@ -61,7 +61,7 @@ hochgeladenen Dokument landet, verantwortet die erfassende Person.
 ## Was nicht gespeichert wird
 
 - **Keine Tracking-Cookies.** Das Anmelde-Token liegt im `localStorage` des
-  Browsers, es gibt kein Session-Cookie und kein Tracking.
+  Programms bzw. Browsers, es gibt kein Session-Cookie und kein Tracking.
 - **Keine Analytik.** Kein Google Analytics, kein Matomo, keine Telemetrie
   an den Hersteller.
 - **Keine Nutzungsprofile**, kein Scoring, keine automatisierte
@@ -117,13 +117,12 @@ Dritte am System arbeiten:
 | Hersteller / Support | Nur wenn er zu Wartungszwecken Zugriff erhält — im Regelbetrieb nicht der Fall |
 | *(keine)* | PATIO überträgt keine Daten an Dritte — kein Mailversand, kein Sprachmodell, keine externen Schriften |
 
-::: warning Externer Mailserver ist ein Datenabfluss
 ## Technische und organisatorische Maßnahmen
 
 | Maßnahme | Umsetzung |
 |---|---|
 | Zutrittskontrolle | Der Rechner steht im Büro; physischer Zugang ist zu regeln |
-| Zugangskontrolle | Anmeldung mit Passwort (bcrypt) und Code per E-Mail |
+| Zugangskontrolle | Anmeldung mit Benutzername und Passwort (bcrypt, Kostenfaktor 12, mindestens 12 Zeichen), Ratebremse gegen Durchprobieren |
 | Zugriffskontrolle | Rollen Admin/Benutzer, Sichtbarkeit projektweise über `user_projects` |
 | Trennungskontrolle | Je Büro eine eigene Installation auf eigener Hardware |
 | Übertragung | HTTPS über den Reverse-Proxy; keine unverschlüsselte Verbindung im Netz |

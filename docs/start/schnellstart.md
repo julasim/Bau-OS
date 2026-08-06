@@ -92,10 +92,10 @@ Passwort und E-Mail-Adresse.
 Sobald ein Konto existiert, ist der Assistent gesperrt (HTTP 410). Weitere
 Benutzer legt der Admin über die Benutzerverwaltung an.
 
-::: warning Anmeldung braucht E-Mail-Versand
-Nach Benutzername und Passwort verlangt der Login einen 6-stelligen Code,
-Benutzername und Passwort genügen. Das Passwort braucht mindestens
-12 Zeichen — es ist der einzige Faktor.
+::: tip Ein Faktor
+Benutzername und Passwort genügen — kein Code, keine Authenticator-App. Das
+Passwort braucht mindestens 12 Zeichen, weil es der einzige Faktor ist.
+:::
 
 ## Nützliche Befehle
 

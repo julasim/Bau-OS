@@ -96,6 +96,24 @@ Chrome, Edge und der Explorer nutzen den Windows-Speicher und sind mit
 Schritt 3 erledigt.
 :::
 
+### Gilt das auch für das Arbeitsplatz-Programm?
+
+`PATIO.exe` baut auf Electron und damit auf Chromium. Für **lokal
+installierte** Wurzelzertifikate greift dort derselbe Windows-Speicher — der
+eigene Chrome-Root-Store betrifft nur öffentliche Wurzeln. Schritt 3 sollte
+also für Programm und Browser gemeinsam gelten.
+
+::: warning Begründet, aber nicht nachgemessen
+Das Programm gibt es noch nicht. Der praktische Test steht als **erste
+Aufgabe** in dessen Arbeitspaket — vor allem anderen und bevor acht
+Arbeitsplätze eingerichtet werden.
+
+Ein Detail, das dabei mitgeprüft gehört: eine Erreichbarkeitsprüfung mit
+Node-Bordmitteln (`fetch`, `https`) **scheitert** an diesem Zertifikat, weil
+Node seinen eigenen CA-Vorrat mitbringt und den Windows-Speicher nicht kennt —
+während das Fenster daneben problemlos lädt.
+:::
+
 Bei einer Domäne mit Active Directory geht das zentral per Gruppenrichtlinie:
 `Computerkonfiguration → Windows-Einstellungen → Sicherheitseinstellungen →
 Richtlinien für öffentliche Schlüssel → Vertrauenswürdige
