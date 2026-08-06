@@ -29,10 +29,13 @@ COPY package*.json ./
 RUN npm ci
 
 # Quellcode kopieren + bauen (Backend-TS + Vue-Frontend), dann devDeps entfernen.
-# Das build-Skript in package.json kopiert src/emails und src/db/migrations
-# selbst nach dist/ — die frueher hier stehenden zusaetzlichen `cp -r` liefen
-# gegen ein BEREITS EXISTIERENDES Ziel und legten dadurch
-# dist/db/migrations/migrations/ bzw. dist/emails/emails/ an.
+# Das build-Skript in package.json kopiert src/db/migrations selbst nach dist/ —
+# ein hier zusaetzlich stehendes `cp -r` lief gegen ein BEREITS EXISTIERENDES
+# Ziel und legte dadurch dist/db/migrations/migrations/ an.
+# (src/emails ist mit dem Ausbau des Mailversands entfallen.)
+#
+# Was NICHT im Bau-Kontext landet, steht in .dockerignore — insbesondere
+# release/ mit den gespeicherten Images.
 COPY . .
 RUN npm run build:all \
     && npm prune --omit=dev

@@ -211,8 +211,10 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
   if ("email" in body) {
     const e = body.email;
     if (e === null || e === "") {
-      // Admin kann Email entfernen — User muss dann beim naechsten Login
-      // Setup-Flow durchlaufen.
+      // Admin kann die Adresse entfernen. Das hat keine Folgen mehr fuer die
+      // Anmeldung — sie ist seit dem Umbau zum Firmenserver reine
+      // Kontaktinformation. (Frueher stand hier, der Nutzer muesse dann den
+      // Email-Einrichtungs-Fluss durchlaufen; den gibt es nicht mehr.)
       patch.email = null;
     } else if (typeof e === "string") {
       const normalized = e.trim().toLowerCase();

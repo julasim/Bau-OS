@@ -215,22 +215,59 @@ verlinken() {
 [ "$(date +%u)" = "1" ] && verlinken woechentlich "$(date +%G-W%V)"
 [ "$(date +%d)" = "01" ] && verlinken monatlich "$(date +%Y-%m)"
 
+# Nur VOLLSTAENDIGE Staende zaehlen fuer die Aufbewahrung.
+#
+# Sonst belegt jeder fehlgeschlagene Lauf einen der Plaetze: bei sieben
+# Tagesstaenden und einer Woche Fehlschlaegen waeren alle sieben Plaetze mit
+# unbrauchbaren Staenden gefuellt — und der letzte gute waere weggerotiert.
+# Genau dann, wenn man ihn braucht.
 aufraeumen() {
   local kategorie="$1" behalten="$2"
+  local ordner="$BACKUP_DIR/$kategorie"
+  [ -d "$ordner" ] || return 0
+
+  local vollstaendige
+  vollstaendige=$(find "$ordner" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+                  | while read -r d; do [ -f "$d/VOLLSTAENDIG" ] && echo "$d"; done | sort)
   local anzahl
-  anzahl=$(find "$BACKUP_DIR/$kategorie" -mindepth 1 -maxdepth 1 -type d | wc -l)
-  [ "$anzahl" -le "$behalten" ] && return 0
-  find "$BACKUP_DIR/$kategorie" -mindepth 1 -maxdepth 1 -type d | sort \
-    | head -n -"$behalten" | while read -r alt; do
+  anzahl=$(echo "$vollstaendige" | grep -c . || true)
+  if [ "$anzahl" -gt "$behalten" ]; then
+    echo "$vollstaendige" | head -n -"$behalten" | while read -r alt; do
+      [ -n "$alt" ] || continue
+      rm -rf "$alt"
+      log "$kategorie: $(basename "$alt") entfernt"
+    done
+  fi
+}
+
+# Fehlgeschlagene Staende getrennt aufraeumen: die zwei juengsten bleiben zur
+# Fehlersuche liegen, aeltere fliegen — sonst fuellen sie ueber Monate die
+# Platte, ohne je zu nuetzen.
+aufraeumen_unvollstaendige() {
+  local ordner="$BACKUP_DIR/$1"
+  [ -d "$ordner" ] || return 0
+  find "$ordner" -mindepth 1 -maxdepth 1 -type d -name '*.UNVOLLSTAENDIG' 2>/dev/null \
+    | sort | head -n -2 | while read -r alt; do
+        [ -n "$alt" ] || continue
         rm -rf "$alt"
-        log "$kategorie: $(basename "$alt") entfernt"
+        log "$1: unbrauchbaren Stand $(basename "$alt") entfernt"
       done
 }
 
 aufraeumen taeglich "$KEEP_DAILY"
 aufraeumen woechentlich "$KEEP_WEEKLY"
 aufraeumen monatlich "$KEEP_MONTHLY"
+aufraeumen_unvollstaendige taeglich
 
 GROESSE=$(du -sh "$ZIEL" | cut -f1)
 log "Sicherung abgeschlossen: $ZIEL ($GROESSE)"
-log "Bestand: $(find "$BACKUP_DIR/taeglich" -mindepth 1 -maxdepth 1 -type d | wc -l) taeglich, $(find "$BACKUP_DIR/woechentlich" -mindepth 1 -maxdepth 1 -type d | wc -l) woechentlich, $(find "$BACKUP_DIR/monatlich" -mindepth 1 -maxdepth 1 -type d | wc -l) monatlich"
+# Nur vollstaendige Staende melden — eine Zahl, die kaputte mitzaehlt, waere
+# eine Erfolgsmeldung ueber etwas, das im Ernstfall nicht traegt.
+zaehle_vollstaendige() {
+  find "$BACKUP_DIR/$1" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+    | while read -r d; do [ -f "$d/VOLLSTAENDIG" ] && echo x; done | wc -l
+}
+log "Bestand (nur vollstaendige): $(zaehle_vollstaendige taeglich) taeglich, $(zaehle_vollstaendige woechentlich) woechentlich, $(zaehle_vollstaendige monatlich) monatlich"
+
+UNBRAUCHBAR=$(find "$BACKUP_DIR" -maxdepth 2 -type d -name '*.UNVOLLSTAENDIG' 2>/dev/null | wc -l)
+[ "$UNBRAUCHBAR" -gt 0 ] && log "HINWEIS: $UNBRAUCHBAR unbrauchbare(r) Stand/Staende liegen zur Fehlersuche bereit."

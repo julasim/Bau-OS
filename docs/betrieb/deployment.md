@@ -188,4 +188,4 @@ Mehr dazu: [Updates](/betrieb/updates).
 
 ## Nächster Schritt
 
-→ [systemd-Service einrichten](/betrieb/systemd)
+→ [Updates](/betrieb/updates)

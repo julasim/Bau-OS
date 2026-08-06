@@ -112,8 +112,58 @@ gunzip -c "$STAND/datenbank.sql.gz" \
   || fehl "Einspielen der Datenbank fehlgeschlagen."
 
 # ── 3. Dokumente ─────────────────────────────────────────────────────────────
+#
+# Der bisherige Stand wird BEISEITE GELEGT, nicht ueberschrieben.
+#
+# Warum: `tar -xzf` in ein bestehendes Verzeichnis ist ein Verschmelzen, kein
+# Zuruecksetzen. Dateien, die NACH der Sicherung entstanden sind, bleiben
+# liegen. Ergebnis waere eine Mischung: die Datenbank steht auf dem Stand der
+# Sicherung (der Dump raeumt mit --clean auf), die Dateien auf Sicherung PLUS
+# Gegenwart. Wer eine Ruecksicherung macht, glaubt einen Zeitpunkt zu bekommen
+# und bekaeme zwei.
+#
+# Besonders unangenehm beim Verschluesselungstrojaner: dessen Dateien tragen
+# neue Namen und ueberlebten das Verschmelzen unbeschadet.
+#
+# Beiseitelegen statt loeschen, weil eine Ruecksicherung oft unter Zeitdruck
+# passiert: so ist nichts unwiederbringlich weg.
+STEMPEL=$(date +%Y%m%d-%H%M%S)
+BEISEITE="${WORKSPACE_DIR}.vor-ruecksicherung-${STEMPEL}"
+
+if [ -d "$WORKSPACE_DIR" ]; then
+  # Platz pruefen: kurzzeitig liegen beide Staende auf der Platte.
+  BRAUCHT=$(du -sk "$WORKSPACE_DIR" 2>/dev/null | cut -f1)
+  FREI=$(df -k --output=avail "$WORKSPACE_DIR" | tail -1)
+  if [ "${FREI:-0}" -lt "${BRAUCHT:-0}" ]; then
+    fehl "Zu wenig Platz. Der bisherige Stand ($(( BRAUCHT / 1024 )) MB) soll beiseite
+       gelegt werden, frei sind nur $(( FREI / 1024 )) MB. Erst Platz schaffen
+       (aeltere Staende unter $BACKUP_DIR), dann erneut versuchen."
+  fi
+
+  if mountpoint -q "$WORKSPACE_DIR" 2>/dev/null; then
+    # Eigener Datentraeger (plausibel, sobald die Dokumente auf eine zweite
+    # Platte wandern). Das Verzeichnis selbst laesst sich dann nicht
+    # umbenennen — `mv` scheitert mit "Device or resource busy". Deshalb den
+    # INHALT beiseite legen, und zwar innerhalb desselben Datentraegers:
+    # das ist ein Umbenennen und damit sofort fertig, statt Gigabytes ueber
+    # eine Dateisystemgrenze zu kopieren.
+    BEISEITE="$WORKSPACE_DIR/.vor-ruecksicherung-${STEMPEL}"
+    log "Eigener Datentraeger erkannt — Inhalt beiseite legen: $BEISEITE"
+    mkdir -p "$BEISEITE"
+    find "$WORKSPACE_DIR" -mindepth 1 -maxdepth 1 \
+         ! -name ".vor-ruecksicherung-${STEMPEL}" -exec mv -t "$BEISEITE" {} +
+  else
+    log "Bisherigen Stand beiseite legen: $BEISEITE"
+    mv "$WORKSPACE_DIR" "$BEISEITE"
+  fi
+fi
+
 log "Dokumente einspielen..."
 tar -xzf "$STAND/dokumente.tar.gz" -C "$(dirname "$WORKSPACE_DIR")"
+[ -d "$WORKSPACE_DIR" ] || fehl "Der Tarball hat $WORKSPACE_DIR nicht angelegt.
+       Der bisherige Stand liegt unversehrt unter $BEISEITE — zurueckbenennen:
+         mv '$BEISEITE' '$WORKSPACE_DIR'"
+
 # Der Container laeuft als node = uid 1000. Ohne das kann der Dienst nach der
 # Ruecksicherung nicht schreiben — und der Fehler zeigt sich woanders.
 chown -R 1000:1000 "$WORKSPACE_DIR"
@@ -165,3 +215,13 @@ echo "  1. Anmelden an https://\${PATIO_HOSTNAME}/ — ohne Zertifikatswarnung"
 echo "  2. Ein Projekt oeffnen, eine Datei herunterladen"
 echo "  3. Pruefprotokoll ansehen: /admin/audit"
 echo
+if [ -d "$BEISEITE" ]; then
+  echo "Der Stand VOR der Ruecksicherung liegt unter:"
+  echo "  $BEISEITE"
+  echo
+  echo "Dort stehen auch die Dateien, die nach der Sicherung entstanden sind —"
+  echo "sie fehlen jetzt bewusst im wiederhergestellten Stand. Was gebraucht"
+  echo "wird, von Hand herueberholen. Erst danach loeschen:"
+  echo "  sudo rm -rf '$BEISEITE'"
+  echo
+fi

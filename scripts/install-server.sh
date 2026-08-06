@@ -127,8 +127,10 @@ chmod +x "$INSTALL_DIR/scripts/"*.sh
 rm -rf "$VORAB"
 
 # Bei der Erstinstallation gibt es noch nichts zu sichern.
-INSTALL_DIR="$INSTALL_DIR" SKIP_BACKUP=true \
-  bash "$INSTALL_DIR/scripts/update-offline.sh" "$PAKET" \
+# INSTALL_DIR ausdruecklich exportieren, damit das aufgerufene Skript denselben
+# Pfad sieht — sonst faellt es auf seine eigene Vorgabe /opt/patio zurueck.
+export INSTALL_DIR
+SKIP_BACKUP=true bash "$INSTALL_DIR/scripts/update-offline.sh" "$PAKET" \
   || fehl "Das Einspielen ist fehlgeschlagen."
 
 # ── 5. Sicherung einrichten ──────────────────────────────────────────────────

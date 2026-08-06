@@ -39,7 +39,6 @@ export default defineConfig({
           { text: "Server aufsetzen", link: "/betrieb/server" },
           { text: "Software installieren", link: "/betrieb/software" },
           { text: "PATIO deployen", link: "/betrieb/deployment" },
-          { text: "systemd Service", link: "/betrieb/systemd" },
           { text: "Netzfreigabe", link: "/betrieb/freigabe" },
           { text: "Updates", link: "/betrieb/updates" },
           { text: "Sicherung", link: "/betrieb/sicherung" },

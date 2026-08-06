@@ -144,10 +144,14 @@ befehl_db() {
     echo -e "  ${ROT}✗${AUS} Die Datenbank läuft nicht."
     return 1
   fi
-  echo -e "  ${FETT}Migrationsstand:${AUS}\n"
-  docker exec "$APP" node dist/scripts/db-migrate.js status 2>/dev/null \
-    || docker exec "$DB" psql -U "${POSTGRES_USER:-patio}" -d "${POSTGRES_DB:-patio}" \
-         -c "SELECT name, applied_at FROM _migrations ORDER BY name DESC LIMIT 5;" 2>/dev/null \
+  # Direkt gegen _migrations. Hier stand ein Aufruf von
+  # `node dist/scripts/db-migrate.js` — den Pfad gibt es nicht: tsconfig.json
+  # baut nur src/**/*, scripts/ landet nie in dist/. Der Zweig scheiterte
+  # also immer und fiel still auf die naechste Zeile zurueck.
+  echo -e "  ${FETT}Migrationen:${AUS}\n"
+  docker exec "$DB" psql -U "${POSTGRES_USER:-patio}" -d "${POSTGRES_DB:-patio}" -tAc \
+    "SELECT count(*) || ' angewendet, zuletzt: ' || max(name) FROM _migrations" 2>/dev/null \
+    | sed 's/^/    /' \
     || echo -e "  ${GELB}!${AUS} Migrationsstand nicht abrufbar."
   echo
   echo -e "  ${MATT}Direkte Abfrage:  docker exec -it $DB psql -U patio -d patio${AUS}"

@@ -22,6 +22,23 @@ tools/
 .DS_Store
 Thumbs.db
 
-# Dokumentation
-docs/.vitepress/dist/
-docs/.vitepress/cache/
+# Dokumentation — wird vom Dienst NICHT ausgeliefert (geprueft: kein
+# serveStatic darauf in src/api/server.ts), gehoert also nicht ins Image.
+docs/
+
+# Auslieferungspakete. OHNE diese Zeile schickt jeder `docker build` die
+# gespeicherten Images als Bau-Kontext mit — gemessen 169 von 172 MB, und es
+# waechst mit jedem Paket. Der Bau wird dadurch immer langsamer, ohne dass
+# jemand den Grund sieht.
+release/
+
+# Archiv (abgeloeste Skripte und Ansichten) — nur Nachschlagewerk.
+_archive/
+
+# Betriebs-Vorlagen (systemd, Samba). Kommen ueber das Auslieferungspaket auf
+# den Server, nicht ueber das Image.
+deploy/
+
+# Tests laufen auf dem Entwicklungsrechner, nicht im Image. tsconfig.json
+# baut ohnehin nur src/**/*.
+tests/

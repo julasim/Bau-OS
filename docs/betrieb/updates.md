@@ -1,145 +1,106 @@
 # Updates
 
-PATIO auf einen neueren Stand bringen.
+Auf dem Firmenserver wird **nie gebaut**. Er hat kein Internet, also gibt es
+weder `git pull` noch `npm install` noch `docker compose pull`. Stattdessen
+entsteht auf dem Entwicklungsrechner **eine Datei**, die per USB-Stick auf den
+Server wandert.
 
-## Vorher: Backup
-
-Ein Update kann Migrationen mitbringen, und Migrationen sind
-**forward-only** — es gibt keinen Rückweg. Vor jedem Update:
-
-```bash
-sudo bash /opt/patio/scripts/backup.sh
+```
+Entwicklungsrechner                        Firmenserver
+───────────────────                        ────────────
+scripts/release-offline.sh
+  ├─ volle Prüfkette
+  ├─ docker build
+  └─ docker save + Prüfsumme
+        │
+        └──▶ patio-<version>.tar.gz ──USB──▶ scripts/update-offline.sh
+             (rund 170 MB)                     ├─ Prüfsumme kontrollieren
+                                               ├─ Sicherung auslösen
+                                               ├─ docker load
+                                               ├─ Stack neu starten
+                                               └─ Gesundheit prüfen
 ```
 
-Details: [Sicherung](/betrieb/sicherung).
-
-## Docker Compose
+## Auf dem Entwicklungsrechner
 
 ```bash
-cd /opt/patio
-git pull
-docker compose build app
-docker compose up -d app
-docker compose logs -f app
+cd apps/patio
+DATABASE_URL="postgres://patio:patio@<WSL-IP>:5432/patio" \
+  bash scripts/release-offline.sh
 ```
 
-Die Migrationen laufen beim Start der Anwendung mit, sofern
-`DB_AUTO_MIGRATE` nicht auf `false` steht.
+Das Skript **besteht auf `DATABASE_URL`**. Ohne Datenbank überspringt die
+Testsuite still 156 von 267 Prüfungen — genau die ACL-, Auth- und DB-Tests —
+und meldet trotzdem grün. Ein Auslieferungspaket auf dieser Grundlage wäre
+fahrlässig.
 
-Für den Standardfall gibt es das Skript `scripts/docker-update.sh`, das
-dieselben Schritte bündelt.
+Ergebnis in `release/`:
 
-::: warning Nur die .env geändert?
-`docker compose restart` liest die `.env` **nicht** neu ein. Dafür braucht
-es:
+| Datei | Inhalt |
+|---|---|
+| `patio-<version>.tar.gz` | Image, Compose-Datei, `docker/`, `deploy/`, Skripte |
+| `patio-<version>.tar.gz.sha256` | Prüfsumme |
+
+Im Paket liegt eine `PAKET.txt` mit Version, Baudatum, Rechnername und
+Git-Stand — **einschließlich eines Vermerks, wenn beim Bauen uncommittete
+Änderungen im Baum lagen.**
+
+## Auf dem Server
 
 ```bash
-docker compose up -d --force-recreate app
+# Paket nach /opt/patio kopieren, dann:
+sudo patio update patio-0.2.0.tar.gz
 ```
 
-Prüfen, ob der Wert angekommen ist:
+Der Ablauf:
+
+1. **Prüfsumme** — ein auf dem Weg beschädigtes Paket fällt hier auf.
+2. **Zielverzeichnis prüfen** — vor dem ersten Handgriff, damit kein halb
+   aktualisierter Rechner zurückbleibt.
+3. **Sicherung auslösen.** Schlägt sie fehl, bricht das Update ab.
+4. `docker load`, Konfiguration und Skripte ersetzen, Stack neu starten.
+5. **Gesundheitsprüfung** gegen `/api/health`. Antwortet der Dienst nicht,
+   setzt das Skript auf das vorige Image zurück.
+
+::: danger Migrationen laufen nur vorwärts
+Der Rückweg auf das alte Image holt das **Schema nicht** zurück. Ein Update,
+das migriert hat, ist damit praktisch einbahnig — die erzwungene Sicherung
+davor ist der einzige echte Rückweg.
+
+Kommt die alte Fassung mit dem neuen Schema nicht zurecht:
 
 ```bash
-docker compose exec app sh -c 'echo $APP_URL'
+sudo bash /opt/patio/scripts/restore.sh
 ```
 :::
 
-## Bare Metal
+## Wenn etwas schiefgeht
 
 ```bash
-cd /opt/patio
-git pull
-npm ci
-npm run build:all
-sudo systemctl restart patio
-sudo systemctl status patio
+patio status              # Zustand aller Dienste
+patio logs 100            # letzte Protokollzeilen
+docker images patio-app   # welche Stände liegen noch da?
 ```
 
-Oder gebündelt:
+Der Rückweg von Hand, falls die automatische Rücksetzung nicht greift:
 
 ```bash
-sudo bash /opt/patio/scripts/update.sh
+docker tag patio-app:<alte-version> patio-app:latest
+cd /opt/patio && docker compose up -d app
 ```
 
-::: tip npm ci statt npm install
-`npm ci` installiert exakt das, was in `package-lock.json` steht. `npm
-install` darf Versionen anheben — auf einem Produktivsystem ist das keine
-gute Idee.
-:::
+## Was das Update nicht anfasst
 
-## Migrationen kontrolliert fahren
+`.env` bleibt unberührt — dort stehen die Geheimnisse dieser Installation.
+Kommen neue Schlüssel dazu, stehen sie in der mitgelieferten `.env.example`
+und müssen von Hand übernommen werden.
 
-Wer den Zeitpunkt selbst bestimmen will, setzt `DB_AUTO_MIGRATE=false` und
-fährt sie explizit:
+## Arbeitsplätze
 
-```bash
-npm run db:status     # was ist angewendet, was fehlt
-npm run db:migrate    # fehlende anwenden
-```
-
-Im Compose-Aufbau:
-
-```bash
-docker compose exec app npm run db:status
-```
-
-Der Runner hält einen Advisory-Lock, es können also nicht zwei Instanzen
-gleichzeitig migrieren. Getrackt wird per Dateiname in `_migrations`, **ohne
-Prüfsumme** — eine bereits angewendete Migration nachträglich zu ändern
-bleibt folgenlos und ist deshalb zu vermeiden.
-
-## Nach dem Update prüfen
-
-```bash
-# Docker
-docker compose ps
-docker compose exec app curl -s localhost:3000/api/health
-
-# Bare Metal
-systemctl is-active patio
-curl -s localhost:3000/api/health
-```
-
-Dann von einem Arbeitsplatz anmelden und eine Änderung speichern — der
-Health-Check sagt nur, dass der Prozess lebt, nicht dass die Anwendung
-funktioniert.
-
-## Node.js aktualisieren
-
-Nur bei der Bare-Metal-Installation nötig; im Container gibt das Basisimage
-die Version vor.
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_24.x | sudo bash -
-sudo apt-get install -y nodejs
-node --version
-
-cd /opt/patio
-npm ci
-npm run build:all
-sudo systemctl restart patio
-```
-
-::: warning Native Module neu bauen
-`bcrypt` wird gegen die installierte Node-Version kompiliert. Nach einem
-Wechsel der Hauptversion muss `npm ci` durchlaufen, sonst startet der Dienst
-mit einem ABI-Fehler nicht.
-:::
-
-## System-Updates
-
-```bash
-sudo apt update && sudo apt upgrade -y
-```
-
-Nach einem Kernel-Update ist ein Neustart fällig:
-
-```bash
-sudo reboot
-```
-
-PATIO kommt danach von selbst wieder hoch — über systemd beziehungsweise
-über `restart: always` in der Compose-Datei.
+Die Oberfläche steckt im selben Image wie der Dienst (`serveStatic` aus
+`dist/web`) — Server und Browser können also nicht auseinanderlaufen. An den
+Arbeitsplätzen ist nach einem Update nichts zu tun außer einem Neuladen der
+Seite.
 
 ## Nächster Schritt
 
