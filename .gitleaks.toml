@@ -21,3 +21,32 @@ description = "Dummy-TOTP-Seed aus dem Test-Fixture (kein echtes Secret)"
 regexes = [
   '''ABCDEFGHIJ234567''',
 ]
+
+# Testpasswoerter aus tests/api-json-konten-weg.test.ts.
+#
+# Der Test legt ueber die Admin-Route ein Konto an, meldet sich damit an und
+# loescht es am Ende wieder — das Passwort steht deshalb zweimal im Klartext da
+# und muss es auch. gitleaks 8.30.1 stuft es als "generic-api-key" ein und hat
+# damit ab Commit 24320bc jeden CI-Lauf rot gemacht.
+#
+# **Warum eine Allowlist und nicht einfach ein anderes Passwort:** der CI-Scan
+# laeuft ueber die ganze Git-History (fetch-depth: 0). Die Fundstelle im alten
+# Commit bliebe also bestehen, egal was in der Arbeitskopie steht. Die einzige
+# Alternative waere History-Rewriting — unverhaeltnismaessig fuer ein
+# erfundenes Testpasswort.
+#
+# **Nur ueber das Muster, NICHT ueber den Pfad.** Der erste Versuch hatte
+# zusaetzlich `paths = ["^tests/"]` mit `condition = "AND"`, in der Annahme,
+# beide Bedingungen muessten zutreffen. Gemessen mit gitleaks 8.30.1: sie tun
+# es nicht — der Pfad-Eintrag allein nahm die GESAMTE Testsuite von der
+# Pruefung aus. Nachgewiesen mit einem eingefuegten GitHub-Token: in src/
+# gemeldet, in tests/ verschluckt. Ein echtes Secret in einer Testdatei waere
+# also unbemerkt durchgegangen.
+#
+# Die Regex allein ist eng genug: ein echtes Zugangsdatum sieht nicht aus wie
+# `db-passwort-1234`. Gegengeprueft, siehe unten.
+[[allowlists]]
+description = "Erfundene Testpasswoerter in der Testsuite (kein echtes Secret)"
+regexes = [
+  '''(json|db|test|pruef)-passwort-\d+''',
+]

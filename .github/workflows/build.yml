@@ -60,6 +60,14 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        # Electron ist seit AP12 devDependency (Arbeitsplatz-Programm). Sein
+        # postinstall laedt sonst bei JEDEM Lauf rund 100 MB Binaerdatei aus dem
+        # Netz — die Binaerdatei wird hier nie gebraucht: die CI baut kein
+        # Paket und startet kein Fenster, sie prueft nur Typen, Lint und Tests.
+        # `npm run dist` laeuft ausschliesslich auf Julius' Maschine (dort
+        # liegt auch das Signaturzertifikat).
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
         run: npm ci
 
       - name: Production-Build (build:all = tsc + vite, identisch zu Docker)
@@ -75,6 +83,20 @@ jobs:
         # npm run nutzt die in devDependencies GEPINNTE vue-tsc (node_modules/.bin)
         # statt `npx` ohne Pin die neueste zu ziehen (die mit TS 6 bricht — TEST-1).
         run: npm run typecheck:web
+
+      # Zwei Bereiche, die `npm run build:all` NICHT erfasst: die tsconfig.json
+      # im Root schliesst nur `src/**/*` ein. Bis hierher wurden `scripts/` und
+      # `electron/` (das Arbeitsplatz-Programm aus AP12) in der CI also von
+      # keiner Typpruefung angefasst — ein Fehler dort waere erst auf Julius'
+      # Maschine beim `npm run build:electron` aufgeschlagen.
+      #
+      # Die Electron-Typen liegen im npm-Paket selbst (electron.d.ts), nicht in
+      # der Binaerdatei — der Schritt funktioniert also trotz
+      # ELECTRON_SKIP_BINARY_DOWNLOAD oben.
+      - name: Backend-Skripte + Arbeitsplatz-Huelle (tsc)
+        run: |
+          npm run typecheck:scripts
+          npm run typecheck:electron
 
       - name: Lint (eslint)
         run: npm run lint
