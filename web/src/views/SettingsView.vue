@@ -1215,25 +1215,14 @@ onMounted(() => {
               Theme, Akzentfarbe und Schriftgröße. Änderungen werden sofort live übernommen.
             </p>
 
-            <!-- Variant: Studio (neutral) vs Atelier (warm) — Workspace v2 -->
-            <div class="settings-card p-4" style="margin-bottom: 12px">
-              <div class="text-sm" style="font-weight: 600; margin-bottom: 8px">Workspace-Variante</div>
-              <div class="flex" style="gap: 8px; flex-wrap: wrap">
-                <button
-                  v-for="v in ['studio', 'atelier'] as const"
-                  :key="v"
-                  @click="shell.setVariant(v)"
-                  :class="['settings-chip', shell.state.value.variant === v ? 'settings-chip-active' : '']"
-                  style="padding: 6px 14px; border-radius: 6px; font-size: 12px"
-                >
-                  {{ v === "studio" ? "Studio (neutral, dicht)" : "Atelier (warm, ruhig)" }}
-                </button>
-              </div>
-              <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 6px">
-                Studio = Schwarz, dichte Listen, scharfe Kanten. Atelier = warmes Papier-Farbschema, weichere Radien,
-                Slate-Akzent.
-              </div>
-            </div>
+            <!--
+              Hier stand ein Umschalter "Workspace-Variante: Studio / Atelier".
+              Er ist mit der Uebernahme des SIMA-Designs entfallen: das neue
+              Stylesheet kennt nur noch `.app-v2[data-variant="studio"]`.
+              Der Knopf waere stehengeblieben und haette nichts mehr bewirkt —
+              schlimmer noch, "Atelier" haette die Oberflaeche ohne einzige
+              Regel dastehen lassen.
+            -->
 
             <!-- Density: compact vs cozy -->
             <div class="settings-card p-4" style="margin-bottom: 12px">

@@ -1,14 +1,19 @@
 // ============================================================
 // PATIO Workspace v2 — Shell-State (Phase 7c)
 // ============================================================
-// Globaler Singleton fuer Variant (Studio/Atelier), Density
+// Globaler Singleton fuer Variant, Density
 // (compact/cozy), Rail/List-Collapsed-States. Persistiert in
 // localStorage + synct ueber Tabs via storage-event.
 // ============================================================
 
 import { ref, watch } from "vue";
 
-export type Variant = "studio" | "atelier";
+// SIMA ist der einzige Look — die frühere Variante "atelier" ist entfernt.
+// Grund: das übernommene Stylesheet kennt nur noch
+// `.app-v2[data-variant="studio"]`. Bliebe der Typ weit, könnte der Zustand
+// einen Wert annehmen, für den es keine einzige Regel gibt — die Oberfläche
+// stünde dann ohne Farben da, ohne dass irgendwo ein Fehler auftaucht.
+export type Variant = "studio";
 export type Density = "compact" | "cozy";
 
 interface ShellState {
@@ -33,7 +38,9 @@ function loadState(): ShellState {
     if (!raw) return DEFAULTS;
     const parsed = JSON.parse(raw) as Partial<ShellState>;
     return {
-      variant: parsed.variant === "atelier" ? "atelier" : "studio",
+      // Fest auf "studio": ein alter localStorage-Eintrag mit "atelier"
+      // würde sonst als ungültiger Wert im Zustand hängen bleiben.
+      variant: "studio",
       density: parsed.density === "cozy" ? "cozy" : "compact",
       railCollapsed: parsed.railCollapsed === true,
       listCollapsed: parsed.listCollapsed === true,
@@ -82,9 +89,6 @@ export function useWorkspaceShell() {
     },
     closeRailMobile() {
       railMobileOpen.value = false;
-    },
-    setVariant(v: Variant) {
-      state.value.variant = v;
     },
     setDensity(d: Density) {
       state.value.density = d;

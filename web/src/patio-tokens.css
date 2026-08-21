@@ -1,169 +1,139 @@
 /* ============================================================
-   PATIO — Design Tokens
-   Plan · Architektur · Termine · Intelligenz · Office
+   PATIO — Design Tokens · SIMA Architecture Corporate Design
    ------------------------------------------------------------
-   Quelle der Wahrheit für Brand und Produkt. Tokens sind
-   identisch in Mainpage und App — kein zweites Brand-System.
+   Streng schwarz / weiß / grau. Helvetica. Hairlines statt
+   Schatten. Radius 7px für UI-Elemente. Status-Farben nur
+   funktional (rot/amber/grün), nie als Brand-Akzent.
 
-   Niveau-Referenz: Linear / Vercel / Stripe.
-   Prinzip: monochrom, flach, präzise, viel Ruhe.
-
-   ------------------------------------------------------------
-   SCHRIFTEN: ausschliesslich vom System.
-
-   Hier stand ein @import auf fonts.googleapis.com (Inter, Inter
-   Tight, JetBrains Mono). Auf einem Firmenserver ohne Internet
-   wartet damit jeder Arbeitsplatz bei jedem Laden in einen
-   Timeout und bekommt danach ohnehin Systemschrift — und es war
-   der einzige verbliebene Aussenkontakt der Oberflaeche.
-
-   Bewusst NICHT durch gebuendelte WOFF2-Dateien ersetzt: die
-   Oberflaeche wird aus PATIO Desktop uebernommen, und deren
-   Designsystem setzt "Helvetica Neue", Helvetica, Arial und
-   ui-monospace — reine Systemschriften. Inter-Schnitte hier zu
-   buendeln waere Arbeit fuer den Papierkorb.
-
-   Bis dahin greifen die Ersatzketten unten (auf Windows also
-   Segoe UI). Gut lesbar, und naeher am Ziel als Inter.
+   Quelle: SIMA-Handoff (Werte 1:1). Bestehende Token-Namen
+   bleiben als Aliase erhalten, damit alle Views weiterlaufen.
    ============================================================ */
 
+/* Schriften lokal/System — KEINE Webfonts (Offline-App + CSP). */
+
 :root {
-  /* ── Ink & Paper ─────────────────────────────────────────
-     Zwei Inks im System:
-       --ink           absolute Ink, für Logo & Brand-Marken
-       --ink-text      lesefreundliches Ink für Fließtext-UI
-     Niemals reines Schwarz für Text — das ist Logos vorbehalten.
-  */
-  --ink:           #0a0a0a;
-  --ink-text:      #111827;
+  /* ── SIMA-Tokens (Handoff-Namen) — Light (Default) ─────── */
+  --fg:            #000000;   /* Überschriften, primärer Text, Balken, Solid-Buttons */
+  --fg-body:       #1a1a1a;   /* Fließtext */
+  --muted:         #5f5f5f;   /* Sekundärtext, Labels */
+  --subtle:        #828282;   /* Tertiärtext, Uppercase-Label, Placeholder */
+  --line:          #e4e4e4;   /* Standard-Rahmen/Trenner */
+  --line-strong:   #cccccc;   /* kräftigerer Rahmen (Inputs, Avatare) */
+  --hair:          #eeeeee;   /* Hairline (Zeilentrenner in Karten) */
+  --surface:       #ffffff;   /* Flächen, Karten */
+  --surface-subtle:#fafafa;   /* Tabellenkopf, aktive Zeile, Kontextleiste */
+  --surface-muted: #f5f5f5;
+  --fill:          #e8e8e8;   /* Fortschrittsbalken-Hintergrund */
+
+  --ok:   #2e7d32;  --ok-bg:   #f1f6f1;   /* im Plan / erledigt / bezahlt */
+  --warn: #b26a00;  --warn-bg: #faf5ec;   /* beobachten / in Arbeit / gestellt */
+  --err:  #b00020;  --err-bg:  #fbf0f1;   /* Handlungsbedarf / überfällig */
+
+  /* ── Sidebar (Rail) — Default DUNKEL, unabhängig vom App-Theme ──
+     Umschaltbar auf hell via [data-sidebar="light"] (s. unten). */
+  --rail-bg:     #000000;
+  --rail-fg:     #ffffff;
+  --rail-muted:  #a0a0a0;
+  --rail-subtle: #666666;
+  --rail-line:   rgba(255, 255, 255, 0.10);
+  --rail-active: rgba(255, 255, 255, 0.11);
+  --rail-hover:  rgba(255, 255, 255, 0.06);
+  --rail-border: rgba(255, 255, 255, 0.12);
+
+  /* ── Bestehende Token-Namen → SIMA-Werte (Aliase) ──────────
+     Alle Views/Components nutzen diese Namen — Werte zeigen auf
+     die SIMA-Palette, damit die Umstellung durchschlägt. */
+  --ink:           #000000;   /* Brand/Logo-Ink */
+  --ink-text:      #1a1a1a;
   --paper:         #ffffff;
-
-  /* ── Light Surfaces ──────────────────────────────────────
-     Drei Ebenen: paper (default) → subtle (alt) → muted (deeper).
-     Border ist die einzige Trennlinie — Schatten sind selten.
-  */
-  --surface:       #ffffff;
-  --surface-subtle:#fafafa;
-  --surface-muted: #f4f4f5;
-  --border:        #e5e7eb;
-  --border-strong: #d4d4d8;
-  --hairline:      #f0f0f1;        /* divider innerhalb einer Card */
-
-  /* ── Dark Surfaces ───────────────────────────────────────
-     Drei Ebenen analog. Niemals reines Schwarz #000.
-  */
-  --surface-dark:        #0f0f11;
-  --surface-dark-subtle: #18181b;
-  --surface-dark-muted:  #1f1f23;
-  --border-dark:         #27272a;
-  --border-dark-strong:  #3f3f46;
-  --hairline-dark:       #1d1d20;
-
-  /* ── Foreground (Light) ──────────────────────────────────
-     Vier Lese-Stufen. Nicht mehr.
-       fg          Headline / primärer UI-Text
-       fg-body     Fließtext, Buttons, Inputs
-       fg-muted    Sub-Labels, Meta, Captions
-       fg-subtle   Hint-Text, Placeholder
-  */
-  --fg:            #0a0a0a;
-  --fg-body:       #18181b;
-  --fg-muted:      #52525b;
-  --fg-subtle:     #a1a1aa;
+  --border:        var(--line);
+  --border-strong: var(--line-strong);
+  --hairline:      var(--hair);
+  --fg-muted:      var(--muted);
+  --fg-subtle:     var(--subtle);
   --fg-inverse:    #ffffff;
 
-  /* ── Foreground (Dark) ─────────────────────────────────── */
-  --fg-dark:         #f4f4f5;
-  --fg-dark-body:    #e4e4e7;
-  --fg-dark-muted:   #a1a1aa;
-  --fg-dark-subtle:  #71717a;
-  --fg-dark-inverse: #0a0a0a;
+  --success:    var(--ok);   --success-fg: var(--ok);   --success-bg: var(--ok-bg);
+  --warning:    var(--warn); --warning-fg: var(--warn); --warning-bg: var(--warn-bg);
+  --danger:     var(--err);  --danger-fg:  var(--err);  --danger-bg:  var(--err-bg);
+  --link:       #1a1a1a;      /* nur in gerendertem Markdown; kein Brand-Blau */
 
-  /* ── Status — sehr sparsam einsetzen ─────────────────────
-     Status-Farben sind FUNKTIONAL, nicht dekorativ.
-     Kein Status als Brand-Akzent, kein Status als Hover-Color.
-  */
-  --success:       #22c55e;
-  --success-fg:    #15803d;
-  --success-bg:    #f0fdf4;
-  --warning:       #f59e0b;
-  --warning-fg:    #b45309;
-  --warning-bg:    #fffbeb;
-  --danger:        #dc2626;
-  --danger-fg:     #b91c1c;
-  --danger-bg:     #fef2f2;
+  /* Default = Ink (SIMA): Solid-Button = Ink auf Paper. --user-accent wird von
+     useTheme() nur gesetzt, wenn eine nicht-neutrale Akzentfarbe gewaehlt ist;
+     sonst greift hier der Fallback. --accent-hover leitet sich per color-mix
+     aus dem Akzent ab, damit der Hover-Zustand mitfaehrt statt auf Schwarz zu
+     kleben. */
+  --accent:       var(--user-accent, var(--fg));
+  --accent-hover: color-mix(in oklab, var(--accent) 86%, #000000);
+  --accent-fg:    var(--user-accent-fg, #ffffff);
 
-  --link:          #2563eb;        /* nur in gerendertem Markdown */
+  /* ── Dark-Palette-Tokens — IMMER verfügbar (SIMA-Dark-Werte) ────────
+     Die Rail ist stets dunkel und referenziert diese direkt; ebenso
+     Dark-Mode-Consumer, die --*-dark direkt nutzen. Nicht entfernen. */
+  --surface-dark:        #141414;
+  --surface-dark-subtle: #191919;
+  --surface-dark-muted:  #1f1f1f;
+  --border-dark:         #262626;
+  --border-dark-strong:  #3a3a3a;
+  --hairline-dark:       #1f1f1f;
+  --fg-dark:             #f4f4f4;
+  --fg-dark-body:        #e2e2e2;
+  --fg-dark-muted:       #9a9a9a;
+  --fg-dark-subtle:      #6a6a6a;
+  --fg-dark-inverse:     #000000;
 
-  /* ── Accent ──────────────────────────────────────────────
-     Es gibt KEINEN Brand-Akzent. Akzent = Ink.
-     Primärer Button = Ink auf Paper, oder Paper auf Ink.
-  */
-  --accent:        var(--ink);
-  --accent-hover:  #1f1f23;
-  --accent-fg:     #ffffff;
+  /* ── Typografie — Helvetica, keine Webfonts ─────────────── */
+  --font-sans:    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-display: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono:    ui-monospace, Consolas, "Courier New", monospace;
 
-  /* ── Type — Familien ────────────────────────────────────
-     Drei Familien, klare Rollen.
-       sans     Inter         — Body, UI, Labels, Tabellen
-       display  Inter Tight   — Headlines, Logo-Lockups, Claims
-       mono     JetBrains     — Code, Tool-Calls, Daten, Pfade
-  */
-  --font-sans:    'Inter', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
-  --font-display: 'Inter Tight', 'Inter', system-ui, sans-serif;
-  --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Skala (px) — SIMA: Body 13, dichte UI. */
+  --fs-10: 10px;   /* micro uppercase-label */
+  --fs-11: 11px;   /* meta / label */
+  --fs-12: 12px;   /* small / caption */
+  --fs-13: 13px;   /* body default / dense UI */
+  --fs-14: 14px;   /* section-titel */
+  --fs-15: 15px;
+  --fs-16: 16px;
+  --fs-18: 18px;
+  --fs-20: 20px;   /* detail-h1 klein */
+  --fs-24: 24px;   /* detail-h1 */
+  --fs-28: 28px;   /* projekt-h1 */
+  --fs-30: 30px;
+  --fs-32: 32px;
+  --fs-34: 34px;   /* seiten-h1 */
+  --fs-36: 36px;
+  --fs-48: 48px;
+  --fs-64: 64px;
+  --fs-80: 80px;
 
-  /* ── Type — Skala ────────────────────────────────────────
-     Pixel-Werte, vorhersehbar.
-     Display-Größen tragen tighter tracking (-0.03em ab fs-30).
-  */
-  --fs-11: 11px;       /* micro-label */
-  --fs-12: 12px;       /* small / caption */
-  --fs-13: 13px;       /* sidebar / dense UI */
-  --fs-14: 14px;       /* body default */
-  --fs-15: 15px;       /* body lead */
-  --fs-16: 16px;       /* base */
-  --fs-18: 18px;       /* sub-headline */
-  --fs-20: 20px;       /* h3 / page title */
-  --fs-24: 24px;       /* h2 */
-  --fs-30: 30px;       /* h1 */
-  --fs-36: 36px;       /* display sm */
-  --fs-48: 48px;       /* display md */
-  --fs-64: 64px;       /* display lg — Hero */
-  --fs-80: 80px;       /* display xl — Cover */
+  --fw-regular:  400;
+  --fw-medium:   500;
+  --fw-semibold: 600;
+  --fw-bold:     700;
 
-  /* ── Type — Gewicht / Line-Height / Tracking ──────────── */
-  --fw-regular:    400;
-  --fw-medium:     500;
-  --fw-semibold:   600;
-  --fw-bold:       700;
+  --lh-tight:    1.12;
+  --lh-snug:     1.25;
+  --lh-normal:   1.45;
+  --lh-relaxed:  1.6;
 
-  --lh-tight:      1.10;          /* Display */
-  --lh-snug:       1.25;          /* Headlines */
-  --lh-normal:     1.45;          /* UI */
-  --lh-relaxed:    1.6;           /* Lese-Fließtext */
+  --tracking-display: -0.01em;
+  --tracking-tight:   -0.01em;
+  --tracking-normal:  0;
+  --tracking-wide:    0.04em;
+  --tracking-label:   0.12em;   /* uppercase micro-labels (.10–.14em) */
+  --tracking-acronym: 0.28em;
 
-  --tracking-display:  -0.03em;   /* Inter Tight ab fs-30 */
-  --tracking-tight:    -0.015em;
-  --tracking-normal:   0;
-  --tracking-wide:     0.04em;
-  --tracking-label:    0.08em;    /* uppercase micro-labels */
-  --tracking-acronym:  0.32em;    /* P · A · T · I · O */
+  /* ── Radien — SIMA: 7px für UI, 0 für Tabs, 50% für Dots ── */
+  --radius-xs:   4px;
+  --radius-sm:   7px;   /* Inputs, Buttons */
+  --radius-md:   7px;   /* Nav-Items, Tags, Badges */
+  --radius-lg:   7px;   /* Cards, KPI-Kacheln */
+  --radius-xl:   7px;   /* große Container */
+  --radius-2xl:  10px;
+  --radius-full: 9999px;
 
-  /* ── Radien — bewusst klein gehalten ────────────────────
-     Keine pillows, keine soft-pillows. Architektonisch, nicht consumer.
-  */
-  --radius-xs:   2px;
-  --radius-sm:   4px;             /* Inputs, kleine Buttons */
-  --radius-md:   6px;             /* Nav-Items, Tags */
-  --radius-lg:   8px;             /* Cards, primäre Buttons */
-  --radius-xl:   12px;            /* große Container, Hero-Karten */
-  --radius-2xl:  16px;
-  --radius-full: 9999px;          /* Status-Dots, Pills */
-
-  /* ── Spacing — 4pt Grid ─────────────────────────────────
-     Verbindlicher Rhythmus. Keine 5px, keine 7px Werte.
-  */
+  /* ── Spacing — 4pt Grid ─────────────────────────────────── */
   --space-0:  0;
   --space-1:  4px;
   --space-2:  8px;
@@ -179,133 +149,144 @@
   --space-24: 96px;
   --space-32: 128px;
 
-  /* ── Shadows — selten, ruhig ────────────────────────────
-     Bevorzugt: Hairline-Border statt Schatten. Schatten nur
-     für Floats (Popover, Tooltip, Modal).
-  */
+  /* ── Schatten — KEINE (SIMA). Flächigkeit über Hairlines. ──
+     Nur ein Fokus-Ring bleibt für :focus-visible / Floats. */
   --shadow-none:  none;
-  --shadow-ring:  0 0 0 1px var(--border);
-  --shadow-focus: 0 0 0 2px rgba(10,10,10,0.10);
-  --shadow-sm:    0 1px 2px rgba(10,10,10,0.04);
-  --shadow-md:    0 4px 12px rgba(10,10,10,0.06);
-  --shadow-lg:    0 12px 32px rgba(10,10,10,0.08);
+  --shadow-ring:  0 0 0 1px var(--line);
+  --shadow-focus: 0 0 0 2px var(--fg);
+  --shadow-sm:    none;
+  --shadow-md:    none;
+  --shadow-lg:    none;
 
-  /* ── Motion — ein Tempo, eine Kurve ─────────────────────
-     180ms ease ist der Default für alles. Keine Springs,
-     kein Bounce, kein Slide-in-Theater.
-  */
+  /* ── Motion — 120ms linear (SIMA) ───────────────────────── */
   --t-fast:   120ms;
-  --t-base:   180ms;
-  --t-slow:   280ms;
-  --ease:     cubic-bezier(0.2, 0, 0, 1);
+  --t-base:   120ms;
+  --t-slow:   200ms;
+  --ease:     linear;
 
-  /* ── Layout — verbindliche Maße ─────────────────────────
-     Container-Maxbreite und Sidebar-Breite stehen fix.
-  */
-  --container-narrow: 720px;       /* Lesetext, Chat */
-  --container-base:   960px;       /* Listen, Grid */
-  --container-wide:   1200px;      /* Dashboard, Landing */
-  --sidebar-width:    240px;
-  --nav-height:       56px;
+  /* ── Layout ─────────────────────────────────────────────── */
+  --container-narrow: 720px;
+  --container-base:   960px;
+  --container-wide:   1200px;
+  --sidebar-width:    240px;   /* Rail normal */
+  --sidebar-mini:     60px;    /* Rail im Fokus-Modus */
+  --nav-height:       56px;    /* Topbar */
 }
 
-/* ── Dark-Mode Overrides ─────────────────────────────────────
-   PATIO ist Light- UND Dark-First. Dark ist keine zweitklassige
-   Variante: alle Tokens existieren in beiden Welten.
-*/
+/* ── Helle Sidebar (Rail) — via Topbar-Icon / Einstellungen ─── */
+[data-sidebar="light"] {
+  --rail-bg:     #ffffff;
+  --rail-fg:     #000000;
+  --rail-muted:  #666666;
+  --rail-subtle: #999999;
+  --rail-line:   #e4e4e4;
+  --rail-active: #ededed;
+  --rail-hover:  #f4f4f4;
+  --rail-border: #cccccc;
+}
+
+/* ── Dark Mode — SIMA-Dark-Werte ───────────────────────────── */
 html.dark, .dark, [data-theme="dark"] {
-  --surface:        var(--surface-dark);
-  --surface-subtle: var(--surface-dark-subtle);
-  --surface-muted:  var(--surface-dark-muted);
-  --border:         var(--border-dark);
-  --border-strong:  var(--border-dark-strong);
-  --hairline:       var(--hairline-dark);
+  --fg:            #f4f4f4;
+  --fg-body:       #e2e2e2;
+  --muted:         #9a9a9a;
+  --subtle:        #6a6a6a;
+  --line:          #262626;
+  --line-strong:   #3a3a3a;
+  --hair:          #1f1f1f;
+  --surface:       #141414;
+  --surface-subtle:#191919;
+  --surface-muted: #1f1f1f;
+  --fill:          #242424;
 
-  --fg:         var(--fg-dark);
-  --fg-body:    var(--fg-dark-body);
-  --fg-muted:   var(--fg-dark-muted);
-  --fg-subtle:  var(--fg-dark-subtle);
-  --fg-inverse: var(--fg-dark-inverse);
+  --ok:   #5fb865;  --ok-bg:   #16241a;
+  --warn: #d79a3f;  --warn-bg: #2a2113;
+  --err:  #e26b7d;  --err-bg:  #2a1518;
 
-  --accent:       var(--fg-dark);
-  --accent-hover: #d4d4d8;
-  --accent-fg:    var(--ink);
+  /* Aliase erben automatisch über var() — hier nur die, die
+     nicht schon per var() zeigen. */
+  --ink:        #f4f4f4;
+  --ink-text:   #e2e2e2;
+  --paper:      #141414;
+  --fg-inverse: #000000;
 
-  --success-bg:   rgba(34,197,94,0.10);
-  --warning-bg:   rgba(245,158,11,0.10);
-  --danger-bg:    rgba(220,38,38,0.12);
+  /* Dark: Akzent-Default ist hell, der Hover geht daher gegen Weiss. */
+  --accent:       var(--user-accent, var(--fg));
+  --accent-hover: color-mix(in oklab, var(--accent) 86%, #ffffff);
+  --accent-fg:    var(--user-accent-fg, #000000);
 
-  --shadow-ring:  0 0 0 1px var(--border-dark);
-  --shadow-focus: 0 0 0 2px rgba(244,244,245,0.12);
-  --shadow-sm:    0 1px 2px rgba(0,0,0,0.40);
-  --shadow-md:    0 4px 12px rgba(0,0,0,0.50);
-  --shadow-lg:    0 12px 32px rgba(0,0,0,0.60);
+  --shadow-ring:  0 0 0 1px var(--line);
+  --shadow-focus: 0 0 0 2px var(--fg);
+  --shadow-sm:    none;
+  --shadow-md:    none;
+  --shadow-lg:    none;
 }
 
-/* ── Base — minimal, nur das Nötigste ──────────────────────── */
+/* ── Base ──────────────────────────────────────────────────── */
 html, body {
   background: var(--surface);
   color: var(--fg-body);
   font-family: var(--font-sans);
-  font-size: var(--fs-14);
+  font-size: var(--fs-13);
   line-height: var(--lh-normal);
-  font-feature-settings: 'cv11', 'ss01', 'ss03';
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
 
-/* ── Type-Helpers — semantisch, nicht visuell ──────────────── */
+/* Geld/Zahlen/Fortschritt: tabellarische Ziffern. */
+.tabular, .num, [data-nums] { font-variant-numeric: tabular-nums; }
+
+/* ── Type-Helpers — SIMA-Skala ─────────────────────────────── */
 .patio-display {
   font-family: var(--font-display);
-  font-weight: var(--fw-semibold);
-  letter-spacing: var(--tracking-display);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
   line-height: var(--lh-tight);
 }
 .patio-h1 {
   font-family: var(--font-display);
-  font-size: var(--fs-48);
-  font-weight: var(--fw-semibold);
-  letter-spacing: var(--tracking-display);
+  font-size: var(--fs-34);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
   line-height: var(--lh-tight);
   color: var(--fg);
 }
 .patio-h2 {
   font-family: var(--font-display);
-  font-size: var(--fs-30);
-  font-weight: var(--fw-semibold);
-  letter-spacing: var(--tracking-display);
+  font-size: var(--fs-28);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
   line-height: var(--lh-snug);
   color: var(--fg);
 }
 .patio-h3 {
   font-family: var(--font-display);
   font-size: var(--fs-20);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   letter-spacing: var(--tracking-tight);
   line-height: var(--lh-snug);
   color: var(--fg);
 }
 .patio-body {
   font-family: var(--font-sans);
-  font-size: var(--fs-14);
+  font-size: var(--fs-13);
   line-height: var(--lh-relaxed);
   color: var(--fg-body);
 }
 .patio-lead {
   font-family: var(--font-sans);
-  font-size: var(--fs-18);
+  font-size: var(--fs-16);
   line-height: var(--lh-relaxed);
   color: var(--fg-body);
-  letter-spacing: var(--tracking-tight);
 }
-.patio-small  { font-size: var(--fs-12); color: var(--fg-muted); line-height: var(--lh-normal); }
-.patio-micro  { font-size: var(--fs-11); color: var(--fg-subtle); line-height: var(--lh-normal); }
+.patio-small  { font-size: var(--fs-12); color: var(--muted); line-height: var(--lh-normal); }
+.patio-micro  { font-size: var(--fs-11); color: var(--subtle); line-height: var(--lh-normal); }
 .patio-label {
   font-size: var(--fs-11);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-bold);
   text-transform: uppercase;
   letter-spacing: var(--tracking-label);
-  color: var(--fg-muted);
+  color: var(--subtle);
 }
 .patio-mono   { font-family: var(--font-mono); font-size: 0.92em; }
 .patio-acronym {
@@ -314,5 +295,5 @@ html, body {
   letter-spacing: var(--tracking-acronym);
   text-transform: uppercase;
   font-size: var(--fs-12);
-  color: var(--fg-muted);
+  color: var(--muted);
 }
