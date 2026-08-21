@@ -88,16 +88,32 @@ sudo systemctl restart ssh
 
 ## 6. Firewall
 
-Der Rechner steht im internen Netz, nicht am Internet. Offen sein müssen nur
-SSH und der Port des Reverse-Proxy:
+Der Rechner steht im internen Netz, nicht am Internet. Offen sein müssen genau
+vier Ports — und nur aus dem Büronetz:
 
 ```bash
-sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp    # SSH
+sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp    # SSH (Verwaltung)
+sudo ufw allow from 192.168.0.0/16 to any port 80 proto tcp    # nur die Weiterleitung auf HTTPS
 sudo ufw allow from 192.168.0.0/16 to any port 443 proto tcp   # PATIO
-sudo ufw allow from 192.168.0.0/16 to any port 445 proto tcp   # Netzfreigabe
+sudo ufw allow from 192.168.0.0/16 to any port 445 proto tcp   # Netzfreigabe (SMB)
 sudo ufw enable
 sudo ufw status
 ```
+
+::: tip Warum Port 80 dazugehört
+Caddy bindet ihn (`docker-compose.yml`, `80:80`) und leitet auf HTTPS um.
+Bleibt er zu, bekommt jemand, der `http://patio.sima.intern` eintippt, keine
+Weiterleitung, sondern eine Zeitüberschreitung — und meldet einen Ausfall, der
+keiner ist.
+
+Für die Zertifikate wird der Port **nicht** gebraucht: die eigene lokale CA
+(`tls internal`) stellt sie ohne Anfrage von außen aus.
+:::
+
+::: warning SSH gehört enger gefasst
+`192.168.0.0/16` ist das ganze Büronetz. Für SSH genügt der Arbeitsplatz der
+Verwaltung — dort die konkrete Adresse eintragen statt des ganzen Bereichs.
+:::
 
 Der Adressbereich ist an das eigene Netz anzupassen. SSH sollte enger stehen —
 idealerweise nur der Arbeitsplatz der Administration.

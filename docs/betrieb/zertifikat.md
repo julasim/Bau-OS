@@ -104,14 +104,17 @@ eigene Chrome-Root-Store betrifft nur öffentliche Wurzeln. Schritt 3 sollte
 also für Programm und Browser gemeinsam gelten.
 
 ::: warning Begründet, aber nicht nachgemessen
-Das Programm gibt es noch nicht. Der praktische Test steht als **erste
-Aufgabe** in dessen Arbeitspaket — vor allem anderen und bevor acht
-Arbeitsplätze eingerichtet werden.
+Das Programm **ist gebaut** ([Arbeitsplatz-Programm](/betrieb/arbeitsplatz)) —
+nachgemessen ist dieser Punkt trotzdem nicht: dafür fehlten ein Server mit
+interner CA und ein echter Windows-Arbeitsplatz. Er gehört deshalb an den
+Anfang der Einrichtung, **bevor** acht Plätze ausgestattet werden.
 
-Ein Detail, das dabei mitgeprüft gehört: eine Erreichbarkeitsprüfung mit
+Ein Detail ist dabei schon berücksichtigt: eine Erreichbarkeitsprüfung mit
 Node-Bordmitteln (`fetch`, `https`) **scheitert** an diesem Zertifikat, weil
 Node seinen eigenen CA-Vorrat mitbringt und den Windows-Speicher nicht kennt —
-während das Fenster daneben problemlos lädt.
+während das Fenster daneben problemlos lädt. Das Programm nutzt deshalb
+Electrons `net`-Modul, das über Chromiums Netzwerkschicht und damit über den
+System-Speicher geht.
 :::
 
 Bei einer Domäne mit Active Directory geht das zentral per Gruppenrichtlinie:

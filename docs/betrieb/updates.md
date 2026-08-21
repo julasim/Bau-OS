@@ -30,9 +30,9 @@ DATABASE_URL="postgres://patio:patio@<WSL-IP>:5432/patio" \
 ```
 
 Das Skript **besteht auf `DATABASE_URL`**. Ohne Datenbank überspringt die
-Testsuite still 156 von 267 Prüfungen — genau die ACL-, Auth- und DB-Tests —
-und meldet trotzdem grün. Ein Auslieferungspaket auf dieser Grundlage wäre
-fahrlässig.
+Testsuite still **290 von 412** Prüfungen — genau die ACL-, Auth- und DB-Tests
+— und meldet trotzdem grün (gemessen: `122 passed | 290 skipped`). Ein
+Auslieferungspaket auf dieser Grundlage wäre fahrlässig.
 
 Ergebnis in `release/`:
 

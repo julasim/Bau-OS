@@ -4,10 +4,13 @@ Häufige Probleme und ihre Ursachen. Die Reihenfolge folgt der Häufigkeit,
 nicht der Dramatik.
 
 ::: tip Erst Logs, dann raten
-Vor jeder Vermutung: frische Logs holen. `docker compose logs --since 2m
-app` beziehungsweise `journalctl -u patio -n 100`. PATIO ist bei
-Startfehlern ausgesprochen redselig — die Meldung nennt fast immer die
-Ursache.
+Vor jeder Vermutung: frische Logs holen — `docker compose logs --since 2m
+app`. PATIO ist bei Startfehlern ausgesprochen redselig; die Meldung nennt
+fast immer die Ursache.
+
+**Nicht** `journalctl -u patio`: eine solche Unit gibt es nicht, die Anwendung
+läuft nur als Compose-Stack. Über systemd laufen ausschließlich die
+Sicherungs-Einheiten (`journalctl -u patio-backup`).
 :::
 
 ---
@@ -69,11 +72,14 @@ Häufige Ursachen:
 
 ```bash
 docker compose up -d --force-recreate app
-docker compose exec app sh -c 'echo $APP_URL'
+docker compose exec app sh -c 'echo $PATIO_HOSTNAME'
 ```
 
-Bei systemd genügt `sudo systemctl restart patio` — die Unit liest
-`EnvironmentFile` bei jedem Start neu.
+::: tip `restart` reicht nicht
+Ein `docker compose restart app` liest die `.env` **nicht** neu. Nötig ist
+`docker compose up -d --force-recreate app`. Das ist die häufigste Ursache
+dafür, dass eine geänderte Einstellung „nicht greift".
+:::
 
 ::: warning Zwei Werte lassen sich nicht per .env ändern
 `docker-compose.yml` setzt `DATABASE_URL` und `WORKSPACE_PATH` im
@@ -173,8 +179,10 @@ ls -la /opt/patio-workspace
 sudo chown -R 1000:1000 /opt/patio-workspace    # Container läuft als UID 1000
 ```
 
-Bei systemd zusätzlich `ReadWritePaths` in der Unit prüfen —
-`ProtectSystem=strict` macht alles andere schreibgeschützt.
+Der Eigentümer ist die häufigste Ursache: der Container läuft als uid 1000,
+und wer das Verzeichnis dem Dienstbenutzer eines Systemkontos zuweist
+(`useradd -r` vergibt eine uid **unter** 1000), macht den Dienst
+schreibunfähig. Der Fehler zeigt sich dann an ganz anderer Stelle.
 
 Erlaubte Endungen: `pdf`, `docx`, `doc`, `xlsx`, `xls`, `csv`, `txt`, `md`,
 `png`, `jpg`, `jpeg`, `gif`, `webp`, `zip`, `json`, `xml`. Zusätzlich prüft
@@ -203,9 +211,16 @@ Die Anfrage hat zu lange gedauert. Bitte den Umfang eingrenzen.
 
 Eine Abfrage lief in das `statement_timeout` von PostgreSQL (SQLSTATE
 57014). Meist eine sehr breite Suche oder eine Portfolio-Auswertung über
-viele Projekte. Kurzfristig: Suchbegriff eingrenzen. Mittelfristig: die
-Umstellung der Suche von `ILIKE` auf `tsvector` steht als eigenes
-Arbeitspaket an.
+viele Projekte. Kurzfristig: Suchbegriff eingrenzen.
+
+Die Suche läuft bereits über `tsvector` mit GIN-Index (Migration `048`) — die
+früher hier genannte Umstellung ist erledigt. Tritt der Fehler weiterhin auf,
+lohnt ein Blick darauf, ob die Indizes wirklich angelegt sind:
+
+```bash
+docker compose exec postgres psql -U patio -d patio \
+  -c "\di+ *such_text*"
+```
 
 Kommt stattdessen „Datenbank derzeit nicht erreichbar" (SQLSTATE 53300),
 sind die Verbindungen aufgebraucht:

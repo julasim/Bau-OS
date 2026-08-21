@@ -19,10 +19,22 @@ führt:
 | In der Sicherung | ja (Dateien) | ja (Datenbank) |
 | Obergrenze je Datei | keine | 50 MB (`MAX_UPLOAD_MB`) |
 
-**Die Anwendung liest und schreibt in diesem Ordner nichts.** Sie zeigt ihn
-auch nicht an. Wer eine Datei in PATIO hochlädt, legt sie in die Datenbank;
-wer sie in den Ordner kopiert, legt sie in die Freigabe. Beides ist richtig —
-nur eben für verschiedene Dinge.
+**Die Anwendung schreibt in diesem Ordner nichts** und zeigt ihn nicht an. Wer
+eine Datei in PATIO hochlädt, legt sie in die Datenbank; wer sie in den Ordner
+kopiert, legt sie in die Freigabe. Beides ist richtig — nur eben für
+verschiedene Dinge.
+
+::: info Eine Ausnahme: Lesen aus dem Altbestand
+Hier stand „liest und schreibt nichts". Die Hälfte davon stimmt nicht: für
+**alte Datei-Datensätze**, deren Inhalt noch nicht in der Datenbank liegt,
+greift ein Rückfall auf die Platte (`src/api/routes/files.ts`, Zeilen 144 und
+387). Er springt nur an, wenn der Datensatz keinen Inhalt mitbringt, und er
+prüft vorher die Rechte und den Pfad.
+
+Geschrieben wird nichts: die Funktion dafür (`createFile` in
+`src/workspace/files.ts`) hat **keinen einzigen Aufrufer** mehr. Für Ablagen,
+die neu aufgesetzt werden, ist der Ordner damit ausschließlich Netzfreigabe.
+:::
 
 ::: tip Warum nicht alles in einer Ablage
 Ein 800-MB-Plansatz gehört nicht in eine Datenbank: er bläht jede Sicherung

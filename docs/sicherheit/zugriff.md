@@ -46,12 +46,21 @@ Weg über die Datenbank, siehe
 [Troubleshooting](/betrieb/troubleshooting).
 :::
 
-::: tip Der Alt-Konten-Rückfallpfad
-Konten aus `data/users.json` melden sich weiterhin an. Der Pfad existiert für
-Erstinbetriebnahme und Wiederherstellung; beim Start zieht PATIO solche
-Konten idempotent in die Datenbank nach. Er entfällt mit dem Arbeitspaket
-„Konten und Sitzungen". Auf einem produktiven System sollte die Datei leer
-sein.
+::: tip Alt-Konten aus `data/users.json` melden sich NICHT mehr an
+Hier stand bis zuletzt das Gegenteil. Der einstufige Sonderweg über die
+JSON-Datei ist geschlossen — er war der letzte Anmeldeweg ohne Datenbank und
+umging damit Rollen und Rechte.
+
+Von der Datei bleiben zwei harmlose Verwendungen:
+
+- **Übernahme beim Start** (`importLegacyJsonUsers()` in `src/api/auth.ts`):
+  Konten, die es nur in der JSON-Datei gibt, werden idempotent in die Datenbank
+  gezogen. Wer von einer alten Installation kommt, sperrt sich damit nicht aus.
+- **Sperre der Ersteinrichtung**: der Setup-Assistent zählt sie mit, damit er
+  nicht ein zweites Mal aufgeht.
+
+Ein Konto, das nur in der Datei steht und nie übernommen wurde, kommt nicht
+hinein. Auf einem produktiven System sollte die Datei leer sein.
 :::
 
 ## Ersteinrichtung
@@ -76,12 +85,65 @@ Datensätze **ohne** Projektbezug sind persönlich:
 | Notizen | Ersteller |
 | Dateien | Hochladende Person oder über eine Freigabe |
 
-Die gesamte Logik liegt in `src/data/access.ts`. Die Repositories bauen ihre
-WHERE-Klauseln daraus, statt sie sich selbst zusammenzusetzen — genau diese
-eine Stelle ist deshalb prüfbar.
+Die gesamte Logik liegt in `src/data/access.ts` — niemand setzt sich die
+Sichtbarkeit selbst aus `user_projects` zusammen, deshalb ist genau diese eine
+Stelle prüfbar.
+
+**Wichtig ist aber, wo sie ausgewertet wird:** 16 Routen rufen
+`getVisibleProjectIds()` auf und reichen das Ergebnis weiter; sechs
+Repositories wenden eine übergebene Liste an, **ermitteln sie aber nie selbst**.
+Eine neue Route, die den Aufruf vergisst, liefert damit ungefiltert aus. Genau
+so sind hier mehrere Lücken entstanden — die auffälligste war der Word-Export,
+über den sich die Rechteprüfung vollständig umgehen ließ.
 
 Projekt-Zugriff vergeben und entziehen: `POST` und `DELETE` auf
 `/api/projects/:name/access`.
+
+## Das Geld-Recht
+
+Getrennt von den Rollen gibt es ein eigenes Recht für **Geldbeträge**:
+Stundensätze, Honorare, Rechnungssummen, Deckungsbeiträge. In einem Büro sollen
+nicht alle die Sätze der Kollegen kennen.
+
+| | |
+|---|---|
+| Spalte | `users.can_see_money` (Migration `043`) |
+| Voreinstellung | **aus** — neue Konten sehen keine Beträge |
+| Admins | haben es immer |
+| Vergabe | Verwaltung → Benutzer, eigener Schalter |
+
+::: tip Eine Filterstelle statt acht
+Das Recht müsste an acht Stellen greifen: Rechnungen, Portfolio,
+Projekt-Cockpit, Positionskatalog, Volltextsuche, Live-Kanal, Word-Export und
+Sicherungs-Status. Statt es achtmal einzeln zu prüfen — und beim neunten Mal zu
+vergessen — sitzt **eine Middleware hinter allen Routen**:
+
+```
+app.use("/api/*", geldFilter);      // src/api/server.ts:431
+```
+
+`src/api/geld.ts` geht die fertige JSON-Antwort rekursiv durch und entfernt die
+Geldfelder, wenn das Konto das Recht nicht hat. Eine neue Route kann das nicht
+vergessen, weil sie nichts dafür tun muss.
+
+Die Beträge werden also **nicht in der Oberfläche ausgeblendet**, sondern
+verlassen den Server gar nicht erst. Ein Mitschnitt der Netzwerkantworten
+enthält sie nicht.
+:::
+
+::: danger Die Grenze des Verfahrens — bitte beim Weiterbauen beachten
+Der Filter erkennt Geld an **Feldnamen**, nicht am Inhalt. `GELD_FELDER` in
+`src/api/geld.ts` ist eine feste Liste (`hourlyRate`, `betrag`, `einzelpreis`,
+`budget`, `honorar`, `deckungsbeitrag`, `kostenIst` und weitere).
+
+**Ein Betrag unter einem neuen Namen — etwa `preis`, `summe` oder `netto` —
+ginge ungefiltert hinaus.** Der Test `tests/api-geld-recht.test.ts` prüft
+gegen dieselbe Liste und würde es ebenfalls nicht bemerken.
+
+Wer ein neues Geldfeld einführt, muss es also an **zwei** Stellen eintragen:
+in `GELD_FELDER` und in die Endpunktliste des Tests. Das ist der eine Handgriff,
+den dieses Verfahren nicht abnimmt.
+:::
 
 ## Live-Updates
 
@@ -171,10 +233,27 @@ Sicherheitsrelevante Vorgänge werden protokolliert, einsehbar unter
 | Bereich | Ereignisse |
 |---|---|
 | Anmeldung | `login.success`, `login.fail` |
-| Anmelde-Link | `login.magic_link.sent`, `.success`, `.fail` |
-| E-Mail-Einrichtung | `email_setup.code_sent`, `.success`, `.code_fail` |
-| Passwort | `password_reset.request`, `.success`, `password.admin_reset` |
+| Passwort | `password.change` (selbst geändert), `password.admin_reset` (vom Admin zurückgesetzt) |
 | Benutzer | `user.create`, `user.update`, `user.role`, `user.delete` |
+
+Mehr wird derzeit nicht geschrieben. `user.role` statt `user.update` erscheint
+nur, wenn sich tatsächlich die Rolle ändert.
+
+::: info Tote Ereignistypen im Quellcode
+`src/data/db-audit.ts` führt weitere Typen, die **nicht mehr entstehen können**:
+
+- `login.magic_link.*`, `login.email.*`, `login.email_setup_required`,
+  `email_setup.*` — die E-Mail-Anmeldung ist ersatzlos entfallen, es gibt
+  keinen Codepfad mehr, der sie schreibt.
+- `ms.*` — der Outlook-Abgleich ist entfallen.
+- `2fa.*` — hier steht der Code noch (`src/api/routes/auth-2fa.ts`), aber die
+  Routen sind **nicht eingehängt** (`src/api/server.ts:486` ist
+  auskommentiert). Unerreichbar, nicht gelöscht — der zweite Faktor kommt mit
+  dem VPN zurück.
+
+In einem bestehenden Audit-Log können solche Einträge als **Historie**
+auftauchen. Das ist kein Hinweis darauf, dass der Weg noch offen wäre.
+:::
 
 Jeder Eintrag hält IP und User-Agent (auf 256 Zeichen gekürzt).
 Aufbewahrung: `AUDIT_RETENTION_DAYS`, Standard 365 Tage; der Wartungs-Cron

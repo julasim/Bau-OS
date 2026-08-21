@@ -40,13 +40,24 @@ docker compose logs --tail 100 app        # letzte 100 Zeilen
 docker compose logs app | grep -i error
 ```
 
-### systemd
+### systemd — nur für die Sicherung
+
+::: warning `journalctl -u patio` gibt es nicht
+Hier standen vier Befehle auf eine Unit `patio.service`. **Die existiert
+nicht** — PATIO läuft ausschließlich als Compose-Stack, es gibt keinen
+systemd-Dienst für die Anwendung. Wer die Befehle eingibt, bekommt
+„Unit patio.service could not be found". Für die Anwendungsprotokolle gilt der
+Docker-Abschnitt darüber.
+:::
+
+Über systemd laufen nur die **Sicherungs-Einheiten** (`deploy/patio-backup.timer`,
+`patio-backup.service`, `patio-backup-fehler@.service`):
 
 ```bash
-sudo journalctl -u patio -f
-sudo journalctl -u patio -n 100
-sudo journalctl -u patio --since today
-sudo journalctl -u patio -p err
+systemctl status patio-backup.timer       # läuft der Zeitplan?
+systemctl list-timers patio-backup        # wann das nächste Mal?
+sudo journalctl -u patio-backup -n 100    # Protokoll des letzten Laufs
+sudo journalctl -u patio-backup --since today
 ```
 
 ### Logdateien

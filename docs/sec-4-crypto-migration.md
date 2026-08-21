@@ -1,5 +1,10 @@
 # SEC-4 — Feld-Verschlüsselung auf eigenen `ENCRYPTION_KEY` umstellen
 
+Diese Seite wird aus dem laufenden Betrieb heraus verlinkt: Startet PATIO ohne
+`ENCRYPTION_KEY`, protokolliert es eine Warnung mit genau diesem Pfad
+(`src/index.ts`, Zeile 109). Für eine **neue** Installation genügt es, den
+Schlüssel von Anfang an in die `.env` zu setzen — dann ist hier nichts zu tun.
+
 ## Warum
 
 Bisher wurde der Schlüssel für die Feld-Verschlüsselung (TOTP-Secret; dazu
@@ -18,10 +23,21 @@ trennt beide Belange: ein eigener `ENCRYPTION_KEY` verschlüsselt die Felder,
   Bestandsdaten bleiben lesbar.
 - Legacy-Plaintext (Felder ohne `enc:v1:`-Prefix) wird noch durchgereicht.
 
-Betroffene Felder: `users.telegram_bot_token`, `users.totp_secret_encrypted`,
-`user_microsoft_accounts.access_token_encrypted` / `refresh_token_encrypted`.
+Betroffene Felder laut `scripts/reencrypt.ts`: `users.telegram_bot_token`,
+`users.totp_secret_encrypted`, `user_microsoft_accounts.access_token_encrypted`
+und `refresh_token_encrypted`.
 
-## Migration am VPS (zweistufig)
+::: info Drei der vier Felder sind Altbestand
+Der Telegram-Bot und der Outlook-Abgleich sind entfallen. Migration `047`
+entfernt `user_microsoft_accounts` — **aber nur, wenn die Tabelle leer ist**;
+sonst bleibt sie mit einem Hinweis im Protokoll stehen. Ist sie weg, überspringt
+`reencrypt.ts` die beiden Felder mit einer Meldung und läuft weiter
+(`scripts/reencrypt.ts`, Zeile 62–70). Das ist kein Fehler.
+
+Praktisch relevant ist heute nur `users.totp_secret_encrypted`.
+:::
+
+## Migration auf dem Firmenserver (zweistufig)
 
 ### Stufe 1 — Schlüssel einführen + umschlüsseln
 
@@ -42,15 +58,28 @@ Betroffene Felder: `users.telegram_bot_token`, `users.totp_secret_encrypted`,
    docker compose exec app npm run db:reencrypt
    ```
    Erwartung: alle Felder auf `ENCRYPTION_KEY` umgeschlüsselt, `fehlgeschlagen=0`.
-6. Funktions-Check: Der 2FA-/OTP-Login muss funktionieren — er ist der
-   einzige verbliebene Verbraucher eines entschlüsselten Secrets.
+6. **Prüfen — aber anders als früher.**
 
-   > Die früher hier genannten Proben „Telegram-Bot antwortet" und
-   > „Outlook-Sync läuft" sind entfallen: beide Funktionen gibt es seit dem
-   > Umbau zum Firmenserver nicht mehr. Die zugehörigen Spalten
-   > (`telegram_bot_token`, die Microsoft-Token) stehen noch im Schema und
-   > werden von `scripts/reencrypt.ts` weiterhin mit umgeschlüsselt — sie
-   > enthalten aber nur noch Altbestand.
+   ::: warning Es gibt derzeit keinen laufenden Verbraucher zum Gegenprüfen
+   Hier stand, der 2FA-/OTP-Login sei die Funktionsprobe. **Das geht nicht
+   mehr:** die 2FA-Routen sind nicht eingehängt (`src/api/server.ts:486` ist
+   auskommentiert), der zweite Faktor kommt erst mit dem VPN zurück. Telegram
+   und Outlook gibt es ohnehin nicht mehr.
+
+   Damit hat heute **kein aktiver Anmeldeweg** ein entschlüsseltes Feld nötig —
+   eine „funktioniert noch"-Probe ist schlicht nicht möglich.
+   :::
+
+   Was stattdessen zählt, ist die Ausgabe des Laufs selbst:
+
+   - `fehlgeschlagen=0`
+   - Die Zahl umgeschlüsselter Felder entspricht dem, was der Trockenlauf
+     angekündigt hat.
+   - Übersprungene Felder sind erklärt (Tabelle durch Migration `047`
+     entfernt), nicht stumm ausgeblieben.
+
+   Der Dienst muss danach normal starten und darf die SEC-4-Warnung nicht mehr
+   protokollieren — sie erscheint nur, solange `ENCRYPTION_KEY` leer ist.
 
 ### Stufe 2 — Rückfälle entfernen (später, eigener Commit)
 

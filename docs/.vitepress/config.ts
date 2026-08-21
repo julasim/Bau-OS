@@ -48,6 +48,7 @@ export default defineConfig({
           { text: "Server aufsetzen", link: "/betrieb/server" },
           { text: "PATIO installieren", link: "/betrieb/installation" },
           { text: "Zertifikat", link: "/betrieb/zertifikat" },
+          { text: "Arbeitsplatz-Programm", link: "/betrieb/arbeitsplatz" },
           { text: "Netzfreigabe", link: "/betrieb/freigabe" },
           { text: "Updates", link: "/betrieb/updates" },
           { text: "Sicherung", link: "/betrieb/sicherung" },
@@ -68,6 +69,10 @@ export default defineConfig({
         items: [
           { text: "Dateistruktur", link: "/referenz/dateistruktur" },
           { text: "Konfiguration", link: "/referenz/config" },
+          // Wird aus dem laufenden Betrieb verlinkt (src/index.ts:109 gibt den
+          // Pfad in der SEC-4-Warnung aus) und aus drei Doku-Seiten — stand
+          // aber in keiner Navigation und war damit nur ueber Umwege auffindbar.
+          { text: "Verschlüsselung umstellen", link: "/sec-4-crypto-migration" },
           { text: "Changelog", link: "/referenz/changelog" },
         ],
       },

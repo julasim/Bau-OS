@@ -312,8 +312,10 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   einen Filesystem-Fallback gibt es nicht mehr.
 - **Volltextsuche:** `src/data/db-search.ts` — sucht über Notizen, Aufgaben,
   Projekte und Dateien und **filtert nach sichtbaren Projekten** (die alte
-  Suche tat das nicht). Sucht derzeit per `ILIKE`; der Umbau auf `tsvector`
-  ist ein eigenes Arbeitspaket und tauscht nur die WHERE-Klauseln aus.
+  Suche tat das nicht). Sucht ueber `tsvector` mit deutscher Textkonfiguration
+  (Migration 048, `websearch_to_tsquery` + `ts_rank`). `ILIKE` ist bewusst
+  geblieben — fuer Wortteile in kurzen Feldern wie Projekt- und Dateinamen,
+  wo eine Wortstamm-Suche nicht greift.
   **Typ-Casts sind Pflicht:** `project_id` ist `uuid`, die Scope-IDs kommen als
   Strings — ohne `::uuid[]` wirft Postgres `operator does not exist: uuid =
   text`, und zwar nur bei Nicht-Admins (siehe `tests/api-search-acl.test.ts`).
@@ -372,7 +374,9 @@ Das gesamte Frontend wurde auf das **PATIO Design System v2** umgestellt
 - Pro Feature ein Commit, mit Migration-Referenz bei Schema-Änderungen.
 - Vor jedem Commit: `npx tsc --noEmit`,
   `npx vue-tsc --noEmit -p web/tsconfig.json`, `npm test`.
-- Push auf `main` → Server holt's per `git pull` (siehe Deploy oben).
+- Push auf `main` bringt nichts auf den Server: der hat kein Internet und
+  kein Git. Ausgeliefert wird ueber `scripts/release-offline.sh` (Paket
+  schnueren) und `sudo patio update <paket>` (einspielen), siehe Deploy oben.
 - Lokale `.claude/`-Tooling-Ordner **nicht** committen (kein `git add -A`).
 
 ## Tonalität in Code & UX

@@ -10,16 +10,24 @@ Seite fasst die Möglichkeiten zusammen und ordnet sie ein.
 |---|---|---|
 | **Betriebssystem** | Ubuntu 22.04 / macOS / Windows | Ubuntu 24.04 LTS |
 | **CPU** | 2 Kerne | 4 Kerne |
-| **RAM** | 4 GB | 8 GB |
-| **Speicher** | 20 GB frei | 256 GB SSD (Produktivbetrieb) |
-| **Node.js** | 20.x | 24.x LTS |
+| **RAM** | 8 GB | **16 GB** |
+| **Datenträger** | 256 GB SSD | **500 GB NVMe** |
+| **Node.js** | **24.x** (`package.json`: `>=24`) | 24.x |
 | **PostgreSQL** | 16 | 16 |
 
-::: tip Bescheidene Anforderungen
-PATIO ist ein Node-Prozess neben einer Datenbank. Es läuft kein Sprachmodell
-mit — die frühere RAM-Anforderung von 8 GB allein für Ollama ist entfallen.
-Der begrenzende Faktor ist der Speicherplatz: hochgeladene Dateien liegen in
-der Datenbank, und die Backups kommen dazu.
+::: warning 16 GB sind keine Großzügigkeit, sondern die Auslegung
+Der Compose-Stack stellt Postgres ausdrücklich auf 16 GB ein
+(`shared_buffers=2GB`, `effective_cache_size=6GB`, `work_mem=32MB`). Wer nach
+kleineren Zahlen einkauft, betreibt die Datenbank gegen ihre eigene
+Konfiguration.
+
+Dass kein Sprachmodell mehr mitläuft, senkt die Anforderung **nicht** unter
+8 GB — der Bedarf sitzt jetzt in der Datenbank. Der begrenzende Faktor bleibt
+der Speicherplatz: hochgeladene Dateien liegen in der Datenbank, und die
+gestaffelte Sicherung kommt dazu.
+
+Maßgeblich ist die Tabelle unter
+[Voraussetzungen](/betrieb/voraussetzungen).
 :::
 
 ---
@@ -31,8 +39,16 @@ Auf dem Firmenserver wird **nicht** aus dem Git-Repository installiert und
 kommt als Paket vom Entwicklungsrechner:
 
 ```bash
+cd /opt/patio
+# Das Installationsskript liegt IM Paket — erst herausholen, dann starten:
+sudo tar -xzf patio-<version>.tar.gz ./dabei/scripts/install-server.sh
 sudo bash dabei/scripts/install-server.sh patio-<version>.tar.gz
 ```
+
+::: tip Die erste Zeile gehört dazu
+Hier stand nur der zweite Befehl. Der bricht mit „No such file or directory"
+ab, weil `dabei/scripts/install-server.sh` vor dem Auspacken nicht existiert.
+:::
 
 Vollständige Anleitung mit Sicherungsplatte, Zertifikat und Netzfreigabe:
 **[PATIO installieren](/betrieb/installation)**.
@@ -70,7 +86,14 @@ docker compose up -d
 Das schließt Caddy mit der internen Zertifizierungsstelle ein — dieselbe
 Konstellation wie auf dem Server.
 
-### Das Verwaltungswerkzeug
+## Das Verwaltungswerkzeug — nur auf dem Server
+
+::: warning Auf dem Entwicklungsrechner gibt es diesen Befehl nicht
+Der Befehl `patio` entsteht erst bei der Installation: `install-server.sh`
+legt einen Symlink `/usr/local/bin/patio` auf `scripts/patio-cli.sh`. Er
+spricht die Container unter `/opt/patio` an. Dieser Abschnitt stand bisher
+unter „Für die Entwicklung" und war dort falsch einsortiert.
+:::
 
 ```bash
 patio status              # Zustand aller Dienste, Sicherung, Erreichbarkeit

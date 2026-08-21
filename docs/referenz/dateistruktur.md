@@ -21,18 +21,20 @@ src/
 │   ├── sse-tickets.ts    — Einmal-Tickets für den SSE-Verbindungsaufbau
 │   ├── file-validation.ts— Upload-Prüfung: Endung und Magic Bytes
 │   ├── totp.ts           — TOTP-Hilfsfunktionen (derzeit nicht eingebunden)
-│   └── routes/           — 24 Route-Dateien, siehe unten
+│   ├── geld.ts           — EINE Filterschicht für alle Geldbeträge
+│   ├── projekt-bezug.ts  — löst ?projectId= auf einen Projektnamen auf
+│   └── routes/           — 29 Route-Dateien, siehe unten
 ├── data/                 — Repository-Schicht (ausschließlich PostgreSQL)
 │   ├── index.ts          — einzige Import-Fläche für alle Repositories
 │   ├── types.ts          — Entity- und Repository-Interfaces
 │   ├── access.ts         — Sichtbarkeit und ACL-Prüfungen
 │   ├── termin-validation.ts — Validierung von Termin-Eingaben
-│   └── db-*.ts           — 21 Repositories, siehe unten
+│   └── db-*.ts           — 24 Repositories, siehe unten
 ├── db/                   — Datenbankschicht
 │   ├── client.ts         — postgres.js-Verbindungspool
 │   ├── migrate.ts        — SQL-Migrations-Runner
 │   ├── index.ts          — Barrel-Export
-│   └── migrations/       — 43 SQL-Dateien (001–041)
+│   └── migrations/       — 51 SQL-Dateien, Nummern bis 049
 ├── workspace/            — echter Dateizugriff auf WORKSPACE_PATH
 │   ├── index.ts          — Re-Export
 │   ├── helpers.ts        — safePath, ensureDir, Pfad-Utilities
@@ -42,16 +44,26 @@ src/
 │   └── docx-render.ts    — DOCX-Erzeugung aus Word-Vorlagen
 
 web/                      — Vue-3-Frontend (eigenes Vite-Projekt)
-docker/                   — Standalone-Compose, Caddyfile, DB-Init
+electron/                 — Hülle des Arbeitsplatz-Programms
+├── main.ts               — Fenster, Tray, Menü; findet den Server
+├── adresse.ts            — reine Logik: Adressen und Fehlertexte (getestet)
+├── server-store.ts       — merkt die Serveradresse
+├── einrichtung.html      — Ersteinrichtung UND Fehleranzeige in einem
+├── preload.cjs           — einziger Rückkanal, nur für die Einrichtungsseite
+└── app-icon.ts           — Symbol als Data-URL
+docker/                   — Caddyfile, DB-Init, VPS-Compose
 scripts/                  — Installations-, Backup- und Wartungsskripte
 tests/                    — Vitest-Suite
-docs/                     — diese Dokumentation (VitePress)
+docs/                     — diese Dokumentation (VitePress → dist/docs, /docs/)
 ```
 
-::: warning src/format.ts
-Der Markdown-nach-Telegram-HTML-Konverter hat seit dem Umbau **keinen
-Aufrufer mehr**. Die Datei ist Altbestand und keine dokumentierte
-Schnittstelle.
+Die Compose-Datei des Firmenservers liegt im **Repo-Root**
+(`docker-compose.yml`); unter `docker/` steht nur noch die alte VPS-Fassung.
+
+::: info src/format.ts ist weg
+Hier stand eine Warnung vor `src/format.ts`, dem Markdown-nach-Telegram-Konverter
+ohne Aufrufer. Die Datei existiert nicht mehr — sie ist mit dem Bot-Altbestand
+entfallen (`find src -name format.ts` findet nichts).
 :::
 
 ---
@@ -125,9 +137,13 @@ Die Hono-Anwendung. Enthält neben der Route-Registrierung:
   Content-Security-Policy im Report-Only-Modus.
 - **CORS** — ohne `CORS_ORIGINS` nur `http://localhost:<API_PORT>`.
 - **Globaler Rate-Limit** je IP über alle `/api/*`-Routen, danach die
-  Auth-Middleware.
-- **Login-Kette**: Passwort, E-Mail-Code, Anmelde-Link, Passwort-Reset,
-  Setup-Assistent für das erste Admin-Konto.
+  Auth-Middleware und dahinter der Geld-Filter (`geldFilter`).
+- **Anmeldung**: Benutzername und Passwort, **einstufig**. Dazu der
+  Setup-Assistent für das erste Admin-Konto. Die frühere Kette aus
+  E-Mail-Code, Anmelde-Link und Passwort-Reset ist ersatzlos entfallen — sie
+  brauchte einen erreichbaren Mailserver, den es hier nicht gibt.
+- **Statische Auslieferung**: die Vue-Oberfläche aus `dist/web`, davor die
+  Dokumentation unter `/docs/` aus `dist/docs`.
 - **Statische Auslieferung** der gebauten Vue-Anwendung aus `dist/web`
   inklusive SPA-Fallback auf `index.html`.
 
@@ -186,7 +202,8 @@ bleibt als Wiederherstellungspfad im Code.
 
 ### `src/api/routes/`
 
-24 Route-Dateien, alle unter `/api` eingehängt:
+**29 Route-Dateien.** Alle unter `/api` eingehängt — mit einer Ausnahme, die
+unten steht.
 
 | Datei | Beschreibung |
 |---|---|
@@ -204,7 +221,12 @@ bleibt als Wiederherstellungspfad im Code.
 | `time-entries.ts` | Stundenerfassung |
 | `phases.ts` | Leistungsphasen und Gantt |
 | `invoices.ts` | Rechnungen |
+| `positionskatalog.ts` | Wiederverwendbare Rechnungspositionen |
 | `portfolio.ts` | Portfolio-Cockpit |
+| `entscheidungen.ts` | Entscheidungslog je Projekt |
+| `aktivitaet.ts` | Was zuletzt passiert ist — abgeleitet, ohne eigene Tabelle |
+| `papierkorb.ts` | Gelöschtes ansehen, zurückholen, endgültig entfernen |
+| `sicherung.ts` | Status der nächtlichen Sicherung (nur Admin) |
 | `admin-users.ts` | Benutzerverwaltung und Projektzuweisung |
 | `events.ts` | SSE-Endpunkt für Live-Updates |
 | `settings.ts` | Persönliche Einstellungen |
@@ -213,7 +235,26 @@ bleibt als Wiederherstellungspfad im Code.
 | `export-templates.ts` | Word-Exportvorlagen und die Export-Endpunkte |
 | `project-modules.ts` | Aktivierbare Module je Projekt |
 | `ui-preferences.ts` | Oberflächen-Einstellungen je Benutzer |
-| `auth-2fa.ts` | TOTP-Routen — **nicht eingebunden** |
+| `auth-2fa.ts` | TOTP-Routen — **nicht eingebunden** (`server.ts:486` auskommentiert) |
+
+### `src/api/geld.ts`
+
+Die **eine** Stelle, an der Geldbeträge gefiltert werden. Als Middleware hinter
+allen Routen eingehängt (`app.use("/api/*", geldFilter)`): sie geht die fertige
+JSON-Antwort rekursiv durch und entfernt die bekannten Geldfelder, wenn das
+Konto `can_see_money` nicht hat. Admins immer durchgelassen.
+
+Der Grund für diese Bauweise: das Recht müsste sonst an acht Stellen einzeln
+geprüft werden — und beim neunten Mal vergisst es jemand. So kann eine neue
+Route es gar nicht falsch machen.
+
+### `src/api/projekt-bezug.ts`
+
+Löst `?projectId=<uuid>` an einer einzigen Stelle auf einen Projektnamen auf.
+Damit verstehen die Routen eine umbenennungsfeste Alternative zu
+`?project=<Name>`, ohne dass alle zwölf Repositories auf IDs umgebaut werden
+mussten. Unterscheidet ausdrücklich „ID zeigt ins Leere" (404) von „kein
+Projekt angegeben".
 
 ---
 
@@ -235,8 +276,13 @@ Interfaces aller persistierten Entitäten und aller Repository-Verträge:
 
 ### `src/data/access.ts`
 
-Die zentrale Stelle für „wer darf was sehen". Die Repositories bauen ihre
-WHERE-Klauseln daraus, statt sich die Logik selbst zusammenzusetzen.
+Die zentrale Stelle für „wer darf was sehen" — niemand setzt sich die Logik
+selbst aus `user_projects` zusammen.
+
+**Ermittelt wird die Sichtbarkeit in den Routen** (16 rufen
+`getVisibleProjectIds()` auf), **angewandt** in sechs Repositories, die eine
+übergebene Liste entgegennehmen. Kein Repository ermittelt sie selbst — eine
+Route, die den Aufruf vergisst, liefert deshalb ungefiltert aus.
 
 | Funktion | Bedeutung |
 |---|---|
@@ -252,9 +298,17 @@ ebenso, Dateien zusätzlich über Freigaben.
 ### `src/data/db-search.ts`
 
 Volltextsuche über Notizen, Aufgaben, Projekte und Dateien. Filtert nach
-sichtbaren Projekten — die frühere Suche tat das nicht. Sucht derzeit per
-`ILIKE`; die Umstellung auf `tsvector` ist ein eigenes Arbeitspaket und
-tauscht nur die WHERE-Klauseln aus.
+sichtbaren Projekten — die frühere Suche tat das nicht.
+
+Sucht über **`tsvector` mit deutscher Textkonfiguration** (Migration `048`):
+generierte Spalten `such_text`, GIN-Index, Abfrage per
+`websearch_to_tsquery`, Sortierung nach `ts_rank`. Damit greifen Wortstämme —
+„Rechnungen" findet „Rechnung".
+
+`ILIKE` ist **absichtlich geblieben**, und zwar für kurze Felder wie
+Projektnamen und Dateinamen: dort sucht man nach Wortteilen („müll" soll
+„Wohnhaus Müller" finden), und genau das kann eine Wortstamm-Suche nicht. Die
+beiden Verfahren ergänzen sich, das eine hat das andere nicht abgelöst.
 
 ::: warning Typ-Casts sind Pflicht
 `project_id` ist `uuid`, die Scope-IDs kommen als Strings. Ohne `::uuid[]`
@@ -430,9 +484,13 @@ vorzuziehen.
 
 | Verzeichnis | Inhalt |
 |---|---|
-| `tests/` | Vitest-Suite. Die ACL-, Auth- und Datenbanktests überspringen sich still ohne `DATABASE_URL` |
-| `scripts/` | Installation, Backup, Restore, Migration, Neuverschlüsselung |
-| `docker/` | Standalone-Compose mit eigenem Caddy, Caddyfile, Init-SQL für den Postgres-Container |
-| `docs/` | Diese Dokumentation (VitePress) |
-| `data/` | Alt-Konten (`users.json`) — gitignored |
+| `tests/` | Vitest-Suite. Die ACL-, Auth- und Datenbanktests überspringen sich still ohne `DATABASE_URL` — 290 von 412 |
+| `scripts/` | Installation, Sicherung, Rücksicherung, Offline-Pakete, Neuverschlüsselung, Prüfstand des Arbeitsplatz-Programms |
+| `electron/` | Hülle des Arbeitsplatz-Programms |
+| `docker/` | Caddyfile, Init-SQL für den Postgres-Container, alte VPS-Compose-Datei. **Der Firmenserver-Stack liegt im Repo-Root** (`docker-compose.yml`) |
+| `deploy/` | systemd-Einheiten der Sicherung, Samba-Abschnitt |
+| `docs/` | Diese Dokumentation (VitePress) — gebaut nach `dist/docs`, ausgeliefert unter `/docs/` |
+| `build/` | Programmsymbol für den Bau der `.exe` |
+| `data/` | Alt-Konten (`users.json`) — gitignored, **kein Anmeldeweg mehr**, nur Übernahme beim Start |
 | `logs/` | Textlog und JSONL-Log — gitignored |
+| `release/` | Auslieferungspakete und die gebaute `.exe` — gitignored |

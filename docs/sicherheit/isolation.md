@@ -101,9 +101,15 @@ organisatorische Entscheidung, keine technische.
 - **Ausgehend spricht die Anwendung mit niemandem.** Kein Mailversand,
   kein Sprachmodell, keine externen Schriften.
 
-Bei einer Bare-Metal-Installation gilt dasselbe über andere Mittel:
-`listen_addresses` von PostgreSQL auf `localhost`, Firewall auf SSH und
-HTTPS aus dem eigenen Netz beschränkt.
+::: info Es gibt nur noch den Compose-Weg
+Hier stand ein Hinweis für eine Bare-Metal-Installation. Die wird **nicht mehr
+unterstützt** — die zugehörigen Skripte liegen unter
+`_archive/scripts/saas-aera/`, und auf dem Server wird ohnehin nie gebaut.
+
+Wer PostgreSQL dennoch nativ betreibt (etwa auf einem Entwicklungsrechner),
+erreicht dasselbe über `listen_addresses = 'localhost'` und eine Firewall, die
+nur SSH und HTTPS aus dem eigenen Netz zulässt.
+:::
 
 ## Was die Trennung nicht abdeckt
 

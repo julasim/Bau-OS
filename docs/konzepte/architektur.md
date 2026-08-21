@@ -1,14 +1,19 @@
 # Architektur
 
 PATIO besteht aus drei Schichten: der **Vue-Oberfläche**, der **Hono-API** als
-einzigem Dienst und **PostgreSQL** als Speicher. Dokumente liegen daneben als
-echte Dateien im Dateisystem.
+einzigem Dienst und **PostgreSQL** als Speicher — und zwar als einzigem: auch
+hochgeladene Dokumente liegen dort (Tabelle `files`), nicht auf der Platte.
+
+Der Ordner hinter `WORKSPACE_PATH` ist etwas anderes: die Netzfreigabe
+„Dokumente", in die die Anwendung nichts schreibt.
 
 Die Oberfläche läuft am Arbeitsplatz in einem eigenen Programmfenster
-(`PATIO.exe`, geplant) und im Besprechungsraum im Browser. Für die Architektur
-macht das keinen Unterschied: **sie spricht durchgehend relative Pfade**
-(`/api/…`), kennt also gar keine Serveradresse. Genau deshalb ist dieselbe
-Oberfläche in beiden Verpackungen lauffähig.
+(`PATIO.exe`) und im Besprechungsraum im Browser. Für die Architektur macht das
+keinen Unterschied: **sie spricht durchgehend relative Pfade** (`/api/…`),
+kennt also gar keine Serveradresse. Genau deshalb ist dieselbe Oberfläche in
+beiden Verpackungen lauffähig — und genau deshalb musste für das
+Arbeitsplatz-Programm keine Zeile der Oberfläche angefasst werden. Siehe
+[Arbeitsplatz-Programm](/betrieb/arbeitsplatz).
 
 ## Datenfluss
 
@@ -36,14 +41,18 @@ Oberfläche in beiden Verpackungen lauffähig.
     └────────┬──────────────────┬───────┘
              │                  │
              ▼                  ▼
-      [ PostgreSQL ]     [ Dateisystem ]
-      Projekte, Notizen,  WORKSPACE_PATH:
-      Aufgaben, Termine,  hochgeladene
-      Team, Metadaten     Dokumente
+      [ PostgreSQL ]
+      Projekte, Notizen, Aufgaben, Termine, Team
+      UND die hochgeladenen Dokumente (Tabelle `files`)
+
+   daneben, ohne Zutun der Anwendung:
+      Netzfreigabe "Dokumente" (WORKSPACE_PATH) — Plaene, CAD, Scans
 ```
 
-Es gibt **keine ausgehende Verbindung** im Betrieb — abgesehen vom
-Kein Mailserver, kein Sprachmodell, kein Außenkontakt.
+Es gibt **keine ausgehende Verbindung** im Betrieb: kein Mailserver, kein
+Sprachmodell, kein Cloud-Dienst, keine Telemetrie. Auch die Oberfläche lädt
+nichts nach — der frühere Aufruf zu Google Fonts ist entfallen; gesetzt werden
+Systemschriften mit Inter als erster Wahl, falls vorhanden.
 
 ### Ablauf einer Anfrage
 
@@ -60,14 +69,23 @@ Kein Mailserver, kein Sprachmodell, kein Außenkontakt.
    Inhalte, nur „was hat sich geändert". Die Oberfläche lädt über die reguläre
    Route nach.
 
-::: warning Der Filter sitzt in den Routen, nicht in den Repositories
-Zwölf Routen rufen `getVisibleProjectIds()` auf; **kein einziges Repository**
-tut es. Das heißt: eine neue Route, die den Aufruf vergisst, liefert
-ungefiltert aus. Genau so sind in diesem Projekt vier Lücken entstanden.
+::: warning Der Filter wird in den Routen ERMITTELT, nicht in den Repositories
+Die Aufteilung ist wichtig, weil sie erklärt, wo Lücken entstehen:
 
-Die Umkehrung — Filterung als `WHERE`-Klausel im Repository, wo man sie nicht
-vergessen kann — ist als eigenes Arbeitspaket vorgesehen. Bis dahin gilt beim
-Bauen neuer Routen: **Rechtefilter nicht vergessen.**
+- **16 Routen** rufen `getVisibleProjectIds()` auf und reichen das Ergebnis
+  weiter.
+- **6 Repositories** (`db-search`, `db-files`, `db-portfolio`, `db-meetings`,
+  `db-bautagebuch`, `db-entscheidungen`) wenden eine übergebene Liste an —
+  **keines ermittelt sie selbst.**
+
+Das heißt: ein Repository filtert zwar, aber nur mit dem, was die Route ihm
+gibt. Eine neue Route, die den Aufruf vergisst, liefert ungefiltert aus. Genau
+so sind in diesem Projekt mehrere Lücken entstanden — die auffälligste war der
+Word-Export, über den sich die gesamte Rechteprüfung umgehen ließ.
+
+Die Umkehrung — Filterung fest als `WHERE`-Klausel im Repository, wo man sie
+nicht vergessen kann — ist als eigenes Arbeitspaket vorgesehen. Bis dahin gilt
+beim Bauen neuer Routen: **Rechtefilter nicht vergessen.**
 :::
 
 ## Modulstruktur
@@ -79,26 +97,31 @@ src/
 ├── logger.ts      Konsole + Textlog + JSONL, nicht blockierend
 ├── maintenance.ts täglicher Cron (Audit-Retention, abgelaufene Tokens)
 ├── api/
-│   ├── server.ts        Hono-App, Login-Kette, Middleware, statische Auslieferung
-│   ├── auth.ts          JWT, Benutzer, E-Mail-Codes, Anmelde-Links
+│   ├── server.ts        Hono-App, Anmeldung, Middleware, statische Auslieferung
+│   ├── auth.ts          JWT, Benutzerkonten, Passwörter (bcrypt)
+│   ├── geld.ts          EINE Filterschicht für alle Geldbeträge
+│   ├── projekt-bezug.ts löst `?projectId=` auf einen Projektnamen auf
 │   ├── crypto.ts        Feld-Verschlüsselung (AES-GCM)
 │   ├── events.ts        Event-Bus mit Rechtefilter
 │   ├── sse-tickets.ts   Einmal-Tickets für den SSE-Aufbau
 │   ├── file-validation.ts  Endung + Magic Bytes bei Uploads
-│   └── routes/          24 Route-Dateien je Domäne
+│   └── routes/          29 Route-Dateien je Domäne
 ├── data/
 │   ├── index.ts   einzige Import-Fläche für alle Repositories
 │   ├── access.ts  Sichtbarkeit und ACL
 │   ├── types.ts   Entities und Repository-Verträge
-│   └── db-*.ts    21 Postgres-Repositories
+│   └── db-*.ts    24 Postgres-Repositories
 ├── db/
 │   ├── client.ts  Verbindungspool (postgres.js)
 │   ├── migrate.ts Migrations-Runner mit Advisory-Lock
-│   └── migrations/ nummerierte SQL-Dateien, forward-only
-├── workspace/     echter Dateizugriff (safePath, lesen/schreiben, PDF/DOCX-Extraktion)
+│   └── migrations/ 51 SQL-Dateien, forward-only
+├── workspace/     Lesezugriff auf die Netzfreigabe (Rueckfall fuer alte
+│                  Datei-Datensaetze) + Text aus PDF und DOCX ziehen
 └── export/        DOCX-Erzeugung aus Word-Vorlagen
 
 web/               Vue 3 + Pinia + Vue Router (eigenes Vite-Projekt)
+electron/          Hülle des Arbeitsplatz-Programms (lädt die Oberfläche vom Server)
+docs/              diese Dokumentation (VitePress) — der Server liefert sie unter /docs/
 ```
 
 Detaillierte Auflistung: [Dateistruktur](/referenz/dateistruktur).
@@ -114,7 +137,8 @@ Detaillierte Auflistung: [Dateistruktur](/referenz/dateistruktur).
 | Live-Updates | Server-Sent Events |
 | Dokumenten-Export | `docxtemplater` auf Basis eigener Word-Vorlagen |
 | Zeitplanung | `node-cron` (Europe/Vienna) |
-| Betrieb | Docker Compose, zwei Container, Reverse-Proxy davor |
+| Arbeitsplatz | Electron-Hülle, lädt die Oberfläche vom Server |
+| Betrieb | Docker Compose, **drei Container** (`postgres`, `app`, `caddy`) |
 
 ## Design-Prinzipien
 
@@ -122,8 +146,8 @@ Detaillierte Auflistung: [Dateistruktur](/referenz/dateistruktur).
 
 PATIO läuft ausschließlich gegen PostgreSQL. Der frühere Dateisystem-Modus
 ist ersatzlos entfallen — alle Repositories sind Postgres-Repositories und
-non-nullable, kein Aufrufer prüft mehr auf `null`. Das Dateisystem hält nur
-noch, was ohnehin Dateien sind: hochgeladene Dokumente.
+non-nullable, kein Aufrufer prüft mehr auf `null`. Auch hochgeladene Dokumente
+liegen dort und nicht auf der Platte; das ist der Sinn von „ein Speicher".
 
 Der Datenzugriff läuft **ausschließlich** über `src/data/index.ts`. Direkt
 aus `db-*` zu importieren umgeht die Abstraktion und ist verboten.
@@ -142,10 +166,45 @@ kontrolliert, damit `restart: always` ihn sauber neu hochfährt.
 
 ### Sichtbarkeit an einer Stelle
 
-`src/data/access.ts` ist die einzige Quelle für „wer darf was sehen". Die
-Repositories bauen ihre WHERE-Klauseln daraus, statt sich die Logik jeweils
-selbst aus `user_projects` zusammenzusetzen. Auch der SSE-Kanal misst an
-demselben Maßstab.
+`src/data/access.ts` ist die einzige Quelle für „wer darf was sehen". Niemand
+setzt sich die Logik selbst aus `user_projects` zusammen. Auch der SSE-Kanal
+misst an demselben Maßstab. Wo die Auswertung sitzt — Route oder Repository —
+steht im Kasten weiter oben.
+
+### Geldbeträge an genau einer Stelle filtern
+
+Wer keine Honorare sehen darf, soll sie in keiner Antwort finden. Statt das in
+jeder betroffenen Route einzeln zu prüfen — Rechnungen, Portfolio, Cockpit,
+Positionskatalog, Suche, Live-Kanal, Export und Sicherungs-Status — sitzt eine
+einzige Middleware hinter allen Routen: `src/api/geld.ts` geht die fertige
+JSON-Antwort rekursiv durch und entfernt die Geldfelder, wenn das Konto das
+Recht nicht hat. Eine neue Route kann das nicht vergessen, weil sie nichts
+dafür tun muss.
+
+**Die Grenze:** erkannt wird an Feldnamen aus einer festen Liste, nicht am
+Inhalt. Ein Betrag unter einem neuen Namen ginge durch — Einzelheiten unter
+[Zugriffskontrolle](/sicherheit/zugriff).
+
+### Konflikte melden statt still überschreiben
+
+**Elf Tabellen** tragen einen Zähler `rev`: die neun aus Migration `042`
+(Notizen, Aufgaben, Termine, Besprechungen, Projekte, Team, Leistungsphasen,
+Rechnungen, Stunden) sowie Entscheidungen und Positionskatalog, die ihn mit
+`045` und `046` gleich mitbekommen haben. Das Repository schreibt ihn als
+**ein einziges** Kommando:
+
+```sql
+UPDATE … SET …, rev = rev + 1 WHERE id = $1 AND rev = $2
+```
+
+Trifft das keine Zeile, hat inzwischen jemand anderes gespeichert — die Route
+antwortet mit **409**, und die Oberfläche lädt den aktuellen Stand nach.
+Entscheidend ist, dass Prüfung und Schreiben **dasselbe** Kommando sind: ein
+vorgelagertes `SELECT` mit anschließendem `UPDATE` hätte genau dazwischen eine
+Lücke.
+
+Ohne Zähler laufen das **Bautagebuch**, die **Dateien** und die bürointerne
+Konfiguration — dort gilt weiterhin „der Letzte gewinnt".
 
 ### Migrationen forward-only
 
@@ -154,6 +213,10 @@ geschrieben (`IF NOT EXISTS`, DO-Block-Guards). Der Runner trackt per
 Dateiname in `_migrations`, fährt jede Migration in einer eigenen
 Transaktion und hält einen Advisory-Lock gegen parallel startende Instanzen.
 Rückwärts-Migrationen gibt es nicht.
+
+Derzeit 51 Dateien mit Nummern bis `049`. Die Nummern `005` und `006` sind
+historisch **je zweimal** vergeben — das ist kein Fehler: der Runner
+unterscheidet nach vollem Dateinamen, nicht nach Nummer.
 
 ### Kein Außenkontakt
 

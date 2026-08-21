@@ -3,7 +3,8 @@
 PATIO ist eine Büro-Software für **Architektur-, Planungs- und
 Projektsteuerungsbüros**. Sie läuft zentral auf einem Rechner im eigenen Netz.
 Am Arbeitsplatz steht ein **eigenes Programm** — `PATIO.exe`, mit Symbol in
-der Taskleiste und Eintrag im Startmenü.
+der Taskleiste. Es wird als portable Datei aus dem geteilten Ordner gestartet;
+einen Installer und damit einen Startmenü-Eintrag gibt es bewusst noch nicht.
 
 ::: warning Wichtige Abgrenzung
 PATIO ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe
@@ -25,8 +26,16 @@ PATIO.exe je Arbeitsplatz       Besprechungsraum: Browser, Vollbild
                            ▼
              PATIO-Anwendung (Hono-API + Vue-Oberfläche)
                            │
-       ├──► PostgreSQL     Projekte, Notizen, Aufgaben, Termine, Team
-       └──► Dateisystem    Dokumente — zugleich als Netzfreigabe
+                           ▼
+                      PostgreSQL
+        Projekte, Notizen, Aufgaben, Termine, Team
+        — und die hochgeladenen Dokumente selbst
+
+
+   daneben, von PATIO nicht angefasst:
+
+        Netzfreigabe „Dokumente"
+        Pläne, CAD, große Scans — direkt im Explorer
 ```
 
 Drei Container auf einem Rechner: Datenbank, Anwendung und der TLS-Zugang.
@@ -39,9 +48,9 @@ Die Oberfläche ist in beiden Fällen dieselbe: `PATIO.exe` ist ein Fenster,
 das sie vom Server lädt. Der Unterschied liegt in der Verpackung — kein
 Adressfeld, keine Lesezeichen, kein versehentlich geschlossener Reiter.
 
-**Stand heute** liefert der Server die Oberfläche aus, und man erreicht sie im
-Browser. Das Arbeitsplatz-Programm ist geplant und noch nicht gebaut; die
-Hülle dafür kommt aus PATIO Desktop.
+Der Browser bleibt der Weg für den **Besprechungsraum** und als Rückfallebene,
+wenn an einem Platz das Programm fehlt. Einrichtung und Verteilung:
+[Arbeitsplatz-Programm](/betrieb/arbeitsplatz).
 :::
 
 ## Für wen?
@@ -71,28 +80,74 @@ Stundenerfassung, im Bautagebuch), bedienen es aber nicht.
 | **Honorar** | Stundensätze, Deckungsbeitrag je Projekt |
 | **Rechnungen** | Projektbezogene Rechnungsstellung |
 | **Portfolio** | Übersicht über alle Projekte mit echten Fortschrittszahlen |
-| **Team** | Mitglieder, Firmen, Kategorien, Kontakt-Log, vCard |
+| **Entscheidungen** | Entscheidungslog je Projekt: Begründung, Alternativen, Beteiligte |
+| **Team** | Mitglieder, Kategorien, Kontakt-Log, vCard |
+| **Firmen** | Adressbuch der Beteiligten, mit Zusammenführen von Dubletten |
 | **Dateien** | Upload, Vorschau, Projektakte |
-| **Suche** | Volltext über Notizen, Aufgaben, Projekte und Dateien |
+| **Suche** | Volltext über Notizen, Aufgaben, Projekte und Dateien — mit deutschen Wortstämmen |
+| **Aktivität** | Was zuletzt im Büro passiert ist, über alle Datenarten |
+| **Papierkorb** | Gelöschtes ist wiederherstellbar, statt sofort weg zu sein |
 | **Exporte** | DOCX auf Basis eigener Word-Vorlagen mit Firmen-Branding |
 
 ## Datenhaltung
 
-Alles Strukturierte liegt in PostgreSQL: Projekte, Notizen, Aufgaben,
-Termine, Team, Meetings, Bautagebuch, Stunden, Phasen, Rechnungen und die
-Datei-Metadaten. Hochgeladene Dokumente liegen als Dateien unter
-`WORKSPACE_PATH`.
+Alles liegt in PostgreSQL: Projekte, Notizen, Aufgaben, Termine, Team,
+Meetings, Bautagebuch, Stunden, Phasen, Rechnungen — **und die hochgeladenen
+Dokumente selbst**, als Binärinhalt in der Tabelle `files`. Auf der Platte
+landet dabei nichts.
+
+`WORKSPACE_PATH` zeigt auf die **Netzfreigabe** „Dokumente" und ist eine
+andere Sache (siehe Kasten unten).
 
 Einen Dateisystem-Modus als Alternative zur Datenbank gibt es nicht mehr —
 ohne erreichbare Datenbank startet PATIO gar nicht.
 
+::: warning Zwei Ablagen, die man nicht verwechseln darf
+Es gibt **zwei getrennte Orte** für Dateien, und die Unterscheidung ist im
+Alltag wichtig:
+
+- **Die Netzfreigabe „Dokumente"** ist ein ganz normaler Netzordner im
+  Explorer — für Pläne, CAD-Dateien und große Scans. Die Anwendung fasst ihn
+  nicht an.
+- **In PATIO Hochgeladenes** liegt in der Datenbank, mit Projektbezug,
+  Rechteprüfung und Volltextsuche.
+
+Eine Datei in PATIO zu löschen berührt die Freigabe nicht, und umgekehrt.
+Details: [Netzfreigabe](/betrieb/freigabe).
+:::
+
 ## Benutzer und Rechte
 
-Anmeldung mit Benutzerkonto, zwei Rollen: **Admin** sieht alles, **Benutzer**
-sieht die Projekte, die ihm zugewiesen sind. Aufgaben, Termine und Notizen
-ohne Projektbezug sind persönlich.
+Anmeldung mit Benutzername und Passwort, zwei Rollen: **Admin** sieht alles,
+**Benutzer** sieht die Projekte, die ihm zugewiesen sind. Aufgaben, Termine und
+Notizen ohne Projektbezug sind persönlich — sie gehören dem, der sie angelegt
+hat.
+
+Daneben gibt es ein eigenes Recht für **Geldbeträge** (Stundensätze, Honorare,
+Rechnungssummen, Deckungsbeiträge). Es ist standardmäßig **zu** und wird je
+Konto freigegeben. Wer es nicht hat, bekommt diese Beträge in keiner Antwort —
+auch nicht über Suche, Export oder Live-Kanal. Sie werden serverseitig aus der
+Antwort entfernt, nicht nur ausgeblendet.
 
 Details: [Zugriffskontrolle](/sicherheit/zugriff).
+
+## Wenn zwei gleichzeitig arbeiten
+
+Die bearbeitbaren Datensätze tragen einen Änderungszähler: **Notizen,
+Aufgaben, Termine, Besprechungen, Projekte, Team, Leistungsphasen, Rechnungen,
+Stunden, Entscheidungen und der Positionskatalog** — elf Tabellen.
+
+Speichert jemand einen Stand, den ein Kollege inzwischen geändert hat, wird der
+Vorgang **abgelehnt** statt still zu überschreiben — die
+Oberfläche lädt dann den aktuellen Stand nach und sagt, was passiert ist.
+Früher gewann schlicht der Letzte, ohne Hinweis.
+
+::: warning Wo der Schutz NICHT greift
+**Bautagebuch-Einträge, Dateien und die bürointerne Konfiguration** haben
+keinen Zähler. Dort gilt weiterhin: der Letzte gewinnt. Für Tageseinträge, an
+denen selten zwei Personen gleichzeitig arbeiten, ist das vertretbar — man
+sollte es nur wissen.
+:::
 
 ## Nächste Schritte
 

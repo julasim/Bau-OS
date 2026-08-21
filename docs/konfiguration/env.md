@@ -41,8 +41,18 @@ sieht für Docker und systemd gesund aus und ist trotzdem tot.
 
 ### WORKSPACE_PATH
 
-Absoluter Pfad zum Verzeichnis, in dem PATIO Dokumente als Dateien ablegt.
-`VAULT_PATH` wird als Alias weiterhin akzeptiert.
+Absoluter Pfad zur **Netzfreigabe „Dokumente"** — dem Ordner für Pläne, CAD und
+große Scans. `VAULT_PATH` wird als Alias weiterhin akzeptiert.
+
+::: warning Nicht der Ablageort für Uploads
+Hier stand „Verzeichnis, in dem PATIO Dokumente als Dateien ablegt". Das
+stimmt nicht: was in PATIO hochgeladen wird, landet in der **Datenbank**
+(Tabelle `files`), nicht auf der Platte. In diesen Ordner **schreibt die
+Anwendung nichts**; sie liest nur für alte Datei-Datensätze daraus nach.
+
+Pflichtangabe ist die Variable trotzdem — ohne sie startet der Dienst nicht.
+Zur Abgrenzung der beiden Ablagen: [Netzfreigabe](/betrieb/freigabe).
+:::
 
 ```bash
 # Linux
@@ -198,6 +208,28 @@ Ohne diese Prüfung schriebe die Sicherung in das leere Verzeichnis auf der
 Systemplatte, meldete Erfolg und liefe still auf. Details:
 [Sicherung](/betrieb/sicherung).
 
+### BACKUP_REMOTE
+
+::: danger Diese Variable tut derzeit nichts
+Die `.env.example` beschrieb sie als zweites Ziel, auf das jede Sicherung
+zusätzlich abgeworfen wird — eine Wechselplatte außer Haus. **Das ist nicht
+umgesetzt.** Weder `scripts/backup.sh` noch `scripts/restore.sh` lesen die
+Variable; im ganzen Repo kommt sie nur in der `.env.example` vor:
+
+```bash
+grep -rl BACKUP_REMOTE --exclude-dir=node_modules .
+# → nur .env.example
+```
+
+Wer sie gesetzt hat, hat **keine** Auslagerung. Die Zeile bleibt als Warnung
+stehen, statt still gelöscht zu werden.
+
+**Was die Sicherung heute leistet:** Schutz gegen Plattenausfall,
+versehentliches Löschen und ein misslungenes Update. **Was sie nicht leistet:**
+Schutz gegen Brand, Diebstahl oder einen Verschlüsselungstrojaner — die Platte
+steht im selben Raum.
+:::
+
 ## Entfallene Variablen
 
 Diese liest kein Code mehr. Stehen sie noch in einer alten `.env`, schaden
@@ -228,9 +260,17 @@ Diese Variablen liest der Anwendungscode nie; sie werden von
 | `POSTGRES_DB` | `patio` | Datenbankname |
 | `WORKSPACE_HOST_DIR` | `./workspace` | Host-Verzeichnis, das als `/workspace` eingehängt wird |
 
-Nur im Standalone-Aufbau (`docker/docker-compose.standalone.yml`, eigener
-Caddy statt gemeinsamem Edge-Proxy) kommen `CADDY_DOMAIN` und `CADDY_EMAIL`
-hinzu.
+::: tip Es gibt genau zwei Compose-Dateien
+`docker-compose.yml` im Repo-Root **ist** der Firmenserver-Stack (postgres,
+app, caddy — in sich geschlossen). Die alte VPS-Fassung mit gemeinsamem
+Edge-Proxy liegt unter `docker/docker-compose.vps.yml`.
+
+Eine Datei `docker/docker-compose.standalone.yml` gibt es **nicht mehr** — sie
+ist beim Umbau zur heutigen `docker-compose.yml` geworden. Ebenso entfallen
+sind `CADDY_DOMAIN` und `CADDY_EMAIL`: Caddy stellt die Zertifikate über
+`tls internal` aus der eigenen lokalen CA aus und braucht dafür weder Domain
+noch Mailadresse.
+:::
 
 ## Beispiel-.env
 

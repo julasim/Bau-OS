@@ -5,7 +5,9 @@ Für den Betrieb im Büro siehe [Voraussetzungen](/betrieb/voraussetzungen).
 
 ## Voraussetzungen
 
-- **Node.js 20+** — [nodejs.org](https://nodejs.org/)
+- **Node.js 24** — [nodejs.org](https://nodejs.org/). Das ist keine Empfehlung,
+  sondern Pflicht: `package.json` fordert `>=24`, und der Container baut auf
+  `node:24-bookworm-slim`.
 - **PostgreSQL** — lokal installiert oder als Container
 
 ::: warning Ohne Datenbank kein Start
@@ -86,8 +88,10 @@ selbst aus, dann genügt Port 3000.
 ## 5. Erstes Konto anlegen
 
 Beim ersten Aufruf ist die Benutzertabelle leer. Die Oberfläche zeigt dann
-den Setup-Assistenten und legt das erste Admin-Konto an — Benutzername,
-Passwort und E-Mail-Adresse.
+den Setup-Assistenten und legt das erste Admin-Konto an: Benutzername
+(mindestens 3 Zeichen) und Passwort. **Eine E-Mail-Adresse ist optional** —
+der erste Admin muss anlegbar sein, ohne dass irgendwo ein Postfach erreichbar
+ist.
 
 Sobald ein Konto existiert, ist der Assistent gesperrt (HTTP 410). Weitere
 Benutzer legt der Admin über die Benutzerverwaltung an.
@@ -101,21 +105,35 @@ Passwort braucht mindestens 12 Zeichen, weil es der einzige Faktor ist.
 
 ```bash
 npm run build          # Backend nach dist/
-npm run build:all      # Backend + Frontend
+npm run build:all      # Backend + Frontend + diese Dokumentation nach dist/docs
 npm start              # Produktionsstart aus dist/
 
 npm test               # Vitest
-npm run lint           # ESLint
+npm run lint           # ESLint (src, tests, scripts, web/src, electron)
 npm run db:migrate     # Migrationen anwenden
 npm run db:status      # Migrationsstand anzeigen
 
 npm run docs:dev       # diese Dokumentation lokal ansehen
 ```
 
-::: warning Tests ohne Datenbank
+Für das Arbeitsplatz-Programm (siehe [dort](/betrieb/arbeitsplatz)):
+
+```bash
+npm run build:electron   # Hülle nach dist-electron/
+npm run electron:dev     # Hülle lokal starten
+npm run dist             # portable .exe bauen (signiert)
+```
+
+::: danger Tests ohne Datenbank melden grün, obwohl der größere Teil fehlt
 Ohne gesetzte `DATABASE_URL` überspringen sich die ACL-, Auth- und
-Datenbanktests **still**. Die Suite meldet trotzdem grün, obwohl der
-größere Teil gar nicht gelaufen ist.
+Datenbanktests **still** — gemessen: `122 passed | 290 skipped (412)`, kein
+einziger Fehlschlag. Ein halber Lauf sieht damit aus wie ein voller.
+
+**Auf die Zahl der übersprungenen Prüfungen sehen, nicht auf die Farbe.**
+
+```bash
+DATABASE_URL="postgres://patio:patio@localhost:5432/patio" npm test
+```
 :::
 
 ## Weiter

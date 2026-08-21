@@ -18,7 +18,7 @@ hero:
 
 features:
   - title: Im eigenen Haus
-    details: Ein Rechner im Büro-LAN, zwei Container (Anwendung und PostgreSQL). Kein Cloud-Dienst, keine Telemetrie, kein Außenkontakt im Betrieb.
+    details: Ein Rechner im Büro-LAN, drei Container (Anwendung, PostgreSQL, Caddy für TLS). Kein Cloud-Dienst, keine Telemetrie, kein Außenkontakt im Betrieb.
   - title: Die Projektakte
     details: Stammdaten, Aufgaben, Termine, Notizen, Meeting-Protokolle, Bautagebuch, Dateien und Stunden — alles am Projekt, für alle im Büro sichtbar.
   - title: Projektsteuerung

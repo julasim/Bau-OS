@@ -1,7 +1,8 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # PATIO App-Container — nur Node.js + unser Code.
-# PostgreSQL, Ollama und Caddy laufen jeweils als separate Container
-# (offizielle Images — siehe docker-compose.yml).
+# PostgreSQL und Caddy laufen jeweils als separate Container (offizielle
+# Images — siehe docker-compose.yml). Insgesamt drei Container; einen
+# Ollama-Container gibt es seit dem Ausbau der KI-Laufzeit nicht mehr.
 #
 # Multi-Stage: Build-Tools (python3/make/g++) leben NUR im builder-Stage und
 # landen NICHT im finalen Image. Das Runtime-Image enthaelt nur Node 24 + curl

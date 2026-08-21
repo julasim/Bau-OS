@@ -412,3 +412,104 @@ zweite Faktor kommt zurück, sobald es einen Zugang von außen gibt.
 - **Eine fehlgeschlagene Sicherung belegte einen Aufbewahrungsplatz.** Nach
   einer Woche Fehlschlägen wären alle sieben Tagesplätze mit unbrauchbaren
   Ständen gefüllt gewesen — und der letzte gute weggerotiert
+
+---
+
+## Datenverlust geschlossen, Rechte scharf, Papierkorb
+**06.08.2026**
+
+Sechs Stufen in einem Zug — von „hier gehen still Daten verloren" bis zur
+Volltextsuche. Migrationen `042`–`049`, 265 → 399 Tests.
+
+### Es gingen still Daten verloren
+
+- **Notizen wurden per Namenspräfix gesucht.** Zwei Notizen „Besprechung" und
+  „Besprechung Bauherr" — und eine Änderung landete auf der falschen. Jetzt
+  entscheidet nur noch die ID.
+- **Zwei Arbeitsplätze überschrieben einander wortlos.** Es gab keinerlei
+  Konflikterkennung. Jetzt trägt jeder Datensatz einen Zähler; wer einen
+  überholten Stand speichert, bekommt eine Ablehnung statt eines stillen
+  Verlusts.
+- **`db-termine.delete()` löschte per Textmuster.** Ein Termin „Abnahme" hätte
+  jeden anderen Termin mit „Abnahme" im Text mitgenommen.
+- **Das Löschen einer Datei nahm die gleichnamige Datei in der Netzfreigabe
+  mit** — zwei getrennte Ablagen, die der Code verwechselte.
+
+### Rechte
+
+- **Der Word-Export war die offene Hintertür.** Vier Export-Routen ohne jede
+  Rechteprüfung: darüber ließ sich die gesamte Zugriffskontrolle umgehen.
+- **Bürointerne Konfiguration war für jeden schreibbar** — bis hin zum Löschen
+  der einzigen Word-Vorlage, mit der Rechnungen erzeugt werden.
+- **Die Team-Liste verriet alle Projektnamen des Büros** über die
+  Projektzuordnungen der Mitglieder. Bei einem Büro, das für konkurrierende
+  Bauherren arbeitet, ist schon der Projektname eine Auskunft.
+- **Neu: das Geld-Recht.** Stundensätze, Honorare und Deckungsbeiträge hängen
+  an einem eigenen Schalter je Konto, Voreinstellung zu. Durchgesetzt an einer
+  einzigen Stelle für alle Routen, nicht achtmal einzeln.
+- **Der Dokumentenordner war über HTTP offen.** Drei Wege arbeiteten ohne
+  Rechteprüfung direkt im Dateisystem der Netzfreigabe. Entfernt statt bewacht.
+
+### Papierkorb
+
+Löschen setzt nur noch eine Markierung. Die Kaskaden im Schema feuern erst beim
+endgültigen Entfernen — vorher riss ein gelöschtes Projekt Rechnungen und
+erfasste Stunden mit, während Notizen als verwaiste Reste zurückblieben. Je
+Beziehung ein eigener Test, der in der Datenbank nachzählt.
+
+Gilt für Projekte **und** für einzelne Notizen, Aufgaben und Termine.
+
+### Neue Funktionen
+
+- **Entscheidungslog** je Projekt: Begründung, Alternativen, Beteiligte
+- **Rechnungspositionen und Positionskatalog**
+- **Aktivität** — was zuletzt im Büro passiert ist, über alle Datenarten
+- **Sicherungs-Status** in der Oberfläche
+- **Firmen-Ansicht** samt Zusammenführen von Dubletten. Die API gab es seit
+  Monaten vollständig, nur rief sie niemand auf
+- **Volltextsuche** mit deutschen Wortstämmen statt reinem Textvergleich
+
+### Aufgeräumt
+
+95 tote Abfragen auf einen Dateisystem-Modus, den es nicht mehr gibt. Die
+JSON-Konten sind als Anmeldeweg geschlossen — sie werden nur noch beim Start in
+die Datenbank übernommen. Sechs Tabellen der Bot- und Outlook-Ära entfernt,
+aber nur, wenn sie leer waren.
+
+---
+
+## Arbeitsplatz-Programm
+**06.08.2026**
+
+Am Arbeitsplatz läuft kein Browser mehr, sondern `PATIO.exe`.
+
+Die Hülle stammt aus PATIO Desktop und wurde entkernt: dort **startet** das
+Programm die Anwendung samt eigenem Server, hier **findet** es den
+Firmenserver. Die Oberfläche musste dafür nicht angefasst werden — sie spricht
+durchgehend relative Pfade und kennt gar keine Serveradresse.
+
+- Beim ersten Start fragt es nach der Serveradresse und prüft sie, bevor es sie
+  übernimmt
+- Ist der Server weg, erscheint eine Erklärung in Klartext statt der
+  Fehlerseite des Browsers — auch dann, wenn die Verbindung mitten in der
+  Arbeit abreißt
+- Zweimal gestartet ergibt **ein** Fenster, nicht zwei Sitzungen
+- Zertifikatsfehler werden **nicht** übergangen, sondern erklärt
+- `F1` öffnet diese Dokumentation. Der Server liefert sie jetzt selbst aus —
+  vorher zeigte der Menüpunkt ins Leere
+
+Verteilt wird die portable Datei über den geteilten Ordner; es gibt keinen
+Update-Dienst. Einzelheiten: [Arbeitsplatz-Programm](/betrieb/arbeitsplatz).
+
+### Beim Bauen gefunden
+
+- Die **Adressprüfung verbog jedes fremde Schema** zu einem
+  Unsinns-Rechnernamen: aus `file:///C:/Windows` wurde `https://file`
+- Das Programm war **gegen ein Wegwerf-Profil nicht prüfbar**, weil es den
+  Datenordner hart überschrieb — damit ließ sich ein gepackter Stand nie ohne
+  Risiko für die Echtdaten testen
+- Diese **Dokumentation lud Schriften von Google Fonts nach.** Solange sie nur
+  lokal gebaut wurde, fiel das nicht auf; ausgeliefert liefe jeder Seitenaufruf
+  auf einem Rechner ohne Internet erst in einen Timeout
+- Das Programmpaket enthielt den **kompletten Server-Code** samt Datenbank-
+  Treiber — 2896 Einträge statt sechs, auf jedem Bürorechner

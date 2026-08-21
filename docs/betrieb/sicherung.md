@@ -50,9 +50,28 @@ auffallen würde es erst in dem Moment, in dem man die Sicherung braucht.
 > **Was diese Lösung nicht abdeckt.** Eine dauerhaft angesteckte Platte steht
 > im selben Raum. Gegen Plattenausfall, versehentliches Löschen und einen
 > misslungenen Update schützt sie vollständig — gegen Brand, Diebstahl oder
-> einen Verschlüsselungstrojaner nicht. Der billigste Ausgleich wäre eine
-> zweite Platte im Wechsel, die außer Haus liegt; `BACKUP_DIR` ist ein
-> Parameter, das Skript kann beides.
+> einen Verschlüsselungstrojaner nicht.
+
+::: danger Es gibt KEINE automatische Auslagerung
+Die `.env.example` beschrieb `BACKUP_REMOTE` als zweites Ziel, auf das jede
+Sicherung zusätzlich abgeworfen wird. **Das ist nicht umgesetzt.** Weder
+`scripts/backup.sh` noch `scripts/restore.sh` lesen die Variable; im ganzen
+Repo kommt sie nur in der `.env.example` vor:
+
+```bash
+grep -rl BACKUP_REMOTE --exclude-dir=node_modules .
+# → nur .env.example
+```
+
+Wer sie gesetzt hat, hat **keine** Kopie außer Haus. Das ist genau die Art
+Fehler, die erst auffällt, wenn man die Sicherung braucht.
+
+**Bis das gebaut ist, hilft nur Handarbeit:** eine zweite Platte im Wechsel.
+Dazu `BACKUP_DIR` auf deren Einhängepunkt zeigen lassen und den Lauf einmal
+von Hand anstoßen — das Skript verlangt ohnehin eine wirklich eingehängte
+Platte und bricht sonst ab. Zwei Platten abwechselnd, eine davon außer Haus,
+schließen die Lücke.
+:::
 
 ## Aufbewahrung
 
