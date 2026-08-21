@@ -17,6 +17,7 @@
 import { computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import NavRail from "./shell/NavRail.vue";
+import AppTopbar from "./shell/AppTopbar.vue";
 import SystemStatusBanner from "./SystemStatusBanner.vue";
 import ConfirmDialog from "./ConfirmDialog.vue";
 import BIcon from "./BIcon.vue";
@@ -24,13 +25,17 @@ import { useWorkspaceShell } from "../composables/useWorkspaceShell";
 import { connectionError } from "../composables/useEvents";
 
 const route = useRoute();
-const { state, railMobileOpen, toggleRailMobile, closeRailMobile } = useWorkspaceShell();
+const { state, railMobileOpen, toggleRailMobile, closeRailMobile, listMobileOpen, toggleListMobile, closeListMobile } =
+  useWorkspaceShell();
 
-// Beim Navigieren das Mobile-Rail-Overlay schliessen, sonst bleibt es
-// nach Auswahl eines Nav-Punkts offen ueber dem Inhalt liegen.
+// Beim Navigieren BEIDE Mobile-Overlays schliessen, sonst bleiben sie nach
+// der Auswahl offen ueber dem Inhalt liegen.
 watch(
   () => route.fullPath,
-  () => closeRailMobile(),
+  () => {
+    closeRailMobile();
+    closeListMobile();
+  },
 );
 
 /** True wenn die aktuelle Route eine 'listpane'-Komponente definiert.
@@ -49,23 +54,44 @@ const hasListPane = computed(() => {
     :data-list-collapsed="state.listCollapsed"
     :data-no-list="!hasListPane"
     :data-rail-mobile-open="railMobileOpen"
+    :data-list-mobile-open="listMobileOpen"
   >
     <!-- Mobile-Hamburger: oeffnet die NavRail als Overlay (<=768px).
          Auf Desktop via CSS ausgeblendet. -->
     <button type="button" class="mobile-nav-toggle" aria-label="Navigation oeffnen" @click="toggleRailMobile">
       <BIcon name="grid" :size="20" />
     </button>
+    <!-- Zweiter Umschalter: oeffnet die Listenspalte als Overlay (<=768px) —
+         nur auf Routen, die ueberhaupt eine mitbringen. -->
+    <button
+      v-if="hasListPane"
+      type="button"
+      class="mobile-list-toggle"
+      aria-label="Liste oeffnen"
+      @click="toggleListMobile"
+    >
+      <BIcon name="list" :size="20" />
+    </button>
     <!-- Backdrop hinter dem Rail-Overlay; Tap schliesst. -->
     <div v-if="railMobileOpen" class="mobile-nav-backdrop" @click="closeRailMobile"></div>
+    <!-- Backdrop hinter dem Listen-Overlay; Tap schliesst. -->
+    <div v-if="listMobileOpen" class="mobile-nav-backdrop" @click="closeListMobile"></div>
     <NavRail />
-    <router-view name="listpane" v-if="hasListPane" />
-    <!-- Migrated v2-Views: rendern <DetailPane> selbst. -->
-    <router-view v-if="hasListPane" />
-    <!-- Legacy Full-Width-Views: brauchen Wrapper mit overflow + min-h-0,
-         damit ihre eigenen Inhalte scrollen statt clipped zu werden. -->
-    <main v-else class="legacy-detail">
-      <router-view />
-    </main>
+    <router-view v-if="hasListPane" name="listpane" />
+    <!-- Inhaltsspalte: die globale Leiste sitzt HIER, nicht als Grid-Zeile
+         ueber allem — sonst waeren Navigations- und Listenspalte nicht mehr
+         voll hoch. Darunter der scrollende Koerper. -->
+    <section class="app-content">
+      <AppTopbar />
+      <div class="app-content-body">
+        <!-- v2-Ansichten rendern ihr <DetailPane> selbst. -->
+        <router-view v-if="hasListPane" />
+        <!-- Vollbreite Altbestands-Ansichten: eigener Scroll-Container. -->
+        <main v-else class="legacy-detail">
+          <router-view />
+        </main>
+      </div>
+    </section>
     <!-- System-Status (Backend-Down/JWT-Expired) als Top-Banner ueber allem -->
     <SystemStatusBanner />
     <!-- SSE-Verbindungsabbruch nach MAX_RECONNECT_ATTEMPTS -->
@@ -78,6 +104,23 @@ const hasListPane = computed(() => {
 </template>
 
 <style scoped>
+/* Inhaltsspalte als Grid-Kind: Leiste oben (fest) + Koerper darunter, der
+   die Hoehe fuellt und intern scrollt. */
+.app-content {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--detail-bg, var(--bg-app));
+}
+.app-content-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 1fr;
+  overflow: hidden;
+}
 .legacy-detail {
   background: var(--bg-app);
   min-height: 0;

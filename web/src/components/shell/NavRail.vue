@@ -9,6 +9,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { api, clearToken } from "../../api";
+import { useBranding } from "../../composables/useBranding";
 import { useCurrentUser } from "../../composables/useCurrentUser";
 import BIcon from "../BIcon.vue";
 
@@ -95,19 +96,11 @@ function goProjectTab(t: string) {
   });
 }
 
-// ── Branding-Logo (Phase 6g) ─────────────────────────────────────────
-interface BrandingLite {
-  companyName: string | null;
-  logoUrl: string | null;
-}
-const branding = ref<BrandingLite>({ companyName: null, logoUrl: null });
-async function loadBranding() {
-  try {
-    branding.value = await api.get<BrandingLite>("/branding");
-  } catch {
-    /* unauth oder Backend down — Fallback auf PATIO-Wortmarke */
-  }
-}
+// ── Branding-Logo ────────────────────────────────────────────────────
+// Geteilte Quelle statt eigener Abfrage: die Topbar braucht denselben Wert,
+// und zwei Bausteine, die dasselbe getrennt laden, ergeben zwei identische
+// Aufrufe je Seitenaufbau.
+const { branding, ensureBranding } = useBranding();
 
 function isActive(to: string): boolean {
   if (to === "/") return route.path === "/";
@@ -123,7 +116,7 @@ function logout() {
   router.push("/login");
 }
 
-onMounted(() => void loadBranding());
+onMounted(() => void ensureBranding());
 </script>
 
 <template>

@@ -6,6 +6,10 @@
 //   - accentColor: hex-Farbe → setzt --color-primary CSS-Var
 //   - fontSize: small | medium | large → body-class
 //   - compactUI: kleinere Paddings → body-class
+//   - sidebarTheme: die Navigationsleiste hell/dunkel — EIGENE Achse,
+//     unabhaengig vom App-Theme. Das uebernommene Stylesheet fuehrt dafuer
+//     `[data-sidebar="light"]`; ohne diese Achse bliebe die Leiste immer
+//     schwarz und der Umschalter in der Topbar haette nichts zu schalten.
 //
 // Sync-Strategie:
 //   1. Initial-Apply aus localStorage (synchron, vor Render — kein FOUC).
@@ -19,6 +23,7 @@ import { ref, watch } from "vue";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type FontSize = "small" | "medium" | "large";
+export type SidebarTheme = "light" | "dark";
 
 const STORAGE_KEY = "patio-ui-prefs";
 
@@ -27,6 +32,7 @@ interface LocalPrefs {
   accentColor: string;
   fontSize: FontSize;
   compactUI: boolean;
+  sidebarTheme: SidebarTheme;
 }
 
 const DEFAULTS: LocalPrefs = {
@@ -34,6 +40,7 @@ const DEFAULTS: LocalPrefs = {
   accentColor: "#111827",
   fontSize: "medium",
   compactUI: false,
+  sidebarTheme: "dark",
 };
 
 function loadFromStorage(): LocalPrefs {
@@ -46,6 +53,7 @@ function loadFromStorage(): LocalPrefs {
       accentColor: parsed.accentColor ?? DEFAULTS.accentColor,
       fontSize: parsed.fontSize ?? DEFAULTS.fontSize,
       compactUI: parsed.compactUI ?? DEFAULTS.compactUI,
+      sidebarTheme: parsed.sidebarTheme === "light" ? "light" : DEFAULTS.sidebarTheme,
     };
   } catch {
     return DEFAULTS;
@@ -91,6 +99,11 @@ function apply(p: LocalPrefs): void {
   root.dataset.fontSize = p.fontSize;
   // Compact-UI als data-Attribut
   root.dataset.compact = p.compactUI ? "1" : "0";
+
+  // Seitenleisten-Theme: data-sidebar="light" schaltet die Leiste auf hell
+  // (patio-tokens.css [data-sidebar="light"]); "dark" trifft keine Regel und
+  // laesst damit die schwarze Vorgabe stehen.
+  root.dataset.sidebar = p.sidebarTheme;
 }
 
 // Initial sofort anwenden (synchron — kein FOUC bevor Vue mounted)
@@ -145,6 +158,13 @@ export function useTheme() {
     setCompactUI(v: boolean) {
       prefs.value = { ...prefs.value, compactUI: v };
     },
+    setSidebarTheme(t: SidebarTheme) {
+      prefs.value = { ...prefs.value, sidebarTheme: t };
+    },
+    toggleSidebarTheme() {
+      const next: SidebarTheme = prefs.value.sidebarTheme === "light" ? "dark" : "light";
+      prefs.value = { ...prefs.value, sidebarTheme: next };
+    },
     /** Wird bei Login + nach Settings-PATCH gerufen — Backend ist
      *  Source-of-Truth, lokaler State syncen sich an. */
     applyFromServer(remote: Partial<LocalPrefs>) {
@@ -153,6 +173,7 @@ export function useTheme() {
         accentColor: remote.accentColor ?? prefs.value.accentColor,
         fontSize: remote.fontSize ?? prefs.value.fontSize,
         compactUI: remote.compactUI ?? prefs.value.compactUI,
+        sidebarTheme: remote.sidebarTheme ?? prefs.value.sidebarTheme,
       };
     },
 

@@ -124,12 +124,14 @@ async function changePassword() {
 }
 
 // ── Theme + UI-Praeferenzen (Phase 6f) ─────────────────────────────────────
+import { useBranding } from "../composables/useBranding";
 import { useTheme } from "../composables/useTheme";
 import { useWorkspaceShell } from "../composables/useWorkspaceShell";
 import { useCurrentUser } from "../composables/useCurrentUser";
 
 const themeApi = useTheme();
 const shell = useWorkspaceShell();
+const { reloadBranding } = useBranding();
 type ThemeMode = "light" | "dark" | "system";
 type FontSize = "small" | "medium" | "large";
 
@@ -704,6 +706,9 @@ async function saveBranding() {
       website: brandingDraft.value.website.trim() || null,
     };
     branding.value = await api.patch<BrandingState>("/branding", body);
+    // Die geteilte Quelle nachziehen, sonst zeigen Navigationsleiste und
+    // Brotkrumen bis zum naechsten vollen Seitenaufbau den alten Firmennamen.
+    await reloadBranding();
     flash("success", "Branding gespeichert");
   } catch (e) {
     flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");

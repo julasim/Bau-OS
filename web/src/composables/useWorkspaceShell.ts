@@ -56,6 +56,10 @@ const state = ref<ShellState>(loadState());
 // BEWUSST nicht persistiert und nicht Teil von ShellState — reiner
 // Session-UI-Zustand, der beim Navigieren/Resize wieder zugeht.
 const railMobileOpen = ref(false);
+// Zweites Overlay fuer schmale Bildschirme: die Listenspalte. Ohne dieses
+// Gegenstueck waere sie unter 768px nicht erreichbar — die CSS-Regel dafuer
+// kam mit dem uebernommenen Stylesheet mit, der Umschalter fehlte.
+const listMobileOpen = ref(false);
 
 watch(
   state,
@@ -84,11 +88,18 @@ export function useWorkspaceShell() {
   return {
     state,
     railMobileOpen,
+    listMobileOpen,
     toggleRailMobile() {
       railMobileOpen.value = !railMobileOpen.value;
     },
     closeRailMobile() {
       railMobileOpen.value = false;
+    },
+    toggleListMobile() {
+      listMobileOpen.value = !listMobileOpen.value;
+    },
+    closeListMobile() {
+      listMobileOpen.value = false;
     },
     setDensity(d: Density) {
       state.value.density = d;
