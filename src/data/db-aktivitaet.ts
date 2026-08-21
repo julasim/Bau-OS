@@ -99,7 +99,8 @@ export const dbAktivitaet = {
         LEFT JOIN projects p ON p.id = a.project_id
         LEFT JOIN users u ON u.id = a.created_by
        WHERE a.project_id IS NULL OR p.deleted_at IS NULL
-       ORDER BY a.updated_at DESC
+       -- Zweitkriterium ist PFLICHT (Begruendung im Kommentar ueber der Funktion).
+       ORDER BY a.updated_at DESC, a.id DESC
        LIMIT ${grenze}
     `;
 

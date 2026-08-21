@@ -146,11 +146,33 @@ describe.skipIf(!HAS_DB)("Aktivität", () => {
     const alle = await fx.app.request("/api/tasks", { headers: authHeader(fx.admin.token) });
     const id = ((await alle.json()) as { id: string; text: string }[]).find((t) => t.text === `${P}-aufgabe`)!.id;
 
-    await fx.app.request(`/api/tasks/${id}`, {
+    // ── Warum hier gewartet wird ──────────────────────────────────────────
+    // `updated_at` hat ZWEI Quellen, und das ist der Grund für einen Test,
+    // der ohne diese Pause etwa jeden dritten Lauf scheiterte:
+    //
+    //   * beim INSERT schreibt die Anwendung den Wert (Node-Uhr),
+    //   * beim UPDATE überschreibt ihn der Trigger `update_updated_at()`
+    //     mit `now()` — der DATENBANK-Uhr.
+    //
+    // Laufen App und Datenbank auf derselben Maschine (Produktion: ein
+    // Compose-Stack), sind beide Uhren identisch und es fällt nicht auf. In
+    // dieser Entwicklungsumgebung läuft Postgres in WSL und geht gemessen
+    // rund 220 ms hinter der Windows-Uhr — der frisch geänderte Datensatz
+    // bekam dadurch einen ÄLTEREN Zeitstempel als der Sekundenbruchteile
+    // vorher angelegte und rutschte im Feed unter ihn.
+    //
+    // Die Pause ist deshalb kein Kaschieren, sondern stellt einen Abstand
+    // her, der größer ist als jede realistische Uhrenabweichung.
+    await new Promise((r) => setTimeout(r, 800));
+
+    const geaendert = await fx.app.request(`/api/tasks/${id}`, {
       method: "PUT",
       headers: jsonHeader(fx.admin.token),
       body: JSON.stringify({ text: `${P}-aufgabe geändert` }),
     });
+    // Ohne diese Prüfung würde ein fehlgeschlagenes Update als
+    // Sortierproblem erscheinen — der Test sah die Antwort bisher nie an.
+    expect(geaendert.status).toBe(200);
 
     // Bewusst nur innerhalb des eigenen Namensraums geprüft, nicht global:
     // die Testdateien laufen parallel, andere Suiten schreiben in dieselbe
