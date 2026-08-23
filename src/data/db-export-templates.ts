@@ -10,7 +10,7 @@ import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { alsIso } from "./zeitstempel.js";
 
-export type ExportKind = "meeting" | "bautagebuch" | "time-entry" | "project-summary";
+export type ExportKind = "meeting" | "bautagebuch" | "time-entry" | "project-summary" | "invoice";
 
 export interface ExportTemplatePublic {
   id: string;

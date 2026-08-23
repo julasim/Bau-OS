@@ -14,6 +14,7 @@
 //   - bautagebuch:    siehe buildBautagebuchData()
 //   - time-entry:     siehe buildTimeEntryData()
 //   - project-summary: siehe buildProjectSummaryData()
+//   - invoice:        siehe buildInvoiceData()
 //
 // Branding-Felder (Firma, FirmenAdresse, …) sind in jedem Export
 // verfuegbar — werden in buildBaseData() global eingesammelt.
@@ -202,6 +203,7 @@ async function buildTimeEntryData(opts: {
   memberId?: string;
   from?: string;
   to?: string;
+  invoiceId?: string;
 }): Promise<Record<string, unknown>> {
   const db = getDb();
 
@@ -332,6 +334,94 @@ async function buildProjectSummaryData(projectName: string): Promise<Record<stri
   };
 }
 
+/** Betrag in der Form, die auf eine Rechnung gehoert: 1.234,56 */
+function eur(wert: unknown): string {
+  const n = Number(wert);
+  if (!Number.isFinite(n)) return "";
+  return n.toLocaleString("de-AT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+/**
+ * Daten einer Rechnung.
+ *
+ * ── Warum es diese Export-Art ueberhaupt braucht ──────────────────────────
+ *
+ * Es gab vier Export-Arten und keine davon war die Rechnung — obwohl alle
+ * Daten im System stehen: Positionen, Menge, Einzelpreis, Umsatzsteuersatz,
+ * Phase, Projektnummer. Fuer ein Buero, das Honorare abrechnet, ist das die
+ * spuerbarste Luecke: die einzige Datenart, die das Haus wirklich VERLAESST,
+ * liess sich nicht ausgeben.
+ *
+ * Gerechnet wird hier und nicht in der Vorlage: Word kann keine Summe ueber
+ * eine Schleife bilden, und eine Rechnung, deren Endbetrag von der Vorlage
+ * abhaengt, ist keine Rechnung.
+ */
+async function buildInvoiceData(invoiceId: string): Promise<Record<string, unknown>> {
+  const db = getDb();
+  const [r] = await db`
+    SELECT i.*, p.name AS projekt_name, p.projektnummer, p.bauherr, p.standort,
+           tm.name AS bauherr_name, ph.name AS phase_name
+      FROM project_invoices i
+      JOIN projects p ON p.id = i.project_id
+      LEFT JOIN team_members tm ON tm.id = p.bauherr_id
+      LEFT JOIN project_phases ph ON ph.id = i.phase_id
+     WHERE i.id = ${invoiceId} LIMIT 1`;
+  if (!r) throw new DocxRenderError("Rechnung nicht gefunden");
+
+  const positionen = Array.isArray(r.positionen) ? (r.positionen as Record<string, unknown>[]) : [];
+
+  let netto = 0;
+  const ustNachSatz = new Map<number, number>();
+  const zeilen = positionen.map((pos, i) => {
+    const menge = Number(pos.menge) || 0;
+    const einzel = Number(pos.einzelpreis) || 0;
+    const satz = Number(pos.ustSatz) || 0;
+    const summe = menge * einzel;
+    netto += summe;
+    ustNachSatz.set(satz, (ustNachSatz.get(satz) ?? 0) + summe * (satz / 100));
+    return {
+      Nr: String(i + 1),
+      Text: String(pos.text ?? ""),
+      Menge: String(menge).replace(".", ","),
+      Einheit: pos.einheit ? String(pos.einheit) : "",
+      Einzelpreis: eur(einzel),
+      UstSatz: String(satz),
+      Summe: eur(summe),
+    };
+  });
+
+  // Bestandsrechnungen haben keine Positionen — dann gilt der eingetragene
+  // Betrag. Ohne diesen Zweig staende auf jeder alten Rechnung 0,00.
+  if (positionen.length === 0) netto = Number(r.betrag) || 0;
+
+  const ustGesamt = [...ustNachSatz.values()].reduce((a, b) => a + b, 0);
+
+  return {
+    Rechnung: {
+      Nummer: r.nummer ? String(r.nummer) : "",
+      Datum: formatDate(r.datum),
+      Status: r.status ? String(r.status) : "",
+      Anmerkung: r.note ? String(r.note) : "",
+      Phase: r.phase_name ? String(r.phase_name) : "",
+      Netto: eur(netto),
+      Ust: eur(ustGesamt),
+      Brutto: eur(netto + ustGesamt),
+    },
+    Projekt: {
+      Name: String(r.projekt_name),
+      Projektnummer: alsDokumentwert(r.projektnummer ? String(r.projektnummer) : null),
+      Bauherr: r.bauherr_name ? String(r.bauherr_name) : r.bauherr ? String(r.bauherr) : "",
+      Standort: r.standort ? String(r.standort) : "",
+    },
+    Positionen: zeilen,
+    // Je Steuersatz eine Zeile — oesterreichische Rechnungen weisen 20 % und
+    // 10 % getrennt aus, wenn beides vorkommt.
+    UstZeilen: [...ustNachSatz.entries()]
+      .sort((a, b) => b[0] - a[0])
+      .map(([satz, betrag]) => ({ Satz: String(satz), Betrag: eur(betrag) })),
+  };
+}
+
 // ── Render-Pipeline ──────────────────────────────────────────────────────────
 
 export interface RenderOptions {
@@ -349,6 +439,7 @@ export interface RenderOptions {
   memberId?: string;
   from?: string;
   to?: string;
+  invoiceId?: string;
 }
 
 export interface RenderResult {
@@ -400,6 +491,10 @@ export async function renderDocxExport(opts: RenderOptions): Promise<RenderResul
       if (!opts.projectName) throw new DocxRenderError("projectName erforderlich");
       kindData = await buildProjectSummaryData(opts.projectName);
       break;
+    case "invoice":
+      if (!opts.invoiceId) throw new DocxRenderError("invoiceId erforderlich fuer den Rechnungs-Export");
+      kindData = await buildInvoiceData(opts.invoiceId);
+      break;
   }
   const data = { ...base, ...kindData };
 
@@ -449,6 +544,12 @@ export async function renderDocxExport(opts: RenderOptions): Promise<RenderResul
   if (opts.kind === "time-entry") filename = `Stundenzettel ${dateSlug}.docx`;
   if (opts.kind === "project-summary" && opts.projectName) {
     filename = `Projektuebersicht ${dateSlug}.docx`;
+  }
+  if (opts.kind === "invoice") {
+    // Die Rechnungsnummer steht im Dateinamen, nicht das Datum: eine Rechnung
+    // wird unter ihrer Nummer abgelegt und gesucht.
+    const nr = kindData.Rechnung as { Nummer?: string } | undefined;
+    filename = nr?.Nummer ? `Rechnung ${nr.Nummer}.docx` : `Rechnung ${dateSlug}.docx`;
   }
   return { buffer, filename: mitProjektnummer(await nummerZuProjekt(opts.projectName), filename) };
 }
@@ -620,6 +721,27 @@ export function listExportVariables(kind: ExportKind): { tag: string; descriptio
       { tag: "{SummeStunden}", description: "Total ueber alle Eintraege" },
       { tag: "{AnzahlEintraege}", description: "" },
       { tag: "{#Eintraege}{Datum}: {Mitarbeiter} {Stunden}h{/Eintraege}", description: "Loop" },
+    ];
+  }
+  if (kind === "invoice") {
+    return [
+      ...base,
+      { tag: "{Rechnung.Nummer}", description: "" },
+      { tag: "{Rechnung.Datum}", description: "" },
+      { tag: "{Rechnung.Phase}", description: "Leistungsphase, falls zugeordnet" },
+      { tag: "{Rechnung.Anmerkung}", description: "" },
+      { tag: "{Rechnung.Netto}", description: "Summe der Positionen, ohne Ust." },
+      { tag: "{Rechnung.Ust}", description: "Umsatzsteuer gesamt" },
+      { tag: "{Rechnung.Brutto}", description: "Endbetrag" },
+      { tag: "{Projekt.Name}", description: "" },
+      { tag: "{Projekt.Projektnummer}", description: "" },
+      { tag: "{Projekt.Bauherr}", description: "" },
+      { tag: "{Projekt.Standort}", description: "" },
+      {
+        tag: "{#Positionen}{Nr} {Text} {Menge} {Einheit} {Einzelpreis} {Summe}{/Positionen}",
+        description: "Loop ueber die Rechnungszeilen",
+      },
+      { tag: "{#UstZeilen}{Satz} % … {Betrag}{/UstZeilen}", description: "Je Steuersatz eine Zeile" },
     ];
   }
   if (kind === "project-summary") {

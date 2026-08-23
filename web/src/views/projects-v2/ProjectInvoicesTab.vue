@@ -7,6 +7,7 @@ import { formatEUR } from "../../utils/format";
 import { ref, computed, onMounted, watch } from "vue";
 import { api } from "../../api";
 import BIcon from "../../components/BIcon.vue";
+import { dateiHolen } from "../../utils/download";
 
 const props = defineProps<{ projectName: string }>();
 
@@ -302,7 +303,35 @@ async function remove() {
   }
 }
 
-onMounted(() => void load());
+// ── Rechnung ausgeben ────────────────────────────────────────────────────
+//
+// Die fünfte Export-Art. Sie fehlte ganz, obwohl alle Daten im System stehen:
+// Positionen, Menge, Einzelpreis, Umsatzsteuersatz, Phase, Projektnummer. Für
+// ein Büro, das Honorare abrechnet, ist eine Rechnung die einzige Datenart,
+// die das Haus wirklich verlässt.
+const pdfMoeglich = ref(false);
+
+async function exportieren(alsPdf: boolean) {
+  const inv = draft.value;
+  if (!inv?.id) return;
+  busy.value = true;
+  try {
+    const url = `/api/exports/invoice/${inv.id}` + (alsPdf ? "?format=pdf" : "");
+    const fehler = await dateiHolen(url, `Rechnung ${inv.nummer ?? inv.id}.${alsPdf ? "pdf" : "docx"}`);
+    if (fehler) error.value = fehler;
+  } finally {
+    busy.value = false;
+  }
+}
+
+onMounted(async () => {
+  void load();
+  try {
+    pdfMoeglich.value = (await api.get<{ pdf: boolean }>("/exports/faehigkeiten")).pdf;
+  } catch {
+    pdfMoeglich.value = false;
+  }
+});
 </script>
 
 <template>
@@ -400,6 +429,18 @@ onMounted(() => void load());
         <div class="inv-editor" v-if="draft">
           <div class="inv-editor-head">
             <h3>{{ draft.id ? "Rechnung bearbeiten" : "Neue Teilrechnung" }}</h3>
+            <button v-if="draft.id" class="patio-btn ghost sm" :disabled="busy" @click="exportieren(false)">
+              <BIcon name="download" :size="11" /><span style="margin-left: 4px">Word</span>
+            </button>
+            <button
+              v-if="draft.id && pdfMoeglich"
+              class="patio-btn ghost sm"
+              :disabled="busy"
+              title="Dieselbe Vorlage, als PDF"
+              @click="exportieren(true)"
+            >
+              <BIcon name="download" :size="11" /><span style="margin-left: 4px">PDF</span>
+            </button>
             <button v-if="draft.id" class="patio-btn ghost sm" :disabled="busy" @click="remove">
               <BIcon name="trash" :size="11" /><span style="margin-left: 4px">Löschen</span>
             </button>

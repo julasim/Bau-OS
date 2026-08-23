@@ -41,6 +41,21 @@ Ergebnis in `release/`:
 | `patio-<version>.tar.gz` | Image, Compose-Datei, `docker/`, `deploy/`, Skripte |
 | `patio-<version>.tar.gz.sha256` | Prüfsumme |
 
+::: warning Die Paketgröße hängt an der PDF-Ausgabe
+Das Server-Abbild enthält LibreOffice, damit PATIO Word-Exporte in PDF
+umwandeln kann — rund **350 MB**, die jedes Offline-Update auf dem
+Datenträger mitträgt.
+
+Wer darauf verzichten kann, baut ohne:
+
+```bash
+docker compose build --build-arg MIT_PDF=nein app
+```
+
+Dann erscheint der PDF-Knopf gar nicht erst; der Word-Export bleibt
+vollständig. Einzelheiten: [Export und Volldump](/konzepte/export).
+:::
+
 Im Paket liegt eine `PAKET.txt` mit Version, Baudatum, Rechnername und
 Git-Stand — **einschließlich eines Vermerks, wenn beim Bauen uncommittete
 Änderungen im Baum lagen.**

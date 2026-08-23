@@ -44,7 +44,9 @@ src/
 │   ├── files.ts          — `readFile`, sonst nichts mehr
 │   └── extractor.ts      — Text aus PDF und DOCX ziehen (nur aus Buffern)
 ├── export/
-│   └── docx-render.ts    — DOCX-Erzeugung aus Word-Vorlagen
+│   ├── docx-render.ts    — DOCX-Erzeugung aus Word-Vorlagen (fünf Arten)
+│   ├── pdf.ts            — PDF über LibreOffice, aus derselben Word-Datei
+│   └── volldump.ts       — der ganze Bestand als Markdown-Ordnerbaum (ZIP)
 
 web/                      — Vue-3-Frontend (eigenes Vite-Projekt)
 electron/                 — Hülle des Arbeitsplatz-Programms

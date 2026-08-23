@@ -48,10 +48,30 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
+# ── PDF-Ausgabe: LibreOffice ────────────────────────────────────────────────
+#
+# PATIO wandelt Word-Exporte ueber `soffice --convert-to pdf` in PDF um — aus
+# GENAU DERSELBEN Vorlage, die auch die .docx erzeugt. Eine PDF-Bibliothek
+# waere ein zweites Layoutsystem, das irgendwann anders aussieht als der
+# Word-Export.
+#
+# Das kostet rund 350 MB im Image, und der Firmenserver wird ueber
+# Datentraeger aktualisiert (scripts/release-offline.sh) — die Last traegt
+# jedes Update mit. Deshalb `libreoffice-writer` statt des ganzen Pakets und
+# `--no-install-recommends`.
+#
+# Abschaltbar: `docker compose build --build-arg MIT_PDF=nein app`. Dann
+# antwortet der PDF-Weg mit 503 und einem Satz in Klartext; der Word-Export
+# bleibt vollstaendig.
+ARG MIT_PDF=ja
+
 # Nur curl (Healthcheck) + ca-certificates — KEINE Build-Tools.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     ca-certificates \
+    && if [ "$MIT_PDF" = "ja" ]; then \
+         apt-get install -y --no-install-recommends libreoffice-writer fonts-dejavu-core; \
+       fi \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /opt/patio

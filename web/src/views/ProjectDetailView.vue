@@ -13,7 +13,7 @@ import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 import { anzeigeNummer, PROJEKTNUMMER_BEISPIEL } from "../utils/projektnummer";
 import { copyToClipboard } from "../utils/clipboard";
-import { dateinameAusHeader } from "../utils/dateiname";
+import { dateiHolen } from "../utils/download";
 
 const { isAdmin, darfGeld } = useCurrentUser();
 const { confirm } = useConfirm();
@@ -1819,37 +1819,14 @@ async function newMeeting() {
 // Helper: GET zur API mit Auth-Header, Response als Blob herunterladen.
 // Wenn das Backend einen Fehler liefert, parsen wir die JSON-Error-Message
 // und zeigen einen Alert.
+/** Holt eine Exportdatei und zeigt einen Fehler, falls es keine gibt.
+ *
+ *  Die eigentliche Arbeit steht in `utils/download.ts` — sie wird inzwischen
+ *  auch vom Rechnungs-Reiter gebraucht, und eine zweite Kopie hätte irgendwann
+ *  eine andere Fehlerbehandlung. */
 async function downloadDocx(url: string, fallbackFilename: string) {
-  try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${localStorage.getItem("patio-token") ?? ""}` },
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ error: "Export fehlgeschlagen" }));
-      await confirm({
-        message: err.error || `HTTP ${res.status}`,
-        confirmLabel: "OK",
-        cancelLabel: "",
-      });
-      return;
-    }
-    const blob = await res.blob();
-    // Liest `filename*=UTF-8''…` bevorzugt — sonst gewinnt der ASCII-Ersatzname,
-    // und aus „Müller" wird „Mueller" auf der Platte des Nutzers.
-    const filename = dateinameAusHeader(res.headers.get("Content-Disposition"), fallbackFilename ?? "export");
-    const objUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = objUrl;
-    a.download = filename!;
-    a.click();
-    URL.revokeObjectURL(objUrl);
-  } catch (e) {
-    await confirm({
-      message: e instanceof Error ? e.message : "Export fehlgeschlagen",
-      confirmLabel: "OK",
-      cancelLabel: "",
-    });
-  }
+  const fehler = await dateiHolen(url, fallbackFilename || "export");
+  if (fehler) await confirm({ message: fehler, confirmLabel: "OK", cancelLabel: "" });
 }
 
 // ── Welche Word-Vorlage wird benutzt? ────────────────────────────────────
@@ -1871,6 +1848,10 @@ interface ExportVorlage {
 }
 
 const exportVorlagen = ref<ExportVorlage[]>([]);
+// Kann dieser Server PDF? LibreOffice ist optional (rund 350 MB, und jedes
+// Offline-Update trägt sie mit). Ein PDF-Knopf, der auf jedem zweiten Server
+// einen Fehler liefert, ist schlechter als keiner.
+const pdfMoeglich = ref(false);
 const gewaehlteVorlage = ref<Record<string, string>>({});
 
 async function ladeExportVorlagen() {
@@ -1879,38 +1860,60 @@ async function ladeExportVorlagen() {
   } catch {
     exportVorlagen.value = [];
   }
+  try {
+    pdfMoeglich.value = (await api.get<{ pdf: boolean }>("/exports/faehigkeiten")).pdf;
+  } catch {
+    pdfMoeglich.value = false;
+  }
 }
 
 function vorlagenFuer(kind: string): ExportVorlage[] {
   return exportVorlagen.value.filter((v) => v.kind === kind);
 }
 
-/** Hängt `?templateId=` an, wenn für diese Art eine andere als die
- *  Standardvorlage gewählt wurde. */
-function mitVorlage(pfad: string, kind: string): string {
+/** Hängt `?templateId=` und bei Bedarf `?format=pdf` an. */
+function mitVorlage(pfad: string, kind: string, alsPdf = false): string {
+  const teile: string[] = [];
   const id = gewaehlteVorlage.value[kind];
-  if (!id) return pfad;
-  return pfad + (pfad.includes("?") ? "&" : "?") + "templateId=" + encodeURIComponent(id);
+  if (id) teile.push("templateId=" + encodeURIComponent(id));
+  if (alsPdf) teile.push("format=pdf");
+  if (teile.length === 0) return pfad;
+  return pfad + (pfad.includes("?") ? "&" : "?") + teile.join("&");
 }
 
-async function exportMeetingDocx(id: string) {
-  await downloadDocx(mitVorlage(`/api/exports/meeting/${id}`, "meeting"), `Meeting-${id}.docx`);
+/** Endung passend zum Format — sonst liegt eine PDF als .docx auf der Platte. */
+const endung = (alsPdf: boolean) => (alsPdf ? "pdf" : "docx");
+
+async function exportMeetingDocx(id: string, alsPdf = false) {
+  await downloadDocx(mitVorlage(`/api/exports/meeting/${id}`, "meeting", alsPdf), `Meeting-${id}.${endung(alsPdf)}`);
 }
-async function exportBautagebuchDocx(id: string) {
-  await downloadDocx(mitVorlage(`/api/exports/bautagebuch/${id}`, "bautagebuch"), `Bautagebuch-${id}.docx`);
-}
-async function exportTimeEntriesDocx() {
-  const project = encodeURIComponent(projectName.value);
+async function exportBautagebuchDocx(id: string, alsPdf = false) {
   await downloadDocx(
-    mitVorlage(`/api/exports/time-entries?project=${project}`, "time-entry"),
-    `Stundenzettel-${projectName.value}.docx`,
+    mitVorlage(`/api/exports/bautagebuch/${id}`, "bautagebuch", alsPdf),
+    `Bautagebuch-${id}.${endung(alsPdf)}`,
   );
 }
-async function exportProjectSummaryDocx() {
+async function exportTimeEntriesDocx(alsPdf = false) {
+  const project = encodeURIComponent(projectName.value);
+  await downloadDocx(
+    mitVorlage(`/api/exports/time-entries?project=${project}`, "time-entry", alsPdf),
+    `Stundenzettel-${projectName.value}.${endung(alsPdf)}`,
+  );
+}
+async function exportProjectSummaryDocx(alsPdf = false) {
   const n = encodeURIComponent(projectName.value);
   await downloadDocx(
-    mitVorlage(`/api/exports/project/${n}/summary`, "project-summary"),
-    `Projekt-${projectName.value}.docx`,
+    mitVorlage(`/api/exports/project/${n}/summary`, "project-summary", alsPdf),
+    `Projekt-${projectName.value}.${endung(alsPdf)}`,
+  );
+}
+
+/** Rechnung als Word oder PDF. Die fünfte Export-Art — sie fehlte ganz,
+ *  obwohl alle Daten im System stehen. */
+async function exportRechnung(id: string, nummer: string | null, alsPdf = false) {
+  await downloadDocx(
+    mitVorlage(`/api/exports/invoice/${id}`, "invoice", alsPdf),
+    `Rechnung ${nummer ?? id}.${endung(alsPdf)}`,
   );
 }
 
@@ -2491,7 +2494,7 @@ async function deleteMeeting() {
                 <BIcon name="arrowUpRight" :size="12" />
                 <span>Als Markdown exportieren</span>
               </button>
-              <button class="action-menu-item" @click="exportProjectSummaryDocx">
+              <button class="action-menu-item" @click="exportProjectSummaryDocx(false)">
                 <BIcon name="file" :size="12" />
                 <span>Zusammenfassung als Word…</span>
               </button>
@@ -2549,7 +2552,15 @@ async function deleteMeeting() {
           <option value="">Standardvorlage</option>
           <option v-for="v in vorlagenFuer('project-summary')" :key="v.id" :value="v.id">{{ v.name }}</option>
         </select>
-        <button class="pt-btn pt-btn--secondary pt-btn--sm" @click="exportProjectSummaryDocx">
+        <button
+          v-if="pdfMoeglich"
+          class="pt-btn pt-btn--secondary pt-btn--sm"
+          title="Projektübersicht als PDF"
+          @click="exportProjectSummaryDocx(true)"
+        >
+          PDF
+        </button>
+        <button class="pt-btn pt-btn--secondary pt-btn--sm" @click="exportProjectSummaryDocx(false)">
           <BIcon name="file" :size="11" /> Export
         </button>
       </div>
@@ -3446,12 +3457,26 @@ async function deleteMeeting() {
               <button
                 v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
                 class="patio-btn ghost sm"
-                @click="exportBautagebuchDocx(bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)!.id)"
+                @click="
+                  exportBautagebuchDocx(bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)!.id, false)
+                "
                 title="Diesen Tag als Word herunterladen"
               >
                 <BIcon name="download" :size="11" />
                 <span style="margin-left: 4px">Word</span>
               </button>
+              <button
+                v-if="pdfMoeglich"
+                class="patio-btn ghost sm"
+                title="Dieselbe Vorlage, als PDF"
+                @click="
+                  exportBautagebuchDocx(bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)!.id, true)
+                "
+              >
+                <BIcon name="download" :size="11" />
+                <span style="margin-left: 4px">PDF</span>
+              </button>
+
               <button
                 v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
                 class="patio-btn ghost sm"
@@ -3622,12 +3647,22 @@ async function deleteMeeting() {
               <button
                 v-if="meetingDraft.id"
                 class="patio-btn ghost sm"
-                @click="exportMeetingDocx(meetingDraft.id)"
+                @click="exportMeetingDocx(meetingDraft.id, false)"
                 title="Als Word-Datei herunterladen"
               >
                 <BIcon name="download" :size="11" />
                 <span style="margin-left: 4px">Word</span>
               </button>
+              <button
+                v-if="pdfMoeglich && meetingDraft.id"
+                class="patio-btn ghost sm"
+                title="Dieselbe Vorlage, als PDF"
+                @click="exportMeetingDocx(meetingDraft.id!, true)"
+              >
+                <BIcon name="download" :size="11" />
+                <span style="margin-left: 4px">PDF</span>
+              </button>
+
               <button v-if="meetingDraft.id" class="patio-btn ghost sm" @click="deleteMeeting">
                 <BIcon name="trash" :size="11" />
                 <span style="margin-left: 4px">Löschen</span>
@@ -3843,11 +3878,20 @@ async function deleteMeeting() {
           <button
             v-if="timeEntries.length > 0"
             class="patio-btn ghost sm"
-            @click="exportTimeEntriesDocx"
+            @click="exportTimeEntriesDocx(false)"
             title="Stundenzettel als Word herunterladen"
           >
             <BIcon name="download" :size="11" />
             <span style="margin-left: 4px">Stundenzettel</span>
+          </button>
+          <button
+            v-if="timeEntries.length > 0 && pdfMoeglich"
+            class="patio-btn ghost sm"
+            title="Stundenzettel als PDF"
+            @click="exportTimeEntriesDocx(true)"
+          >
+            <BIcon name="download" :size="11" />
+            <span style="margin-left: 4px">PDF</span>
           </button>
           <span class="empty-hint" style="margin-left: auto; font-size: 12px">
             <strong style="color: var(--color-text)">{{ timeTotalHours.toFixed(1) }}h</strong>

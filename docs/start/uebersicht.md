@@ -88,7 +88,8 @@ Stundenerfassung, im Bautagebuch), bedienen es aber nicht.
 | **Suche** | Volltext über Notizen, Aufgaben, Projekte und Dateien — mit deutschen Wortstämmen |
 | **Aktivität** | Was zuletzt im Büro passiert ist, über alle Datenarten |
 | **Papierkorb** | Gelöschtes ist wiederherstellbar, statt sofort weg zu sein |
-| **Exporte** | DOCX auf Basis eigener Word-Vorlagen mit Firmen-Branding |
+| **[Exporte](/konzepte/export)** | Fünf Dokumentarten aus eigenen Word-Vorlagen — Protokoll, Bautagebuch, Stundenzettel, Projektübersicht, **Rechnung** — wahlweise als PDF |
+| **Volldump** | Der ganze Bestand als Markdown-Ordnerbaum: lesbar ohne PATIO |
 
 ## Datenhaltung
 

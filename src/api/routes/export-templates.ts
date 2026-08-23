@@ -17,6 +17,12 @@
 //   GET    /api/exports/bautagebuch/:id
 //   GET    /api/exports/time-entries?...
 //   GET    /api/exports/project/:name/summary
+//   GET    /api/exports/invoice/:id           (braucht zusaetzlich das Geld-Recht)
+//   GET    /api/exports/faehigkeiten           → { pdf: boolean }
+//
+//   Alle Export-Endpunkte verstehen `?format=pdf` — dieselbe Word-Datei,
+//   durch LibreOffice geschickt. Fehlt LibreOffice, kommt ein 503 mit einem
+//   Satz in Klartext statt eines 500ers.
 //
 //   (Die Pfade tragen KEINE .docx-Endung — sie stand hier jahrelang und
 //   fuehrte beim Nachbauen des Aufrufs zuverlaessig in einen 404. Die Endung
@@ -27,6 +33,7 @@
 // ============================================================
 
 import { Hono } from "hono";
+import type { Context } from "hono";
 import type { AppEnv } from "../server.js";
 import {
   listExportTemplates,
@@ -39,10 +46,14 @@ import {
 } from "../../data/db-export-templates.js";
 import { renderDocxExport, renderDocxTest, listExportVariables, DocxRenderError } from "../../export/docx-render.js";
 import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
-import { meetingRepo, bautagebuchRepo } from "../../data/index.js";
+import { meetingRepo, bautagebuchRepo, invoiceRepo, projectRepo } from "../../data/index.js";
+import { darfGeldSehen } from "../geld.js";
 import { logError } from "../../logger.js";
 import { adminMiddleware } from "../auth.js";
 import { contentDisposition } from "../dateiname.js";
+import { docxNachPdf, pdfMoeglich, PdfNichtMoeglich } from "../../export/pdf.js";
+import { volldumpAlsZip } from "../../export/volldump.js";
+import { getVisibleProjectIds } from "../../data/access.js";
 
 export const exportTemplatesRoutes = new Hono<AppEnv>();
 
@@ -61,8 +72,35 @@ export const exportTemplatesRoutes = new Hono<AppEnv>();
 // stehenden Handler nicht mehr erfassen.
 exportTemplatesRoutes.on(["POST", "PATCH", "DELETE"], ["/export-templates", "/export-templates/*"], adminMiddleware);
 
-const VALID_KINDS: ExportKind[] = ["meeting", "bautagebuch", "time-entry", "project-summary"];
+const VALID_KINDS: ExportKind[] = ["meeting", "bautagebuch", "time-entry", "project-summary", "invoice"];
 const MAX_DOCX_BYTES = 10 * 1024 * 1024; // 10 MB
+/**
+ * Liefert das Ergebnis aus — als Word, oder auf `?format=pdf` als PDF.
+ *
+ * ── Warum ein Schalter und keine zweite Route je Art ───────────────────────
+ *
+ * Weil die PDF aus GENAU DERSELBEN Word-Datei entsteht. Eine eigene Route
+ * hiesse: zwei Wege, die dasselbe Dokument erzeugen sollen und irgendwann
+ * auseinanderlaufen. Der Schalter macht sichtbar, dass es ein Dokument in zwei
+ * Formaten ist.
+ */
+async function ausliefern(c: Context<AppEnv>, result: { buffer: Buffer; filename: string }) {
+  const alsPdf = c.req.query("format") === "pdf";
+  if (!alsPdf) {
+    return ausliefern(c, result);
+  }
+  try {
+    const pdf = await docxNachPdf(result.buffer, result.filename);
+    c.header("Content-Type", "application/pdf");
+    c.header("Content-Disposition", contentDisposition(result.filename.replace(/\.docx$/i, ".pdf")));
+    return c.body(new Uint8Array(pdf));
+  } catch (err) {
+    // 503, nicht 500: die Anfrage war richtig, dem Server fehlt ein Werkzeug.
+    if (err instanceof PdfNichtMoeglich) return c.json({ error: err.message }, 503);
+    throw err;
+  }
+}
+
 const DOCX_MIME = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
 function userName(c: { var: { dbUser?: { displayName?: string | null; username?: string } | null } }): string | null {
@@ -120,9 +158,7 @@ exportTemplatesRoutes.get("/export-templates/:id/test", async (c) => {
   const id = c.req.param("id");
   try {
     const result = await renderDocxTest(id, userName(c));
-    c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", contentDisposition(result.filename));
-    return c.body(new Uint8Array(result.buffer));
+    return ausliefern(c, result);
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
     logError("[Export] Test-Render", err);
@@ -204,6 +240,35 @@ exportTemplatesRoutes.delete("/export-templates/:id", async (c) => {
   return c.json({ ok });
 });
 
+// ── Was dieser Server kann ──────────────────────────────────────────────────
+//
+// Die Oberflaeche muss wissen, ob es PDF gibt: LibreOffice ist optional (rund
+// 350 MB, und jedes Offline-Update traegt sie mit). Ein PDF-Knopf, der auf
+// jedem zweiten Server einen Fehler liefert, ist schlechter als keiner.
+exportTemplatesRoutes.get("/exports/faehigkeiten", async (c) => {
+  return c.json({ pdf: await pdfMoeglich() });
+});
+
+// ── Volldump: der ganze Bestand als Markdown-Ordnerbaum ─────────────────────
+//
+// Die Lock-in-Versicherung. Alles, was das Buero eingegeben hat, in einem
+// Format, das jeder Texteditor oeffnet — ohne PATIO, ohne PostgreSQL, ohne
+// Docker.
+//
+// Er ersetzt keine Sicherung: eine Sicherung hilft, wenn PATIO wieder
+// aufgesetzt wird, dieser Baum hilft, wenn es NICHT mehr aufgesetzt wird.
+//
+// Kein Weg an den Rechten vorbei: enthalten ist genau das, was der Fragende
+// auch einzeln abrufen duerfte. Betraege haengen zusaetzlich am Geld-Recht —
+// ein ZIP ist kein JSON, der Antwort-Filter sieht es nicht.
+exportTemplatesRoutes.get("/exports/volldump", async (c) => {
+  const sichtbar = await getVisibleProjectIds(userCtx(c));
+  const strom = await volldumpAlsZip(sichtbar, darfGeldSehen(c));
+  c.header("Content-Type", "application/zip");
+  c.header("Content-Disposition", contentDisposition(`PATIO Volldump ${new Date().toISOString().slice(0, 10)}.zip`));
+  return c.body(strom as unknown as ReadableStream);
+});
+
 // ── Export-Endpoints (das eigentliche Generieren) ────────────────────────────
 
 exportTemplatesRoutes.get("/exports/meeting/:id", async (c) => {
@@ -226,12 +291,50 @@ exportTemplatesRoutes.get("/exports/meeting/:id", async (c) => {
       templateId,
       currentUserName: userName(c),
     });
-    c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", contentDisposition(result.filename));
-    return c.body(new Uint8Array(result.buffer));
+    return ausliefern(c, result);
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
     logError("[Export] Meeting", err);
+    return c.json({ error: "Export fehlgeschlagen" }, 500);
+  }
+});
+
+// ── Rechnung ────────────────────────────────────────────────────────────────
+//
+// Die fuenfte Export-Art, und die einzige, die das Haus wirklich verlaesst.
+// Sie fehlte, obwohl alle Daten im System stehen — Positionen, Menge,
+// Einzelpreis, Umsatzsteuersatz, Phase, Projektnummer.
+//
+// ── Warum hier zusaetzlich das Geld-Recht steht ────────────────────────────
+//
+// Der Antwort-Filter (`src/api/geld.ts`) raeumt Geldfelder aus JSON-Antworten.
+// Eine .docx ist kein JSON: der Filter sieht sie nicht, und die Betraege
+// stehen darin ausgeschrieben. Ohne diese Zeile waere der Rechnungsexport der
+// Weg, auf dem ein Konto ohne Geld-Recht doch an Honorare kommt.
+exportTemplatesRoutes.get("/exports/invoice/:id", async (c) => {
+  const id = c.req.param("id");
+  const templateId = c.req.query("templateId") ?? undefined;
+
+  // 404 vor 403 — sonst verraet der Statuscode, welche IDs es gibt.
+  const rechnung = await invoiceRepo.get(id);
+  if (!rechnung) return c.json({ error: "Rechnung nicht gefunden" }, 404);
+
+  const projektName = await projectRepo.nameById?.(rechnung.projectId);
+  if (!(await darfProjekt(c, projektName))) return c.json({ error: "Kein Zugriff" }, 403);
+  if (!darfGeldSehen(c)) return c.json({ error: "Kein Zugriff auf Geldbetraege" }, 403);
+
+  try {
+    const result = await renderDocxExport({
+      kind: "invoice",
+      invoiceId: id,
+      projectName: projektName ?? undefined,
+      templateId,
+      currentUserName: userName(c),
+    });
+    return ausliefern(c, result);
+  } catch (err) {
+    if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
+    logError("[Export] Rechnung", err);
     return c.json({ error: "Export fehlgeschlagen" }, 500);
   }
 });
@@ -251,9 +354,7 @@ exportTemplatesRoutes.get("/exports/bautagebuch/:id", async (c) => {
       templateId: c.req.query("templateId") ?? undefined,
       currentUserName: userName(c),
     });
-    c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", contentDisposition(result.filename));
-    return c.body(new Uint8Array(result.buffer));
+    return ausliefern(c, result);
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
     logError("[Export] Bautagebuch", err);
@@ -286,9 +387,7 @@ exportTemplatesRoutes.get("/exports/time-entries", async (c) => {
       templateId: c.req.query("templateId") ?? undefined,
       currentUserName: userName(c),
     });
-    c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", contentDisposition(result.filename));
-    return c.body(new Uint8Array(result.buffer));
+    return ausliefern(c, result);
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
     logError("[Export] TimeEntries", err);
@@ -307,9 +406,7 @@ exportTemplatesRoutes.get("/exports/project/:name/summary", async (c) => {
       templateId: c.req.query("templateId") ?? undefined,
       currentUserName: userName(c),
     });
-    c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", contentDisposition(result.filename));
-    return c.body(new Uint8Array(result.buffer));
+    return ausliefern(c, result);
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
     logError("[Export] ProjectSummary", err);

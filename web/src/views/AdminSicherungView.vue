@@ -16,6 +16,7 @@ import { useRouter } from "vue-router";
 import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
+import { dateiHolen } from "../utils/download";
 import { formatDate } from "../utils/format";
 
 interface Stand {
@@ -80,6 +81,25 @@ async function laden() {
   }
 }
 
+// ── Volldump ──────────────────────────────────────────────────────────────
+//
+// Er steht bewusst HIER und nicht unter „Export": eine Sicherung hilft, wenn
+// PATIO wieder aufgesetzt wird — der Volldump hilft, wenn es NICHT mehr
+// aufgesetzt wird. Beides gehört auf dieselbe Seite, weil es dieselbe Frage
+// beantwortet: was bleibt, wenn etwas schiefgeht.
+const dumpLaeuft = ref(false);
+
+async function volldumpHolen() {
+  dumpLaeuft.value = true;
+  fehler.value = null;
+  try {
+    const f = await dateiHolen("/api/exports/volldump", `PATIO Volldump ${new Date().toISOString().slice(0, 10)}.zip`);
+    if (f) fehler.value = f;
+  } finally {
+    dumpLaeuft.value = false;
+  }
+}
+
 onMounted(laden);
 </script>
 
@@ -93,6 +113,24 @@ onMounted(laden);
         durchgelaufen ist — sie löst keine Sicherung aus.
       </p>
     </header>
+
+    <section class="sic-dump">
+      <div>
+        <div class="sic-karte-titel">Alles als Textdateien mitnehmen</div>
+        <p class="sic-karte-text">
+          Ein ZIP mit dem gesamten Bestand als Markdown-Ordnerbaum: ein Ordner je Projekt, darin Stammdaten, Notizen,
+          Aufgaben, Termine, Protokolle, Entscheidungen, Bautagebuch, Phasen, Rechnungen — und die abgelegten Dateien.
+          Lesbar mit jedem Texteditor, ohne PATIO.
+        </p>
+        <p class="sic-karte-text">
+          Das ersetzt <strong>keine</strong> Sicherung. Eine Sicherung hilft, wenn PATIO wieder aufgesetzt wird; dieser
+          Ordnerbaum hilft, wenn es nicht mehr aufgesetzt wird.
+        </p>
+      </div>
+      <button class="patio-btn solid sm" :disabled="dumpLaeuft" @click="volldumpHolen">
+        {{ dumpLaeuft ? "wird erzeugt …" : "Volldump herunterladen" }}
+      </button>
+    </section>
 
     <div v-if="fehler" class="sic-error">{{ fehler }}</div>
     <div v-if="!geladen" class="empty-hint">Lade…</div>
@@ -168,6 +206,25 @@ onMounted(laden);
 </template>
 
 <style scoped>
+.sic-dump {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px dashed var(--color-border);
+  border-radius: 8px;
+}
+.sic-dump button {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+@media (max-width: 700px) {
+  .sic-dump {
+    flex-direction: column;
+  }
+}
+
 .sic-wrap {
   padding: 24px;
   max-width: 900px;
