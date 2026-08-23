@@ -47,6 +47,21 @@ export const LOG_JSONL_KEEP_FILES = parseInt(process.env.LOG_JSONL_KEEP_FILES ||
 // 0 = nie loeschen (manuelle Verwaltung).
 export const AUDIT_RETENTION_DAYS = parseInt(process.env.AUDIT_RETENTION_DAYS || "365", 10);
 
+// ── Verfall von Rang 4 (Aufgabensystem, Migration 050) ─────────────────────
+// Rang 4 heisst "Streichen": weder dringend noch wichtig. Die Spezifikation
+// sieht dafuer einen Verfall nach 30 Tagen vor — sonst waechst genau die
+// Halde, gegen die das ganze System gebaut ist.
+//
+// Verfallen heisst NICHT geloescht: die Aufgabe wandert in den Papierkorb
+// (`deleted_at`) und ist von dort wiederherstellbar. Ein Aufgabensystem, das
+// ungefragt Daten vernichtet, wird zu Recht nie wieder benutzt.
+//
+// Gemessen wird an `updated_at`: jede Beruehrung setzt die Frist zurueck. Wer
+// eine Aufgabe noch anfasst, meint sie noch — das ist das ehrlichste Signal,
+// das ohne eine zusaetzliche Spalte zu haben ist.
+// 0 = abgeschaltet.
+export const RANG4_VERFALL_TAGE = parseInt(process.env.RANG4_VERFALL_TAGE || "30", 10);
+
 // ── Passwoerter ──────────────────────────────────────────────────────────────
 // Seit dem Umbau zum Firmenserver ist das Passwort der EINZIGE Faktor: der
 // Email-Code-Zweig ist entfallen (er brauchte SMTP und war ohne Internet nicht

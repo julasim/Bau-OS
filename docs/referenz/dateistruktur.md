@@ -36,7 +36,7 @@ src/
 │   ├── client.ts         — postgres.js-Verbindungspool
 │   ├── migrate.ts        — SQL-Migrations-Runner
 │   ├── index.ts          — Barrel-Export
-│   └── migrations/       — 56 SQL-Dateien, Nummern bis 054
+│   └── migrations/       — 57 SQL-Dateien, Nummern bis 055
 ├── workspace/            — echter Dateizugriff auf WORKSPACE_PATH
 │   ├── index.ts          — Re-Export
 │   ├── helpers.ts        — safePath, ensureDir, Pfad-Utilities
@@ -413,7 +413,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 
 ### `src/db/migrations/`
 
-56 Dateien, `001` bis `054` (zwei Nummern sind doppelt vergeben: `005` und
+57 Dateien, `001` bis `055` (zwei Nummern sind doppelt vergeben: `005` und
 `006`). Die inhaltlich wichtigsten:
 
 | Migration | Inhalt |
@@ -451,6 +451,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 | `052_projektnummer.sql` | Die Projektnummer wird Pflicht und eindeutig |
 | `053_projektnummer_historie.sql` | Früher vergebene Nummern bleiben auffindbar |
 | `054_projektnummer_bereinigung.sql` | Bereinigung deckungsgleich mit der Anwendung |
+| `055_telegram_pair_tokens.sql` | Letzter Rest der Bot-Ära: die Pair-Token-Tabelle (nur wenn leer) |
 
 ::: tip Die Projektnummer ist die Kennung des Hauses
 `052` bis `054` machen aus einem optionalen Stammdatenfeld die Kennung, unter

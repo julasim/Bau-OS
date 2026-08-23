@@ -24,7 +24,7 @@ einmal:
 | **1** | dringend **und** wichtig — *Sofort* | höchstens 5 offene, über alle Projekte |
 | **2** | wichtig, nicht dringend — *Terminieren* | mindestens eine pro Tag |
 | **3** | dringend, nicht wichtig — *Sammeln* | höchstens 60 Minuten am Tag |
-| **4** | keins von beidem — *Streichen* | — |
+| **4** | keins von beidem — *Streichen* | verfällt nach 30 Tagen in den Papierkorb |
 
 **Der Standard ist 3, nicht 1.** Der Normalfall wird nicht markiert; aktiv
 gesetzt wird nur 1, 2 oder 4. Aus sechzig Entscheidungen pro Abend werden so
@@ -91,6 +91,28 @@ einem gemeinsamen Server würde sonst der eine dem anderen den Tag abräumen.
 Sichtbar sind wie überall nur Aufgaben aus Projekten, die Sie sehen dürfen —
 die drei Ansichten holen den Rechtefilter genauso wie jede andere Route.
 
+## Rang 4 verfällt nach 30 Tagen
+
+Was auf Rang 4 steht und **seit 30 Tagen niemand mehr angefasst hat**, wandert
+im nächtlichen Wartungslauf (03:15) in den **Papierkorb**. Von dort ist es
+wiederherstellbar — verfallen heißt nicht gelöscht.
+
+Sonst wächst genau die Halde, gegen die das ganze System gebaut ist: eine
+Liste, in der neben dem Wichtigen dreihundert Dinge stehen, die man vor einem
+halben Jahr einmal für erwähnenswert hielt.
+
+| Verfällt | Verfällt nicht |
+|---|---|
+| Rang 4, offen, seit 30 Tagen unberührt | Rang 1, 2 und 3 — egal wie alt |
+| | Erledigtes: die Einordnung war richtig, und es wurde trotzdem getan |
+| | Was schon im Papierkorb liegt |
+
+**Jede Berührung setzt die Frist zurück.** Gemessen wird an „zuletzt geändert",
+und dieser Zeitstempel wird von der Datenbank selbst gepflegt — die Anwendung
+kann ihn nicht umgehen. Wer eine Aufgabe noch anfasst, meint sie noch.
+
+Die Frist steht in `RANG4_VERFALL_TAGE`; `0` schaltet den Verfall ab.
+
 ## Grenzen der heutigen Fassung
 
 - **Eingang und Matrix zeigen höchstens 40 Zeilen je Spalte.** Darunter steht,
@@ -100,5 +122,3 @@ die drei Ansichten holen den Rechtefilter genauso wie jede andere Route.
 - **Aufgaben ohne Schätzung zählen mit 0 Minuten** in die Tagessumme. Die
   Auslastung ist damit eine Untergrenze, nicht die Wahrheit — und genau
   deshalb steht die Zahl der ungeschätzten daneben.
-- **Der Verfall von Rang 4 nach 30 Tagen ist noch nicht gebaut.** Die Spalte
-  trägt den Rang, der Cron räumt ihn noch nicht ab.

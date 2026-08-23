@@ -30,6 +30,7 @@ Prozess mit Exit-Code 1, wenn einer fehlt.
 | `DB_ENABLED` | — | — | Abgeleitet: `true`, wenn `DATABASE_URL` gesetzt ist |
 | `DB_AUTO_MIGRATE` | `true` | `DB_AUTO_MIGRATE` | Migrationen beim Start anwenden |
 | `AUDIT_RETENTION_DAYS` | `365` | `AUDIT_RETENTION_DAYS` | Aufbewahrung der Audit-Einträge in Tagen, `0` = nie löschen |
+| `RANG4_VERFALL_TAGE` | `30` | `RANG4_VERFALL_TAGE` | Nach wie vielen Tagen ohne Berührung eine Rang-4-Aufgabe in den Papierkorb wandert, `0` = kein Verfall |
 
 ::: warning DB_ENABLED ist kein Schalter mehr
 `DB_ENABLED` war früher die Weiche zwischen Datenbank- und

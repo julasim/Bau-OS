@@ -24,6 +24,7 @@ Vorlage: `.env.example`. Was hier nicht steht, wird nirgends ausgewertet.
 | `NODE_ENV` | Nein | `development` | `production` schaltet die Härtung scharf |
 | `MAX_UPLOAD_MB` | Nein | `50` | Maximale Dateigröße beim Upload |
 | `AUDIT_RETENTION_DAYS` | Nein | `365` | Aufbewahrung der Audit-Einträge in Tagen, `0` = nie löschen |
+| `RANG4_VERFALL_TAGE` | Nein | `30` | Verfall von Rang-4-Aufgaben in Tagen, `0` = aus |
 | `API_RATE_LIMIT_REQUESTS` | Nein | `600` | Anfragen pro Zeitfenster und IP |
 | `API_RATE_LIMIT_WINDOW_MS` | Nein | `60000` | Zeitfenster des globalen Limits in Millisekunden |
 | `LOG_JSONL_MAX_BYTES` | Nein | `5242880` | Dateigröße, ab der das JSONL-Log rotiert |
@@ -174,6 +175,18 @@ Wie lange Audit-Einträge (Anmeldungen, fehlgeschlagene Versuche,
 Passwort-Resets) aufbewahrt werden. Standard `365` Tage, `0` schaltet das
 automatische Löschen ab. Aufgeräumt wird vom Wartungs-Cron
 (`src/maintenance.ts`).
+
+### RANG4_VERFALL_TAGE
+
+Nach wie vielen Tagen **ohne Berührung** eine Aufgabe auf Rang 4
+(„Streichen") in den Papierkorb wandert. Standard `30`, `0` schaltet den
+Verfall ab. Gerechnet wird gegen „zuletzt geändert" — jede Bearbeitung setzt
+die Frist zurück.
+
+Verfallen heißt **nicht gelöscht**: die Aufgabe steht danach im Papierkorb und
+lässt sich zurückholen. Erledigtes und die Ränge 1 bis 3 sind nie betroffen.
+Ausgeführt wird das im selben Wartungs-Cron um 03:15. Hintergrund:
+[Das Aufgabensystem](/konzepte/aufgabensystem).
 
 ### LOG_JSONL_MAX_BYTES / LOG_JSONL_KEEP_FILES
 

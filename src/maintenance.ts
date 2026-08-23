@@ -5,9 +5,13 @@
 // die nicht jedes mal beim Boot getriggert werden sollen:
 //
 //   - Audit-Log: Eintraege aelter als AUDIT_RETENTION_DAYS loeschen
-//   - Telegram-Pair-Tokens: abgelaufene weg (zur Sicherheit, normal
-//     putzt redeemPairToken die schon mit, aber wenn nie eingeloest
-//     bleiben sie im Worst-Case bis ein neuer Token erstellt wird)
+//   - Rang-4-Verfall: was seit RANG4_VERFALL_TAGE niemand angefasst hat,
+//     wandert in den Papierkorb (Aufgabensystem, Migration 050)
+//
+// Hier stand bis zuletzt ein dritter Punkt: das Aufraeumen abgelaufener
+// Telegram-Pair-Tokens. Den Bot gibt es seit AP0 nicht mehr, in die Tabelle
+// schreibt keine Zeile Code — der Job putzte jede Nacht einen Bestand, der
+// nicht mehr waechst. Migration 055 raeumt die Tabelle selbst ab.
 //
 // Cron: jeden Tag um 03:15 Uhr (in TIMEZONE). Versetzt zur 03:00-Uhr-
 // Backup-Zeit, damit der Dump nicht gerade waehrend einer DELETE-
@@ -18,7 +22,7 @@
 // ============================================================
 
 import cron from "node-cron";
-import { TIMEZONE, AUDIT_RETENTION_DAYS } from "./config.js";
+import { TIMEZONE, AUDIT_RETENTION_DAYS, RANG4_VERFALL_TAGE } from "./config.js";
 import { logInfo, logError } from "./logger.js";
 
 /** Loescht Audit-Eintraege aelter als AUDIT_RETENTION_DAYS.
@@ -31,27 +35,41 @@ async function cleanupAuditLog(): Promise<number | null> {
   return deleteOlderThan(cutoff);
 }
 
-/** Loescht abgelaufene Telegram-Pair-Tokens. Idempotent — wenn keine
- *  da sind, ist das ein No-op. */
-async function cleanupPairTokens(): Promise<number> {
-  const { getDb } = await import("./db/client.js");
-  const db = getDb();
-  const result = await db`DELETE FROM telegram_pair_tokens WHERE expires_at < now()`;
-  return result.count;
+/** Laesst Rang-4-Aufgaben verfallen — in den Papierkorb, nicht ins Nichts.
+ *  Begruendung der Frist und des Zeitmassstabs: `RANG4_VERFALL_TAGE` in
+ *  src/config.ts. Liefert die Anzahl oder null bei abgeschaltetem Verfall. */
+async function rang4Verfall(): Promise<number | null> {
+  if (RANG4_VERFALL_TAGE <= 0) return null;
+  const { aufgabensystemRepo } = await import("./data/index.js");
+  return aufgabensystemRepo.rang4Verfall(RANG4_VERFALL_TAGE);
 }
 
 async function runMaintenance(): Promise<void> {
+  // Jeder Schritt einzeln abgesichert. Vorher lagen sie in EINEM try: warf
+  // der zweite, blieb die Erfolgsmeldung des ersten ungeschrieben, und im
+  // Log stand nur der Fehler — der Lauf sah aus, als haette er gar nichts
+  // getan. Jetzt scheitert hoechstens der eine Schritt.
+  const parts: string[] = [];
+
   try {
     const auditDeleted = await cleanupAuditLog();
-    const pairDeleted = await cleanupPairTokens();
-    const parts: string[] = [];
     if (auditDeleted !== null) parts.push(`Audit: ${auditDeleted} Eintraege > ${AUDIT_RETENTION_DAYS}d geloescht`);
-    if (pairDeleted > 0) parts.push(`Pair-Tokens: ${pairDeleted} abgelaufene weg`);
-    if (parts.length === 0) parts.push("nichts zu tun");
-    logInfo(`[Maintenance] ${parts.join("; ")}`);
   } catch (err) {
-    logError("[Maintenance]", err);
+    logError("[Maintenance] Audit-Retention", err);
+    parts.push("Audit: FEHLER (siehe Log)");
   }
+
+  try {
+    const verfallen = await rang4Verfall();
+    if (verfallen !== null && verfallen > 0) {
+      parts.push(`Rang 4: ${verfallen} Aufgabe(n) nach ${RANG4_VERFALL_TAGE}d in den Papierkorb`);
+    }
+  } catch (err) {
+    logError("[Maintenance] Rang-4-Verfall", err);
+    parts.push("Rang-4-Verfall: FEHLER (siehe Log)");
+  }
+
+  logInfo(`[Maintenance] ${parts.length ? parts.join("; ") : "nichts zu tun"}`);
 }
 
 // ── Tageswechsel (Aufgabensystem, Migration 050) ────────────────────────────
@@ -95,7 +113,9 @@ export function startMaintenanceCron(): void {
     },
     { timezone: TIMEZONE },
   );
-  logInfo(`[Maintenance] Cron registriert: 03:15 ${TIMEZONE} (Audit-Retention ${AUDIT_RETENTION_DAYS}d)`);
+  logInfo(
+    `[Maintenance] Cron registriert: 03:15 ${TIMEZONE} (Audit-Retention ${AUDIT_RETENTION_DAYS}d, Rang-4-Verfall ${RANG4_VERFALL_TAGE > 0 ? `${RANG4_VERFALL_TAGE}d` : "aus"})`,
+  );
 
   // Tageswechsel um Mitternacht — siehe Begruendung ueber `tageswechsel()`.
   cron.schedule(

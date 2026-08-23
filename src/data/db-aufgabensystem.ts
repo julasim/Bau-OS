@@ -261,4 +261,52 @@ export const dbAufgabensystem = {
     `;
     return rows.length;
   },
+
+  /**
+   * Verfall von Rang 4 — was seit `tage` Tagen niemand mehr angefasst hat,
+   * wandert in den Papierkorb.
+   *
+   * ── Warum Papierkorb und nicht DELETE ──────────────────────────────────
+   *
+   * Weil ein System, das ungefragt Daten vernichtet, zu Recht nie wieder
+   * benutzt wird. `deleted_at` ist derselbe Weg, den auch das Loeschen von
+   * Hand nimmt (Migration 049) — die Aufgabe steht danach im Papierkorb und
+   * laesst sich zurueckholen.
+   *
+   * ── Warum `updated_at` und nicht `created_at` ──────────────────────────
+   *
+   * Weil jede Beruehrung die Frist zuruecksetzen soll. Wer eine Aufgabe noch
+   * anfasst, meint sie noch. Eine eigene Spalte `rang_seit` waere genauer,
+   * aber sie muesste an jeder Schreibstelle mitgepflegt werden — und eine
+   * Spalte, die irgendwo vergessen wird, ist schlechter als eine, die
+   * unvermeidlich mitlaeuft.
+   *
+   * „Unvermeidlich" ist woertlich gemeint: auf `tasks` liegt der Trigger
+   * `trg_tasks_updated_at`, der `updated_at` bei JEDEM Schreibvorgang auf
+   * `now()` setzt — bedingungslos, ohne dass eine Route etwas dazu tun muss.
+   * Der Zeitstempel laesst sich also von der Anwendung aus nicht faelschen,
+   * und genau darauf beruht diese Frist.
+   *
+   * ── Was ausdruecklich NICHT verfaellt ──────────────────────────────────
+   *
+   * Erledigtes (`status = 'done'`) — dort ist Rang 4 die richtige Antwort
+   * gewesen, und der Nachweis, dass etwas getan wurde, gehoert nicht in den
+   * Papierkorb. Und was bereits im Papierkorb liegt.
+   *
+   * Liefert die Anzahl verfallener Aufgaben (fuers Protokoll).
+   */
+  async rang4Verfall(tage: number): Promise<number> {
+    if (!Number.isFinite(tage) || tage <= 0) return 0;
+    const db = getDb();
+    const rows = await db`
+      UPDATE tasks
+         SET deleted_at = now()
+       WHERE rang = 4
+         AND status <> 'done'
+         AND deleted_at IS NULL
+         AND updated_at < now() - make_interval(days => ${Math.floor(tage)})
+       RETURNING id
+    `;
+    return rows.length;
+  },
 };
