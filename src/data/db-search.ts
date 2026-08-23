@@ -127,6 +127,16 @@ function clampLimit(limit: number): number {
 //
 // Ein Treffer auf der Nummer zaehlt wie ein Treffer im Namen (TITEL_BONUS):
 // wer eine Aktennummer eintippt, sucht dieses eine Projekt und nichts sonst.
+//
+// ── Frueher vergebene Nummern (Migration 053) ───────────────────────────────
+//
+// Sie werden mitdurchsucht, aber OHNE Titel-Bonus. Wer eine alte Nummer
+// eintippt, hat meist ein aelteres Dokument in der Hand — der Treffer ist
+// richtig, aber ein Projekt, das die Nummer AKTUELL traegt, ist der bessere.
+//
+// Ohne Index: `array_to_string` ist STABLE und darf nicht in einen
+// Ausdrucks-Index (siehe Migration 053). Die Projekttabelle hat einige hundert
+// Zeilen, den Durchlauf macht die Suche ohnehin.
 export const dbSearch = {
   /**
    * Sucht ueber Notizen, Aufgaben, Projekte und Dateien.
@@ -227,7 +237,8 @@ export const dbSearch = {
                         THEN ${TITEL_BONUS}::real ELSE 0 END
             FROM projects pr, frage
            -- ILIKE auch auf der Projektnummer -- Begruendung ueber der Funktion.
-           WHERE (pr.such_text @@ frage.tsq OR pr.name ILIKE ${like} OR pr.projektnummer ILIKE ${like})
+           WHERE (pr.such_text @@ frage.tsq OR pr.name ILIKE ${like} OR pr.projektnummer ILIKE ${like}
+                  OR array_to_string(pr.projektnummer_frueher, ' ') ILIKE ${like})
              AND pr.deleted_at IS NULL
              AND (${all} OR pr.id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR pr.id = ${projectId}::uuid)

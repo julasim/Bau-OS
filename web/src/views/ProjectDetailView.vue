@@ -24,6 +24,8 @@ interface ProjectInfo {
   color?: string | null;
   // Stammdaten (Migration 004) — im Hero-Bereich mit Inline-Editor.
   projektnummer?: string | null;
+  /** Frueher vergebene Nummern (Migration 053) — fuer „frueher: …" im Kopf. */
+  projektnummerFrueher?: string[];
   bauherr?: string | null;
   standort?: string | null;
   projektart?: string | null;
@@ -2244,6 +2246,15 @@ async function deleteMeeting() {
           <span v-if="anzeigeNummer(info.projektnummer)">Nr. {{ anzeigeNummer(info.projektnummer) }}</span>
           <!-- Fehlt sie, ist das keine Luecke, sondern eine offene Aufgabe. -->
           <span v-else class="pd-nr-fehlt">Projektnummer fehlt</span>
+          <!-- Frueher vergebene Nummern (Migration 053). Sie stehen hier, weil
+               versendete Dokumente sie tragen — wer eines in der Hand haelt,
+               soll im Projekt sehen, dass es dazugehoert. -->
+          <template v-if="info.projektnummerFrueher?.length">
+            <span class="sep"></span>
+            <span class="pd-nr-frueher" :title="'Diese Nummern trug das Projekt einmal'">
+              früher: {{ info.projektnummerFrueher.join(", ") }}
+            </span>
+          </template>
         </div>
       </div>
 
@@ -3977,6 +3988,10 @@ async function deleteMeeting() {
 <style scoped>
 .pd-nr-fehlt {
   color: var(--warn);
+}
+.pd-nr-frueher {
+  color: var(--fg-subtle);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ── Module-Popover (Phase 6e) ──────────────────────────────────────── */

@@ -8,7 +8,7 @@ import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Project, ProjectAccessEntry, ProjectCreateOptions, ProjectRepository, ProjectUpdate } from "./types.js";
 import { alsIso } from "./zeitstempel.js";
-import { pruefeProjektnummer, vergleichbar, istNummerVergeben } from "./projektnummer.js";
+import { pruefeProjektnummer, vergleichbar, istNummerVergeben, istPlatzhalter } from "./projektnummer.js";
 
 // Mapping: camelCase-API-Feld ↔ snake_case-Spaltenname.
 // Wird beim dynamischen UPDATE genutzt, um tippfest aus dem Patch auf
@@ -18,6 +18,7 @@ const UPDATE_COLUMNS: Record<keyof ProjectUpdate, string> = {
   status: "status",
   color: "color",
   projektnummer: "projektnummer",
+  projektnummerFrueher: "projektnummer_frueher",
   bauherr: "bauherr",
   standort: "standort",
   projektart: "projektart",
@@ -50,6 +51,7 @@ function rowToProjectInfo(row: Record<string, unknown>): Project {
     status: String(row.status),
     color: row.color ? String(row.color) : null,
     projektnummer: row.projektnummer ? String(row.projektnummer) : null,
+    projektnummerFrueher: Array.isArray(row.projektnummer_frueher) ? row.projektnummer_frueher.map(String) : [],
     bauherr: row.bauherr ? String(row.bauherr) : null,
     standort: row.standort ? String(row.standort) : null,
     projektart: row.projektart ? String(row.projektart) : null,
@@ -84,7 +86,7 @@ function projectInfoSelect(db: ReturnType<typeof getDb>) {
   return db`
     SELECT
       p.id, p.rev, p.name, p.description, p.status, p.color,
-      p.projektnummer, p.bauherr, p.standort, p.projektart, p.nutzung,
+      p.projektnummer, p.projektnummer_frueher, p.bauherr, p.standort, p.projektart, p.nutzung,
       p.phase, p.start_date, p.end_date,
       p.bauherr_id, p.parent_id,
       p.created_by,
@@ -333,13 +335,15 @@ export const dbProjects: ProjectRepository = {
       patch = { ...patch, projektnummer: geprueft.nummer };
     }
 
-    // Nur Felder mit explizit gesetztem Wert (inkl. null!) in das UPDATE
-    // aufnehmen. undefined = unveraendert, null = leeren.
-    const entries = Object.entries(patch).filter(([, v]) => v !== undefined) as [
-      keyof ProjectUpdate,
-      ProjectUpdate[keyof ProjectUpdate],
-    ][];
-    if (entries.length === 0) return false;
+    // Ist ueberhaupt etwas zu tun? Die eigentliche Feldliste wird ERST WEITER
+    // UNTEN gebaut, wenn der Patch endgueltig ist — dazwischen ergaenzt ihn
+    // die Historie der Projektnummer (Migration 053).
+    //
+    // Diese Reihenfolge ist mit Absicht so und hat mich zweimal erwischt: eine
+    // Liste, die aus dem Patch gebaut und danach nur noch gelesen wird, nimmt
+    // spaetere Ergaenzungen NICHT mit — still, ohne Fehler, ohne Test, der
+    // ohne Datenbank anschlaegt.
+    if (Object.values(patch).every((v) => v === undefined)) return false;
 
     // Existenz pruefen (sonst wuerde UPDATE stillschweigend 0 Zeilen aendern).
     const [existing] = await db`SELECT id, rev FROM projects WHERE name = ${name} LIMIT 1`;
@@ -356,6 +360,41 @@ export const dbProjects: ProjectRepository = {
       return false;
     }
 
+    // ── Die Projektnummer, Teil 2a: die alte aufheben (Migration 053) ─────
+    //
+    // Direkt hier und nicht als eigener Aufruf: die Historie muss in DERSELBEN
+    // Anweisung fortgeschrieben werden wie die Nummer selbst. Zwei getrennte
+    // UPDATEs koennten zwischen sich scheitern, und dann stuende die neue
+    // Nummer da, ohne dass die alte irgendwo auffindbar waere.
+    //
+    // Nicht aufgehoben werden: der Platzhalter aus 052 (er war nie eine
+    // Aktennummer) und eine Nummer, die schon in der Liste steht (Hin- und
+    // Zurueckkorrigieren soll sie nicht doppelt eintragen).
+    if (patch.projektnummer) {
+      const [alt] =
+        await db`SELECT projektnummer, projektnummer_frueher FROM projects WHERE id = ${String(existing.id)}`;
+      const alteNummer = alt?.projektnummer ? String(alt.projektnummer) : null;
+      const bisher: string[] = Array.isArray(alt?.projektnummer_frueher) ? alt.projektnummer_frueher.map(String) : [];
+      // Die Liste beantwortet EINE Frage: welche Nummern trug dieses Projekt
+      // einmal und traegt sie nicht mehr? Daraus folgen beide Schritte.
+      //
+      // Anhaengen: die bisherige Nummer, sofern sie eine echte war (nicht der
+      // Platzhalter aus 052) und noch nicht drinsteht.
+      //
+      // Entfernen: die NEUE Nummer, falls sie schon einmal drin war. Ohne
+      // diesen Schritt stuende nach einer Rueckkorrektur (016 → 014 → 016) die
+      // aktuelle Nummer unter „frueher: …" — gemessen, so ist dieser Fall
+      // aufgefallen.
+      const anhaengen = alteNummer && !istPlatzhalter(alteNummer) && !bisher.includes(alteNummer) ? [alteNummer] : [];
+      const neueListe = [...bisher, ...anhaengen].filter((n) => n !== patch.projektnummer);
+      // Nur schreiben, wenn sich wirklich etwas aendert — sonst zaehlt jeder
+      // Speichervorgang den Konflikt-Zaehler hoch, ohne dass etwas passiert.
+      const gleich = neueListe.length === bisher.length && neueListe.every((n, i) => n === bisher[i]);
+      if (alteNummer !== patch.projektnummer && !gleich) {
+        patch = { ...patch, projektnummerFrueher: neueListe };
+      }
+    }
+
     // ── Die Projektnummer, Teil 2: ist sie frei? ──────────────────────────
     // Erst hier, weil dafuer die eigene ID bekannt sein muss — sonst meldete
     // jedes Speichern ohne Nummernaenderung „schon vergeben", naemlich an
@@ -369,6 +408,14 @@ export const dbProjects: ProjectRepository = {
       if (belegt) return "nummer-vergeben";
     }
 
+    // Jetzt ist der Patch endgueltig: Nummer geprueft und bereinigt, Historie
+    // ergaenzt, Eindeutigkeit bestaetigt.
+    const entries = Object.entries(patch).filter(([, v]) => v !== undefined) as [
+      keyof ProjectUpdate,
+      ProjectUpdate[keyof ProjectUpdate],
+    ][];
+    if (entries.length === 0) return false;
+
     // Dynamisches UPDATE per postgres.js — fuer jede Spalte ein eigener
     // Parameter, damit SQL-Injection ausgeschlossen ist. Spaltennamen
     // kommen aus der fix gemappten UPDATE_COLUMNS-Tabelle (Whitelist).
@@ -376,13 +423,20 @@ export const dbProjects: ProjectRepository = {
     // postgres.js bietet kein natives "dynamic SET" — wir bauen das manuell
     // mit db.unsafe fuer die Spaltennamen + geparametrisierte Werte.
     const setFragments: string[] = [];
-    // postgres.js unsafe() erwartet einen konkreten SQL-Parameter-Typ;
-    // (string | null) deckt alles ab, was wir via ProjectUpdate patchen.
-    const values: (string | null)[] = [];
+    // postgres.js unsafe() erwartet konkrete SQL-Parameter-Typen. Bis
+    // Migration 053 war das ausnahmslos `string | null` — seither gibt es mit
+    // `projektnummer_frueher` eine Feld-Spalte (`text[]`).
+    //
+    // Das `String(val)` unten haette daraus stillschweigend eine Zeichenkette
+    // gemacht: aus `["SAZTG-2026-014"]` wird `"SAZTG-2026-014"`, und aus zwei
+    // Eintraegen eine komma-getrennte Zeichenkette. Postgres haette das
+    // zurueckgewiesen — oder, schlimmer, als einelementiges Feld angenommen
+    // und die Historie beim zweiten Aendern zusammengeschoben.
+    const values: (string | string[] | null)[] = [];
     for (const [key, val] of entries) {
       const col = UPDATE_COLUMNS[key];
       if (!col) continue; // sollte nicht passieren (Typ-Guard)
-      values.push(val == null ? null : String(val));
+      values.push(val == null ? null : Array.isArray(val) ? val.map(String) : String(val));
       setFragments.push(`${col} = $${values.length}`);
     }
     // Kein einziges Feld war patchbar (z.B. nur unbekannte Schluessel im

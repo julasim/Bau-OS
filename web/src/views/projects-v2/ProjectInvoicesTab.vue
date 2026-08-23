@@ -163,9 +163,41 @@ function emptyDraft(): InvoiceDraft {
     note: "",
   };
 }
-function newInvoice() {
+/** Die naechste freie Rechnungsnummer, aus der Projektnummer abgeleitet.
+ *
+ *  Ein VORSCHLAG: die Rechnungsnummer ist steuerlich relevant, und Stornos,
+ *  uebernommene Vorgaenge und Korrekturen folgen keinem Schema. Er steht im
+ *  Feld und laesst sich ueberschreiben.
+ *
+ *  Erst beim Anlegen geholt und nicht beim Seitenaufbau — beim Bearbeiten
+ *  einer bestehenden Rechnung waere er falsch. */
+async function newInvoice() {
   draft.value = emptyDraft();
+  try {
+    const { vorschlag } = await api.get<{ vorschlag: string | null }>(
+      `/projects/${encodeURIComponent(props.projectName)}/invoices/naechste-nummer`,
+    );
+    // Nur setzen, wenn das Formular noch leer ist: der Aufruf ist
+    // asynchron, und wer schnell tippt, soll nicht ueberschrieben werden.
+    if (vorschlag && draft.value && draft.value.nummer === "") draft.value.nummer = vorschlag;
+  } catch {
+    // Ein fehlender Vorschlag ist kein Fehler — das Projekt hat dann keine
+    // (echte) Nummer. Das Feld bleibt leer und ist von Hand ausfuellbar.
+  }
 }
+
+/** Traegt eine ANDERE Rechnung dieses Projekts bereits diese Nummer?
+ *
+ *  Warnung, keine Sperre. Ein Doppel kann gewollt sein (Korrektur, Storno,
+ *  uebernommener Vorgang) — die Software kennt die Buchhaltung des Hauses
+ *  nicht gut genug, um das zu verbieten. */
+const nummerDoppelt = computed(() => {
+  const d = draft.value;
+  if (!d) return false;
+  const n = d.nummer.trim().toLowerCase();
+  if (!n) return false;
+  return invoices.value.some((i) => i.id !== d.id && (i.nummer ?? "").trim().toLowerCase() === n);
+});
 function selectInvoice(inv: ProjectInvoice) {
   draft.value = {
     id: inv.id,
@@ -347,7 +379,12 @@ onMounted(() => void load());
           <div class="ph-field-row">
             <div class="ph-field">
               <label class="ph-label">Nummer</label>
-              <input v-model="draft.nummer" type="text" class="stamm-input" placeholder="z. B. 2026-014" />
+              <input v-model="draft.nummer" type="text" class="stamm-input" placeholder="z. B. SAZTG-2026-014-R01" />
+              <!-- Warnung, keine Sperre: ein Doppel kann gewollt sein
+                   (Korrektur, Storno, übernommener Vorgang). -->
+              <p v-if="nummerDoppelt" class="inv-nr-warnung">
+                Diese Nummer trägt bereits eine andere Rechnung dieses Projekts.
+              </p>
             </div>
             <div class="ph-field">
               <label class="ph-label">
@@ -458,6 +495,13 @@ onMounted(() => void load());
 </template>
 
 <style scoped>
+.inv-nr-warnung {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--warn);
+}
+
 .inv-summary {
   display: flex;
   gap: 1px;

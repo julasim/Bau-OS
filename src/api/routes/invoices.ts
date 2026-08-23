@@ -47,6 +47,21 @@ invoicesRoutes.get("/projects/:projectName/invoices", async (c) => {
   return c.json(await invoiceRepo.list(proj.id));
 });
 
+// Vorschlag fuer die naechste Rechnungsnummer, abgeleitet aus der
+// Projektnummer (Migration 052). Eigene Route und nicht Teil der Liste: die
+// Oberflaeche braucht ihn nur beim Anlegen, und die Liste wird bei jedem
+// Seitenaufbau geholt.
+//
+// KEIN Geld-Recht noetig — eine Nummer ist kein Betrag. Der Filter aus
+// `src/api/geld.ts` laesst das Feld ohnehin durch; die Schreibsperre weiter
+// unten gilt weiterhin.
+invoicesRoutes.get("/projects/:projectName/invoices/naechste-nummer", async (c) => {
+  const proj = await resolveProject(c);
+  if ("error" in proj) return proj.error;
+  const vorschlag = invoiceRepo.naechsteNummer ? await invoiceRepo.naechsteNummer(proj.id) : null;
+  return c.json({ vorschlag });
+});
+
 // Rechnungen anlegen, aendern und loeschen ist Geldarbeit. Lesen faellt
 // ohnehin durch den Antwort-Filter (die Betraege fehlen dann), aber Schreiben
 // muss ausdruecklich verwehrt werden — sonst koennte jemand Betraege setzen,

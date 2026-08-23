@@ -10,6 +10,7 @@ import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { ProjectInvoice, InvoicePosition, InvoiceRepository } from "./types.js";
 import { alsIso } from "./zeitstempel.js";
+import { istPlatzhalter } from "./projektnummer.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -100,6 +101,47 @@ export const dbInvoices: InvoiceRepository = {
       [projectId],
     );
     return rows.map((r) => rowToInvoice(r as Record<string, unknown>));
+  },
+
+  /**
+   * Schlaegt die naechste Rechnungsnummer fuer ein Projekt vor.
+   *
+   * Form: `<Projektnummer>-R<NN>`, also z. B. `SAZTG-2026-014-R03`.
+   *
+   * ── Warum ein Vorschlag und keine Vergabe ─────────────────────────────────
+   *
+   * Die Rechnungsnummer ist steuerlich relevant. Eine Software, die die
+   * Buchhaltung des Hauses nicht kennt, sollte sie nicht erzwingen: Stornos,
+   * uebernommene Vorgaenge und Korrekturen brauchen Nummern, die aus keinem
+   * Schema folgen. Der Vorschlag nimmt die Arbeit ab, die Entscheidung bleibt
+   * beim Buero.
+   *
+   * ── Warum nicht einfach `Anzahl + 1` ──────────────────────────────────────
+   *
+   * Weil geloeschte oder von Hand umbenannte Rechnungen die Zaehlung
+   * verschieben und der Vorschlag dann auf eine bereits vergebene Nummer
+   * zeigt. Gezaehlt wird deshalb der hoechste tatsaechlich vergebene Zaehler
+   * IN DIESER FORM; alles, was nicht so aussieht, wird uebergangen.
+   *
+   * Liefert `null`, wenn das Projekt keine (echte) Nummer hat — dann gibt es
+   * nichts, wovon sich etwas ableiten liesse.
+   */
+  async naechsteNummer(projectId) {
+    const db = getDb();
+    const [p] = await db`SELECT projektnummer FROM projects WHERE id = ${projectId} LIMIT 1`;
+    const basis = p?.projektnummer ? String(p.projektnummer) : null;
+    if (!basis || istPlatzhalter(basis)) return null;
+
+    const rows = await db`SELECT nummer FROM project_invoices WHERE project_id = ${projectId}`;
+    let hoechste = 0;
+    // Der Praefix wird fuer die Regex maskiert: eine Projektnummer ist
+    // Freitext und kann `(`, `.` oder `+` enthalten.
+    const muster = new RegExp("^" + basis.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "-R(\\d+)$", "i");
+    for (const r of rows) {
+      const treffer = r.nummer ? muster.exec(String(r.nummer)) : null;
+      if (treffer) hoechste = Math.max(hoechste, Number(treffer[1]));
+    }
+    return `${basis}-R${String(hoechste + 1).padStart(2, "0")}`;
   },
 
   async get(id) {

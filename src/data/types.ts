@@ -154,6 +154,16 @@ export interface Project {
   color?: string | null;
   tags?: string[];
   // Stammdaten (Migration 004) — strukturiert statt als Textblock in description.
+  /** Frueher vergebene Projektnummern (Migration 053), aelteste zuerst.
+   *
+   *  Eine von Hand vergebene Kennung wird korrigiert. Ohne diese Liste faende
+   *  man ein bereits versendetes Dokument mit der alten Nummer im Programm
+   *  nicht mehr wieder — jede Ausgabe zieht die Nummer live, kein
+   *  Kind-Datensatz haelt einen Schnappschuss.
+   *
+   *  Sie blockieren die Wiedervergabe NICHT: sonst waere jeder Tippfehler eine
+   *  dauerhaft verbrannte Nummer. */
+  projektnummerFrueher?: string[];
   /** Die Kennung, unter der das Projekt im Haus gefuehrt wird (Migration 052).
    *  Pflicht und eindeutig; sie loest die UUID nach aussen ab. Optional im Typ
    *  bleibt sie nur, weil aeltere Antworten aus dem Papierkorb und aus
@@ -230,6 +240,10 @@ export interface ProjectUpdate {
   status?: string | null;
   color?: string | null;
   projektnummer?: string | null;
+  /** Frueher vergebene Nummern (Migration 053). Wird NICHT vom Aufrufer
+   *  gesetzt — `update()` schreibt die Liste selbst fort, wenn sich die Nummer
+   *  aendert. Steht hier, damit das dynamische UPDATE die Spalte kennt. */
+  projektnummerFrueher?: string[];
   bauherr?: string | null;
   standort?: string | null;
   projektart?: string | null;
@@ -1285,6 +1299,13 @@ export interface PhaseRepository {
 }
 
 export interface InvoiceRepository {
+  /** Schlaegt die naechste Rechnungsnummer eines Projekts vor
+   *  (`<Projektnummer>-R<NN>`, Migration 052/053). Ein VORSCHLAG, keine
+   *  Vergabe: die Rechnungsnummer ist steuerlich relevant, und Stornos,
+   *  uebernommene Vorgaenge und Korrekturen folgen keinem Schema.
+   *  `null`, wenn das Projekt keine echte Nummer hat. */
+  naechsteNummer?(projectId: string): Promise<string | null>;
+
   list(projectId: string): Promise<ProjectInvoice[]>;
   /** Einzelne Rechnung — fuer ACL-Pruefung vor Mutationen. */
   get(id: string): Promise<ProjectInvoice | null>;
