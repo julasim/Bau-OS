@@ -275,7 +275,15 @@ export interface ProjectUpdate {
  *  ist ein 400, das andere ein 409. */
 export type ProjectUpdateErgebnis = boolean | "nummer-fehlt" | "nummer-vergeben";
 
-export type ProjectCreateErgebnis = "ok" | "ungueltiger-name" | "nummer-fehlt" | "nummer-vergeben";
+export type ProjectCreateErgebnis =
+  | "ok"
+  | "ungueltiger-name"
+  | "nummer-fehlt"
+  | "nummer-vergeben"
+  /** Der Name gehoert einem Projekt im Papierkorb. Frueher wurde es hier still
+   *  zurueckgeholt — ohne Rechtepruefung und ohne dass es jemand merkte.
+   *  Zurueckholen geht ueber `POST /projects/:name/wiederherstellen`. */
+  | "name-im-papierkorb";
 
 export interface ProjectCreateOptions {
   description?: string | null;

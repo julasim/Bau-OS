@@ -4,7 +4,7 @@ import type { MemberType, ContactLogEntry } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import { darfGeldSehen } from "../geld.js";
-import { getVisibleProjectIds } from "../../data/access.js";
+import { getVisibleProjectIds, canSeeProject } from "../../data/access.js";
 
 export const teamRoutes = new Hono<AppEnv>();
 
@@ -139,6 +139,11 @@ teamRoutes.post("/team/:id/projects", async (c) => {
   const body = await c.req.json<{ projectId: string; projectRole?: string | null }>();
   if (!body.projectId) return c.json({ error: "projectId erforderlich" }, 400);
   if (!teamRepo.assignToProject) return c.json({ error: "Nicht unterstützt" }, 501);
+  // Der Projektbezug aus Body bzw. Pfad ist eine Behauptung des Aufrufers,
+  // keine Berechtigung — dieselbe Regel wie in src/api/routes/projects.ts.
+  if (!(await canSeeProject({ userId: c.var.userId, role: c.var.userRole }, body.projectId))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
 
   const ok = await teamRepo.assignToProject(memberId, body.projectId, body.projectRole ?? null);
   if (!ok) return c.json({ error: "Zuordnung fehlgeschlagen" }, 500);
@@ -149,7 +154,10 @@ teamRoutes.post("/team/:id/projects", async (c) => {
       actorId: c.var.userId,
     },
   );
-  const member = await teamRepo.get(memberId);
+  // Mit Sichtbarkeitsfilter: sonst stuenden in der Antwort auch die
+  // Projektzuordnungen, die der Aufrufer gar nicht sehen darf — Name und ID
+  // inklusive.
+  const member = await teamRepo.get(memberId, await sichtbar(c));
   return c.json(member);
 });
 
@@ -159,6 +167,11 @@ teamRoutes.patch("/team/:id/projects/:projectId", async (c) => {
   const projectId = c.req.param("projectId");
   const body = await c.req.json<{ projectRole?: string | null }>();
   if (!teamRepo.updateProjectRole) return c.json({ error: "Nicht unterstützt" }, 501);
+  // Der Projektbezug aus Body bzw. Pfad ist eine Behauptung des Aufrufers,
+  // keine Berechtigung — dieselbe Regel wie in src/api/routes/projects.ts.
+  if (!(await canSeeProject({ userId: c.var.userId, role: c.var.userRole }, projectId))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
 
   const ok = await teamRepo.updateProjectRole(memberId, projectId, body.projectRole ?? null);
   if (!ok) return c.json({ error: "Zuordnung nicht gefunden" }, 404);
@@ -171,6 +184,11 @@ teamRoutes.delete("/team/:id/projects/:projectId", async (c) => {
   const memberId = c.req.param("id");
   const projectId = c.req.param("projectId");
   if (!teamRepo.unassignFromProject) return c.json({ error: "Nicht unterstützt" }, 501);
+  // Der Projektbezug aus Body bzw. Pfad ist eine Behauptung des Aufrufers,
+  // keine Berechtigung — dieselbe Regel wie in src/api/routes/projects.ts.
+  if (!(await canSeeProject({ userId: c.var.userId, role: c.var.userRole }, projectId))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
 
   const ok = await teamRepo.unassignFromProject(memberId, projectId);
   if (ok) {

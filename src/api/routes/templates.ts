@@ -32,6 +32,13 @@ import {
   deleteCustomVariable,
 } from "../../data/db-custom-placeholders.js";
 import { adminMiddleware } from "../auth.js";
+import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
+
+/** Hilfs-Builder: holt UserCtx aus dem Hono-Context — dieselbe Form wie in
+ *  src/api/routes/projects.ts. */
+function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+  return { userId: c.var.userId, role: c.var.userRole };
+}
 
 export const templatesRoutes = new Hono<AppEnv>();
 
@@ -125,6 +132,22 @@ templatesRoutes.get("/templates/:id/render", async (c) => {
   const project = c.req.query("project") ?? null;
   const dbUser = c.var.dbUser;
   const userName = dbUser?.displayName ?? dbUser?.username ?? null;
+
+  // Der Projektname aus der Abfragezeichenfolge ist eine Behauptung des
+  // Aufrufers, keine Berechtigung.
+  //
+  // `buildVariables()` (src/data/db-templates.ts) liest die Projekt-Stammdaten
+  // ohne jeden ACL-Aufruf — Projektnummer, Bauherr, Standort, Projektart,
+  // Nutzung, Phase. Gemessen am 2026-08-23: ein Konto ohne Recht bekam auf
+  // `GET /api/projects/<fremd>` ein 403 und ueber diese Vorschau denselben
+  // Standort im Klartext. Dafuer brauchte es nicht einmal eine eigene Vorlage —
+  // die Werksvorlage aus Migration 026 enthaelt die Platzhalter bereits.
+  //
+  // Die Pruefung steht VOR dem Rendern, wie in export-templates.ts: sonst
+  // verraet schon die Fehlermeldung, ob es das Projekt gibt.
+  if (project && !(await canSeeProjectByName(userCtx(c), project))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
 
   const result = await renderTemplate(id, { project, currentUserName: userName });
   if (!result) return c.json({ error: "Template nicht gefunden" }, 404);

@@ -123,6 +123,24 @@ projectsRoutes.post("/projects", async (c) => {
     if (!geprueft.ok) return c.json({ error: geprueft.text }, 400);
   }
 
+  // ── Ein bestehender Name ist kein Freibrief ───────────────────────────────
+  //
+  // `create()` patcht ein vorhandenes Projekt durch. Wer das darf, entscheidet
+  // die Route — hier, wie ueberall in diesem Haus (siehe src/data/access.ts).
+  //
+  // Ohne diese Pruefung war `POST /projects` ein Beitritt zu jedem fremden
+  // Projekt: das Repository trug den Aufrufer in `user_projects` ein und
+  // patchte seine Stammdaten. Nachgemessen am 2026-08-23 — ein Konto ohne
+  // jedes Recht bekam auf `GET` ein 403 und konnte anschliessend ueber diesen
+  // Weg Notizen lesen und die Projektnummer ueberschreiben.
+  //
+  // **409 und nicht 403.** Ein 403 auf einen fremden Namen waere selbst eine
+  // Auskunft („diesen Namen gibt es"). 409 ist dieselbe Antwort, die auch ein
+  // Berechtigter bekaeme, dessen Name schon vergeben ist.
+  if (schonDa && !(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Ein Projekt mit diesem Namen existiert bereits" }, 409);
+  }
+
   // Existenz-Check vor create, damit wir 201 vs 200 zurueckgeben koennen.
   const already = schonDa;
 
@@ -156,6 +174,14 @@ projectsRoutes.post("/projects", async (c) => {
   if (ok === "ungueltiger-name") return c.json({ error: "Ungueltiger Projektname" }, 400);
   if (ok === "nummer-fehlt") {
     return c.json({ error: `Projektnummer erforderlich (z. B. ${PROJEKTNUMMER_BEISPIEL})` }, 400);
+  }
+  if (ok === "name-im-papierkorb") {
+    // Frueher wurde hier still zurueckgeholt — ohne Rechtepruefung, und dem
+    // Verwalter verschwand das Projekt kommentarlos aus dem Papierkorb.
+    return c.json(
+      { error: "Ein Projekt mit diesem Namen liegt im Papierkorb. Dort zurückholen oder endgültig entfernen." },
+      409,
+    );
   }
   if (ok === "nummer-vergeben") {
     // 409, nicht 400: die Eingabe ist in Ordnung, nur eben schon belegt.

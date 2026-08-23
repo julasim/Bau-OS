@@ -227,21 +227,35 @@ export const dbProjects: ProjectRepository = {
     // heisst hier "stelle sicher dass es existiert". Falls bereits vorhanden,
     // patchen wir die Stammdaten durch (nur Felder die im Patch gesetzt sind).
     if (existing) {
-      // Liegt ein Projekt dieses Namens im Papierkorb, wird es zurueckgeholt.
+      // ── Ein bestehender Name ist KEIN Beitritt ──────────────────────────
       //
-      // Begruendet, weil es zwei vertretbare Antworten gibt: „Name ist
-      // vergeben" waere fuer den Benutzer nicht nachvollziehbar — er sieht
-      // nirgends ein Projekt dieses Namens. Und `create()` heisst hier
-      // ausdruecklich „stelle sicher, dass es existiert" (die Funktion patcht
-      // bestehende Projekte durch, statt zu scheitern). Zurueckholen ist die
-      // konsequente Fortsetzung davon; im schlimmsten Fall bekommt jemand
-      // seine alten Datensaetze wieder, im besten hat er genau das gewollt.
-      if (existing.deleted_at) {
-        await db`UPDATE projects SET deleted_at = NULL WHERE id = ${String(existing.id)}`;
-      }
+      // Diese Funktion patcht bestehende Projekte durch — das ist gewollt und
+      // heisst „stelle sicher, dass es existiert". Sie hat dabei aber zwei
+      // Dinge getan, die niemand verlangt hatte:
+      //
+      //   1. Sie trug den Aufrufer in `user_projects` ein.
+      //   2. Sie holte ein geloeschtes Projekt aus dem Papierkorb.
+      //
+      // Beides ohne jede Rechtepruefung, und die Route reichte den
+      // angemeldeten Benutzer als `createdById` durch. Nachgemessen am
+      // 2026-08-23: ein Konto ohne jedes Recht bekam auf `GET` das erwartete
+      // 403 — und war nach einem `POST /api/projects {"name": "<fremdes
+      // Projekt>"}` Mitglied, konnte Notizen lesen, das Dossier laden und die
+      // Projektnummer ueberschreiben. In einem Buero mit acht Arbeitsplaetzen
+      // genuegt dafuer der Projektname.
+      //
+      // Damit war auch der Rechte-Fix an den acht Unterrouten umgehbar: was
+      // die verwehren, holte man sich mit einem POST davor.
+      //
+      // Beide Schritte sind hier ersatzlos entfallen. Zugriff vergibt die
+      // Verwaltung ueber `POST /projects/:name/access`, zurueckgeholt wird
+      // ueber `POST /projects/:name/wiederherstellen` — beide mit
+      // Rechtepruefung. WER hier ueberhaupt patchen darf, entscheidet die
+      // Route (src/api/routes/projects.ts), wie ueberall in diesem Projekt.
+      if (existing.deleted_at) return "name-im-papierkorb";
+
       const patch: ProjectUpdate = {
         description: opts.description,
-        projektnummer: nummer ?? undefined,
         bauherr: opts.bauherr,
         standort: opts.standort,
         projektart: opts.projektart,
@@ -249,23 +263,30 @@ export const dbProjects: ProjectRepository = {
         phase: opts.phase,
         startDate: opts.startDate,
         endDate: opts.endDate,
+        // Die Nummer NUR aufnehmen, wenn wirklich eine mitkam.
+        //
+        // Vorher stand hier `projektnummer: nummer ?? undefined` — der
+        // Schluessel war damit IMMER vorhanden, und `update()` prueft mit
+        // `"projektnummer" in patch`. Das ist auch bei `undefined` wahr:
+        // jeder POST OHNE Nummer lief in „nummer-fehlt", `update()` brach ab,
+        // bevor irgendetwas geschrieben wurde — und weil das Ergebnis unten
+        // weggeworfen wurde, meldete die Route trotzdem Erfolg. Der
+        // dokumentierte Zweck dieses Zweigs war damit wirkungslos.
+        ...(nummer !== null ? { projektnummer: nummer } : {}),
       };
       // Nur patchen, wenn mindestens ein Wert gesetzt ist — sonst no-op
       // (sonst wuerde ein nackter create()-Aufruf alle Spalten auf null
       // zuruecksetzen, wenn man das aus Versehen wieder bei bestehendem
       // Projekt aufruft).
       const hasAny = Object.values(patch).some((v) => v !== undefined);
-      if (hasAny) await this.update(name, patch);
-      // Auch bei bestehendem Projekt: wenn createdById uebergeben wurde,
-      // user_projects-Eintrag idempotent setzen — z.B. fuer den Fall, dass
-      // ein User ein Projekt anlegt, das ein anderer Admin schon erzeugt
-      // hatte (ON CONFLICT verhindert Duplikat).
-      if (createdById) {
-        await db`
-          INSERT INTO user_projects (user_id, project_id)
-          VALUES (${createdById}, ${String(existing.id)})
-          ON CONFLICT DO NOTHING
-        `;
+      if (hasAny) {
+        // Ergebnis auswerten, nicht wegwerfen: `update()` kann „Nummer
+        // vergeben" melden, und das muss der Aufrufer erfahren.
+        const ergebnis = await this.update(name, patch);
+        if (ergebnis === "nummer-vergeben") return "nummer-vergeben";
+        if (ergebnis === "nummer-fehlt") return "nummer-fehlt";
+        // `false` heisst hier „nichts zu tun oder Zeile verschwunden" — das
+        // ist kein Fehler des Aufrufers und bleibt „ok".
       }
       return "ok";
     }
