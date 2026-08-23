@@ -15,6 +15,7 @@ import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { TimeEntry, TimeEntryInput, TimeEntryRepository, TimeSummary } from "./types.js";
+import { alsIso } from "./zeitstempel.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}(:\d{2})?$/;
@@ -47,8 +48,8 @@ function rowToEntry(row: Record<string, unknown>): TimeEntry {
     notes: row.notes ? String(row.notes) : null,
     createdById: row.created_by ? String(row.created_by) : null,
     createdByUsername: row.created_by_username ? String(row.created_by_username) : null,
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
     /** Konflikt-Zaehler (Migration 042) — die Oberflaeche schickt ihn beim
      *  Speichern zurueck. Fehlt er im DTO, ist der Schutz von aussen unerreichbar. */
     rev: Number(row.rev ?? 1),

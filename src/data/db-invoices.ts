@@ -9,6 +9,7 @@
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { ProjectInvoice, InvoicePosition, InvoiceRepository } from "./types.js";
+import { alsIso } from "./zeitstempel.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -80,8 +81,8 @@ function rowToInvoice(row: Record<string, unknown>): ProjectInvoice {
     datum: dateStr(row.datum),
     status: row.status as ProjectInvoice["status"],
     note: row.note ? String(row.note) : null,
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
   };
 }
 

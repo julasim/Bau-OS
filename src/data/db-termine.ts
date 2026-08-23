@@ -4,6 +4,7 @@ import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import { validateDatum, validateUhrzeit, normalizeDatum } from "./termin-validation.js";
 import type { Termin, TerminRepository } from "./types.js";
+import { alsIso } from "./zeitstempel.js";
 
 function rowToTermin(row: Record<string, unknown>): Termin {
   const assigneeIds = Array.isArray(row.assignee_ids) ? (row.assignee_ids as string[]).map(String) : [];
@@ -29,7 +30,7 @@ function rowToTermin(row: Record<string, unknown>): Termin {
     phaseId: row.phase_id ? String(row.phase_id) : null,
     isMilestone: row.is_milestone === true,
     createdById: row.created_by ? String(row.created_by) : null,
-    createdAt: String(row.created_at),
+    createdAt: alsIso(row.created_at),
     /** Konflikt-Zaehler (Migration 042) — die Oberflaeche schickt ihn beim
      *  Speichern zurueck. Fehlt er im DTO, ist der Schutz von aussen unerreichbar. */
     rev: Number(row.rev ?? 1),
@@ -214,7 +215,7 @@ export const dbTermine: TerminRepository = {
       id: String(r.id),
       titel: String(r.titel),
       projectName: r.project_name ? String(r.project_name) : null,
-      geloeschtAm: String(r.deleted_at),
+      geloeschtAm: alsIso(r.deleted_at),
       createdById: r.created_by ? String(r.created_by) : null,
     }));
   },

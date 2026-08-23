@@ -8,6 +8,7 @@
 
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { alsIso } from "./zeitstempel.js";
 
 export type ExportKind = "meeting" | "bautagebuch" | "time-entry" | "project-summary";
 
@@ -33,7 +34,7 @@ function rowToPublic(row: Record<string, unknown>): ExportTemplatePublic {
     filename: String(row.filename),
     isDefault: row.is_default === true,
     createdById: row.created_by_id ? String(row.created_by_id) : null,
-    uploadedAt: row.uploaded_at instanceof Date ? row.uploaded_at.toISOString() : String(row.uploaded_at),
+    uploadedAt: alsIso(row.uploaded_at),
     sizeBytes: row.size_bytes !== undefined ? Number(row.size_bytes) : 0,
   };
 }

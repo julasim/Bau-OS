@@ -8,6 +8,7 @@
 
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { alsIso } from "./zeitstempel.js";
 
 export interface CustomProjectModule {
   id: string;
@@ -29,7 +30,7 @@ function rowToCustomModule(row: Record<string, unknown>): CustomProjectModule {
     icon: String(row.icon ?? "folder"),
     enabledByDefault: row.enabled_by_default === true,
     sortOrder: Number(row.sort_order ?? 0),
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+    createdAt: alsIso(row.created_at),
   };
 }
 

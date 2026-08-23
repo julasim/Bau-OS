@@ -7,6 +7,7 @@
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Project, ProjectAccessEntry, ProjectCreateOptions, ProjectRepository, ProjectUpdate } from "./types.js";
+import { alsIso } from "./zeitstempel.js";
 
 // Mapping: camelCase-API-Feld ↔ snake_case-Spaltenname.
 // Wird beim dynamischen UPDATE genutzt, um tippfest aus dem Patch auf
@@ -70,8 +71,8 @@ function rowToProjectInfo(row: Record<string, unknown>): Project {
     childrenCount: Number(row.children_count),
     budget: row.budget ? Number(row.budget) : null,
     budgetUsed: row.budget_used ? Number(row.budget_used) : null,
-    createdAt: row.created_at ? String(row.created_at) : undefined,
-    updatedAt: row.updated_at ? String(row.updated_at) : undefined,
+    createdAt: row.created_at ? alsIso(row.created_at) : undefined,
+    updatedAt: row.updated_at ? alsIso(row.updated_at) : undefined,
   };
 }
 
@@ -354,7 +355,7 @@ export const dbProjects: ProjectRepository = {
       username: String(r.username),
       displayName: r.display_name ? String(r.display_name) : null,
       role: r.role === "admin" ? "admin" : "user",
-      addedAt: String(r.added_at),
+      addedAt: alsIso(r.added_at),
     }));
   },
 
@@ -465,7 +466,7 @@ export const dbProjects: ProjectRepository = {
     return rows.map((r) => ({
       id: String(r.id),
       name: String(r.name),
-      deletedAt: String(r.deleted_at),
+      deletedAt: alsIso(r.deleted_at),
     }));
   },
 

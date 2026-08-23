@@ -6,6 +6,7 @@ import { getDb } from "../db/client.js";
 import { encryptString, decryptString } from "./crypto.js";
 import { peekTicket } from "./sse-tickets.js";
 import type { Context, Next } from "hono";
+import { alsIso } from "../data/zeitstempel.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,8 +75,8 @@ function rowToDbUser(row: Record<string, unknown>): DbUser {
     totpEnabled: row.totp_enabled === true,
     email: row.email ? String(row.email) : null,
     settings,
-    createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
   };
 }
 

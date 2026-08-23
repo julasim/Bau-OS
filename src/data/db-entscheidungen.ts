@@ -6,6 +6,7 @@
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
+import { alsIso } from "./zeitstempel.js";
 import type {
   Entscheidung,
   EntscheidungAlternative,
@@ -63,8 +64,8 @@ function rowToEntscheidung(row: Record<string, unknown>): Entscheidung {
         : null,
     createdById: row.created_by ? String(row.created_by) : null,
     createdByUsername: row.created_by_username ? String(row.created_by_username) : undefined,
-    createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
     rev: Number(row.rev ?? 1),
   };
 }

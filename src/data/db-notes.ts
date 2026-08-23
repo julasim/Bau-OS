@@ -4,6 +4,7 @@ import { getDb } from "../db/client.js";
 import { escapeLike } from "./sql-like.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { NoteMeta, NoteRepository } from "./types.js";
+import { alsIso } from "./zeitstempel.js";
 
 /** Loest eine Angabe auf GENAU EINE Notiz auf — oder auf keine.
  *
@@ -130,8 +131,8 @@ export const dbNotes: NoteRepository = {
     return rows.map((r) => ({
       title: String(r.title),
       project: r.project_name ? String(r.project_name) : null,
-      createdAt: String(r.created_at),
-      updatedAt: String(r.updated_at),
+      createdAt: alsIso(r.created_at),
+      updatedAt: alsIso(r.updated_at),
       size: Number(r.size || 0),
       createdById: r.created_by ? String(r.created_by) : null,
     }));
@@ -230,7 +231,7 @@ export const dbNotes: NoteRepository = {
       id: String(r.id),
       titel: String(r.titel),
       projectName: r.project_name ? String(r.project_name) : null,
-      geloeschtAm: String(r.deleted_at),
+      geloeschtAm: alsIso(r.deleted_at),
       createdById: r.created_by ? String(r.created_by) : null,
     }));
   },

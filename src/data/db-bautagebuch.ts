@@ -15,6 +15,7 @@
 
 import { getDb } from "../db/client.js";
 import type { BautagebuchEntry, BautagebuchRepository } from "./types.js";
+import { alsIso } from "./zeitstempel.js";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -53,8 +54,8 @@ function rowToEntry(row: Record<string, unknown>): BautagebuchEntry {
     incidents: row.incidents ? String(row.incidents) : null,
     createdById: row.created_by ? String(row.created_by) : null,
     createdByUsername: row.created_by_username ? String(row.created_by_username) : null,
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
   };
 }
 

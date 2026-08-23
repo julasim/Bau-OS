@@ -10,6 +10,7 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
+import { alsIso } from "./zeitstempel.js";
 
 export interface BrandingPublic {
   companyName: string | null;
@@ -45,7 +46,7 @@ function rowToBranding(row: Record<string, unknown>): BrandingPublic {
     phone: row.phone ? String(row.phone) : null,
     email: row.email ? String(row.email) : null,
     website: row.website ? String(row.website) : null,
-    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    updatedAt: alsIso(row.updated_at),
   };
 }
 

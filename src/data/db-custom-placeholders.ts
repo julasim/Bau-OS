@@ -8,6 +8,7 @@
 
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { alsIso } from "./zeitstempel.js";
 
 export interface CustomVariable {
   id: string;
@@ -24,8 +25,8 @@ function rowToCustomVariable(row: Record<string, unknown>): CustomVariable {
     name: String(row.name),
     description: row.description ? String(row.description) : null,
     value: String(row.value ?? ""),
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
   };
 }
 

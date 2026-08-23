@@ -11,6 +11,7 @@ import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Company, ContactLogEntry, MemberType, TeamMember, TeamMemberProject, TeamRepository } from "./types.js";
+import { alsIso } from "./zeitstempel.js";
 
 // ── Row-Mapper ──────────────────────────────────────────────
 
@@ -53,8 +54,8 @@ function rowToMember(row: Record<string, unknown>): TeamMember {
     contactLog,
     userId: row.user_id ? String(row.user_id) : null,
     username: row.username ? String(row.username) : null,
-    createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
     /** Konflikt-Zaehler (Migration 042) — die Oberflaeche schickt ihn beim
      *  Speichern zurueck. Fehlt er im DTO, ist der Schutz von aussen unerreichbar. */
     rev: Number(row.rev ?? 1),
@@ -69,8 +70,8 @@ function rowToCompany(row: Record<string, unknown>): Company {
     website: row.website ? String(row.website) : null,
     notes: row.notes ? String(row.notes) : null,
     memberCount: row.member_count !== undefined ? Number(row.member_count) : undefined,
-    createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
   };
 }
 

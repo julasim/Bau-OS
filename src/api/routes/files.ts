@@ -10,6 +10,7 @@ import { emitForProjectName } from "../events.js";
 import { validateUpload } from "../file-validation.js";
 import type { AppEnv } from "../server.js";
 import { projektBezugAusQuery } from "../projekt-bezug.js";
+import { alsIso } from "../../data/zeitstempel.js";
 
 export const filesRoutes = new Hono<AppEnv>();
 
@@ -241,7 +242,7 @@ filesRoutes.get("/files/starred", async (c) => {
       name: String(f.filename),
       type: "file" as const,
       size: Number(f.filesize || 0),
-      modified: f.updated_at ? String(f.updated_at) : null,
+      modified: f.updated_at ? alsIso(f.updated_at) : null,
       extension: f.filetype ? String(f.filetype) : "",
       id: String(f.id),
       project: f.project_name ? String(f.project_name) : null,
@@ -273,7 +274,7 @@ filesRoutes.get("/files/shared", async (c) => {
       name: String(f.filename),
       type: "file" as const,
       size: Number(f.filesize || 0),
-      modified: f.updated_at ? String(f.updated_at) : null,
+      modified: f.updated_at ? alsIso(f.updated_at) : null,
       extension: f.filetype ? String(f.filetype) : "",
       id: String(f.id),
       project: f.project_name ? String(f.project_name) : null,
@@ -441,7 +442,7 @@ filesRoutes.get("/files/:id/shares", async (c) => {
       username: String(r.username),
       displayName: r.display_name ? String(r.display_name) : null,
       canEdit: r.can_edit === true,
-      addedAt: String(r.added_at),
+      addedAt: alsIso(r.added_at),
     })),
   );
 });

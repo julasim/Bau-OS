@@ -11,6 +11,7 @@
 
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { alsIso } from "./zeitstempel.js";
 
 export type TemplateKind = "note" | "meeting" | "bautagebuch";
 
@@ -50,8 +51,8 @@ function rowToTemplate(row: Record<string, unknown>): Template {
     body: String(row.body),
     isDefault: row.is_default === true,
     createdById: row.created_by_id ? String(row.created_by_id) : null,
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
-    updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
   };
 }
 

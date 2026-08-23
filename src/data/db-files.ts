@@ -2,6 +2,7 @@
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import type { FileEntry, FileRepository, FileShareEntry } from "./types.js";
+import { alsIso } from "./zeitstempel.js";
 
 function rowToFile(row: Record<string, unknown>): FileEntry {
   return {
@@ -16,8 +17,8 @@ function rowToFile(row: Record<string, unknown>): FileEntry {
     project: row.project_name ? String(row.project_name) : null,
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
     analyzed: !!row.analyzed,
-    createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
   };
 }
 
@@ -252,7 +253,7 @@ export const dbFiles: FileRepository = {
       username: String(r.username),
       displayName: r.display_name ? String(r.display_name) : null,
       canEdit: r.can_edit === true,
-      addedAt: String(r.added_at),
+      addedAt: alsIso(r.added_at),
     }));
   },
 
