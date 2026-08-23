@@ -219,12 +219,23 @@ const allowedOrigins = process.env.CORS_ORIGINS ? process.env.CORS_ORIGINS.split
 
 app.use("*", secureHeaders());
 
-// SEC-5: Content-Security-Policy. Bewusst im REPORT-ONLY-Modus — meldet
-// Verstoesse (Browser-Console), blockiert aber nichts, damit die SPA nicht
-// bricht. Nach Beobachtung auf enforce umstellen: Header-Name in
-// "Content-Security-Policy" aendern. style-src braucht 'unsafe-inline'
-// (Vue-Scoped-Styles); Scripts laufen als gebuendelte Chunks (kein inline).
-const CSP_POLICY = [
+// ── SEC-5: Content-Security-Policy — ERZWINGEND ─────────────────────────────
+//
+// Die Richtlinie stand lange unter dem Header `Content-Security-Policy-
+// Report-Only`: der Browser meldete Verstoesse in der Konsole und blockierte
+// nichts. Das war als Beobachtungsphase gedacht und hat als solche zu lange
+// gedauert — eine Richtlinie, die nichts blockiert, ist keine Massnahme,
+// sondern eine Notiz.
+//
+// Sie ist jetzt scharf. Das ist auch der Punkt, an dem die Offline-Zusage
+// aufhoert, reine Code-Disziplin zu sein: `default-src 'self'` und
+// `connect-src 'self'` machen aus „wir laden nichts von aussen nach" eine
+// Regel, die der Browser durchsetzt, statt eine, die beim naechsten
+// eingefuegten Schnipsel bricht.
+//
+// `style-src` braucht 'unsafe-inline' — Vue setzt Scoped-Styles zur Laufzeit;
+// Skripte laufen dagegen ausschliesslich als gebuendelte Chunks.
+const CSP_APP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
@@ -233,10 +244,37 @@ const CSP_POLICY = [
   "connect-src 'self'",
   "object-src 'none'",
   "base-uri 'self'",
+  "form-action 'self'",
   "frame-ancestors 'none'",
 ].join("; ");
+
+// ── Warum die Dokumentation eine eigene Richtlinie bekommt ──────────────────
+//
+// Die gebaute VitePress-Seite unter /docs/ enthaelt drei INLINE-Skripte
+// (Hell/Dunkel-Umschaltung, Plattform-Erkennung). Unter `script-src 'self'`
+// wuerden sie blockiert, und die Doku-Seite kaeme im falschen Farbschema oder
+// gar nicht richtig hoch.
+//
+// Statt der ganzen Anwendung 'unsafe-inline' fuer Skripte zu geben — was die
+// strenge Richtlinie entwertet — bekommt nur /docs/ eine eigene. Der
+// entscheidende Teil bleibt auch dort scharf: `default-src 'self'` und
+// `connect-src 'self'`. Die Dokumentation ist statischer Text ohne
+// Benutzerdaten; was dort zaehlt, ist, dass sie nichts von aussen nachlaedt.
+const CSP_DOCS = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join("; ");
+
 app.use("*", async (c, next) => {
-  c.header("Content-Security-Policy-Report-Only", CSP_POLICY);
+  c.header("Content-Security-Policy", c.req.path.startsWith("/docs/") ? CSP_DOCS : CSP_APP);
   await next();
 });
 

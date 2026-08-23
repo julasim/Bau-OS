@@ -289,7 +289,7 @@ npm run build:electron   # Arbeitsplatz-Huelle nach dist-electron/
 npm run electron:dev     # Huelle lokal starten
 npm run dist             # portable .exe bauen (signiert, braucht das Zertifikat)
 
-npm test             # vitest run (582 Tests — nur MIT Datenbank vollstaendig, siehe unten)
+npm test             # vitest run (603 Tests — nur MIT Datenbank vollstaendig, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -309,22 +309,22 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 427 von 582 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 444 von 603 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
 > 34 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
 > Gemessen am 2026-08-23: `15 passed | 44 skipped (59)` Dateien,
-> `155 passed | 427 skipped (582)` Prüfungen; mit Datenbank `580 passed | 2 skipped`. **Diese Zahlen wandern mit jedem
+> `159 passed | 444 skipped (603)` Prüfungen; mit Datenbank `601 passed | 2 skipped`. **Diese Zahlen wandern mit jedem
 > neuen Test** — wer sie hier liest, prüft sie besser einmal nach, statt sich
 > auf sie zu verlassen. Der Punkt bleibt derselbe: die Farbe sagt nichts.
 >
-> ⚠ **Und dieser Lauf meldet wieder GRÜN.** Hier stand bis eben, seit
-> `tests/db.test.ts` dazukam scheitere die Suite ohne Datenbank — das stimmt
-> nicht mehr, gemessen scheitert keine einzige. Damit ist die Falle zurück,
-> die der Absatz eigentlich schließen sollte: **ein halber Lauf sieht aus wie
-> ein voller.** Ob dagegen ein Wächter-Test gebaut wird (der ohne
-> `DATABASE_URL` bewusst rot meldet) oder ob das für DB-lose Läufe stören
-> würde, ist eine offene Entscheidung — bis dahin gilt: **auf die Zahl der
-> übersprungenen Prüfungen sehen, nicht auf die Farbe.**
+> ⚠ **Und dieser Lauf meldet GRÜN** — lokal weiterhin, bewusst. **In der CI
+> nicht mehr:** seit dem 23.08.2026 läuft dort ein Postgres-Dienst mit
+> (`.github/workflows/build.yml`), und `tests/waechter.test.ts` schlägt fehl,
+> wenn `DATABASE_URL` in der CI fehlt (`process.env.CI`). Lokal ohne Datenbank
+> zu arbeiten bleibt erlaubt — dort ist die Zahl der übersprungenen Dateien im
+> Bericht sichtbar, und wer sie liest, weiß, woran er ist. In der CI liest
+> niemand; dort zählt nur die Farbe. Trotzdem gilt lokal weiter: **auf die
+> Zahl der übersprungenen Prüfungen sehen, nicht auf die Farbe.**
 >
 > **Diese Zahlen beim Hinzufügen von Tests mitpflegen.** Die
 > Test-Datenbank ist der Container `patio-test-db` in **WSL Ubuntu-24.04**; von

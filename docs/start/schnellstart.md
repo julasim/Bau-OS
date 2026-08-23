@@ -126,8 +126,12 @@ npm run dist             # portable .exe bauen (signiert)
 
 ::: danger Tests ohne Datenbank melden grün, obwohl der größere Teil fehlt
 Ohne gesetzte `DATABASE_URL` überspringen sich die ACL-, Auth- und
-Datenbanktests **still** — gemessen am 23.08.2026: `155 passed | 427 skipped
-(582)`, kein einziger Fehlschlag. Ein halber Lauf sieht damit aus wie ein voller.
+Datenbanktests **still** — gemessen am 23.08.2026: `159 passed | 444 skipped
+(603)`, kein einziger Fehlschlag.
+
+In der **CI** kann das nicht mehr passieren: dort läuft ein Postgres-Dienst
+mit, und `tests/waechter.test.ts` schlägt fehl, wenn `DATABASE_URL` in der CI
+fehlt. Lokal ohne Datenbank zu arbeiten bleibt erlaubt. Ein halber Lauf sieht damit aus wie ein voller.
 
 **Auf die Zahl der übersprungenen Prüfungen sehen, nicht auf die Farbe.**
 

@@ -136,7 +136,8 @@ Die Hono-Anwendung. Enthält neben der Route-Registrierung:
   überlastete Datenbank 503, `EACCES`/`EPERM` 403, `ENOSPC` 507, alles
   andere 500 mit Hinweis aufs Log.
 - **Security-Header** via `hono/secure-headers`, dazu eine
-  Content-Security-Policy im Report-Only-Modus.
+  **erzwingende** Content-Security-Policy (eigene, lockerere Fassung nur für
+  `/docs/`, siehe [Zugriffskontrolle](/sicherheit/zugriff)).
 - **CORS** — ohne `CORS_ORIGINS` nur `http://localhost:<API_PORT>`.
 - **Globaler Rate-Limit** je IP über alle `/api/*`-Routen, danach die
   Auth-Middleware und dahinter der Geld-Filter (`geldFilter`).
@@ -573,7 +574,7 @@ vorzuziehen.
 
 | Verzeichnis | Inhalt |
 |---|---|
-| `tests/` | Vitest-Suite. Ohne `DATABASE_URL` überspringen sich die ACL-, Auth- und Datenbanktests **still** — gemessen am 23.08.2026 laufen 155 von 582, die übrigen 427 werden übersprungen, und der Lauf meldet trotzdem grün |
+| `tests/` | Vitest-Suite. Ohne `DATABASE_URL` überspringen sich die ACL-, Auth- und Datenbanktests **still** — gemessen am 23.08.2026 laufen 159 von 603, die übrigen 444 werden übersprungen, und der Lauf meldet trotzdem grün — **in der CI** verhindert das ein Wächter |
 | `scripts/` | Installation, Sicherung, Rücksicherung, Offline-Pakete, Neuverschlüsselung, Prüfstand des Arbeitsplatz-Programms |
 | `electron/` | Hülle des Arbeitsplatz-Programms |
 | `docker/` | Caddyfile, Init-SQL für den Postgres-Container, alte VPS-Compose-Datei. **Der Firmenserver-Stack liegt im Repo-Root** (`docker-compose.yml`) |

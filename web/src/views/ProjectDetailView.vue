@@ -12,6 +12,7 @@ import ProjectEntscheidungenTab from "./projects-v2/ProjectEntscheidungenTab.vue
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 import { anzeigeNummer, PROJEKTNUMMER_BEISPIEL } from "../utils/projektnummer";
+import { copyToClipboard } from "../utils/clipboard";
 
 const { isAdmin, darfGeld } = useCurrentUser();
 const { confirm } = useConfirm();
@@ -1371,8 +1372,28 @@ function initial(name: string): string {
     .toUpperCase();
 }
 
-function mapsLink(standort: string): string {
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(standort)}`;
+// ── Warum der Standort hier NICHT mehr auf eine Karte verlinkt ─────────────
+//
+// Hier stand ein Link auf Google Maps. Er war praktisch — und er war die
+// einzige Stelle im Projektkopf, an der PATIO beim Anklicken eine
+// Projektadresse an einen Dritten geschickt hat. Die Dokumentation sagt an
+// drei Stellen zu, dass keine Inhalte das Haus verlassen; eines von beiden
+// musste weichen.
+//
+// Was bleibt, ist der praktische Nutzen ohne den Aussenkontakt: die Adresse
+// laesst sich mit einem Klick kopieren und in die Karte des eigenen Wahl
+// einfuegen.
+const standortKopiert = ref(false);
+let standortTimer: ReturnType<typeof setTimeout> | undefined;
+
+async function standortKopieren(standort: string) {
+  // Ueber den Haus-Helfer, nicht ueber navigator.clipboard direkt: ohne TLS
+  // ist `navigator.clipboard` gar nicht da, und der Firmenserver laeuft im
+  // Zweifel erst einmal ueber http://<IP>.
+  if (!(await copyToClipboard(standort))) return;
+  standortKopiert.value = true;
+  if (standortTimer) clearTimeout(standortTimer);
+  standortTimer = setTimeout(() => (standortKopiert.value = false), 1600);
 }
 
 // ── Quick-Add (Uebersicht) ───────────────────────────────
@@ -2256,9 +2277,15 @@ async function deleteMeeting() {
             Bauherr <strong>{{ info.bauherrName || info.bauherr }}</strong>
           </span>
           <span v-if="(info.bauherrName || info.bauherr) && info.standort" class="sep"></span>
-          <a v-if="info.standort" :href="mapsLink(info.standort)" target="_blank" rel="noopener" class="maps-link">
-            {{ info.standort }}
-          </a>
+          <button
+            v-if="info.standort"
+            type="button"
+            class="standort-kopieren"
+            :title="standortKopiert ? 'Adresse kopiert' : 'Adresse in die Zwischenablage kopieren'"
+            @click="standortKopieren(info.standort)"
+          >
+            {{ standortKopiert ? "Adresse kopiert" : info.standort }}
+          </button>
           <span v-if="anzeigeNummer(info.projektnummer) && info.standort" class="sep"></span>
           <span v-if="anzeigeNummer(info.projektnummer)">Nr. {{ anzeigeNummer(info.projektnummer) }}</span>
           <!-- Fehlt sie, ist das keine Luecke, sondern eine offene Aufgabe. -->
@@ -5229,14 +5256,18 @@ async function deleteMeeting() {
   background: var(--color-bg);
 }
 
-/* ── Maps-Link ─────────────────────────────────────────── */
-.maps-link {
+/* ── Standort kopieren ─────────────────────────────────── */
+.standort-kopieren {
   color: inherit;
-  text-decoration: none;
+  font: inherit;
+  padding: 0;
+  background: none;
+  border: none;
   border-bottom: 1px dashed var(--color-text-faint);
+  cursor: pointer;
   transition: all 180ms ease;
 }
-.maps-link:hover {
+.standort-kopieren:hover {
   color: var(--color-text);
   border-bottom-color: var(--color-primary);
 }

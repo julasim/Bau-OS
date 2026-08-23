@@ -275,14 +275,25 @@ Der Dateibrowser blendet auf Wurzelebene die Systemordner `Agents`,
 | Maßnahme | Umsetzung |
 |---|---|
 | Security-Header | `hono/secure-headers`: `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy` und weitere |
-| Content-Security-Policy | Eigene Richtlinie, derzeit im **Report-Only**-Modus |
+| Content-Security-Policy | Eigene Richtlinie, **erzwingend**. `default-src 'self'`, `connect-src 'self'`, `object-src 'none'`, `frame-ancestors 'none'` |
 | CORS | Ohne `CORS_ORIGINS` nur `http://localhost:<API_PORT>` |
 | Fehlerantworten | Zentral in JSON, ohne Stack-Trace nach außen |
 
-::: warning CSP meldet, blockiert aber nicht
-Der Header heißt `Content-Security-Policy-Report-Only`. Verstöße erscheinen
-in der Browser-Konsole, werden aber nicht unterbunden. Der Schritt auf
-Durchsetzung ist bewusst noch nicht getan.
+::: tip Die CSP ist der Punkt, an dem die Offline-Zusage durchgesetzt wird
+Bis zum 23.08.2026 lief die Richtlinie unter `Content-Security-Policy-Report-Only`:
+Verstöße erschienen in der Konsole, blockiert wurde nichts. Als
+Beobachtungsphase gedacht, als solche zu lange gelaufen — eine Richtlinie, die
+nichts blockiert, ist keine Maßnahme, sondern eine Notiz.
+
+Jetzt ist sie scharf. `default-src 'self'` und `connect-src 'self'` machen aus
+„PATIO lädt nichts von außen nach" eine Regel, die der Browser durchsetzt,
+statt eine, die beim nächsten eingefügten Schnipsel bricht.
+
+**Die Dokumentation unter `/docs/` hat eine eigene Richtlinie**: die gebaute
+VitePress-Seite enthält drei Inline-Skripte (Hell/Dunkel-Umschaltung,
+Plattform-Erkennung), die unter `script-src 'self'` blockiert würden. Statt der
+ganzen Anwendung `'unsafe-inline'` zu geben, gilt die Ausnahme nur dort — und
+auch dort bleiben `default-src 'self'` und `connect-src 'self'` bestehen.
 :::
 
 ## Feld-Verschlüsselung

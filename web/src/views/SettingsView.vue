@@ -1155,7 +1155,7 @@ onMounted(() => {
               </div>
               <div class="settings-row flex items-center justify-between px-4 py-3">
                 <span class="text-sm settings-label">Registriert</span>
-                <span class="text-sm settings-value">{{ data.profile.createdAt }}</span>
+                <span class="text-sm settings-value">{{ formatDate(data.profile.createdAt) }}</span>
               </div>
               <div class="settings-row flex items-center gap-3 px-4 py-3">
                 <label class="text-sm settings-label w-40 flex-shrink-0">Anzeige-Name</label>

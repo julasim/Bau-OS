@@ -564,16 +564,12 @@ onUnmounted(() => {
             <BIcon name="bell" :size="11" />
             <span>{{ member.phone }}</span>
           </a>
-          <a
-            v-if="member.phone"
-            :href="`https://wa.me/${member.phone.replace(/[^0-9+]/g, '')}`"
-            target="_blank"
-            rel="noopener"
-            class="contact-chip"
-            :title="'WhatsApp'"
-          >
-            WA
-          </a>
+          <!-- Hier stand ein WhatsApp-Verweis (wa.me). Er hat beim Anklicken
+               die Telefonnummer eines Beteiligten an einen Dritten
+               uebergeben — die einzige zweite Stelle im Programm mit
+               Aussenkontakt. `mailto:` und `tel:` daneben bleiben: sie
+               oeffnen ein Programm auf dem eigenen Rechner und schicken
+               nichts irgendwohin. -->
         </div>
 
         <!-- Stammdaten-Grid (inline-edit) -->

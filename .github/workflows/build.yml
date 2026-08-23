@@ -10,7 +10,10 @@
 #   - Frontend-TypeScript (vue-tsc --noEmit)
 #   - Vite-Production-Build der SPA — faengt SFC-Parse-Errors,
 #     Import-Fehler, fehlende Assets etc.
-#   - Vitest-Suite
+#   - Vitest-Suite — GEGEN EINE ECHTE POSTGRES-DATENBANK. Ohne sie
+#     ueberspringen sich rund 70 Prozent der Pruefungen still und der Lauf
+#     meldet trotzdem gruen; genau die ACL-, Auth- und Datenbanktests waeren
+#     dann nicht gelaufen. Deshalb der `services`-Block unten.
 #
 # Wenn was rot wird: GitHub markiert den Commit mit X, du siehst es sofort
 # auf der PR-Seite oder am main-Branch-Status. Der Bug-Workflow wird damit
@@ -36,7 +39,36 @@ jobs:
   build-and-test:
     name: tsc + vue-tsc + vite build + vitest
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+
+    # ── Warum hier eine Datenbank steht ──────────────────────────────────────
+    #
+    # Bis hierher lief `npm test` in der CI OHNE `DATABASE_URL`. Gemessen am
+    # 23.08.2026 heisst das: 15 von 60 Testdateien laufen, 45 ueberspringen
+    # sich (`describe.skipIf(!HAS_DB)`), 155 von 599 Pruefungen werden
+    # ausgefuehrt — und der Lauf endet mit Exit 0.
+    #
+    # Damit hat die CI ausgerechnet das nicht geprueft, was am haeufigsten
+    # kaputtgeht: die Rechte. Siebzehn Routen ohne Projektpruefung sind an
+    # einer gruenen CI vorbeigekommen, und die Tests, die sie jetzt absichern,
+    # waeren dort weiterhin nicht gelaufen.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: patio
+          POSTGRES_PASSWORD: patio
+          POSTGRES_DB: patio
+        ports:
+          - 5432:5432
+        # Ohne Healthcheck startet der Vitest-Schritt, bevor Postgres
+        # Verbindungen annimmt — das faellt dann als „connection refused" auf
+        # und sieht aus wie ein Testfehler.
+        options: >-
+          --health-cmd "pg_isready -U patio -d patio"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout
@@ -101,5 +133,20 @@ jobs:
       - name: Lint (eslint)
         run: npm run lint
 
-      - name: Vitest
-        run: npm test
+      # Migrationen VOR den Tests anwenden. Die Suite setzt ein fertiges
+      # Schema voraus — sie legt Testdaten an, sie baut die Tabellen nicht.
+      - name: Migrationen auf die Test-Datenbank anwenden
+        env:
+          DATABASE_URL: postgres://patio:patio@localhost:5432/patio
+        run: npm run db:migrate
+
+      - name: Vitest (mit Datenbank — sonst laufen 70 % der Pruefungen nicht)
+        env:
+          DATABASE_URL: postgres://patio:patio@localhost:5432/patio
+          # Die Auth-Tests brauchen ein Secret; ohne bricht der Import von
+          # config.ts in einzelnen Suiten ab.
+          JWT_SECRET: ci-nur-fuer-tests-mindestens-32-zeichen-lang
+          WORKSPACE_PATH: /tmp/patio-workspace
+        run: |
+          mkdir -p /tmp/patio-workspace
+          npm test

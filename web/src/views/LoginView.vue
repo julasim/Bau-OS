@@ -83,7 +83,10 @@ async function login() {
             letter-spacing: -0.02em;
           "
         >
-          B
+          <!-- Hier stand ein „B" — der Anfangsbuchstabe von Bau-OS, dem Namen
+               vor dem Rebrand. Auf der Anmeldeseite, also der ersten Seite,
+               die jeder im Haus jeden Morgen sieht. -->
+          P
         </div>
         <div>
           <div style="font-size: 14px; font-weight: 600">PATIO</div>
