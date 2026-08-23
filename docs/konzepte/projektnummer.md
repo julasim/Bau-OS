@@ -148,10 +148,14 @@ In dem Fall **bricht die Migration mit Klartext ab** und nennt die
 betroffenen Nummern:
 
 ```
-Migration 052: mehrfach vergebene Projektnummern gefunden:
-saztg-2026-001 (2x). Bitte in der Datenbank vereindeutigen und den
-Dienst erneut starten.
+Migration 052: mehrfach vergebene Projektnummern:
+  saztg-2026-001 → Sanierung Hauptstraße, Wohnhaus Huber
+Bitte in der Datenbank vereindeutigen und den Dienst erneut starten.
 ```
+
+Die Meldung nennt die **Projektnamen**, nicht nur die Nummer: der Abbruch
+rollt die Bereinigung mit zurück, die genannte Nummer stünde danach in keiner
+Zeile mehr — man würde danach suchen und nichts finden.
 
 Das ist Absicht: eine Datenbank, die ohne die Eindeutigkeit startet, während
 das Programm sich darauf verlässt, wäre schlechter als ein Dienst, der mit
