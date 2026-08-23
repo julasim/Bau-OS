@@ -13,7 +13,26 @@
 // IDs umstellen) waere die sauberere Architektur, aber ein Umbau quer durch
 // zwoelf Dateien fuer einen Gewinn, den diese Aufloesung genauso liefert.
 //
-// Vorrang hat `projectId`: wer beides schickt, meint die stabile Kennung.
+// ── Die dritte Form: `projektnummer` (Migration 052) ────────────────────────
+//
+// Die UUID ist stabil, aber unlesbar. Kein Mensch merkt sich
+// `9db792d3-8042-…`, und in einem Dokument, einer Mail oder einer Frage an die
+// KI steht sie nie. Was dort steht, ist `SAZTG-2026-014`.
+//
+// Seit Migration 052 ist die Projektnummer Pflicht und eindeutig — damit ist
+// sie genauso belastbar wie die UUID und obendrein aussprechbar. Sie loest die
+// UUID nach aussen ab: was frueher `?projectId=<uuid>` war, ist jetzt
+// `?projektnummer=SAZTG-2026-014`.
+//
+// **An der Rechtepruefung aendert das nichts.** Diese Datei liefert nur einen
+// NAMEN; ob der Fragende das Projekt sehen darf, entscheidet danach wie bisher
+// die Route (`canSeeProjectByName`, `getVisibleProjectIds`). Eine Nummer ist
+// damit kein zweiter Weg an den Rechten vorbei, sondern ein zweiter Weg zum
+// selben Tor.
+//
+// Vorrang: `projectId` > `projektnummer` > `project`. Wer eine unveraenderliche
+// Kennung mitschickt, meint sie; der Name ist die schwaechste Angabe, weil er
+// sich aendern kann.
 // ============================================================
 
 import { projectRepo } from "../data/index.js";
@@ -23,6 +42,8 @@ import { projectRepo } from "../data/index.js";
 export interface ProjektAngabe {
   project?: string | null;
   projectId?: string | null;
+  /** Die vom Buero vergebene Kennung, z. B. `SAZTG-2026-014` (Migration 052). */
+  projektnummer?: string | null;
 }
 
 /** Ergebnis der Aufloesung.
@@ -33,11 +54,21 @@ export interface ProjektAngabe {
  *  zu sehen, nicht weniger, und das ist bei Rechten die falsche Richtung. */
 export type ProjektBezug = { name: string | null; unbekannt: false } | { name: null; unbekannt: true };
 
-/** Loest `project` (Name) oder `projectId` (UUID) auf den Projektnamen auf. */
+/** Loest `projectId` (UUID), `projektnummer` (Kennung) oder `project` (Name)
+ *  auf den Projektnamen auf — in dieser Reihenfolge. */
 export async function projektBezug(angabe: ProjektAngabe): Promise<ProjektBezug> {
   if (angabe.projectId) {
     if (!projectRepo.nameById) return { name: null, unbekannt: true };
     const name = await projectRepo.nameById(String(angabe.projectId));
+    return name ? { name, unbekannt: false } : { name: null, unbekannt: true };
+  }
+  if (angabe.projektnummer) {
+    if (!projectRepo.nameByNummer) return { name: null, unbekannt: true };
+    const name = await projectRepo.nameByNummer(String(angabe.projektnummer));
+    // `unbekannt` und nicht „kein Bezug": eine Nummer, die ins Leere zeigt,
+    // darf nicht auf die projektuebergreifende Liste hinauslaufen. Der
+    // Aufrufer bekaeme MEHR zu sehen, nicht weniger — bei Rechten die falsche
+    // Richtung. Dieselbe Ueberlegung wie bei `projectId`.
     return name ? { name, unbekannt: false } : { name: null, unbekannt: true };
   }
   if (angabe.project) return { name: String(angabe.project), unbekannt: false };
@@ -49,5 +80,9 @@ export async function projektBezug(angabe: ProjektAngabe): Promise<ProjektBezug>
 export async function projektBezugAusQuery(c: {
   req: { query: (k: string) => string | undefined };
 }): Promise<ProjektBezug> {
-  return projektBezug({ project: c.req.query("project"), projectId: c.req.query("projectId") });
+  return projektBezug({
+    project: c.req.query("project"),
+    projectId: c.req.query("projectId"),
+    projektnummer: c.req.query("projektnummer"),
+  });
 }

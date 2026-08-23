@@ -119,6 +119,13 @@ tasksRoutes.post("/tasks", async (c) => {
   const body = await c.req.json<{
     text: string;
     project?: string;
+    /** Umbenennungsfeste Bezugsarten (Migrationen 042/052) — aufgeloest in
+     *  src/api/projekt-bezug.ts. Sie standen hier bisher nicht im Typ,
+     *  funktionierten aber schon: der ganze Body geht an `projektBezug()`,
+     *  und die Felder kommen aus dem JSON durch. Undeklariert heisst nur,
+     *  dass niemand sie beim Lesen findet. */
+    projectId?: string;
+    projektnummer?: string;
     assignee?: string;
     assigneeId?: string;
     date?: string;

@@ -5,6 +5,7 @@ import { getVisibleProjectIds, canSeeProjectByName, type UserCtx } from "../../d
 import type { ProjectUpdate } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit, emitForProjectName } from "../events.js";
+import { pruefeProjektnummer, PROJEKTNUMMER_BEISPIEL } from "../../data/projektnummer.js";
 
 // Hilfs-Builder: holt UserCtx aus dem Hono-Context — eine Stelle weniger,
 // an der man c.var-Felder vergisst.
@@ -72,8 +73,24 @@ projectsRoutes.post("/projects", async (c) => {
   const name = typeof body.name === "string" ? body.name.trim() : "";
   if (!name) return c.json({ error: "Name erforderlich" }, 400);
 
+  // Die Projektnummer ist Pflicht (Migration 052) — sie ist die Kennung, unter
+  // der das Projekt im Haus gefuehrt wird. Hier geprueft und nicht erst im
+  // Repository, damit der Aufrufer den GRUND erfaehrt und nicht nur ein
+  // „ging nicht": zu lang, leer und schon vergeben sind drei verschiedene
+  // Auskuenfte.
+  //
+  // Ausnahme: `create()` ist in diesem Haus idempotent — auf einen bereits
+  // vorhandenen Namen patcht es die mitgegebenen Stammdaten durch. In dem Fall
+  // meint der Aufrufer die Nummer gar nicht, und eine Pflichtabfrage waere
+  // falsch. Deshalb steht die Pflicht hier nur fuer die echte Neuanlage.
+  const schonDa = await projectRepo.getInfo(name);
+  if (!schonDa) {
+    const geprueft = pruefeProjektnummer(body.projektnummer);
+    if (!geprueft.ok) return c.json({ error: geprueft.text }, 400);
+  }
+
   // Existenz-Check vor create, damit wir 201 vs 200 zurueckgeben koennen.
-  const already = await projectRepo.getInfo(name);
+  const already = schonDa;
 
   // Nur erlaubte Stammdaten-Felder an create() weiterreichen. Leere Strings
   // werden zu null — konsistent mit dem PATCH-Endpoint.
@@ -102,7 +119,17 @@ projectsRoutes.post("/projects", async (c) => {
     },
     createdById,
   );
-  if (!ok) return c.json({ error: "Ungueltiger Projektname" }, 400);
+  if (ok === "ungueltiger-name") return c.json({ error: "Ungueltiger Projektname" }, 400);
+  if (ok === "nummer-fehlt") {
+    return c.json({ error: `Projektnummer erforderlich (z. B. ${PROJEKTNUMMER_BEISPIEL})` }, 400);
+  }
+  if (ok === "nummer-vergeben") {
+    // 409, nicht 400: die Eingabe ist in Ordnung, nur eben schon belegt.
+    // Der Text nennt bewusst NICHT, welches Projekt sie traegt — das waere
+    // eine Auskunft ueber ein Projekt, das der Fragende womoeglich gar nicht
+    // sehen darf (siehe src/data/access.ts).
+    return c.json({ error: "Diese Projektnummer ist bereits vergeben" }, 409);
+  }
 
   emitForProjectName({ type: "project", action: already ? "updated" : "created", id: name }, name, {
     actorId: c.var.userId,
@@ -189,6 +216,13 @@ projectsRoutes.patch("/projects/:name", async (c) => {
   // er, gilt weiterhin „zuletzt gewinnt" — aeltere Aufrufer bleiben lauffaehig.
   const rev = typeof body.rev === "number" ? body.rev : undefined;
   const ok = await projectRepo.update(name, patch, rev);
+  if (ok === "nummer-fehlt") {
+    const geprueft = pruefeProjektnummer(patch.projektnummer);
+    return c.json({ error: geprueft.ok ? "Projektnummer ungueltig" : geprueft.text }, 400);
+  }
+  if (ok === "nummer-vergeben") {
+    return c.json({ error: "Diese Projektnummer ist bereits vergeben" }, 409);
+  }
   if (!ok) {
     return c.json({ error: "Projekt nicht gefunden oder Update fehlgeschlagen" }, 404);
   }

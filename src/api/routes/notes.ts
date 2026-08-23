@@ -98,7 +98,13 @@ notesRoutes.get("/notes/:name", async (c) => {
 });
 
 notesRoutes.post("/notes", async (c) => {
-  const koerper = await c.req.json<{ content: string; project?: string; projectId?: string }>();
+  const koerper = await c.req.json<{
+    content: string;
+    project?: string;
+    projectId?: string;
+    /** Dritte Bezugsart (Migration 052) — siehe src/api/projekt-bezug.ts. */
+    projektnummer?: string;
+  }>();
   const content = koerper.content;
   if (!content) return c.json({ error: "Inhalt erforderlich" }, 400);
   const bezug = await projektBezug(koerper);

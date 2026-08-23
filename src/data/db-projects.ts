@@ -8,6 +8,7 @@ import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Project, ProjectAccessEntry, ProjectCreateOptions, ProjectRepository, ProjectUpdate } from "./types.js";
 import { alsIso } from "./zeitstempel.js";
+import { pruefeProjektnummer, vergleichbar, istNummerVergeben } from "./projektnummer.js";
 
 // Mapping: camelCase-API-Feld ↔ snake_case-Spaltenname.
 // Wird beim dynamischen UPDATE genutzt, um tippfest aus dem Patch auf
@@ -181,7 +182,7 @@ export const dbProjects: ProjectRepository = {
 
   async create(name, options, createdById) {
     // Gleiche Unicode-Regel wie vorher (Umlaute erlaubt, "..", Slashes nicht).
-    if (!isValidName(name)) return false;
+    if (!isValidName(name)) return "ungueltiger-name";
 
     // Rueckwaertskompatibilitaet: frueher wurde description als String uebergeben.
     const opts: ProjectCreateOptions =
@@ -191,10 +192,38 @@ export const dbProjects: ProjectRepository = {
 
     const db = getDb();
 
+    // ── Die Projektnummer (Migration 052) ─────────────────────────────────
+    //
+    // Sie ist Pflicht — aber NUR bei echter Neuanlage. Ein `create()` auf ein
+    // bestehendes Projekt heisst in diesem Repository „stelle sicher, dass es
+    // existiert" und patcht die mitgegebenen Stammdaten durch; dort waere eine
+    // Pflichtabfrage falsch, weil der Aufrufer die Nummer gar nicht meint.
+    const bestehend = await db`SELECT id, deleted_at FROM projects WHERE name = ${name} LIMIT 1`;
+    const [existing] = bestehend;
+
+    let nummer: string | null = null;
+    if (opts.projektnummer !== undefined && opts.projektnummer !== null) {
+      const geprueft = pruefeProjektnummer(opts.projektnummer);
+      if (!geprueft.ok) return "nummer-fehlt";
+      nummer = geprueft.nummer;
+    }
+    if (!existing && nummer === null) return "nummer-fehlt";
+
+    // Frei? Der eindeutige Index liegt auf `lower(projektnummer)`, der
+    // Vergleich hier muss dazu passen. Projekte im Papierkorb zaehlen mit —
+    // sonst scheiterte spaeter das Zurueckholen (siehe Migration 052).
+    if (nummer !== null) {
+      const [belegt] = await db`
+        SELECT id FROM projects
+         WHERE lower(projektnummer) = ${vergleichbar(nummer)}
+           ${existing ? db`AND id <> ${String(existing.id)}` : db``}
+         LIMIT 1`;
+      if (belegt) return "nummer-vergeben";
+    }
+
     // Idempotent: existiert der Name schon, ist das kein Fehler — "create"
     // heisst hier "stelle sicher dass es existiert". Falls bereits vorhanden,
     // patchen wir die Stammdaten durch (nur Felder die im Patch gesetzt sind).
-    const [existing] = await db`SELECT id, deleted_at FROM projects WHERE name = ${name} LIMIT 1`;
     if (existing) {
       // Liegt ein Projekt dieses Namens im Papierkorb, wird es zurueckgeholt.
       //
@@ -210,7 +239,7 @@ export const dbProjects: ProjectRepository = {
       }
       const patch: ProjectUpdate = {
         description: opts.description,
-        projektnummer: opts.projektnummer,
+        projektnummer: nummer ?? undefined,
         bauherr: opts.bauherr,
         standort: opts.standort,
         projektart: opts.projektart,
@@ -236,11 +265,18 @@ export const dbProjects: ProjectRepository = {
           ON CONFLICT DO NOTHING
         `;
       }
-      return true;
+      return "ok";
     }
 
     // folder_path ist seit migration 003 nullable — Projekte sind rein logisch.
-    const [inserted] = await db`
+    //
+    // Der try/catch ist der Rueckfall zum Freigabe-Check oben: zwischen
+    // „Nummer ist frei" und diesem INSERT liegt ein Moment, und auf einem
+    // Server mit acht Arbeitsplaetzen reicht der. Ohne ihn waere das Ergebnis
+    // ein 500 statt eines Hinweises, dass jemand schneller war.
+    let inserted: { id: unknown } | undefined;
+    try {
+      [inserted] = await db`
       INSERT INTO projects (
         name, description, status,
         projektnummer, bauherr, standort, projektart, nutzung,
@@ -249,13 +285,17 @@ export const dbProjects: ProjectRepository = {
       )
       VALUES (
         ${name}, ${opts.description ?? null}, 'aktiv',
-        ${opts.projektnummer ?? null}, ${opts.bauherr ?? null}, ${opts.standort ?? null},
+        ${nummer}, ${opts.bauherr ?? null}, ${opts.standort ?? null},
         ${opts.projektart ?? null}, ${opts.nutzung ?? null},
         ${opts.phase ?? null}, ${opts.startDate ?? null}, ${opts.endDate ?? null},
         ${createdById ?? null}
       )
       RETURNING id
     `;
+    } catch (fehler) {
+      if (istNummerVergeben(fehler)) return "nummer-vergeben";
+      throw fehler;
+    }
     // Ersteller automatisch in user_projects — ohne diesen Eintrag wuerde
     // ein Nicht-Admin sein eben angelegtes Projekt direkt nicht mehr sehen.
     if (createdById && inserted) {
@@ -265,12 +305,33 @@ export const dbProjects: ProjectRepository = {
         ON CONFLICT DO NOTHING
       `;
     }
-    return true;
+    return "ok";
   },
 
   async update(name, patch, expectedRev) {
     if (!isValidName(name)) return false;
     const db = getDb();
+
+    // ── Die Projektnummer (Migration 052), Teil 1: pruefen und bereinigen ──
+    //
+    // Muss VOR dem Bau von `entries` stehen. Die Liste unten wird EINMAL aus
+    // dem Patch gebaut und danach nur noch gelesen — wer den Patch spaeter
+    // ersetzt, aendert am geschriebenen UPDATE nichts mehr. Die bereinigte
+    // Nummer landete dann nie in der Datenbank, und zwar still.
+    //
+    // Aendern ist ausdruecklich erlaubt: die Nummer ist von Hand vergeben,
+    // also wird sie irgendwann korrigiert. Genau dafuer ist sie NICHT der
+    // Primaerschluessel — die Korrektur kostet ein UPDATE auf eine Zeile, und
+    // kein einziger Verweis bricht.
+    //
+    // Leeren ist NICHT erlaubt: die Spalte ist seit 052 NOT NULL. Ohne diese
+    // Pruefung waere ein `projektnummer: null` ein Datenbankfehler statt eines
+    // sauberen „geht nicht".
+    if ("projektnummer" in patch) {
+      const geprueft = pruefeProjektnummer(patch.projektnummer);
+      if (!geprueft.ok) return "nummer-fehlt";
+      patch = { ...patch, projektnummer: geprueft.nummer };
+    }
 
     // Nur Felder mit explizit gesetztem Wert (inkl. null!) in das UPDATE
     // aufnehmen. undefined = unveraendert, null = leeren.
@@ -293,6 +354,19 @@ export const dbProjects: ProjectRepository = {
     // Auswaehlen verhindert — die DB hat dafuer keine CHECK-Semantik.
     if (patch.parentId && String(patch.parentId) === String(existing.id)) {
       return false;
+    }
+
+    // ── Die Projektnummer, Teil 2: ist sie frei? ──────────────────────────
+    // Erst hier, weil dafuer die eigene ID bekannt sein muss — sonst meldete
+    // jedes Speichern ohne Nummernaenderung „schon vergeben", naemlich an
+    // sich selbst. Projekte im Papierkorb zaehlen mit (siehe Migration 052).
+    if (patch.projektnummer) {
+      const [belegt] = await db`
+        SELECT id FROM projects
+         WHERE lower(projektnummer) = ${vergleichbar(String(patch.projektnummer))}
+           AND id <> ${String(existing.id)}
+         LIMIT 1`;
+      if (belegt) return "nummer-vergeben";
     }
 
     // Dynamisches UPDATE per postgres.js — fuer jede Spalte ein eigener
@@ -445,6 +519,21 @@ export const dbProjects: ProjectRepository = {
     const db = getDb();
     await db`UPDATE projects SET deleted_at = now() WHERE name = ${name} AND deleted_at IS NULL`;
     return true; // idempotent — auch ohne Treffer ist der Zustand der gewuenschte
+  },
+
+  async nameByNummer(nummer) {
+    // Der Vergleich muss zum eindeutigen Index aus Migration 052 passen
+    // (`lower(projektnummer)`) — sonst faende diese Abfrage `saztg-2026-014`
+    // nicht, obwohl die Datenbank es fuer dieselbe Nummer haelt.
+    const geprueft = pruefeProjektnummer(nummer);
+    if (!geprueft.ok) return null;
+    const db = getDb();
+    const [row] = await db`
+      SELECT name FROM projects
+       WHERE lower(projektnummer) = ${vergleichbar(geprueft.nummer)}
+         AND deleted_at IS NULL
+       LIMIT 1`;
+    return row ? String(row.name) : null;
   },
 
   async nameById(id) {

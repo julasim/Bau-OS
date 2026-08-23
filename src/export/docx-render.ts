@@ -37,6 +37,7 @@ import {
   type ExportKind,
 } from "../data/db-export-templates.js";
 import { logError } from "../logger.js";
+import { mitProjektnummer } from "../data/projektnummer.js";
 
 /** Wandelt einen beliebigen DB-Datumswert in TT.MM.JJJJ.
  *  postgres.js liefert DATE/TIMESTAMP als Date-Objekt; String(date) gibt
@@ -291,6 +292,18 @@ async function buildTimeEntryData(opts: {
   };
 }
 
+/** Die Projektnummer zu einem Projektnamen — fuer den Dateinamen.
+ *
+ *  Bewusst tolerant: findet sie das Projekt nicht, kommt `null` zurueck und
+ *  der Dateiname bleibt der alte. Ein Export darf nicht daran scheitern, dass
+ *  eine Nummer nicht auffindbar war. */
+async function nummerZuProjekt(projectName: string | undefined): Promise<string | null> {
+  if (!projectName) return null;
+  const db = getDb();
+  const [p] = await db`SELECT projektnummer FROM projects WHERE name = ${projectName} LIMIT 1`;
+  return p?.projektnummer ? String(p.projektnummer) : null;
+}
+
 async function buildProjectSummaryData(projectName: string): Promise<Record<string, unknown>> {
   const db = getDb();
   const [p] = await db`
@@ -423,15 +436,20 @@ export async function renderDocxExport(opts: RenderOptions): Promise<RenderResul
   }
 
   // 4. Sinnvollen Filename bauen
+  //
+  // Die Projektnummer steht VORNE (Migration 052). Wer zwanzig Protokolle in
+  // einem Ordner liegen hat, sortiert sie damit nach Akte statt nach Datum —
+  // und sieht auf einen Blick, wohin ein Dokument gehoert. Fehlt die Nummer
+  // (Export ohne Projektbezug), bleibt der Name unveraendert.
   const dateSlug = new Date().toISOString().slice(0, 10);
   let filename = `${opts.kind}-${dateSlug}.docx`;
-  if (opts.kind === "meeting" && opts.meetingId) filename = `Meeting-${dateSlug}.docx`;
-  if (opts.kind === "bautagebuch" && opts.bautagebuchId) filename = `Bautagebuch-${dateSlug}.docx`;
-  if (opts.kind === "time-entry") filename = `Stundenzettel-${dateSlug}.docx`;
+  if (opts.kind === "meeting" && opts.meetingId) filename = `Besprechungsprotokoll ${dateSlug}.docx`;
+  if (opts.kind === "bautagebuch" && opts.bautagebuchId) filename = `Bautagebuch ${dateSlug}.docx`;
+  if (opts.kind === "time-entry") filename = `Stundenzettel ${dateSlug}.docx`;
   if (opts.kind === "project-summary" && opts.projectName) {
-    filename = `Projekt-${opts.projectName.replace(/[^a-zA-Z0-9_-]/g, "_")}.docx`;
+    filename = `Projektuebersicht ${dateSlug}.docx`;
   }
-  return { buffer, filename };
+  return { buffer, filename: mitProjektnummer(await nummerZuProjekt(opts.projectName), filename) };
 }
 
 /** Fuer "Test-Render" in der UI: rendert das Template mit Dummy-Daten,

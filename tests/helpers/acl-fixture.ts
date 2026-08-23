@@ -84,7 +84,12 @@ export async function setupAclFixture(prefix: string, opts: AclFixtureOpts = {})
 
   // Projekt nur A zuweisen (createdById) — bleibt bestehen, B darf es per ACL
   // nicht sehen.
-  await projectRepo.create(projectName, {}, a.id);
+  //
+  // Die Projektnummer ist seit Migration 052 Pflicht und eindeutig. Sie wird
+  // hier aus demselben Namensraum gebildet wie alles andere in dieser
+  // Vorrichtung — eine feste Nummer waere beim zweiten parallel laufenden
+  // Test ein Konflikt, und der saehe aus wie ein Fehler im geprueften Code.
+  await projectRepo.create(projectName, { projektnummer: `TEST-${projectName}` }, a.id);
   const info = await projectRepo.getInfo(projectName);
   if (!info?.id) throw new Error("Projekt-Setup fehlgeschlagen");
   const projectId = info.id;
@@ -94,7 +99,7 @@ export async function setupAclFixture(prefix: string, opts: AclFixtureOpts = {})
   // Zugriff auf A's Projekt. Ohne das waere listVisibleProjectIds(B) = [] und
   // jeder ACL-Check fuer B trivial false — ein kaputter Check "hat irgendein
   // Projekt -> darf alles" bliebe unentdeckt.
-  await projectRepo.create(projectBName, {}, b.id);
+  await projectRepo.create(projectBName, { projektnummer: `TEST-${projectBName}` }, b.id);
   const infoB = await projectRepo.getInfo(projectBName);
   if (!infoB?.id) throw new Error("Projekt-B-Setup fehlgeschlagen");
   const projectBId = infoB.id;

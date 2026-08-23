@@ -1,0 +1,152 @@
+// ============================================================
+// PATIO — Die Projektnummer
+// ============================================================
+// Ein Ort fuer die Regeln der Projektnummer. Sie ist ab Migration 052 die
+// Kennung, unter der ein Projekt im Haus gefuehrt wird — vergeben von Hand,
+// im Buero in der Form `SAZTG-2026-000`.
+//
+// ── Warum das Format NICHT erzwungen wird ───────────────────────────────────
+//
+// Weil eine Aktenordnung Ausnahmen hat. Bauteile, Unterprojekte, uebernommene
+// Altprojekte, ein Jahreswechsel mitten im Auftrag — jedes Muster, das man
+// hier festschreibt, steht irgendwann einem echten Vorgang im Weg, und dann
+// wird es umgangen statt gepflegt. Geprueft wird deshalb nur, was ohne jede
+// Kenntnis der Aktenordnung falsch ist: leer, zu lang, mit Steuerzeichen.
+//
+// Die Form `SAZTG-2026-000` steht als Beispiel in der Oberflaeche. Das ist
+// die richtige Stelle dafuer — ein Vorschlag wirkt, ein Verbot aergert.
+//
+// ── Warum der Vergleich klein geschrieben wird ──────────────────────────────
+//
+// `SAZTG-2026-001` und `saztg-2026-001` sind fuer die Datenbank zwei
+// verschiedene Zeichenketten, fuer jeden Menschen dieselbe Akte. Der
+// eindeutige Index in 052 liegt darum auf `lower(projektnummer)`, und jeder
+// Vergleich hier muss dazu passen — sonst meldet die Anwendung „frei" und die
+// Datenbank lehnt anschliessend ab.
+// ============================================================
+
+/** Obergrenze. Kein fachlicher Wert, sondern ein Riegel gegen Unfug:
+ *  eine Aktennummer, die laenger ist als eine Zeile, ist keine. */
+export const PROJEKTNUMMER_MAX = 60;
+
+/** Das Beispiel, das in der Oberflaeche steht. Hier, damit Server und
+ *  Oberflaeche dasselbe zeigen. */
+export const PROJEKTNUMMER_BEISPIEL = "SAZTG-2026-000";
+
+/** Praefix der Platzhalter, die Migration 052 fuer Projekte ohne Nummer
+ *  gesetzt hat. Die Oberflaeche erkennt sie daran und verlangt eine echte
+ *  Nummer, statt den Platzhalter wie eine Aktennummer anzuzeigen. */
+export const PLATZHALTER_PRAEFIX = "OHNE-NUMMER-";
+
+/** Ist das nur der Platzhalter aus der Migration und keine echte Nummer? */
+export function istPlatzhalter(nummer: string | null | undefined): boolean {
+  return !!nummer && nummer.startsWith(PLATZHALTER_PRAEFIX);
+}
+
+/** Warum eine Eingabe nicht als Projektnummer taugt. */
+export type NummerFehler = "fehlt" | "zu-lang" | "steuerzeichen";
+
+/** Ergebnis der Pruefung: entweder die bereinigte Nummer oder ein Grund. */
+export type NummerErgebnis = { ok: true; nummer: string } | { ok: false; grund: NummerFehler; text: string };
+
+/**
+ * Prueft und bereinigt eine eingegebene Projektnummer.
+ *
+ * Bereinigt wird nur, was niemand absichtlich eingibt: Leerraum am Rand und
+ * mehrfacher Leerraum in der Mitte. Die Gross-/Kleinschreibung bleibt, wie
+ * sie eingegeben wurde — sie gehoert dem Buero. Nur der VERGLEICH ist
+ * unempfindlich dagegen (siehe `vergleichbar`).
+ */
+export function pruefeProjektnummer(roh: unknown): NummerErgebnis {
+  if (typeof roh !== "string") {
+    return { ok: false, grund: "fehlt", text: `Projektnummer erforderlich (z. B. ${PROJEKTNUMMER_BEISPIEL})` };
+  }
+  const nummer = roh.trim().replace(/\s+/g, " ");
+  if (nummer === "") {
+    return { ok: false, grund: "fehlt", text: `Projektnummer erforderlich (z. B. ${PROJEKTNUMMER_BEISPIEL})` };
+  }
+  if (nummer.length > PROJEKTNUMMER_MAX) {
+    return {
+      ok: false,
+      grund: "zu-lang",
+      text: `Projektnummer darf höchstens ${PROJEKTNUMMER_MAX} Zeichen haben`,
+    };
+  }
+  // Steuerzeichen. Sie sind unsichtbar, kommen beim Einfuegen aus anderen
+  // Programmen mit und machen aus zwei gleich AUSSEHENDEN Nummern zwei
+  // verschiedene — der eindeutige Index greift dann nicht. Als Escape
+  // geschrieben, nicht als echtes Zeichen im Quelltext: ein unsichtbares
+  // Zeichen in einer Regex ist genau der Fehler, den diese Zeile abfaengt.
+  // Die Regel `no-control-regex` warnt vor VERSEHENTLICHEN Steuerzeichen in
+  // einer Regex. Diese hier ist die Stelle, die sie absichtlich aufspuert —
+  // deshalb hier und nur hier ausgenommen.
+  // eslint-disable-next-line no-control-regex
+  if (/[\u0000-\u001f\u007f]/.test(nummer)) {
+    return { ok: false, grund: "steuerzeichen", text: "Projektnummer enthält unerlaubte Zeichen" };
+  }
+  return { ok: true, nummer };
+}
+
+/** Die Form, in der zwei Nummern verglichen werden — passend zum eindeutigen
+ *  Index aus Migration 052 (`lower(projektnummer)`). */
+export function vergleichbar(nummer: string): string {
+  return nummer.toLowerCase();
+}
+
+/**
+ * Ist dieser Fehler die Verletzung des Eindeutigkeits-Index auf der
+ * Projektnummer?
+ *
+ * Gebraucht als RÜCKFALL, nicht als Regelweg: die Repos fragen vorher ab, ob
+ * die Nummer frei ist. Zwischen dieser Abfrage und dem Schreiben liegt aber
+ * ein Moment, und auf einem Server mit acht Arbeitsplaetzen reicht der. Ohne
+ * diesen Rueckfall waere das Ergebnis ein 500 statt eines Hinweises, dass
+ * jemand schneller war.
+ */
+export function istNummerVergeben(fehler: unknown): boolean {
+  if (!fehler || typeof fehler !== "object") return false;
+  const f = fehler as { code?: unknown; constraint_name?: unknown; message?: unknown };
+  if (f.code !== "23505") return false;
+  const name = typeof f.constraint_name === "string" ? f.constraint_name : String(f.message ?? "");
+  return name.includes("projektnummer");
+}
+
+/**
+ * Die Projektnummer als Bestandteil eines DATEINAMENS.
+ *
+ * Die Nummer ist Freitext — eine Aktenordnung kennt `A-14/2` und
+ * `Altbestand 1998/7`. Ein Schraegstrich im Dateinamen ist unter Windows kein
+ * Zeichen, sondern eine Pfadtrennung; der Download hiesse dann `2` und laege
+ * angeblich in einem Ordner `A-14`. Ersetzt werden deshalb alle Zeichen, die
+ * Windows in Dateinamen verbietet:
+ *
+ *     \  /  :  *  ?  "  <  >  |
+ *
+ * Dazu Punkte am Ende (Windows schneidet sie stillschweigend ab) und
+ * Steuerzeichen — letztere kommen ueber `pruefeProjektnummer` ohnehin nicht
+ * durch, die Zeile hier ist der Guertel zum Hosentraeger.
+ */
+export function alsDateinamensteil(nummer: string | null | undefined): string {
+  if (!nummer || istPlatzhalter(nummer)) return "";
+  return (
+    nummer
+      // eslint-disable-next-line no-control-regex -- siehe pruefeProjektnummer
+      .replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g, "-")
+      .replace(/\.+$/, "")
+      .trim()
+  );
+}
+
+/**
+ * Baut einen Dateinamen mit vorangestellter Projektnummer.
+ *
+ * `SAZTG-2026-014 Besprechungsprotokoll 2026-08-23.docx`
+ *
+ * Ohne Nummer (oder mit blossem Platzhalter) bleibt der Name unveraendert —
+ * ein Dateiname, der mit einem Bindestrich anfaengt, weil die Nummer fehlte,
+ * waere schlechter als gar keine Nummer.
+ */
+export function mitProjektnummer(nummer: string | null | undefined, rest: string): string {
+  const teil = alsDateinamensteil(nummer);
+  return teil ? `${teil} ${rest}` : rest;
+}

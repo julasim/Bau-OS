@@ -23,7 +23,16 @@ describe.skipIf(!HAS_DB)("PERF-1 — projectRepo.listInfos == list()+getInfo()",
   beforeAll(async () => {
     ({ projectRepo, taskRepo } = await import("../src/data/index.js"));
     ({ getDb } = await import("../src/db/client.js"));
-    for (const n of names) await projectRepo.create(n, {});
+    // Die Projektnummer ist seit Migration 052 Pflicht und eindeutig. Aus dem
+    // Projektnamen abgeleitet, damit parallel laufende Testdateien einander
+    // nicht in die Quere kommen.
+    for (const n of names) {
+      const ergebnis = await projectRepo.create(n, { projektnummer: `TEST-${n}` });
+      // Ohne diese Zusicherung schluckt der Test einen fehlgeschlagenen
+      // Anlage-Aufruf und scheitert zehn Zeilen spaeter an `null.id` — genau
+      // so ist dieser Test beim Einbau der Pflichtnummer aufgefallen.
+      expect(ergebnis).toBe("ok");
+    }
     const infos = await Promise.all(names.map((n) => projectRepo.getInfo(n)));
     ids = infos.map((i) => i!.id);
     // An EINEM Projekt eine Aufgabe → openTasks=1. Damit prueft der Vergleich

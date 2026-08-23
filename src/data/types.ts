@@ -144,6 +144,11 @@ export interface Project {
   color?: string | null;
   tags?: string[];
   // Stammdaten (Migration 004) — strukturiert statt als Textblock in description.
+  /** Die Kennung, unter der das Projekt im Haus gefuehrt wird (Migration 052).
+   *  Pflicht und eindeutig; sie loest die UUID nach aussen ab. Optional im Typ
+   *  bleibt sie nur, weil aeltere Antworten aus dem Papierkorb und aus
+   *  Teil-DTOs sie nicht mitfuehren — wer ein volles Projekt in der Hand hat,
+   *  darf sich auf sie verlassen. Regeln: src/data/projektnummer.ts */
   projektnummer?: string | null;
   bauherr?: string | null;
   standort?: string | null;
@@ -231,8 +236,29 @@ export interface ProjectUpdate {
 /** Stammdaten, die optional bei der Projekt-Erstellung mit uebergeben werden
  *  koennen. Ab Phase 1 werden sie strukturiert in Spalten persistiert; vorher
  *  landeten sie als Textblock in description. */
+/**
+ * Wie `create()` ausgegangen ist.
+ *
+ * Bewusst Woerter statt `boolean` — genau wie bei `rename()` im selben
+ * Repository. Ein `false` kann hier vier verschiedene Dinge heissen, und die
+ * Route muss sie unterscheiden koennen: ein ungueltiger Name ist ein 400,
+ * eine vergebene Projektnummer ein 409, und die beiden Meldungen sagen dem
+ * Nutzer voellig Verschiedenes.
+ */
+/** Wie `update()` ausgegangen ist. `false` heisst weiterhin „nicht gefunden
+ *  oder nichts zu tun"; die beiden Woerter kamen mit der Projektnummer dazu
+ *  (Migration 052) und muessen von der Route unterschieden werden — das eine
+ *  ist ein 400, das andere ein 409. */
+export type ProjectUpdateErgebnis = boolean | "nummer-fehlt" | "nummer-vergeben";
+
+export type ProjectCreateErgebnis = "ok" | "ungueltiger-name" | "nummer-fehlt" | "nummer-vergeben";
+
 export interface ProjectCreateOptions {
   description?: string | null;
+  /** Pflicht ab Migration 052. Der Typ laesst sie weiterhin fehlen, weil
+   *  `create()` auch mit einem blossen Beschreibungstext aufgerufen werden
+   *  kann (Altform); fehlt sie dann, antwortet `create()` mit
+   *  `"nummer-fehlt"` statt still ein Projekt ohne Kennung anzulegen. */
   projektnummer?: string | null;
   bauherr?: string | null;
   standort?: string | null;
@@ -804,7 +830,11 @@ export interface ProjectRepository {
    *  ignoriert. Wenn gesetzt, wird der User auch automatisch zur user_projects-
    *  Junction hinzugefuegt (im DB-Mode), damit der Ersteller sofortigen Zugriff
    *  hat. */
-  create(name: string, options?: string | null | ProjectCreateOptions, createdById?: string | null): Promise<boolean>;
+  create(
+    name: string,
+    options?: string | null | ProjectCreateOptions,
+    createdById?: string | null,
+  ): Promise<ProjectCreateErgebnis>;
   /** Aktualisiert Stammdaten eines bestehenden Projekts. Nur Felder die im
    *  Patch gesetzt sind werden geaendert; undefined laesst unveraendert, null
    *  leert die Spalte explizit. Gibt false zurueck wenn Projekt nicht
@@ -813,7 +843,7 @@ export interface ProjectRepository {
    *  (Migration 042). Bewusst ein eigener Parameter statt eines Feldes in
    *  `ProjectUpdate`: dessen Schluessel sind ueber `UPDATE_COLUMNS` fest auf
    *  Spalten abgebildet, `rev` ist aber keine patchbare Spalte. */
-  update(name: string, patch: ProjectUpdate, expectedRev?: number | null): Promise<boolean>;
+  update(name: string, patch: ProjectUpdate, expectedRev?: number | null): Promise<ProjectUpdateErgebnis>;
   /** Benennt ein Projekt um. Return-Codes:
    *   - "ok": umbenannt
    *   - "invalid": ungueltiger Name (Unicode/Slashes)
@@ -839,6 +869,11 @@ export interface ProjectRepository {
    *  auf die unveraenderliche ID stuetzen koennen. Liefert `null`, wenn es das
    *  Projekt nicht gibt oder es im Papierkorb liegt. */
   nameById?(id: string): Promise<string | null>;
+  /** Loest eine Projektnummer auf den Projektnamen auf (Migration 052).
+   *  Unempfindlich gegen Gross-/Kleinschreibung, passend zum eindeutigen
+   *  Index. Projekte im Papierkorb liefern `null` — wer eine Nummer angibt,
+   *  meint ein Projekt, mit dem er arbeiten will. */
+  nameByNummer?(nummer: string): Promise<string | null>;
   /** Projekte im Papierkorb, zuletzt geloeschte zuerst. */
   listDeleted?(): Promise<Array<{ id: string; name: string; deletedAt: string }>>;
   /** Holt ein Projekt aus dem Papierkorb zurueck. `false`, wenn es dort nicht
