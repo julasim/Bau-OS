@@ -1,3 +1,32 @@
+// ============================================================
+// PATIO — Projekt-Routen
+// ============================================================
+// ── Regel fuer JEDE Route unter /projects/:name ────────────────────────────
+//
+// **Der Projektname aus dem Pfad ist eine Behauptung des Aufrufers, keine
+// Berechtigung.** Vor dem ersten Datenzugriff steht deshalb:
+//
+//     if (!(await canSeeProjectByName(userCtx(c), name))) {
+//       return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+//     }
+//
+// Das galt bis zum 2026-08-23 fuer acht Routen NICHT — und die Lueckenhaftig-
+// keit war der Grund, warum sie so lange niemandem auffiel: sie stand direkt
+// neben dem richtigen Code. `POST /projects/:name/tasks` prueft sauber, das
+// drei Zeilen weiter stehende `PATCH /projects/:name/tasks` pruefte nicht.
+// Beim Lesen sieht die Datei bewacht aus, weil an der Stelle, an der man
+// hinsieht, eine Pruefung steht.
+//
+// Moeglich war damit, allein mit einem gueltigen Konto und dem Projektnamen:
+// den vollen Inhalt jeder Notiz lesen, das komplette Projekt-Dossier
+// herunterladen, Aufgaben/Termine/Unterprojekte auflisten — und schreibend
+// eine fremde Aufgabe abhaken sowie einen fremden Termin loeschen.
+//
+// Festgehalten in `tests/api-projects-acl-luecke.test.ts`; jede der acht
+// Pruefungen dort war vor dem Fix rot. Wer hier eine Route ergaenzt, ergaenzt
+// dort eine Zeile.
+// ============================================================
+
 import { Hono } from "hono";
 import { projectRepo, taskRepo, terminRepo, teamRepo } from "../../data/index.js";
 import { findDbUserById } from "../auth.js";
@@ -269,6 +298,9 @@ projectsRoutes.put("/projects/:name/rename", async (c) => {
 // und kann clientseitig in jede andere Form gewandelt werden.
 projectsRoutes.get("/projects/:name/export.md", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   const info = await projectRepo.getInfo(name);
   if (!info) return c.json({ error: "Projekt nicht gefunden" }, 404);
 
@@ -447,6 +479,9 @@ projectsRoutes.delete("/projects/:name/access/:userId", async (c) => {
 // Direkte Unter-Projekte eines Projekts (Migration 005).
 projectsRoutes.get("/projects/:name/children", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   if (!projectRepo.listChildren) return c.json([]);
   const children = await projectRepo.listChildren(name);
   return c.json(children);
@@ -455,11 +490,17 @@ projectsRoutes.get("/projects/:name/children", async (c) => {
 // Projekt-Notizen
 projectsRoutes.get("/projects/:name/notes", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   return c.json(await projectRepo.listNotes(name));
 });
 
 projectsRoutes.get("/projects/:name/notes/:note", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   const note = c.req.param("note");
   const content = await projectRepo.readNote(name, note);
   if (!content) return c.json({ error: "Notiz nicht gefunden" }, 404);
@@ -469,6 +510,9 @@ projectsRoutes.get("/projects/:name/notes/:note", async (c) => {
 // Projekt-Aufgaben
 projectsRoutes.get("/projects/:name/tasks", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   return c.json(await taskRepo.list(name));
 });
 
@@ -490,6 +534,9 @@ projectsRoutes.post("/projects/:name/tasks", async (c) => {
 
 projectsRoutes.patch("/projects/:name/tasks", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   const { text } = await c.req.json<{ text: string }>();
   const ok = await taskRepo.complete(text, name);
   if (ok) emitForProjectName({ type: "task", action: "completed" }, name, { actorId: c.var.userId });
@@ -499,6 +546,9 @@ projectsRoutes.patch("/projects/:name/tasks", async (c) => {
 // Projekt-Termine
 projectsRoutes.get("/projects/:name/termine", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   return c.json(await terminRepo.list(name));
 });
 
@@ -525,6 +575,9 @@ projectsRoutes.post("/projects/:name/termine", async (c) => {
 
 projectsRoutes.delete("/projects/:name/termine", async (c) => {
   const name = c.req.param("name");
+  if (!(await canSeeProjectByName(userCtx(c), name))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
   const { text } = await c.req.json<{ text: string }>();
   const ok = await terminRepo.delete(text, name);
   if (ok) emitForProjectName({ type: "termin", action: "deleted" }, name, { actorId: c.var.userId });
