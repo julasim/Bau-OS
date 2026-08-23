@@ -50,7 +50,8 @@ meetingsRoutes.get("/projects/:projectName/meetings", async (c) => {
   if ("error" in proj) return proj.error;
   const limitRaw = c.req.query("limit");
   const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 50, 1), 200) : 50;
-  const meetings = await meetingRepo.list(proj.id, limit);
+  // `?vor=YYYY-MM-DD` blaettert nach hinten — siehe bautagebuch.ts.
+  const meetings = await meetingRepo.list(proj.id, limit, c.req.query("vor"));
   return c.json(meetings);
 });
 
@@ -71,6 +72,23 @@ meetingsRoutes.post("/projects/:projectName/meetings", async (c) => {
 });
 
 // ── Einzeln ───────────────────────────────────────────────────
+// ── Cross-Projekt ────────────────────────────────────────────
+//
+// ⚠ MUSS VOR `/meetings/:id` STEHEN. Hono trifft in Registrierungsreihenfolge:
+// stand diese Route weiter unten, landete `/meetings/recent` bei `:id`, das
+// Repository suchte eine Besprechung mit der ID „recent" und die Antwort war
+// 404. Die Route war damit seit ihrem Bau unerreichbar.
+//
+// Dieselbe Falle steht in `projects.ts:207` ausdruecklich kommentiert — und
+// wurde hier trotzdem gemacht. Beim naechsten `/…/recent` daran denken.
+meetingsRoutes.get("/meetings/recent", async (c) => {
+  const limitRaw = c.req.query("limit");
+  const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 20, 1), 100) : 20;
+  const visible = await getVisibleProjectIds(userCtx(c));
+  const meetings = await meetingRepo.listRecent(visible, limit);
+  return c.json(meetings);
+});
+
 meetingsRoutes.get("/meetings/:id", async (c) => {
   const id = c.req.param("id");
   const meeting = await meetingRepo.get(id);
@@ -128,13 +146,4 @@ meetingsRoutes.delete("/meetings/:id", async (c) => {
   const ok = await meetingRepo.delete(id);
   if (ok) emit({ type: "meeting", action: "deleted", id, projectId: meeting.projectId }, { actorId: c.var.userId });
   return c.json({ ok });
-});
-
-// ── Cross-Projekt ────────────────────────────────────────────
-meetingsRoutes.get("/meetings/recent", async (c) => {
-  const limitRaw = c.req.query("limit");
-  const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 20, 1), 100) : 20;
-  const visible = await getVisibleProjectIds(userCtx(c));
-  const meetings = await meetingRepo.listRecent(visible, limit);
-  return c.json(meetings);
 });

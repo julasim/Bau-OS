@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { alsIso, alsIsoOderNull } from "../src/data/zeitstempel.js";
+import { alsIso, alsIsoOderNull, istIsoDatum } from "../src/data/zeitstempel.js";
 import { HAS_DB, setupAclFixture, authHeader, jsonHeader, namensraum, type AclFixture } from "./helpers/acl-fixture.js";
 
 // Der Zeitstempel-Vertrag: **jedes Datum verlässt den Server als ISO 8601.**
@@ -140,5 +140,28 @@ describe("Zeitstempel-Vertrag", () => {
       expect(k.eintraege.length).toBeGreaterThan(0);
       for (const e of k.eintraege) expect(e.geloeschtAm).toMatch(ISO);
     });
+  });
+});
+
+// ── Ein Datum, das es wirklich gibt ─────────────────────────────────────────
+describe("istIsoDatum: Form UND Datum", () => {
+  it("nimmt gültige Tage an", () => {
+    for (const t of ["2026-01-01", "2026-08-23", "2024-02-29", "2026-12-31"]) {
+      expect(istIsoDatum(t), t).toBe(true);
+    }
+  });
+
+  it("lehnt ab, was nur so AUSSIEHT wie ein Datum", () => {
+    // Genau diese Fälle bestanden die alte Formprüfung und schlugen erst in
+    // Postgres auf — für den Aufrufer ein 500er statt einer Absage.
+    for (const t of ["2026-13-99", "2026-02-30", "2026-00-10", "2026-01-32", "2025-02-29"]) {
+      expect(istIsoDatum(t), t).toBe(false);
+    }
+  });
+
+  it("lehnt ab, was gar keine Form hat", () => {
+    for (const t of ["morgen", "23.08.2026", "2026-8-3", "", "'; DROP TABLE x; --", null, undefined, 20260823]) {
+      expect(istIsoDatum(t), String(t)).toBe(false);
+    }
   });
 });

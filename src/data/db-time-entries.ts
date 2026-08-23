@@ -15,9 +15,8 @@ import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { TimeEntry, TimeEntryInput, TimeEntryRepository, TimeSummary } from "./types.js";
-import { alsIso } from "./zeitstempel.js";
+import { alsIso, istIsoDatum } from "./zeitstempel.js";
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}(:\d{2})?$/;
 
 function rowToEntry(row: Record<string, unknown>): TimeEntry {
@@ -81,7 +80,7 @@ function validateInput(input: Partial<TimeEntryInput>):
       activity?: string | null;
       notes?: string | null;
     } {
-  if ("date" in input && input.date && !ISO_DATE.test(input.date)) {
+  if ("date" in input && input.date && !istIsoDatum(input.date)) {
     return "Datum muss im Format YYYY-MM-DD sein";
   }
   if ("hours" in input && input.hours !== undefined) {
@@ -107,8 +106,8 @@ export const dbTimeEntries: TimeEntryRepository = {
   async list(projectId, opts = {}) {
     const db = getDb();
     const limit = opts.limit ?? 100;
-    const from = opts.from && ISO_DATE.test(opts.from) ? opts.from : null;
-    const to = opts.to && ISO_DATE.test(opts.to) ? opts.to : null;
+    const from = opts.from && istIsoDatum(opts.from) ? opts.from : null;
+    const to = opts.to && istIsoDatum(opts.to) ? opts.to : null;
 
     if (from && to) {
       const rows = await db.unsafe(
@@ -255,8 +254,8 @@ export const dbTimeEntries: TimeEntryRepository = {
   async listForMember(memberId, opts = {}) {
     const db = getDb();
     const limit = opts.limit ?? 100;
-    const from = opts.from && ISO_DATE.test(opts.from) ? opts.from : null;
-    const to = opts.to && ISO_DATE.test(opts.to) ? opts.to : null;
+    const from = opts.from && istIsoDatum(opts.from) ? opts.from : null;
+    const to = opts.to && istIsoDatum(opts.to) ? opts.to : null;
     if (from && to) {
       const rows = await db.unsafe(
         `${SELECT} WHERE t.member_id = $1 AND t.entry_date BETWEEN $2 AND $3
@@ -274,8 +273,8 @@ export const dbTimeEntries: TimeEntryRepository = {
 
   async summaryByMember(projectId, from, to) {
     const db = getDb();
-    const fromValid = from && ISO_DATE.test(from) ? from : "1900-01-01";
-    const toValid = to && ISO_DATE.test(to) ? to : "9999-12-31";
+    const fromValid = from && istIsoDatum(from) ? from : "1900-01-01";
+    const toValid = to && istIsoDatum(to) ? to : "9999-12-31";
     // member_name als Fallback wenn member_id NULL → COALESCE.
     // Gruppieren auf member_id-Niveau, aber Label aus member_name (oder
     // "Unbekannt" wenn beides leer).
@@ -303,8 +302,8 @@ export const dbTimeEntries: TimeEntryRepository = {
 
   async summaryByDate(projectId, from, to) {
     const db = getDb();
-    const fromValid = from && ISO_DATE.test(from) ? from : "1900-01-01";
-    const toValid = to && ISO_DATE.test(to) ? to : "9999-12-31";
+    const fromValid = from && istIsoDatum(from) ? from : "1900-01-01";
+    const toValid = to && istIsoDatum(to) ? to : "9999-12-31";
     const rows = await db`
       SELECT
         TO_CHAR(entry_date, 'YYYY-MM-DD') AS key,

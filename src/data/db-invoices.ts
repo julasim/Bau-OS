@@ -9,10 +9,8 @@
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { ProjectInvoice, InvoicePosition, InvoiceRepository } from "./types.js";
-import { alsIso } from "./zeitstempel.js";
+import { alsIso, istIsoDatum } from "./zeitstempel.js";
 import { istPlatzhalter } from "./projektnummer.js";
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 function dateStr(v: unknown): string | null {
   if (v === null || v === undefined) return null;
@@ -193,7 +191,7 @@ export const dbInvoices: InvoiceRepository = {
 
   async create(projectId, input) {
     const db = getDb();
-    if (input.datum && !ISO_DATE.test(input.datum)) return "Datum muss YYYY-MM-DD sein";
+    if (input.datum && !istIsoDatum(input.datum)) return "Datum muss YYYY-MM-DD sein";
     if (typeof input.betrag === "number" && input.betrag < 0) return "Betrag darf nicht negativ sein";
 
     const positionen = input.positionen ?? [];
@@ -231,7 +229,7 @@ export const dbInvoices: InvoiceRepository = {
     // muss er noch stimmen — sonst hat in der Zwischenzeit jemand anderes
     // gespeichert. Ohne Zaehler gilt weiterhin „zuletzt gewinnt".
     pruefeRev(rowToInvoice(current), current.rev, (input as { rev?: number }).rev);
-    if (input.datum && !ISO_DATE.test(input.datum)) return "Datum muss YYYY-MM-DD sein";
+    if (input.datum && !istIsoDatum(input.datum)) return "Datum muss YYYY-MM-DD sein";
 
     const phaseId = "phaseId" in input ? (input.phaseId ?? null) : current.phase_id;
     const nummer = "nummer" in input ? (input.nummer ?? null) : current.nummer;

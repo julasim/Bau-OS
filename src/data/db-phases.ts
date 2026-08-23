@@ -11,9 +11,7 @@
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { ProjectPhase, PhaseRepository } from "./types.js";
-import { alsIso } from "./zeitstempel.js";
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+import { alsIso, istIsoDatum } from "./zeitstempel.js";
 
 function dateStr(v: unknown): string | null {
   if (v === null || v === undefined) return null;
@@ -152,7 +150,7 @@ export const dbPhases: PhaseRepository = {
     if (!name) return "Phasenname fehlt";
     for (const f of ["sollStart", "sollEnde", "istStart", "istEnde"] as const) {
       const v = input[f];
-      if (v && !ISO_DATE.test(v)) return `Datum ${f} muss YYYY-MM-DD sein`;
+      if (v && !istIsoDatum(v)) return `Datum ${f} muss YYYY-MM-DD sein`;
     }
     // sort_order ans Ende, wenn nicht explizit gesetzt.
     let sort = input.sortOrder;
@@ -189,7 +187,7 @@ export const dbPhases: PhaseRepository = {
     pruefeRev(rowToPhase(current), current.rev, (input as { rev?: number }).rev);
     for (const f of ["sollStart", "sollEnde", "istStart", "istEnde"] as const) {
       const v = input[f];
-      if (v && !ISO_DATE.test(v)) return `Datum ${f} muss YYYY-MM-DD sein`;
+      if (v && !istIsoDatum(v)) return `Datum ${f} muss YYYY-MM-DD sein`;
     }
 
     const name = "name" in input ? (input.name ?? current.name) : current.name;

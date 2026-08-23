@@ -912,6 +912,39 @@ async function saveCustomModule() {
   }
 }
 
+// ── Warum ein Modul umbenennbar sein muss ────────────────────────────────
+//
+// Die PATCH-Route gibt es seit dem Bau des Moduls, sie war nur nie verdrahtet:
+// anlegen und löschen ging, ändern nicht. Ein Tippfehler im Namen liess sich
+// deshalb nur durch Löschen und Neuanlegen beheben — und dabei geht die
+// Zuordnung ALLER Projekte verloren, weil der technische Schlüssel beim
+// Neuanlegen aus dem Namen erzeugt wird. Ein „Bauleitng" hätte man also
+// entweder stehen lassen oder teuer bezahlt.
+const customModuleEdit = ref<{ id: string; label: string; description: string } | null>(null);
+
+function startCustomModuleEdit(m: CustomProjectModule) {
+  customModuleEdit.value = { id: m.id, label: m.label, description: m.description ?? "" };
+}
+
+async function saveCustomModuleEdit() {
+  const entwurf = customModuleEdit.value;
+  if (!entwurf || !entwurf.label.trim()) return;
+  customModulesBusy.value = true;
+  try {
+    const aktualisiert = await api.patch<CustomProjectModule>(`/project-modules/custom/${entwurf.id}`, {
+      label: entwurf.label.trim(),
+      description: entwurf.description.trim() || null,
+    });
+    customModules.value = customModules.value.map((m) => (m.id === entwurf.id ? aktualisiert : m));
+    customModuleEdit.value = null;
+    flash("success", "Modul geändert");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Ändern fehlgeschlagen");
+  } finally {
+    customModulesBusy.value = false;
+  }
+}
+
 async function deleteCustomModule(m: CustomProjectModule) {
   if (!(await confirm({ message: `Modul "${m.label}" löschen?`, confirmDanger: true }))) return;
   customModulesBusy.value = true;
@@ -2071,7 +2104,25 @@ onMounted(() => {
               <!-- Liste bestehender custom modules -->
               <div v-if="customModules.length > 0" class="settings-card settings-divide" style="margin-bottom: 12px">
                 <div v-for="m in customModules" :key="m.id" class="settings-row flex items-center gap-3 px-4 py-2.5">
-                  <div style="flex: 1; min-width: 0">
+                  <div v-if="customModuleEdit?.id === m.id" style="flex: 1; min-width: 0" class="flex flex-col gap-2">
+                    <input
+                      v-model="customModuleEdit.label"
+                      class="stamm-input"
+                      placeholder="Name"
+                      @keyup.enter="saveCustomModuleEdit"
+                    />
+                    <input v-model="customModuleEdit.description" class="stamm-input" placeholder="Beschreibung" />
+                    <!-- Der Schlüssel bleibt: an ihm hängt die Zuordnung aller
+                         Projekte. Änderbar ist, was man liest. -->
+                    <div class="text-xs font-mono" style="color: var(--color-text-tertiary)">Key: {{ m.key }}</div>
+                    <div class="flex gap-2">
+                      <button class="patio-btn solid sm" :disabled="customModulesBusy" @click="saveCustomModuleEdit">
+                        Speichern
+                      </button>
+                      <button class="patio-btn sm" @click="customModuleEdit = null">Abbrechen</button>
+                    </div>
+                  </div>
+                  <div v-else style="flex: 1; min-width: 0">
                     <div style="font-size: 13px; font-weight: 500; color: var(--color-text)">{{ m.label }}</div>
                     <div class="text-xs font-mono" style="color: var(--color-text-tertiary)">Key: {{ m.key }}</div>
                     <div v-if="m.description" class="text-xs" style="color: var(--color-text-tertiary)">
@@ -2087,6 +2138,21 @@ onMounted(() => {
                     }"
                     >{{ m.enabledByDefault ? "Standard: An" : "Standard: Aus" }}</span
                   >
+                  <button
+                    v-if="customModuleEdit?.id !== m.id"
+                    class="text-xs px-2 py-1 rounded"
+                    style="
+                      background: transparent;
+                      border: 1px solid var(--color-border);
+                      cursor: pointer;
+                      flex-shrink: 0;
+                    "
+                    :disabled="customModulesBusy"
+                    title="Modul umbenennen"
+                    @click="startCustomModuleEdit(m)"
+                  >
+                    Ändern
+                  </button>
                   <button
                     @click="deleteCustomModule(m)"
                     class="text-xs px-2 py-1 rounded"

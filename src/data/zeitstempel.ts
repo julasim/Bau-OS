@@ -57,3 +57,26 @@ export function alsIso(wert: unknown): string {
 export function alsIsoOderNull(wert: unknown): string | null {
   return wert === null || wert === undefined ? null : alsIso(wert);
 }
+
+// ── Ein Datum, das es wirklich gibt ─────────────────────────────────────────
+//
+// Sechs Repositories hielten je eine eigene Kopie von `/^\d{4}-\d{2}-\d{2}$/`
+// und prueften damit die FORM eines Datums, nicht das Datum. `2026-13-99`
+// besteht diese Pruefung — und schlaegt dann in Postgres auf:
+//
+//   date/time field value out of range: "2026-13-99"
+//
+// Fuer den Aufrufer heisst das ein 500er statt einer Absage. Gefunden beim Bau
+// des Blaetter-Cursors, wo der Wert direkt aus der URL kommt; dieselbe Luecke
+// steckt aber in jedem Datumsfeld, das aus einem Formular kommt.
+const ISO_FORM = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Ist das ein gueltiges Datum im Format `YYYY-MM-DD`? */
+export function istIsoDatum(wert: unknown): wert is string {
+  if (typeof wert !== "string" || !ISO_FORM.test(wert)) return false;
+  const d = new Date(`${wert}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
+  // Der Rueckweg faengt die Faelle, die JavaScript still zurechtbiegt:
+  // `2026-02-30` wird zu `2026-03-02`, ohne dass irgendwo etwas rot wird.
+  return d.toISOString().slice(0, 10) === wert;
+}

@@ -16,9 +16,8 @@ import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Meeting, MeetingActionItem, MeetingInput, MeetingRepository } from "./types.js";
-import { alsIso } from "./zeitstempel.js";
+import { alsIso, istIsoDatum } from "./zeitstempel.js";
 
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const HHMM = /^\d{2}:\d{2}(:\d{2})?$/;
 
 function rowToMeeting(row: Record<string, unknown>): Meeting {
@@ -122,10 +121,10 @@ function normalizeInput(input: Partial<MeetingInput>):
       actionItems?: MeetingActionItem[];
       nextMeetingDate?: string | null;
     } {
-  if ("date" in input && input.date && !ISO_DATE.test(input.date)) {
+  if ("date" in input && input.date && !istIsoDatum(input.date)) {
     return "Datum muss im Format YYYY-MM-DD sein";
   }
-  if ("nextMeetingDate" in input && input.nextMeetingDate && !ISO_DATE.test(input.nextMeetingDate)) {
+  if ("nextMeetingDate" in input && input.nextMeetingDate && !istIsoDatum(input.nextMeetingDate)) {
     return "Folgetermin-Datum muss im Format YYYY-MM-DD sein";
   }
   if ("startTime" in input && input.startTime && !HHMM.test(input.startTime)) {
@@ -175,12 +174,24 @@ async function filterValidAttendees(ids: string[]): Promise<string[]> {
 }
 
 export const dbMeetings: MeetingRepository = {
-  async list(projectId, limit = 50) {
+  async list(projectId, limit = 50, vor) {
     const db = getDb();
-    const rows = await db.unsafe(
-      `${SELECT} WHERE m.project_id = $1 ORDER BY m.meeting_date DESC, m.start_time DESC NULLS LAST LIMIT $2`,
-      [projectId, limit],
-    );
+    // Datums-Cursor fuer „Aeltere laden" — Begruendung siehe db-bautagebuch.ts.
+    // Anders als dort kann ein Tag mehrere Besprechungen tragen; der Cursor ist
+    // deshalb `<` auf das Datum und laesst den angefangenen Tag bewusst aus.
+    // Die Oberflaeche setzt ihn auf den aeltesten SCHON GELADENEN Tag, und der
+    // ist dann vollstaendig geladen.
+    const gueltig = istIsoDatum(vor) ? vor : null;
+    const rows = gueltig
+      ? await db.unsafe(
+          `${SELECT} WHERE m.project_id = $1 AND m.meeting_date < $2
+             ORDER BY m.meeting_date DESC, m.start_time DESC NULLS LAST LIMIT $3`,
+          [projectId, gueltig, limit],
+        )
+      : await db.unsafe(
+          `${SELECT} WHERE m.project_id = $1 ORDER BY m.meeting_date DESC, m.start_time DESC NULLS LAST LIMIT $2`,
+          [projectId, limit],
+        );
     return rows.map((r) => rowToMeeting(r as Record<string, unknown>));
   },
 

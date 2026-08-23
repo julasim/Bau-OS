@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { noteRepo, taskRepo, terminRepo, projectRepo } from "../../data/index.js";
 import { getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
+import { gehoertMirPruefer, type PersoenlicherDatensatz } from "../persoenlich.js";
 
 export const dashboardRoutes = new Hono<AppEnv>();
 
@@ -23,24 +24,37 @@ dashboardRoutes.get("/dashboard", async (c) => {
   // Phase-4-Filter fuer Aggregate. Admin: alles; User: nach sichtbaren
   // Projekten + persoenlichen Items.
   const visibleNames = visible === "all" ? null : new Set(await projectRepo.list(visible));
-  const me = ctx.userId;
 
-  const filterByAccess = <T extends { project: string | null }>(
-    items: T[],
-    isPersonalVisible: (item: T) => boolean,
-  ): T[] => {
+  // ── Warum das hier asynchron ist ─────────────────────────────────────────
+  //
+  // Hier stand ein Direktvergleich: `t.assigneeId === me`. Der trifft NIE.
+  // `assignee_id` zeigt auf team_members.id, `ctx.userId` ist eine users.id —
+  // zwei disjunkte UUID-Raeume (Migrationen 007/013). Die Startseite zeigte
+  // deshalb „0 offene Aufgaben", waehrend die Aufgabenliste welche
+  // auflistete: kein Fehler, keine Meldung, nur eine Zahl, die immer null war.
+  //
+  // Und der Ersteller fehlte ganz: wer sich selbst eine Aufgabe ohne Projekt
+  // anlegt, sah sie in keiner Zahl der Startseite.
+  //
+  // Der Pruefer aus `../persoenlich.js` beantwortet beides und merkt sich, was
+  // er schon aufgeloest hat — sonst waere jede Zeile ein Datenbankzugriff.
+  const gehoertMir = gehoertMirPruefer(ctx);
+
+  const filterByAccess = async <T extends { project: string | null }>(items: T[]): Promise<T[]> => {
     if (ctx.role === "admin" || visibleNames === null) return items;
-    return items.filter((i) => {
-      if (i.project) return visibleNames.has(i.project);
-      return isPersonalVisible(i);
-    });
+    const raus: T[] = [];
+    for (const i of items) {
+      if (i.project) {
+        if (visibleNames.has(i.project)) raus.push(i);
+      } else if (await gehoertMir(i as PersoenlicherDatensatz)) {
+        raus.push(i);
+      }
+    }
+    return raus;
   };
 
-  const visibleTasks = filterByAccess(tasks, (t) => !!me && t.assigneeId === me);
-  const visibleTermine = filterByAccess(
-    termine,
-    (t) => !!me && Array.isArray(t.assigneeIds) && t.assigneeIds.includes(me),
-  );
+  const visibleTasks = await filterByAccess(tasks);
+  const visibleTermine = await filterByAccess(termine);
   // Notizen: simple Liste hat keine Projekt-Info, daher fuer Non-Admins
   // ueber listDetailed gehen und auf sichtbare Projekte filtern.
   let visibleNotesCount = notes.length;

@@ -83,13 +83,72 @@ const memberId = ref("");
 const member = ref<TeamMember | null>(null);
 const loading = ref(false);
 
-type Tab = "projekte" | "aufgaben" | "termine" | "log";
+type Tab = "projekte" | "aufgaben" | "termine" | "stunden" | "log";
+const TAB_TITEL: Record<Tab, string> = {
+  projekte: "Projekte",
+  aufgaben: "Aufgaben",
+  termine: "Termine",
+  stunden: "Stunden",
+  log: "Kontakt-Log",
+};
 const tab = ref<Tab>("projekte");
 
 // Aufgaben + Termine dieser Person (Phase 3)
 const tasks = ref<Task[]>([]);
 const termine = ref<Termin[]>([]);
 const tasksLoaded = ref(false);
+
+// ── Stunden dieser Person ────────────────────────────────────────────────
+//
+// `GET /team/:memberId/time-entries` ist samt eigener Zugriffsregel (Admin
+// sieht alle, alle anderen nur sich selbst) und Zeitraum-Filter gebaut — und
+// wurde von niemandem aufgerufen. Die Verknüpfung Konto ↔ Team-Mitglied
+// (Migration 013) wurde faktisch nur für diese eine ungenutzte Route
+// ausgewertet.
+interface Zeiteintrag {
+  id: string;
+  date: string;
+  hours: number;
+  /** Das Feld heisst `activity`, nicht `description` — beim ersten Bau stand
+   *  hier der falsche Name, und die Spalte „Tätigkeit" zeigte durchgehend
+   *  einen Strich. TypeScript merkt das nicht: die Schnittstelle beschreibt,
+   *  was man erwartet, nicht was ankommt. */
+  activity: string | null;
+  notes: string | null;
+  projectName?: string | null;
+  projektnummer?: string | null;
+}
+
+const stunden = ref<Zeiteintrag[]>([]);
+const stundenGeladen = ref(false);
+const stundenFehler = ref<string | null>(null);
+const stundenVon = ref("");
+const stundenBis = ref("");
+
+const stundenSumme = computed(() => stunden.value.reduce((n, e) => n + (Number(e.hours) || 0), 0));
+
+async function ladeStunden() {
+  stundenFehler.value = null;
+  try {
+    const q = new URLSearchParams();
+    if (stundenVon.value) q.set("from", stundenVon.value);
+    if (stundenBis.value) q.set("to", stundenBis.value);
+    const suffix = q.toString() ? `?${q}` : "";
+    stunden.value = await api.get<Zeiteintrag[]>(`/team/${encodeURIComponent(memberId.value)}/time-entries${suffix}`);
+    stundenGeladen.value = true;
+  } catch (e) {
+    stunden.value = [];
+    // Ein 403 ist hier kein Fehler, sondern die Regel: wer nicht Admin ist,
+    // sieht nur die eigenen Stunden.
+    stundenFehler.value =
+      e instanceof Error && e.message.includes("andere Mitglieder")
+        ? "Stunden anderer Mitglieder sind nur für die Verwaltung sichtbar."
+        : e instanceof Error
+          ? e.message
+          : "Stunden konnten nicht geladen werden.";
+    stundenGeladen.value = true;
+  }
+}
 
 // Projekt-Zuordnung
 const allProjects = ref<ProjectSummary[]>([]);
@@ -228,6 +287,9 @@ async function openTab(t: Tab) {
   tab.value = t;
   if ((t === "aufgaben" || t === "termine") && !tasksLoaded.value) {
     await loadAssignedTasksAndTermine();
+  }
+  if (t === "stunden" && !stundenGeladen.value) {
+    await ladeStunden();
   }
 }
 
@@ -710,15 +772,48 @@ onUnmounted(() => {
         "
       >
         <button
-          v-for="t in ['projekte', 'aufgaben', 'termine', 'log'] as const"
+          v-for="t in ['projekte', 'aufgaben', 'termine', 'stunden', 'log'] as const"
           :key="t"
           @click="openTab(t)"
           :class="['tab-btn', tab === t ? 'tab-btn-active' : '']"
         >
-          {{
-            t === "projekte" ? "Projekte" : t === "aufgaben" ? "Aufgaben" : t === "termine" ? "Termine" : "Kontakt-Log"
-          }}
+          {{ TAB_TITEL[t] }}
         </button>
+      </div>
+
+      <!-- Stunden-Tab -->
+      <div v-if="tab === 'stunden'">
+        <div class="flex items-center" style="gap: 8px; margin-bottom: 14px; flex-wrap: wrap">
+          <label class="text-xs" style="color: var(--color-text-muted)">von</label>
+          <input v-model="stundenVon" type="date" class="form-input" style="max-width: 150px" @change="ladeStunden" />
+          <label class="text-xs" style="color: var(--color-text-muted)">bis</label>
+          <input v-model="stundenBis" type="date" class="form-input" style="max-width: 150px" @change="ladeStunden" />
+          <span v-if="stunden.length" class="text-xs" style="margin-left: auto; color: var(--color-text-muted)">
+            <strong style="color: var(--color-text)">{{ stundenSumme.toFixed(1) }} h</strong>
+            · {{ stunden.length }} {{ stunden.length === 1 ? "Eintrag" : "Einträge" }}
+          </span>
+        </div>
+
+        <div v-if="stundenFehler" class="empty-hint">{{ stundenFehler }}</div>
+        <div v-else-if="!stunden.length" class="empty-hint">Keine Stunden im gewählten Zeitraum.</div>
+        <table v-else class="stunden-tabelle">
+          <thead>
+            <tr>
+              <th style="width: 100px">Datum</th>
+              <th>Projekt</th>
+              <th>Tätigkeit</th>
+              <th style="width: 70px; text-align: right">Stunden</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="e in stunden" :key="e.id">
+              <td class="font-mono">{{ e.date }}</td>
+              <td><ProjektBezug :nummer="e.projektnummer" :name="e.projectName" /></td>
+              <td>{{ e.activity || e.notes || "—" }}</td>
+              <td class="font-mono" style="text-align: right">{{ Number(e.hours).toFixed(1) }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
 
       <!-- Projekte-Tab -->
@@ -1098,6 +1193,24 @@ onUnmounted(() => {
 }
 
 /* Tabs */
+.stunden-tabelle {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.stunden-tabelle th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border);
+}
+.stunden-tabelle td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  color: var(--color-text);
+}
+
 .tab-btn {
   padding-bottom: 10px;
   background: transparent;

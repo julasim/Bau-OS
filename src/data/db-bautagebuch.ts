@@ -15,9 +15,7 @@
 
 import { getDb } from "../db/client.js";
 import type { BautagebuchEntry, BautagebuchRepository } from "./types.js";
-import { alsIso } from "./zeitstempel.js";
-
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+import { alsIso, istIsoDatum } from "./zeitstempel.js";
 
 function rowToEntry(row: Record<string, unknown>): BautagebuchEntry {
   // entry_date kommt aus Postgres als Date-Objekt (postgres.js setzt
@@ -70,17 +68,25 @@ const SELECT = `
 `;
 
 export const dbBautagebuch: BautagebuchRepository = {
-  async list(projectId, limit = 30) {
+  async list(projectId, limit = 30, vor) {
     const db = getDb();
-    const rows = await db.unsafe(`${SELECT} WHERE b.project_id = $1 ORDER BY b.entry_date DESC LIMIT $2`, [
-      projectId,
-      limit,
-    ]);
+    // Datums-Cursor statt Offset: waehrend jemand blaettert, koennen neue
+    // Eintraege dazukommen — ein Offset wuerde dann Zeilen ueberspringen oder
+    // doppelt zeigen. `entry_date` ist je Projekt eindeutig (ein Eintrag pro
+    // Tag), taugt also als Cursor.
+    const gueltig = vor && istIsoDatum(vor) ? vor : null;
+    const rows = gueltig
+      ? await db.unsafe(`${SELECT} WHERE b.project_id = $1 AND b.entry_date < $2 ORDER BY b.entry_date DESC LIMIT $3`, [
+          projectId,
+          gueltig,
+          limit,
+        ])
+      : await db.unsafe(`${SELECT} WHERE b.project_id = $1 ORDER BY b.entry_date DESC LIMIT $2`, [projectId, limit]);
     return rows.map((r) => rowToEntry(r as Record<string, unknown>));
   },
 
   async get(projectId, date) {
-    if (!ISO_DATE.test(date)) return null;
+    if (!istIsoDatum(date)) return null;
     const db = getDb();
     const rows = await db.unsafe(`${SELECT} WHERE b.project_id = $1 AND b.entry_date = $2 LIMIT 1`, [projectId, date]);
     return rows[0] ? rowToEntry(rows[0] as Record<string, unknown>) : null;
@@ -93,7 +99,7 @@ export const dbBautagebuch: BautagebuchRepository = {
   },
 
   async upsert(projectId, date, patch, createdById = null) {
-    if (!ISO_DATE.test(date)) return "Datum muss im Format YYYY-MM-DD sein";
+    if (!istIsoDatum(date)) return "Datum muss im Format YYYY-MM-DD sein";
 
     // Konsistenz: temperature_min darf nicht > max sein.
     if (
@@ -176,7 +182,7 @@ export const dbBautagebuch: BautagebuchRepository = {
   },
 
   async delete(projectId, date) {
-    if (!ISO_DATE.test(date)) return false;
+    if (!istIsoDatum(date)) return false;
     const db = getDb();
     const result = await db`
       DELETE FROM bautagebuch

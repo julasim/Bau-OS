@@ -588,6 +588,7 @@ onMounted(async () => {
   if (isValidTab(route.query.tab)) tab.value = route.query.tab;
   await loadAll();
   void loadProjectModules();
+  void ladeExportVorlagen();
   // Lazy-Loads fuer den initialen Tab anstossen (falls nicht Uebersicht).
   if (tab.value !== "uebersicht") void openTab(tab.value);
   // Uebersicht ist Default-Tab — Children erst nach loadAll laden,
@@ -1529,10 +1530,81 @@ function weatherLabel(w: WeatherKey | null | undefined): string {
   return WEATHER_OPTIONS.find((o) => o.value === w)?.label ?? "·";
 }
 
+// ── Warum es „Ältere laden" braucht ──────────────────────────────────────
+//
+// Die drei Listen holten eine feste Zahl neuester Einträge (Bautagebuch 60,
+// Besprechungen 100, Stunden 200) und boten keinen Weg zu den älteren. Nach
+// rund zwei Monaten täglicher Einträge war der ältere Bestand im Programm
+// nicht mehr erreichbar — die Daten waren da, der Weg dorthin nicht.
+//
+// Geblättert wird über einen Datums-Cursor (`?vor=`), nicht über einen
+// Offset: während jemand blättert, können neue Einträge dazukommen, und ein
+// Offset überspringt dann Zeilen oder zeigt sie doppelt.
+const BAUTAGEBUCH_SEITE = 60;
+const MEETINGS_SEITE = 100;
+const STUNDEN_SEITE = 200;
+
+const bautagebuchMehr = ref(false);
+const meetingsMehr = ref(false);
+const stundenMehr = ref(false);
+const laedtMehr = ref(false);
+
+async function ladeAeltereBautagebuch() {
+  const aeltester = bautagebuchEntries.value.at(-1)?.date;
+  if (!aeltester) return;
+  laedtMehr.value = true;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    const weitere = await api.get<BautagebuchEntry[]>(
+      `/projects/${n}/bautagebuch?limit=${BAUTAGEBUCH_SEITE}&vor=${aeltester}`,
+    );
+    bautagebuchEntries.value = [...bautagebuchEntries.value, ...weitere];
+    bautagebuchMehr.value = weitere.length === BAUTAGEBUCH_SEITE;
+  } finally {
+    laedtMehr.value = false;
+  }
+}
+
+async function ladeAeltereMeetings() {
+  const aeltestes = meetings.value.at(-1)?.date;
+  if (!aeltestes) return;
+  laedtMehr.value = true;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    const weitere = await api.get<Meeting[]>(`/projects/${n}/meetings?limit=${MEETINGS_SEITE}&vor=${aeltestes}`);
+    // Der Cursor lässt den angefangenen Tag aus (`<`), deshalb erst den
+    // bereits geladenen Tag vollständig behalten und dann anhängen.
+    meetings.value = [...meetings.value, ...weitere];
+    meetingsMehr.value = weitere.length === MEETINGS_SEITE;
+  } finally {
+    laedtMehr.value = false;
+  }
+}
+
+async function ladeAeltereStunden() {
+  const aeltester = timeEntries.value.at(-1)?.date;
+  if (!aeltester) return;
+  laedtMehr.value = true;
+  try {
+    const n = encodeURIComponent(projectName.value);
+    const weitere = await api.get<TimeEntry[]>(`/projects/${n}/time-entries?limit=${STUNDEN_SEITE}&to=${aeltester}`);
+    // `to` ist einschliessend — was schon dasteht, muss raus.
+    const bekannt = new Set(timeEntries.value.map((e) => e.id));
+    const neu = weitere.filter((e) => !bekannt.has(e.id));
+    timeEntries.value = [...timeEntries.value, ...neu];
+    stundenMehr.value = weitere.length === STUNDEN_SEITE && neu.length > 0;
+  } finally {
+    laedtMehr.value = false;
+  }
+}
+
 async function loadBautagebuch() {
   try {
     const n = encodeURIComponent(projectName.value);
-    bautagebuchEntries.value = await api.get<BautagebuchEntry[]>(`/projects/${n}/bautagebuch?limit=60`);
+    bautagebuchEntries.value = await api.get<BautagebuchEntry[]>(
+      `/projects/${n}/bautagebuch?limit=${BAUTAGEBUCH_SEITE}`,
+    );
+    bautagebuchMehr.value = bautagebuchEntries.value.length === BAUTAGEBUCH_SEITE;
     bautagebuchLoaded.value = true;
     // Wenn nichts ausgewählt: Heute, falls Eintrag vorhanden — sonst neu für heute.
     if (!bautagebuchSelectedDate.value) {
@@ -1722,7 +1794,8 @@ function meetingDraftFrom(m: Meeting): MeetingDraft {
 async function loadMeetings() {
   try {
     const n = encodeURIComponent(projectName.value);
-    meetings.value = await api.get<Meeting[]>(`/projects/${n}/meetings?limit=100`);
+    meetings.value = await api.get<Meeting[]>(`/projects/${n}/meetings?limit=${MEETINGS_SEITE}`);
+    meetingsMehr.value = meetings.value.length === MEETINGS_SEITE;
     meetingsLoaded.value = true;
   } catch (e) {
     meetingError.value = e instanceof Error ? e.message : "Meetings nicht ladbar (DB-Modus erforderlich)";
@@ -1779,19 +1852,66 @@ async function downloadDocx(url: string, fallbackFilename: string) {
   }
 }
 
+// ── Welche Word-Vorlage wird benutzt? ────────────────────────────────────
+//
+// Alle vier Export-Endpunkte lesen `?templateId=`, die Oberfläche hat es
+// **nie gesendet**. Damit war jede Vorlage ausser der als Standard markierten
+// im Betrieb unerreichbar — obwohl Upload, Testdruck, Download und
+// Variablen-Dokumentation vollständig gebaut sind. Wer eine zweite Vorlage
+// anlegte („Protokoll kurz"), konnte sie nur im Testdruck sehen.
+//
+// Die Auswahl erscheint nur, wenn es für diese Art mehr als eine Vorlage
+// gibt. Bei einer einzigen wäre ein Auswahlfeld mit einem Eintrag nur
+// Bedienlast.
+interface ExportVorlage {
+  id: string;
+  name: string;
+  kind: string;
+  isDefault: boolean;
+}
+
+const exportVorlagen = ref<ExportVorlage[]>([]);
+const gewaehlteVorlage = ref<Record<string, string>>({});
+
+async function ladeExportVorlagen() {
+  try {
+    exportVorlagen.value = await api.get<ExportVorlage[]>("/export-templates");
+  } catch {
+    exportVorlagen.value = [];
+  }
+}
+
+function vorlagenFuer(kind: string): ExportVorlage[] {
+  return exportVorlagen.value.filter((v) => v.kind === kind);
+}
+
+/** Hängt `?templateId=` an, wenn für diese Art eine andere als die
+ *  Standardvorlage gewählt wurde. */
+function mitVorlage(pfad: string, kind: string): string {
+  const id = gewaehlteVorlage.value[kind];
+  if (!id) return pfad;
+  return pfad + (pfad.includes("?") ? "&" : "?") + "templateId=" + encodeURIComponent(id);
+}
+
 async function exportMeetingDocx(id: string) {
-  await downloadDocx(`/api/exports/meeting/${id}`, `Meeting-${id}.docx`);
+  await downloadDocx(mitVorlage(`/api/exports/meeting/${id}`, "meeting"), `Meeting-${id}.docx`);
 }
 async function exportBautagebuchDocx(id: string) {
-  await downloadDocx(`/api/exports/bautagebuch/${id}`, `Bautagebuch-${id}.docx`);
+  await downloadDocx(mitVorlage(`/api/exports/bautagebuch/${id}`, "bautagebuch"), `Bautagebuch-${id}.docx`);
 }
 async function exportTimeEntriesDocx() {
   const project = encodeURIComponent(projectName.value);
-  await downloadDocx(`/api/exports/time-entries?project=${project}`, `Stundenzettel-${projectName.value}.docx`);
+  await downloadDocx(
+    mitVorlage(`/api/exports/time-entries?project=${project}`, "time-entry"),
+    `Stundenzettel-${projectName.value}.docx`,
+  );
 }
 async function exportProjectSummaryDocx() {
   const n = encodeURIComponent(projectName.value);
-  await downloadDocx(`/api/exports/project/${n}/summary`, `Projekt-${projectName.value}.docx`);
+  await downloadDocx(
+    mitVorlage(`/api/exports/project/${n}/summary`, "project-summary"),
+    `Projekt-${projectName.value}.docx`,
+  );
 }
 
 // ── Vorlagen (Phase 6c) ──────────────────────────────────────────────────
@@ -2097,7 +2217,8 @@ function timeDraftFrom(e: TimeEntry): TimeDraft {
 async function loadTimeEntries() {
   try {
     const n = encodeURIComponent(projectName.value);
-    timeEntries.value = await api.get<TimeEntry[]>(`/projects/${n}/time-entries?limit=200`);
+    timeEntries.value = await api.get<TimeEntry[]>(`/projects/${n}/time-entries?limit=${STUNDEN_SEITE}`);
+    stundenMehr.value = timeEntries.value.length === STUNDEN_SEITE;
     // Summary fuer den ganzen verfuegbaren Zeitraum (Default: alles)
     const sum = await api.get<{ groupBy: string; data: TimeSummaryRow[] }>(
       `/projects/${n}/time-entries/summary?groupBy=member`,
@@ -2419,6 +2540,15 @@ async function deleteMeeting() {
         </div>
 
         <!-- Export-Button -->
+        <select
+          v-if="vorlagenFuer('project-summary').length > 1"
+          v-model="gewaehlteVorlage['project-summary']"
+          class="vorlagen-waehler"
+          title="Word-Vorlage wählen"
+        >
+          <option value="">Standardvorlage</option>
+          <option v-for="v in vorlagenFuer('project-summary')" :key="v.id" :value="v.id">{{ v.name }}</option>
+        </select>
         <button class="pt-btn pt-btn--secondary pt-btn--sm" @click="exportProjectSummaryDocx">
           <BIcon name="file" :size="11" /> Export
         </button>
@@ -3274,6 +3404,9 @@ async function deleteMeeting() {
                 <BIcon name="info" :size="12" /> {{ e.incidents.split("\n")[0].slice(0, 60) }}
               </div>
             </div>
+            <button v-if="bautagebuchMehr" class="mehr-laden" :disabled="laedtMehr" @click="ladeAeltereBautagebuch">
+              {{ laedtMehr ? "lädt …" : "Ältere laden" }}
+            </button>
           </div>
 
           <!-- Rechte Spalte: Editor -->
@@ -3301,10 +3434,18 @@ async function deleteMeeting() {
               >
                 · gespeichert
               </span>
+              <select
+                v-if="vorlagenFuer('bautagebuch').length > 1"
+                v-model="gewaehlteVorlage['bautagebuch']"
+                class="vorlagen-waehler"
+                title="Word-Vorlage wählen"
+              >
+                <option value="">Standardvorlage</option>
+                <option v-for="v in vorlagenFuer('bautagebuch')" :key="v.id" :value="v.id">{{ v.name }}</option>
+              </select>
               <button
                 v-if="bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)"
                 class="patio-btn ghost sm"
-                style="margin-left: auto"
                 @click="exportBautagebuchDocx(bautagebuchEntries.find((e) => e.date === bautagebuchSelectedDate)!.id)"
                 title="Diesen Tag als Word herunterladen"
               >
@@ -3458,6 +3599,9 @@ async function deleteMeeting() {
                 {{ (m.attendeesResolved ?? []).length + m.attendeesExternal.length }} Teilnehmer
               </div>
             </div>
+            <button v-if="meetingsMehr" class="mehr-laden" :disabled="laedtMehr" @click="ladeAeltereMeetings">
+              {{ laedtMehr ? "lädt …" : "Ältere laden" }}
+            </button>
           </div>
 
           <!-- Rechte Spalte: Editor -->
@@ -3466,10 +3610,18 @@ async function deleteMeeting() {
               <h3 style="margin: 0; font-size: 16px; font-weight: 600">
                 {{ meetingDraft.id ? "Meeting bearbeiten" : "Neues Meeting" }}
               </h3>
+              <select
+                v-if="vorlagenFuer('meeting').length > 1"
+                v-model="gewaehlteVorlage['meeting']"
+                class="vorlagen-waehler"
+                title="Word-Vorlage wählen"
+              >
+                <option value="">Standardvorlage</option>
+                <option v-for="v in vorlagenFuer('meeting')" :key="v.id" :value="v.id">{{ v.name }}</option>
+              </select>
               <button
                 v-if="meetingDraft.id"
                 class="patio-btn ghost sm"
-                style="margin-left: auto"
                 @click="exportMeetingDocx(meetingDraft.id)"
                 title="Als Word-Datei herunterladen"
               >
@@ -3679,6 +3831,15 @@ async function deleteMeeting() {
             <BIcon name="plus" :size="11" />
             <span style="margin-left: 4px">Stunden eintragen</span>
           </button>
+          <select
+            v-if="timeEntries.length > 0 && vorlagenFuer('time-entry').length > 1"
+            v-model="gewaehlteVorlage['time-entry']"
+            class="vorlagen-waehler"
+            title="Word-Vorlage wählen"
+          >
+            <option value="">Standardvorlage</option>
+            <option v-for="v in vorlagenFuer('time-entry')" :key="v.id" :value="v.id">{{ v.name }}</option>
+          </select>
           <button
             v-if="timeEntries.length > 0"
             class="patio-btn ghost sm"
@@ -3732,6 +3893,9 @@ async function deleteMeeting() {
               <div class="time-row-name">{{ e.memberName ?? "—" }}</div>
               <div v-if="e.activity" class="time-row-activity">{{ e.activity }}</div>
             </div>
+            <button v-if="stundenMehr" class="mehr-laden" :disabled="laedtMehr" @click="ladeAeltereStunden">
+              {{ laedtMehr ? "lädt …" : "Ältere laden" }}
+            </button>
           </div>
 
           <!-- Rechte Spalte: Editor -->
@@ -4042,6 +4206,18 @@ async function deleteMeeting() {
 </template>
 
 <style scoped>
+/* ── Vorlagen-Wähler beim Export ────────────────────────────
+   Erscheint nur, wenn es für diese Art mehr als eine Vorlage gibt. */
+.vorlagen-waehler {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid var(--color-border);
+  border-radius: 5px;
+  background: var(--color-bg);
+  color: var(--color-text-muted);
+  max-width: 180px;
+}
 .pd-nr-fehlt {
   color: var(--warn);
 }

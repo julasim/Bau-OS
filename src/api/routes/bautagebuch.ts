@@ -55,7 +55,11 @@ bautagebuchRoutes.get("/projects/:projectName/bautagebuch", async (c) => {
   if ("error" in proj) return proj.error;
   const limitRaw = c.req.query("limit");
   const limit = limitRaw ? Math.min(Math.max(parseInt(limitRaw, 10) || 30, 1), 365) : 30;
-  const entries = await bautagebuchRepo.list(proj.id, limit);
+  // `?vor=YYYY-MM-DD` blaettert nach hinten: nur Eintraege VOR diesem Tag.
+  // Ohne das war nach rund zwei Monaten taeglicher Eintraege der aeltere
+  // Bestand im Programm nicht mehr erreichbar — die Daten waren da, der Weg
+  // dorthin nicht.
+  const entries = await bautagebuchRepo.list(proj.id, limit, c.req.query("vor"));
   return c.json(entries);
 });
 

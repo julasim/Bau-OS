@@ -41,6 +41,39 @@ interface Termin {
   location: string | null;
 }
 
+// ── Was zuletzt im Büro passiert ist ─────────────────────────────────────
+//
+// Drei Endpunkte (`/meetings/recent`, `/bautagebuch/recent`,
+// `/entscheidungen/recent`) waren gebaut, rechtegefiltert und getestet — und
+// wurden von niemandem aufgerufen. Genau dasselbe Muster hatte die
+// Firmenverwaltung: vollständige API seit Migration 006, kein einziger Aufruf
+// im Frontend, monatelang unerreichbar.
+interface Besprechung {
+  id: string;
+  title: string;
+  date: string;
+  project?: string | null;
+  projectName?: string | null;
+  projektnummer?: string | null;
+}
+
+interface Bautageseintrag {
+  id: string;
+  date: string;
+  activities: string | null;
+  projectName?: string | null;
+  projektnummer?: string | null;
+}
+
+interface Entscheidung {
+  id: string;
+  titel: string;
+  datum: string;
+  status: string;
+  projectName?: string | null;
+  projektnummer?: string | null;
+}
+
 interface Project {
   name: string;
   status?: string;
@@ -56,6 +89,9 @@ const data = ref<DashboardData | null>(null);
 const tasks = ref<Task[]>([]);
 const termine = ref<Termin[]>([]);
 const projects = ref<Project[]>([]);
+const besprechungen = ref<Besprechung[]>([]);
+const bautagebuch = ref<Bautageseintrag[]>([]);
+const entscheidungen = ref<Entscheidung[]>([]);
 const stats = computed(() => ({
   openTasks: data.value?.openTasks ?? 0,
   termine: data.value?.termine ?? 0,
@@ -89,16 +125,33 @@ const recentProjects = computed(() =>
 );
 
 async function load() {
-  const [d, t, te, ps] = await Promise.all([
+  // Die drei letzten fangen einzeln ab: ein Ausfall darf die Startseite nicht
+  // leer lassen. Sie sind Beiwerk, die Zahlen darüber sind es nicht.
+  const [d, t, te, ps, bes, bau, ent] = await Promise.all([
     api.get<DashboardData>("/dashboard"),
     api.get<Task[]>("/tasks"),
     api.get<Termin[]>("/termine"),
     api.get<Project[]>("/projects").catch(() => []),
+    api.get<Besprechung[]>("/meetings/recent?limit=4").catch(() => []),
+    api.get<Bautageseintrag[]>("/bautagebuch/recent?limit=4").catch(() => []),
+    api.get<Entscheidung[]>("/entscheidungen/recent?limit=4").catch(() => []),
   ]);
   data.value = d;
   tasks.value = t;
   termine.value = te;
   projects.value = ps;
+  besprechungen.value = bes;
+  bautagebuch.value = bau;
+  entscheidungen.value = ent;
+}
+
+/** Kürzt einen Freitext auf eine Zeile, ohne mitten im Wort abzuschneiden. */
+function eineZeile(text: string | null, max = 90): string {
+  const t = (text ?? "").replace(/\s+/g, " ").trim();
+  if (t.length <= max) return t;
+  const kurz = t.slice(0, max);
+  const luecke = kurz.lastIndexOf(" ");
+  return (luecke > max * 0.6 ? kurz.slice(0, luecke) : kurz) + "…";
 }
 
 function formatDate(d: string) {
@@ -141,7 +194,7 @@ onMounted(() => {
   document.addEventListener("visibilitychange", onVisibilityChange);
 });
 onUnmounted(() => document.removeEventListener("visibilitychange", onVisibilityChange));
-useEvents(["task", "termin", "note", "project"], () => load());
+useEvents(["task", "termin", "note", "project", "meeting", "bautagebuch", "entscheidung"], () => load());
 
 const statCards = computed(() => [
   {
@@ -345,6 +398,87 @@ const statCards = computed(() => [
       </section>
     </div>
 
+    <!-- Was zuletzt im Büro passiert ist ─────────────────────────────────
+         Drei Endpunkte, die es seit Monaten gibt und die niemand aufgerufen
+         hat. Sie stehen bewusst in einer Reihe: es ist dieselbe Frage aus
+         drei Blickwinkeln. -->
+    <section v-if="besprechungen.length || bautagebuch.length || entscheidungen.length" style="margin-bottom: 24px">
+      <div class="flex items-center justify-between" style="margin-bottom: 12px">
+        <h2 style="font-size: 13px; font-weight: 600; color: var(--color-text); margin: 0">Zuletzt im Büro</h2>
+        <router-link
+          to="/aktivitaet"
+          style="font-size: 11px; color: var(--color-text-muted); text-decoration: none"
+          class="hover-link"
+          >Ganze Aktivität →</router-link
+        >
+      </div>
+
+      <div class="grid gap-3 dash-letzte-grid" style="grid-template-columns: repeat(3, 1fr)">
+        <!-- Besprechungen -->
+        <div v-if="besprechungen.length" class="surface-card">
+          <div class="letzte-kopf">
+            <BIcon name="users" :size="12" />
+            <span>Besprechungen</span>
+          </div>
+          <router-link
+            v-for="m in besprechungen"
+            :key="m.id"
+            :to="`/projects/${encodeURIComponent(m.projectName ?? m.project ?? '')}?tab=meetings`"
+            class="letzte-zeile"
+          >
+            <div class="letzte-titel">{{ m.title }}</div>
+            <div class="letzte-meta">
+              <span class="font-mono">{{ formatDate(m.date) }}</span>
+              <ProjektBezug :nummer="m.projektnummer" :name="m.projectName ?? m.project" nur-nummer />
+            </div>
+          </router-link>
+        </div>
+
+        <!-- Bautagebuch -->
+        <div v-if="bautagebuch.length" class="surface-card">
+          <div class="letzte-kopf">
+            <BIcon name="book" :size="12" />
+            <span>Bautagebuch</span>
+          </div>
+          <router-link
+            v-for="b in bautagebuch"
+            :key="b.id"
+            :to="`/projects/${encodeURIComponent(b.projectName ?? '')}?tab=bautagebuch`"
+            class="letzte-zeile"
+          >
+            <div class="letzte-titel">{{ eineZeile(b.activities, 60) || "Eintrag ohne Text" }}</div>
+            <div class="letzte-meta">
+              <span class="font-mono">{{ formatDate(b.date) }}</span>
+              <ProjektBezug :nummer="b.projektnummer" :name="b.projectName" nur-nummer />
+            </div>
+          </router-link>
+        </div>
+
+        <!-- Entscheidungen -->
+        <div v-if="entscheidungen.length" class="surface-card">
+          <div class="letzte-kopf">
+            <BIcon name="check" :size="12" />
+            <span>Entscheidungen</span>
+          </div>
+          <router-link
+            v-for="e in entscheidungen"
+            :key="e.id"
+            :to="`/projects/${encodeURIComponent(e.projectName ?? '')}?tab=entscheidungen`"
+            class="letzte-zeile"
+          >
+            <div class="letzte-titel">
+              {{ e.titel }}
+              <span v-if="e.status === 'entwurf'" class="pill" style="margin-left: 6px">Entwurf</span>
+            </div>
+            <div class="letzte-meta">
+              <span class="font-mono">{{ formatDate(e.datum) }}</span>
+              <ProjektBezug :nummer="e.projektnummer" :name="e.projectName" nur-nummer />
+            </div>
+          </router-link>
+        </div>
+      </div>
+    </section>
+
     <!-- Letzte Projekte -->
     <section>
       <div class="flex items-center justify-between" style="margin-bottom: 12px">
@@ -410,6 +544,51 @@ const statCards = computed(() => [
 </template>
 
 <style scoped>
+/* ── „Zuletzt im Büro" ─────────────────────────────────────── */
+.letzte-kopf {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 10px;
+}
+.letzte-zeile {
+  display: block;
+  padding: 7px 0;
+  border-top: 1px solid var(--color-border-subtle);
+  color: inherit;
+  text-decoration: none;
+}
+.letzte-zeile:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+.letzte-zeile:hover .letzte-titel {
+  color: var(--color-accent);
+}
+.letzte-titel {
+  font-size: 12px;
+  color: var(--color-text);
+  line-height: 1.35;
+}
+.letzte-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+@media (max-width: 900px) {
+  .dash-letzte-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
 .stat-card {
   display: block;
   border: 1px solid var(--color-border);

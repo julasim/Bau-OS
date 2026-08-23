@@ -425,7 +425,11 @@ export interface BautagebuchUpsertInput {
 export interface BautagebuchRepository {
   /** Liste aller Eintraege fuer ein Projekt, neueste zuerst.
    *  limit default = 30 (rund ein Monat). */
-  list(projectId: string, limit?: number): Promise<BautagebuchEntry[]>;
+  /** `vor` ist ein Datums-Cursor fuer „Aeltere laden": es kommen nur
+   *  Eintraege VOR diesem Tag. Bewusst kein `offset` — waehrend jemand
+   *  blaettert, kommen neue Eintraege dazu, und ein Offset ueberspringt dann
+   *  Zeilen oder zeigt sie doppelt. */
+  list(projectId: string, limit?: number, vor?: string): Promise<BautagebuchEntry[]>;
   /** Einzelner Eintrag per Projekt+Datum (YYYY-MM-DD). */
   get(projectId: string, date: string): Promise<BautagebuchEntry | null>;
   /** Einzelner Eintrag per ID — samt `projectName` aus dem Join.
@@ -531,7 +535,8 @@ export interface MeetingInput {
 
 export interface MeetingRepository {
   /** Liste fuer ein Projekt, neueste zuerst. */
-  list(projectId: string, limit?: number): Promise<Meeting[]>;
+  /** `vor`: Datums-Cursor fuer „Aeltere laden" — siehe BautagebuchRepository. */
+  list(projectId: string, limit?: number, vor?: string): Promise<Meeting[]>;
   get(id: string): Promise<Meeting | null>;
   /** Legt ein neues Meeting an. Validation-Fehler kommen als String
    *  zurueck (analog zu terminRepo.save). */

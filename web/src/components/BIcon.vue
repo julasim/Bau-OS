@@ -14,6 +14,25 @@ const props = withDefaults(
 );
 
 const dim = computed(() => props.size);
+
+// ── Warum der Name normalisiert wird ──────────────────────────────────────
+//
+// Die Glyphen heissen hier kebab-case (`arrow-right`), aufgerufen wurden sie
+// an acht Stellen aber camelCase (`arrowUpRight`, `chevronRight`, `edit`).
+// Vue rendert dann schlicht ein leeres <svg>: keine Warnung, kein Fehler,
+// nur ein unsichtbarer Knopf. Betroffen waren unter anderem der Zurueck-Pfeil
+// der Navigationsleiste, die Brotkrumen-Trenner in der Topbar und der
+// Download-Knopf im Projekt.
+//
+// Deshalb wird der Name hier auf kebab-case gebracht, statt an acht Stellen
+// umzubenennen. `tests/vue-icons-vorhanden.test.ts` haelt zusaetzlich fest,
+// dass jeder benutzte Name wirklich eine Glyphe hat.
+const name = computed(() =>
+  props.name
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .toLowerCase()
+    .trim(),
+);
 </script>
 
 <template>
@@ -210,6 +229,32 @@ const dim = computed(() => props.size);
     <template v-else-if="name === 'mail'">
       <rect x="2" y="4" width="20" height="16" rx="2" />
       <path d="m22 7-10 6L2 7" />
+    </template>
+    <template v-else-if="name === 'arrow-left'">
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </template>
+    <template v-else-if="name === 'arrow-up-right'">
+      <line x1="7" y1="17" x2="17" y2="7" />
+      <polyline points="7 7 17 7 17 17" />
+    </template>
+    <polyline v-else-if="name === 'chevron-down'" points="6 9 12 15 18 9" />
+    <polyline v-else-if="name === 'chevron-up'" points="18 15 12 9 6 15" />
+    <polyline v-else-if="name === 'chevron-left'" points="15 18 9 12 15 6" />
+    <polyline v-else-if="name === 'chevron-right'" points="9 18 15 12 9 6" />
+    <template v-else-if="name === 'download'">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="7 10 12 15 17 10" />
+      <line x1="12" y1="15" x2="12" y2="3" />
+    </template>
+    <template v-else-if="name === 'upload'">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+      <polyline points="17 8 12 3 7 8" />
+      <line x1="12" y1="3" x2="12" y2="15" />
+    </template>
+    <template v-else-if="name === 'edit'">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
     </template>
     <path
       v-else-if="name === 'phone'"

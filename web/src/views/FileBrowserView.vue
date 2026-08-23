@@ -227,13 +227,49 @@ function fileToNode(f: ApiFile): FileNode {
   };
 }
 
+// ── Auch im Inhalt suchen ────────────────────────────────────────────────
+//
+// Die Suche hier filterte nur die bereits geladene Liste nach Datei- und
+// Projektnamen. `GET /files/search` durchsucht zusätzlich den beim Upload
+// extrahierten Text — den Inhalt von PDF und Word. Die Route ist gebaut und
+// rechtegefiltert und wurde von niemandem aufgerufen.
+//
+// Der Unterschied ist der zwischen „wie hiess die Datei nochmal" und „in
+// welchem Plan stand das mit der Brandschutzklappe".
+const inhaltsTreffer = ref<Set<string> | null>(null);
+const inhaltsSucheLaeuft = ref(false);
+
+async function sucheImInhalt(begriff: string) {
+  const term = begriff.trim();
+  // Unter drei Zeichen liefert eine Volltextsuche fast alles — das ist keine
+  // Hilfe, sondern eine zweite vollständige Liste.
+  if (term.length < 3) {
+    inhaltsTreffer.value = null;
+    return;
+  }
+  inhaltsSucheLaeuft.value = true;
+  try {
+    const treffer = await api.get<{ id: string }[]>(`/files/search?q=${encodeURIComponent(term)}`);
+    inhaltsTreffer.value = new Set(treffer.map((t) => t.id));
+  } catch {
+    inhaltsTreffer.value = null;
+  } finally {
+    inhaltsSucheLaeuft.value = false;
+  }
+}
+
+let sucheTimer: ReturnType<typeof setTimeout> | undefined;
+
 const tree = computed<FileNode>(() => {
   // Filter: wenn ein Such-Term aktiv ist, fallen alle Files raus die nicht
   // matchen — das macht die Tree-Sicht zur Such-Sicht. Folder werden nur
   // angezeigt wenn sie min. ein Match enthalten.
   const term = searchTerm.value.trim().toLowerCase();
   const match = (f: ApiFile) =>
-    !term || f.name.toLowerCase().includes(term) || (f.project ?? "").toLowerCase().includes(term);
+    !term ||
+    f.name.toLowerCase().includes(term) ||
+    (f.project ?? "").toLowerCase().includes(term) ||
+    (!!f.id && inhaltsTreffer.value?.has(f.id) === true);
 
   const filtered = allFiles.value.filter(match);
 
@@ -493,9 +529,12 @@ function onForward() {
 
 // Reset preview wenn search aktiv wird (sonst bleibt es bei alten files
 // hängen, die durch Filter weggefallen sind).
-watch(searchTerm, () => {
+watch(searchTerm, (neu) => {
   selected.value = null;
   previewContent.value = null;
+  // Die Inhaltssuche geht an den Server — also erst, wenn das Tippen steht.
+  if (sucheTimer) clearTimeout(sucheTimer);
+  sucheTimer = setTimeout(() => void sucheImInhalt(neu), 300);
 });
 
 // Bei Mode-Wechsel die Files vom passenden Endpoint nachladen.
@@ -819,7 +858,7 @@ onBeforeUnmount(() => {
           <circle cx="11" cy="11" r="7" />
           <line x1="21" y1="21" x2="16.5" y2="16.5" />
         </svg>
-        <input v-model="searchTerm" class="pt-input" type="search" placeholder="Dateiname suchen …" />
+        <input v-model="searchTerm" class="pt-input" type="search" placeholder="Name oder Inhalt suchen …" />
       </div>
 
       <!-- Modus-Filter (Alle / Zuletzt / Markiert / Geteilt) -->
@@ -852,7 +891,15 @@ onBeforeUnmount(() => {
 
       <!-- Leer -->
       <div v-else-if="(tree.children?.length ?? 0) === 0" class="ap-empty">
-        <p>{{ searchTerm ? "Keine Treffer für diese Suche." : "Noch keine Dateien abgelegt." }}</p>
+        <p>
+          {{
+            inhaltsSucheLaeuft
+              ? "Suche läuft …"
+              : searchTerm
+                ? "Keine Treffer für diese Suche — auch nicht im Inhalt der Dateien."
+                : "Noch keine Dateien abgelegt."
+          }}
+        </p>
       </div>
 
       <!-- Projektgruppierte Flachliste -->
