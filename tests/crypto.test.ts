@@ -27,8 +27,13 @@ describe("crypto (SEC-4)", () => {
     expect(encryptString(enc)).toBe(enc);
   });
 
-  it("Legacy-Plaintext (ohne Prefix) wird durchgereicht", () => {
-    expect(decryptString("klartext-legacy")).toBe("klartext-legacy");
+  it("ein Wert ohne enc-Prefix wird VERWORFEN, nicht durchgereicht", () => {
+    // Bis Stufe 2 kam er als Klartext zurück (Durchgriff für Bestandsdaten).
+    // Das einzige Feld, das diese Spalte je trägt, ist ein TOTP-Geheimnis —
+    // dort ist „irgendwas kam durch" die schlechteste denkbare Antwort: ein
+    // Zweitfaktor, den jeder mit Datenbankzugriff lesen kann, und niemand
+    // merkt es.
+    expect(decryptString("klartext-legacy")).toBeNull();
   });
 
   it("gleicher Klartext -> unterschiedliche Ciphertexts (frischer IV)", () => {

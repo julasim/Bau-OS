@@ -14,18 +14,38 @@ eine `JWT_SECRET`-Rotation alle verschlüsselten Felder unlesbar gemacht. SEC-4
 trennt beide Belange: ein eigener `ENCRYPTION_KEY` verschlüsselt die Felder,
 `JWT_SECRET` signiert nur noch Tokens.
 
-## Zustand nach diesem Commit (Stufe 1)
+## Stand: Stufe 2 ist abgeschlossen (23.08.2026)
 
-- `src/api/crypto.ts` nutzt `ENCRYPTION_KEY` als **Primärschlüssel**; solange
-  keiner gesetzt ist, fällt es auf `JWT_SECRET` zurück (nichts ändert sich, der
-  Start loggt eine SEC-4-Warnung).
-- `decryptString` probiert erst den Primär-, dann den `JWT_SECRET`-Schlüssel →
-  Bestandsdaten bleiben lesbar.
-- Legacy-Plaintext (Felder ohne `enc:v1:`-Prefix) wird noch durchgereicht.
+Die Umstellung war zweistufig angelegt. **Beide Stufen sind erledigt.**
 
-Betroffene Felder laut `scripts/reencrypt.ts`: `users.telegram_bot_token`,
-`users.totp_secret_encrypted`, `user_microsoft_accounts.access_token_encrypted`
-und `refresh_token_encrypted`.
+- `src/api/crypto.ts` verschlüsselt mit `ENCRYPTION_KEY`; ist keiner gesetzt,
+  fällt es auf `JWT_SECRET` zurück — und schreibt beim **ersten Verschlüsseln**
+  eine Warnung ins Log. Der Rückfall sorgt dafür, dass der Dienst ohne den
+  Schlüssel startet; er ist aber genau der Zustand, gegen den SEC-4 gebaut
+  wurde.
+- **Kein zweiter Entschlüsselungsweg mehr.** Was mit einem anderen Schlüssel
+  verschlüsselt wurde, ergibt `null` — und `needsReencrypt()` meldet es, damit
+  ein unlesbarer Wert nicht wie ein leeres Feld aussieht.
+- **Kein Klartext-Durchgriff mehr.** Ein Wert ohne `enc:v1:`-Prefix in einer
+  verschlüsselten Spalte wird verworfen und protokolliert.
+
+::: tip Warum genau jetzt
+Nachgemessen am 23.08.2026: **73 Konten, 0 verschlüsselte Felder.** Es gab
+nichts umzuschlüsseln — der Migrationszweig hat nie ein einziges Byte
+geschützt, und später wäre der Umbau teuer geworden.
+
+Was der Klartext-Durchgriff bedeutet hätte: das einzige Feld, das diese Spalte
+je trägt, ist ein TOTP-Geheimnis. Dort ist „irgendetwas kam durch" die
+schlechteste denkbare Antwort — ein zweiter Faktor, den jeder mit
+Datenbankzugriff lesen kann, und niemand merkt es.
+:::
+
+Betroffenes Feld laut `scripts/reencrypt.ts`: **`users.totp_secret_encrypted`**
+— und sonst keines. Die drei anderen (`users.telegram_bot_token`,
+`user_microsoft_accounts.access_token_encrypted` und `refresh_token_encrypted`)
+standen dort noch, obwohl ihre Tabellen und Spalten mit den Migrationen 047 und
+056 entfallen sind; der `try/catch` meldete jedes Mal „nicht abfragbar —
+übersprungen" und liess eine fehlende Migration vermuten.
 
 ::: info Drei der vier Felder sind Altbestand
 Der Telegram-Bot und der Outlook-Abgleich sind entfallen. Migration `047`

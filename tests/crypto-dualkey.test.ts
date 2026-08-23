@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 
 // ============================================================
-// SEC-4 dual-key-Fallback (Feld-Verschluesselung) — Beweis-Test
+// SEC-4 Schluesseltrennung (Feld-Verschluesselung) — Beweis-Test
 // ------------------------------------------------------------
 // Der Fallback-Zweig in crypto.ts (decryptString probiert nach dem
 // Primaerschluessel zusaetzlich JWT_SECRET; needsReencrypt meldet einen
@@ -87,16 +87,24 @@ describe("crypto SEC-4 dual-key-Fallback", () => {
     vi.resetModules();
   });
 
-  it("Kern: JWT_SECRET-Fallback macht mit dem Alt-Key verschluesselte Bestandsdaten lesbar", () => {
-    // altEnc wurde in Phase 1 mit JWT verschluesselt. cryptoNew hat PRIMARY === ENC,
-    // scheitert damit am Primaerschluessel und faellt (HAS_FALLBACK) auf JWT_SECRET
-    // zurueck -> Klartext wieder da. Das ist der eigentliche Migrations-Kern.
-    expect(cryptoNew.decryptString(altEnc)).toBe("geheim");
+  it("Kern nach Stufe 2: ein mit dem Alt-Key verschluesselter Wert ist NICHT mehr lesbar", () => {
+    // Bis Stufe 2 fiel `decryptString` hier auf JWT_SECRET zurueck und lieferte
+    // den Klartext — das war der Migrationszweig, damit Bestandsdaten waehrend
+    // der Umstellung lesbar blieben.
+    //
+    // Stufe 2 ist am 23.08.2026 abgeschlossen: es gab nichts umzuschluesseln
+    // (nachgemessen: 73 Konten, 0 verschluesselte Felder), und ein zweiter
+    // Entschluesselungsweg, den niemand braucht, ist ein zweiter Weg, auf dem
+    // ein Geheimnis mit einem ROTIERTEN Schluessel doch noch aufgeht.
+    //
+    // Der Wert ist damit nicht verloren, sondern unlesbar — und
+    // `needsReencrypt` sagt das auch (naechster Test).
+    expect(cryptoNew.decryptString(altEnc)).toBeNull();
   });
 
-  it("needsReencrypt: mit dem Alt-Key verschluesselter Wert muss umgeschluesselt werden (true)", () => {
-    // Nur ueber den Fallback lesbar -> NICHT mit dem Primaerschluessel
-    // verschluesselt -> das Re-Encrypt-Skript muss ihn anfassen.
+  it("needsReencrypt meldet ihn weiterhin (true) — er ist nicht still verschwunden", () => {
+    // Wichtig nach Stufe 2: ohne diese Meldung waere ein unlesbarer Wert von
+    // einem leeren Feld nicht zu unterscheiden.
     expect(cryptoNew.needsReencrypt(altEnc)).toBe(true);
   });
 

@@ -13,28 +13,48 @@
 // vom JWT_SECRET (Token-Signierung). Damit reisst eine JWT_SECRET-Rotation die
 // verschluesselten Felder NICHT mehr mit.
 //
-// Migration (zweistufig, siehe docs/sec-4-crypto-migration.md):
-//   - encryptString nutzt IMMER den Primaerschluessel (ENCRYPTION_KEY, sonst —
-//     solange keiner gesetzt ist — JWT_SECRET als Rueckfall).
-//   - decryptString probiert erst den Primaerschluessel, dann JWT_SECRET. So
-//     bleiben mit dem alten Key verschluesselte Bestandsdaten lesbar, bis
-//     scripts/reencrypt.ts sie auf den Primaerschluessel umgeschluesselt hat.
-//   - Der Legacy-Plaintext-Durchgriff (Werte ohne enc-Prefix) bleibt in dieser
-//     Stufe erhalten und faellt in Stufe 2 (nach dem Re-Encrypt) weg.
+// ── Stufe 2 ist abgeschlossen (23.08.2026) ─────────────────────────────────
+//
+// Die Migration war zweistufig angelegt (docs/sec-4-crypto-migration.md).
+// Stufe 1 liess zwei Dinge zu, damit Bestandsdaten waehrend der Umstellung
+// lesbar blieben:
+//
+//   * einen Rueckfall auf JWT_SECRET beim Entschluesseln, und
+//   * einen Durchgriff fuer Werte OHNE `enc:`-Prefix, die als Klartext
+//     zurueckgegeben wurden.
+//
+// Beides ist jetzt weg. Der Zeitpunkt war der richtige: nachgemessen am
+// 23.08.2026 traegt KEINE Zeile ein verschluesseltes Feld (73 Konten, 0
+// TOTP-Geheimnisse) — es gab nichts umzuschluesseln, und spaeter waere es
+// teurer geworden.
+//
+// Was der Durchgriff bedeutet hat: ein Wert ohne Prefix in einer
+// verschluesselten Spalte kam ungeprueft als Klartext heraus. Beim einzigen
+// Feld, das die Spalte je traegt, ist das ein TOTP-Geheimnis — dort ist
+// „irgendwas kam durch" die schlechteste denkbare Antwort. Jetzt: `null`, und
+// eine Zeile im Log.
 // ============================================================
 
 import crypto from "crypto";
 import { JWT_SECRET, ENCRYPTION_KEY } from "../config.js";
+import { logWarn } from "../logger.js";
 
 const ALGORITHM = "aes-256-gcm";
 const PREFIX = "enc:v1:";
 
-/** Primaerschluessel: bevorzugt der dedizierte ENCRYPTION_KEY. Solange keiner
- *  gesetzt ist, JWT_SECRET (Rueckwaertskompat waehrend der Migration). */
+/**
+ * Der Schluessel. Ohne `ENCRYPTION_KEY` faellt er auf `JWT_SECRET` zurueck —
+ * das ist ein START-Rueckfall, kein zweiter Schluessel: entschluesselt wird
+ * ausschliesslich damit, was damit verschluesselt wurde.
+ *
+ * Der Rueckfall bleibt, damit ein Dienst ohne `ENCRYPTION_KEY` startet (er
+ * verschluesselt heute nichts). Er ist aber der Grund, warum SEC-4 ueberhaupt
+ * gebaut wurde: eine Rotation des JWT_SECRET wuerde dann alle
+ * verschluesselten Felder mitreissen. Deshalb warnt `encryptString` beim
+ * ersten Schreiben.
+ */
 const PRIMARY_SECRET = ENCRYPTION_KEY || JWT_SECRET;
-/** Ob ein separater Fallback-Schluessel existiert (nur waehrend der Migration,
- *  wenn ENCRYPTION_KEY gesetzt und != JWT_SECRET ist). */
-const HAS_FALLBACK = PRIMARY_SECRET !== JWT_SECRET && JWT_SECRET.length > 0;
+const OHNE_EIGENEN_SCHLUESSEL = !ENCRYPTION_KEY;
 
 /** Leitet einen 32-Byte-Key aus einem Secret ab. */
 function deriveKey(secret: string): Buffer {
@@ -79,30 +99,47 @@ function parseEnc(stored: string): [string, string, string] | null {
 export function encryptString(plain: string | null | undefined): string | null {
   if (!plain) return null;
   if (plain.startsWith(PREFIX)) return plain; // schon verschluesselt
+  if (OHNE_EIGENEN_SCHLUESSEL) {
+    // Einmal je Vorgang, nicht als Abbruch: das Feld zu verlieren waere
+    // schlimmer als es mit dem falschen Schluessel zu schuetzen. Aber wer das
+    // Log liest, soll es sehen, BEVOR das JWT_SECRET rotiert wird.
+    logWarn(
+      "[Crypto] ENCRYPTION_KEY ist nicht gesetzt — verschluesselt wird mit JWT_SECRET. " +
+        "Eine Rotation des JWT_SECRET macht diese Felder unlesbar. Siehe docs/sec-4-crypto-migration.",
+    );
+  }
   return encryptWith(PRIMARY_SECRET, plain);
 }
 
-/** Entschluesselt. Probiert Primaerschluessel, dann (waehrend der Migration)
- *  JWT_SECRET. Werte ohne enc-Prefix werden als Legacy-Plaintext
- *  zurueckgegeben. Bei nicht entschluesselbaren enc-Werten: null. */
+/**
+ * Entschluesselt — oder liefert `null`.
+ *
+ * `null` heisst genau eine Sache: der Wert ist mit DIESEM Schluessel nicht
+ * lesbar. Er kann mit einem anderen verschluesselt worden sein, beschaedigt
+ * sein, oder gar nicht verschluesselt.
+ *
+ * ── Warum ein Wert ohne `enc:`-Prefix jetzt null ergibt ────────────────────
+ *
+ * Bis Stufe 2 kam er als Klartext zurueck (Durchgriff fuer Bestandsdaten).
+ * Das einzige Feld, das diese Spalte je traegt, ist ein TOTP-Geheimnis — dort
+ * ist „irgendwas kam durch" die schlechteste denkbare Antwort: es waere ein
+ * Zweitfaktor, den jeder mit Datenbankzugriff lesen kann, und niemand wuerde
+ * es merken.
+ */
 export function decryptString(stored: string | null | undefined): string | null {
   if (!stored) return null;
   const tripel = parseEnc(stored);
-  if (!tripel) return stored; // Legacy-Plaintext (faellt in Stufe 2 weg)
-  const [ivB64, ctB64, tagB64] = tripel;
-  const primary = tryDecryptWith(PRIMARY_SECRET, ivB64, ctB64, tagB64);
-  if (primary !== null) return primary;
-  if (HAS_FALLBACK) {
-    const legacy = tryDecryptWith(JWT_SECRET, ivB64, ctB64, tagB64);
-    if (legacy !== null) return legacy;
+  if (!tripel) {
+    logWarn("[Crypto] Wert ohne enc-Prefix in einem verschluesselten Feld — wird verworfen.");
+    return null;
   }
-  return null;
+  const [ivB64, ctB64, tagB64] = tripel;
+  return tryDecryptWith(PRIMARY_SECRET, ivB64, ctB64, tagB64);
 }
 
-/** true, wenn ein gespeicherter Wert (noch) NICHT mit dem Primaerschluessel
- *  verschluesselt ist und daher vom Re-Encrypt-Skript umgeschluesselt werden
- *  muss: Legacy-Plaintext oder ein enc-Wert, den nur der Fallback-Schluessel
- *  oeffnet. Bereits mit dem Primaerschluessel verschluesselte Werte -> false. */
+/** true, wenn ein gespeicherter Wert mit dem aktuellen Schluessel NICHT
+ *  lesbar ist und darum umgeschluesselt (oder verworfen) werden muss.
+ *  Bereits richtig verschluesselte Werte -> false. */
 export function needsReencrypt(stored: string | null | undefined): boolean {
   if (!stored) return false;
   const tripel = parseEnc(stored);
