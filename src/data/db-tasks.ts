@@ -3,8 +3,11 @@ import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Task, TaskRepository } from "./types.js";
+import { alsIso } from "./zeitstempel.js";
 
-function rowToTask(row: Record<string, unknown>): Task {
+/** Zeile → Task. Exportiert, damit `db-aufgabensystem.ts` dieselbe Abbildung
+ *  benutzt statt einer zweiten, die beim naechsten neuen Feld auseinanderlaeuft. */
+export function rowToTask(row: Record<string, unknown>): Task {
   return {
     id: String(row.id),
     rev: Number(row.rev ?? 1),
@@ -19,7 +22,7 @@ function rowToTask(row: Record<string, unknown>): Task {
     location: row.location ? String(row.location) : null,
     project: row.project_name ? String(row.project_name) : null,
     sortOrder: row.sort_order ? Number(row.sort_order) : undefined,
-    completedAt: row.completed_at ? String(row.completed_at) : null,
+    completedAt: row.completed_at ? alsIso(row.completed_at) : null,
     phaseId: row.phase_id ? String(row.phase_id) : null,
     // Aufgabensystem (Migration 050). `rang` ist NOT NULL DEFAULT 3, der
     // Rueckfall deckt nur den Fall ab, dass eine Abfrage die Spalte nicht
@@ -29,14 +32,14 @@ function rowToTask(row: Record<string, unknown>): Task {
     imTagesplan: row.im_tagesplan === true,
     tagesplanVon: row.tagesplan_von ? String(row.tagesplan_von) : null,
     createdById: row.created_by ? String(row.created_by) : null,
-    createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
+    createdAt: alsIso(row.created_at),
+    updatedAt: alsIso(row.updated_at),
   };
 }
 
 // Gemeinsame SELECT-Klausel — LEFT JOIN auf team_members, damit assignee_name
 // immer mitgeliefert wird ohne N+1.
-const TASK_SELECT = `
+export const TASK_SELECT = `
   SELECT t.*,
     p.name as project_name,
     tm.name as assignee_name
@@ -66,7 +69,9 @@ export const dbTasks: TaskRepository = {
 
     await db`
       INSERT INTO tasks (id, text, status, project_id, created_by, created_at, updated_at)
-      VALUES (${id}, ${text}, 'offen', ${projectId}, ${createdById ?? null}, ${now}, ${now})
+      -- 'open', nicht 'offen': Migration 051 hat die Werteliste dieser Spalte
+      -- auf eine Schreibweise gebracht (siehe dort, warum Englisch).
+      VALUES (${id}, ${text}, 'open', ${projectId}, ${createdById ?? null}, ${now}, ${now})
     `;
     const task = await this.get(id);
     if (!task) throw new Error("Task nach INSERT nicht lesbar");
@@ -208,7 +213,7 @@ export const dbTasks: TaskRepository = {
       id: String(r.id),
       titel: String(r.titel),
       projectName: r.project_name ? String(r.project_name) : null,
-      geloeschtAm: String(r.deleted_at),
+      geloeschtAm: alsIso(r.deleted_at),
       createdById: r.created_by ? String(r.created_by) : null,
     }));
   },
