@@ -18,7 +18,20 @@ export interface UiPreferences {
   weekStart: WeekStart;
   calendarDefaultView: CalendarView;
   dateFormat: DateFormat;
-  telegramNotifications: {
+  /** Welche Ereignisse eine Meldung ausloesen sollen.
+   *
+   *  ── Warum das Feld frueher `telegramNotifications` hiess ────────────────
+   *
+   *  Weil es aus der Bot-Zeit stammt: die Meldungen gingen per Telegram
+   *  hinaus. Den Bot gibt es seit AP0 nicht mehr, das Feld wurde im Frontend
+   *  nie gelesen — und der Deep-Merge in `updateUiPreferences()` existiert
+   *  ausschliesslich seinetwegen.
+   *
+   *  Statt es zu loeschen ist es umbenannt: die Struktur (je Person, je
+   *  Ereignisart) ist genau das, was die Benachrichtigungen brauchen — nur
+   *  eben ueber die Glocke im Programm statt ueber einen Messenger. Alte
+   *  Werte werden beim Lesen uebernommen (siehe `getUiPreferences`). */
+  benachrichtigungen: {
     termine: boolean;
     tasks: boolean;
     meetings: boolean;
@@ -34,7 +47,7 @@ export const DEFAULT_PREFERENCES: UiPreferences = {
   weekStart: "monday",
   calendarDefaultView: "month",
   dateFormat: "DD.MM.YYYY",
-  telegramNotifications: {
+  benachrichtigungen: {
     termine: true,
     tasks: true,
     meetings: true,
@@ -49,8 +62,15 @@ export async function getUiPreferences(userId: string): Promise<UiPreferences> {
   const [row] = await db`SELECT ui_preferences FROM users WHERE id = ${userId}`;
   if (!row) return DEFAULT_PREFERENCES;
   const raw = (row.ui_preferences ?? {}) as Partial<UiPreferences> & {
-    telegramNotifications?: Partial<UiPreferences["telegramNotifications"]>;
+    benachrichtigungen?: Partial<UiPreferences["benachrichtigungen"]>;
+    /** Der alte Name. Steht so in den gespeicherten Praeferenzen jedes
+     *  Kontos, das vor der Umbenennung angelegt wurde. */
+    telegramNotifications?: Partial<UiPreferences["benachrichtigungen"]>;
   };
+  // Alter Name gewinnt nur, wenn der neue fehlt — sonst wuerde ein Konto, das
+  // die Einstellung neu gesetzt hat, beim naechsten Lesen wieder den alten
+  // Stand bekommen.
+  const meldungen = raw.benachrichtigungen ?? raw.telegramNotifications ?? {};
   return {
     theme: (raw.theme ?? DEFAULT_PREFERENCES.theme) as ThemeMode,
     accentColor: raw.accentColor ?? DEFAULT_PREFERENCES.accentColor,
@@ -59,22 +79,22 @@ export async function getUiPreferences(userId: string): Promise<UiPreferences> {
     weekStart: (raw.weekStart ?? DEFAULT_PREFERENCES.weekStart) as WeekStart,
     calendarDefaultView: (raw.calendarDefaultView ?? DEFAULT_PREFERENCES.calendarDefaultView) as CalendarView,
     dateFormat: (raw.dateFormat ?? DEFAULT_PREFERENCES.dateFormat) as DateFormat,
-    telegramNotifications: {
-      termine: raw.telegramNotifications?.termine ?? DEFAULT_PREFERENCES.telegramNotifications.termine,
-      tasks: raw.telegramNotifications?.tasks ?? DEFAULT_PREFERENCES.telegramNotifications.tasks,
-      meetings: raw.telegramNotifications?.meetings ?? DEFAULT_PREFERENCES.telegramNotifications.meetings,
-      bautagebuch: raw.telegramNotifications?.bautagebuch ?? DEFAULT_PREFERENCES.telegramNotifications.bautagebuch,
+    benachrichtigungen: {
+      termine: meldungen.termine ?? DEFAULT_PREFERENCES.benachrichtigungen.termine,
+      tasks: meldungen.tasks ?? DEFAULT_PREFERENCES.benachrichtigungen.tasks,
+      meetings: meldungen.meetings ?? DEFAULT_PREFERENCES.benachrichtigungen.meetings,
+      bautagebuch: meldungen.bautagebuch ?? DEFAULT_PREFERENCES.benachrichtigungen.bautagebuch,
     },
   };
 }
 
-/** Updated die Praeferenzen mit einem Patch — Deep-Merge fuer das
- *  telegramNotifications-Sub-Object damit der User nur einen Toggle
- *  schicken muss ohne die anderen mitzusenden. */
+/** Aktualisiert die Praeferenzen mit einem Patch — Deep-Merge fuer die
+ *  Benachrichtigungen, damit der Aufrufer einen einzelnen Schalter senden kann
+ *  ohne die anderen mitzuschicken. */
 export async function updateUiPreferences(
   userId: string,
   patch: Partial<UiPreferences> & {
-    telegramNotifications?: Partial<UiPreferences["telegramNotifications"]>;
+    benachrichtigungen?: Partial<UiPreferences["benachrichtigungen"]>;
   },
 ): Promise<UiPreferences> {
   const db = getDb();
@@ -82,9 +102,9 @@ export async function updateUiPreferences(
   const next: UiPreferences = {
     ...current,
     ...patch,
-    telegramNotifications: {
-      ...current.telegramNotifications,
-      ...(patch.telegramNotifications ?? {}),
+    benachrichtigungen: {
+      ...current.benachrichtigungen,
+      ...(patch.benachrichtigungen ?? {}),
     },
   };
   // postgres.js' JSONValue-Constraint ist sehr eng (Index-Signature + nicht-Date),

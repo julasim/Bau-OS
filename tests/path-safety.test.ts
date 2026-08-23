@@ -8,10 +8,13 @@ import os from "os";
 // Diese Tests prueften den Schutz frueher INDIREKT ueber getProjectInfo()
 // aus workspace/projects.ts. Projekte liegen seit dem Umbau zum Firmenserver
 // in der Datenbank, den Zugangsweg gibt es nicht mehr — der Schutz selbst
-// aber sehr wohl: safePath() bewacht jeden Dateizugriff (readFile,
-// createFile, listFolder) und damit den Dateibrowser. Die Tests zielen
-// deshalb jetzt direkt auf safePath und die Datei-Funktionen, statt auf
-// einen Aufrufer, den es nicht mehr gibt.
+// aber sehr wohl.
+//
+// Seit dem Aufraeumen ist `readFile` sein EINZIGER Aufrufer: `createFile` und
+// `listFolder` sind entfallen (kein Aufrufer, und `createFile` war ein
+// Schreibweg in die Freigabe, den keine Rechtepruefung deckte). Die beiden
+// Faelle, die frueher an `listFolder` hingen, pruefen jetzt `readFile` — die
+// Abdeckung des Traversal-Schutzes bleibt damit dieselbe.
 
 const tmpDir = path.join(os.tmpdir(), "patio-path-test-" + Date.now());
 
@@ -27,14 +30,12 @@ afterEach(() => {
 describe("safePath — Traversal-Schutz im Dateizugriff", () => {
   let safePath: (p: string) => string | null;
   let readFile: (p: string) => string | null;
-  let listFolder: (p?: string) => unknown[];
 
   beforeEach(async () => {
     const helpers = await import("../src/workspace/helpers.js");
     const files = await import("../src/workspace/files.js");
     safePath = helpers.safePath;
     readFile = files.readFile;
-    listFolder = files.listFolder;
   });
 
   // ── Traversal-Versuche ──────────────────────────────────────────────────
@@ -75,12 +76,15 @@ describe("safePath — Traversal-Schutz im Dateizugriff", () => {
     fs.rmSync(geheim, { force: true });
   });
 
-  it("listFolder liefert [] bei einem Traversal-Versuch", () => {
-    expect(listFolder("../../../etc")).toEqual([]);
+  it("readFile liefert null bei einem Traversal-Versuch", () => {
+    expect(readFile("../../../etc/passwd")).toBeNull();
   });
 
-  it("listFolder liefert [] bei einem Null-Byte im Pfad", () => {
-    expect(listFolder("name\x00evil")).toEqual([]);
+  it("ein Null-Byte im Pfad wird abgewiesen", () => {
+    // Node wirft bei einem Null-Byte in fs-Aufrufen; `safePath` muss vorher
+    // greifen, sonst wird aus einem Angriffsversuch ein ungefangener Fehler.
+    expect(() => readFile("name\x00evil")).not.toThrow();
+    expect(readFile("name\x00evil")).toBeNull();
   });
 
   // ── Gueltige Pfade muessen durchgehen ────────────────────────────────────

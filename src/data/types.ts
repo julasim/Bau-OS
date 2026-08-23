@@ -727,21 +727,6 @@ export interface FileEntry {
   updatedAt: string;
 }
 
-export interface AgentLog {
-  id?: string;
-  sessionId: string;
-  agentName: string;
-  eventType: string;
-  toolName?: string;
-  parameters?: Record<string, unknown>;
-  resultSummary?: string;
-  thought?: string;
-  error?: string;
-  projectId?: string;
-  durationMs?: number;
-  createdAt?: string;
-}
-
 // ── Repository Interfaces ────────────────────────────────────
 
 /** Ein Eintrag im Papierkorb (Migration 049). Bewusst schmal: die Liste soll
@@ -1068,73 +1053,14 @@ export interface FileRepository {
   removeShare?(fileId: string, userId: string): Promise<boolean>;
 }
 
-// ── Chat ────────────────────────────────────────────────────────────────────
-
-export interface ChatSession {
-  id: string;
-  agent: string;
-  title: string;
-  source: string;
-  /** UUID des Benutzers, der die Session erzeugt hat. NULL bei Legacy-Sessions
-   *  (vor Multi-User-Support) oder Bot/Heartbeat-Sessions. */
-  userId?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  messageCount?: number;
-  lastMessage?: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  sessionId: string;
-  role: string;
-  content: string;
-  tools: string[];
-  source: string;
-  createdAt: string;
-}
-
-export interface ChatRepository {
-  createSession(agent?: string, title?: string, source?: string, userId?: string | null): Promise<ChatSession>;
-  /** userId=undefined → alle Sessions (Admin-Ansicht). userId=string → nur eigene. */
-  listSessions(agent?: string, limit?: number, userId?: string | null): Promise<ChatSession[]>;
-  deleteSession(id: string): Promise<boolean>;
-  addMessage(sessionId: string, role: string, content: string, tools?: string[], source?: string): Promise<ChatMessage>;
-  getMessages(sessionId: string, limit?: number): Promise<ChatMessage[]>;
-  getRecentHistory(agent?: string, limit?: number): Promise<{ user: string; assistant: string }[]>;
-  getOrCreateTodaySession(agent: string, source?: string): Promise<string>;
-  /** Durchsucht alle Chat-Nachrichten (ueber alle Sessions + Agents) nach
-   *  einem Keyword. Liefert die Treffer mit Datum, Rolle und Content — sortiert
-   *  nach Relevanz (Neuheit). Nuetzlich fuer Cross-Session-Referenzen wie
-   *  "der Termin aus gestern" oder "das Projekt ueber das wir geredet haben". */
-  searchMessages(query: string, limit?: number): Promise<ChatMessage[]>;
-  // ── Session-Sharing (optional — nur DB-Mode) ────────────────
-  /** Gibt einem User Leserecht auf eine Session. Idempotent. */
-  shareSession?(sessionId: string, userId: string): Promise<boolean>;
-  /** Entzieht den Zugriff. false wenn kein Eintrag vorhanden war. */
-  unshareSession?(sessionId: string, userId: string): Promise<boolean>;
-  /** Liste aller Personen, mit denen eine Session geteilt wurde. */
-  listSessionShares?(
-    sessionId: string,
-  ): Promise<{ userId: string; username: string; displayName: string | null; addedAt: string }[]>;
-}
-
-export interface AgentLogRepository {
-  create(log: Omit<AgentLog, "id" | "createdAt">): Promise<AgentLog>;
-  listBySession(sessionId: string, limit?: number): Promise<AgentLog[]>;
-  listRecent(limit?: number, offset?: number): Promise<AgentLog[]>;
-  query(filters: {
-    sessionId?: string;
-    agentName?: string;
-    toolName?: string;
-    projectId?: string;
-    from?: string;
-    to?: string;
-    limit?: number;
-    offset?: number;
-  }): Promise<AgentLog[]>;
-}
-
+// ── Was hier stand: Chat, Agenten-Protokoll, Agenten-Log ───────────────────
+//
+// Fuenf Schnittstellen der Bot-Aera (AgentLog, ChatSession, ChatMessage,
+// ChatRepository, AgentLogRepository, zusammen rund 75 Zeilen). Die
+// zugehoerigen Tabellen sind mit Migration 047 entfallen, ein Import gab es
+// nirgends mehr — aber wer `types.ts` las, hielt einen Chat und ein
+// Agenten-Protokoll fuer vorhanden.
+//
 // ============================================================
 // Projektmanagement (Migration 035) — DB-only
 // ============================================================

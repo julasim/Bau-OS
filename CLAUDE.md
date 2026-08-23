@@ -198,7 +198,8 @@ PostgreSQL, und `src/index.ts` bricht ohne `DATABASE_URL` bzw. `JWT_SECRET`
 hart ab — vorher lief er weiter, galt fuer Docker als gesund und lieferte bei
 jedem Datenzugriff einen 500er. Alle Repos sind non-nullable; die 503-Guards
 sind aus den Domaenen-Routen verschwunden, in `src/api/routes/files.ts` stehen
-aber noch 17 `DB_ENABLED`-Abfragen (Altbestand, harmlos, aber irrefuehrend).
+in `src/api/routes/files.ts` **keine** mehr — die 17 Altbestand-Abfragen, die
+hier lange standen, sind mit `6a0ea8f` (06.08.) entfallen.
 Von `src/workspace/` bleibt nur der echte Dateizugriff (1.774 → 245 Zeilen) —
 Dokumente liegen weiterhin als Dateien.
 

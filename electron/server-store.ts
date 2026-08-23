@@ -24,8 +24,9 @@ import { app } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 
-// Die reine Adress-Logik liegt getrennt, damit sie ohne Electron pruefbar ist.
-export { normalisiereAdresse } from "./adresse.js";
+// Die reine Adress-Logik liegt in `./adresse.ts`, damit sie ohne Electron
+// pruefbar ist. Hier stand ein Re-Export davon — `main.ts` importiert sie
+// direkt aus `adresse.js`, ueber diesen Weg griff niemand darauf zu.
 
 export interface ServerConfig {
   lastServer: string | null;

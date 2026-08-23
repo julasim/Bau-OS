@@ -15,39 +15,18 @@ afterEach(() => {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 });
 
-describe("atomicWriteSync", () => {
-  it("schreibt Datei atomar (kein .tmp danach)", async () => {
-    // Dynamischer Import damit WORKSPACE_PATH gesetzt ist
-    const { atomicWriteSync } = await import("../src/workspace/helpers.js");
-    const fp = path.join(tmpDir, "test.json");
-
-    atomicWriteSync(fp, '{"ok": true}');
-
-    expect(fs.existsSync(fp)).toBe(true);
-    expect(fs.existsSync(fp + ".tmp")).toBe(false);
-    expect(fs.readFileSync(fp, "utf-8")).toBe('{"ok": true}');
-  });
-
-  it("ueberschreibt bestehende Datei atomar", async () => {
-    const { atomicWriteSync } = await import("../src/workspace/helpers.js");
-    const fp = path.join(tmpDir, "overwrite.json");
-
-    fs.writeFileSync(fp, "alt", "utf-8");
-    atomicWriteSync(fp, "neu");
-
-    expect(fs.readFileSync(fp, "utf-8")).toBe("neu");
-  });
-
-  it("laesst .tmp nicht zurueck bei Fehler", async () => {
-    const { atomicWriteSync } = await import("../src/workspace/helpers.js");
-    const invalidDir = path.join(tmpDir, "nicht-existent", "sub", "deep");
-    const fp = path.join(invalidDir, "fail.json");
-
-    expect(() => atomicWriteSync(fp, "data")).toThrow();
-    // Kein .tmp darf zurueckbleiben
-    expect(fs.existsSync(fp + ".tmp")).toBe(false);
-  });
-});
+// ── Was hier stand: Pruefungen fuer atomicWriteSync und ensureDir ─────────
+//
+// Beide Helfer sind mit dem Aufraeumen entfallen: seit dem Umbau zum
+// Firmenserver schreibt die Anwendung nicht mehr ins Dateisystem, und
+// ausserhalb dieser Pruefungen hatten sie keinen Aufrufer mehr.
+//
+// `atomicWriteSync` war gut gebaut (schreiben nach .tmp, dann umbenennen) —
+// genau das macht solchen Code gefaehrlich: er liest sich wie ein benutzter
+// Baustein. Wer ihn wieder braucht, holt ihn aus der Git-Historie.
+//
+// Uebrig bleibt `safePath`, der Traversal-Schutz. Er wird gebraucht: der
+// Download-Rueckfall auf Alt-Dateien geht durch ihn.
 
 describe("safePath", () => {
   it("erlaubt relative Pfade innerhalb des Vaults", async () => {
@@ -89,25 +68,5 @@ describe("safePath", () => {
     } finally {
       fs.rmSync(target, { force: true });
     }
-  });
-});
-
-describe("ensureDir", () => {
-  it("erstellt verschachtelte Ordner", async () => {
-    const { ensureDir } = await import("../src/workspace/helpers.js");
-    const deep = path.join(tmpDir, "a", "b", "c");
-
-    ensureDir(deep);
-
-    expect(fs.existsSync(deep)).toBe(true);
-    expect(fs.statSync(deep).isDirectory()).toBe(true);
-  });
-
-  it("ist idempotent (kein Fehler bei existierendem Ordner)", async () => {
-    const { ensureDir } = await import("../src/workspace/helpers.js");
-    const dir = path.join(tmpDir, "exists");
-
-    fs.mkdirSync(dir);
-    expect(() => ensureDir(dir)).not.toThrow();
   });
 });

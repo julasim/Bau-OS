@@ -689,51 +689,12 @@
 .pt-topbar-actions { display: flex; align-items: center; gap: var(--space-2); }
 
 /* ============================================================
-   11 · Chat — Telegram-Agent · Tool-Calls
+   11 · Was hier stand: die Chat-Oberflaeche
+   ============================================================
+   Rund 45 Regeln fuer den Telegram-Agenten (Nachrichtenblasen,
+   Tool-Aufrufe, Tipp-Animation). Den Chat gibt es seit AP0 nicht mehr;
+   keine einzige .vue-Datei benutzte noch eine dieser Klassen.
    ============================================================ */
-.pt-chat { display: flex; flex-direction: column; gap: var(--space-4); }
-.pt-msg-row { display: flex; gap: var(--space-3); max-width: 88%; }
-.pt-msg-row--user { margin-left: auto; flex-direction: row-reverse; }
-.pt-msg {
-  padding: var(--space-3) var(--space-4);
-  font-size: var(--fs-14); line-height: var(--lh-relaxed);
-  border-radius: var(--radius-lg);
-}
-.pt-msg--bot { background: var(--surface-subtle); border: 1px solid var(--border); color: var(--fg-body); border-top-left-radius: var(--radius-xs); }
-.pt-msg--user { background: var(--accent); color: var(--accent-fg); border-top-right-radius: var(--radius-xs); }
-.pt-msg-meta { font-size: var(--fs-11); color: var(--fg-subtle); margin-top: 6px; display: flex; gap: var(--space-2); align-items: center; }
-.pt-msg-row--user .pt-msg-meta { justify-content: flex-end; }
-
-/* Tool-Call — mono, eingerückt, technisch ruhig */
-.pt-toolcall {
-  font-family: var(--font-mono);
-  background: var(--surface-muted);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-}
-.pt-toolcall-head {
-  display: flex; align-items: center; gap: var(--space-2);
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--fs-11); letter-spacing: var(--tracking-wide); text-transform: uppercase;
-  color: var(--fg-subtle);
-  border-bottom: 1px solid var(--hairline);
-}
-.pt-toolcall-head svg { width: 13px; height: 13px; }
-.pt-toolcall-body { padding: var(--space-3); font-size: var(--fs-12); color: var(--fg-body); line-height: 1.7; white-space: pre-wrap; }
-.pt-toolcall-body .pt-tc-fn { color: var(--fg); font-weight: var(--fw-medium); }
-.pt-toolcall-body .pt-tc-arg { color: var(--fg-muted); }
-.pt-toolcall-body .pt-tc-arrow { color: var(--fg-subtle); }
-.pt-toolcall-foot { padding: var(--space-2) var(--space-3); border-top: 1px solid var(--hairline); font-size: var(--fs-12); color: var(--success-fg); display: flex; align-items: center; gap: var(--space-2); }
-.pt-toolcall-foot svg { width: 13px; height: 13px; }
-
-/* Typing-Indikator */
-.pt-typing { display: inline-flex; gap: 4px; align-items: center; padding: var(--space-3) var(--space-4); background: var(--surface-subtle); border: 1px solid var(--border); border-radius: var(--radius-lg); border-top-left-radius: var(--radius-xs); }
-.pt-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--fg-subtle); animation: pt-typing 1.2s var(--ease) infinite; }
-.pt-typing i:nth-child(2) { animation-delay: 0.15s; }
-.pt-typing i:nth-child(3) { animation-delay: 0.3s; }
-@keyframes pt-typing { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
-@media (prefers-reduced-motion: reduce) { .pt-typing i { animation: none; opacity: 0.6; } }
 
 /* ============================================================
    12 · Hilfs-Utilities (knapp gehalten)

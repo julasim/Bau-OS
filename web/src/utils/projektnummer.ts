@@ -67,14 +67,3 @@ export function projektZeile(name: string | null | undefined, nummer: string | n
   if (!name) return nr ?? "";
   return nr ? `${nr} · ${name}` : name;
 }
-
-/**
- * Nur die Nummer, sonst ein sprechender Ersatz.
- *
- * Für Spalten und Felder, in denen ausschließlich die Nummer steht. Der Text
- * „ohne Nummer" ist bewusst kein Bindestrich: er ist eine Aufforderung, kein
- * Formatierungszeichen.
- */
-export function nummerOderHinweis(nummer: string | null | undefined): string {
-  return anzeigeNummer(nummer) ?? "ohne Nummer";
-}

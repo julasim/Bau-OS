@@ -22,7 +22,7 @@ uiPreferencesRoutes.patch("/me/preferences", async (c) => {
   const userId = c.var.userId;
   if (!userId) return c.json({ error: "Nicht eingeloggt" }, 401);
   let patch: Partial<UiPreferences> & {
-    telegramNotifications?: Partial<UiPreferences["telegramNotifications"]>;
+    benachrichtigungen?: Partial<UiPreferences["benachrichtigungen"]>;
   };
   try {
     patch = await c.req.json<typeof patch>();

@@ -13,10 +13,17 @@
 //   DELETE /api/export-templates/:id                   → Loeschen
 //   GET    /api/export-templates/_variables?kind=…     → Tag-Doku
 //
-//   GET    /api/exports/meeting/:id.docx
-//   GET    /api/exports/bautagebuch/:id.docx
-//   GET    /api/exports/time-entries.docx?...
-//   GET    /api/exports/project/:name/summary.docx
+//   GET    /api/exports/meeting/:id
+//   GET    /api/exports/bautagebuch/:id
+//   GET    /api/exports/time-entries?...
+//   GET    /api/exports/project/:name/summary
+//
+//   (Die Pfade tragen KEINE .docx-Endung — sie stand hier jahrelang und
+//   fuehrte beim Nachbauen des Aufrufs zuverlaessig in einen 404. Die Endung
+//   entsteht erst im Content-Disposition-Header.)
+//
+//   Alle vier lesen `?templateId=` und rendern damit eine andere als die
+//   Standardvorlage.
 // ============================================================
 
 import { Hono } from "hono";

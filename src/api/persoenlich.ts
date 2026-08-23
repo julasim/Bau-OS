@@ -73,7 +73,7 @@ export function gehoertMirPruefer(ctx: UserCtx): (d: PersoenlicherDatensatz) => 
   };
 }
 
-/** Einzelfall-Variante fuer Routen, die genau einen Datensatz pruefen. */
-export function gehoertMir(ctx: UserCtx, d: PersoenlicherDatensatz): Promise<boolean> {
-  return gehoertMirPruefer(ctx)(d);
-}
+// Eine Einzelfall-Variante (`gehoertMir(ctx, datensatz)`) stand hier und hatte
+// keinen Aufrufer: die Routen, die genau einen Datensatz pruefen, haben ihre
+// eigene Fassung mit Ersteller-Zweig. Ein zweiter Weg zur selben Antwort ist
+// die haeufigste Ursache dafuer, dass die beiden Wege auseinanderlaufen.

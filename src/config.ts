@@ -18,8 +18,10 @@ import path from "path";
 export const WORKSPACE_PATH = (process.env.WORKSPACE_PATH ?? process.env.VAULT_PATH)!;
 // Altbestand aus der Bot-Aera: diese Ordner werden im Dateibrowser
 // ausgeblendet, falls sie in einem gewachsenen Workspace noch herumliegen.
-export const WORKSPACE_AGENTS_DIR = "Agents";
-export const WORKSPACE_LOGS_DIR = "MEMORY_LOGS";
+// `WORKSPACE_AGENTS_DIR` und `WORKSPACE_LOGS_DIR` standen hier: zwei
+// Ordnernamen der Bot-Aera ("Agents", "MEMORY_LOGS"), die der Dateibrowser
+// ausblendete. Ihr einziger Leser war `listFolder()`, und der ist mit dem
+// Aufraeumen entfallen.
 
 // ── System ────────────────────────────────────────────────────────────────────
 export const TIMEZONE = "Europe/Vienna";

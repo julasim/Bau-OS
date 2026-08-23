@@ -37,12 +37,13 @@ import { logInfo } from "../../logger.js";
 export const settingsRoutes = new Hono<AppEnv>();
 
 // ── Whitelist: nur diese Keys duerfen per PATCH geaendert werden ─────────────
-const ALLOWED_SETTING_KEYS = new Set<keyof UserSettings>([
-  "displayName",
-  "notificationsEnabled",
-  "defaultProject",
-  "chatSearchMode",
-]);
+// `notificationsEnabled` und `chatSearchMode` standen hier: der eine schaltete
+// die Telegram-Meldungen, der andere die Suche im Chatverlauf. Beides gibt es
+// seit AP0 nicht mehr, die Oberflaeche hat auch nie ein Bedienelement dafuer
+// gehabt — die Weissliste liess also zwei Werte durch, die niemand lesen kann.
+// Was Benachrichtigungen angeht, ist die Nachfolge `UiPreferences.benachrichtigungen`
+// (src/data/db-ui-preferences.ts): je Person, je Ereignisart.
+const ALLOWED_SETTING_KEYS = new Set<keyof UserSettings>(["displayName", "defaultProject"]);
 
 // ── GET /settings — Profil + Settings + Runtime-Info ─────────────────────────
 settingsRoutes.get("/settings", (c) => {

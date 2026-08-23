@@ -2,7 +2,6 @@ import { createApp } from "vue";
 import "./patio-tokens.css";
 import "./patio-components.css";
 import "./patio-shell.css";
-import { createPinia } from "pinia";
 import App from "./App.vue";
 import { router } from "./router";
 import "./style.css";
@@ -10,8 +9,14 @@ import "./style.css";
 import { useTheme } from "./composables/useTheme";
 useTheme();
 
+// ── Kein Pinia ────────────────────────────────────────────────────────────
+//
+// Hier stand `app.use(createPinia())`. Einen Store gab es nie — geteilter
+// Zustand liegt in Composables (`useEvents`, `useAufgabensystem`,
+// `useBranding`, `useTheme`), und das reicht fuer eine Oberflaeche dieser
+// Groesse. Registriert, aber leer, hiess nur: die Doku nannte Pinia im Stack,
+// und wer einen Store suchte, fand keinen.
 const app = createApp(App);
-app.use(createPinia());
 app.use(router);
 app.mount("#app");
 

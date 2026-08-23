@@ -12,9 +12,7 @@ import { alsIso } from "../data/zeitstempel.js";
 
 export interface UserSettings {
   displayName?: string;
-  notificationsEnabled?: boolean;
   defaultProject?: string | null;
-  chatSearchMode?: boolean;
 }
 
 /** User-Objekt im JSON-Fallback (legacy). */
@@ -382,9 +380,11 @@ export function saveUsers(users: User[]): void {
   fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf-8");
 }
 
-export function findUser(username: string): User | undefined {
-  return loadUsers().find((u) => u.username === username);
-}
+// `findUser()` stand hier — die letzte Lesefunktion auf `data/users.json`,
+// die ausserhalb der Uebernahme beim Start noch existierte. Kein Aufrufer.
+// Die JSON-Konten sind als Anmeldeweg seit AP1 geschlossen; was bleibt, ist
+// `loadUsers()` fuer den einmaligen Import und die Sperre der
+// Ersteinrichtung.
 
 export function updateUser(username: string, patch: Partial<User>): User | undefined {
   const users = loadUsers();

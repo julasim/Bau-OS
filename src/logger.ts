@@ -167,24 +167,9 @@ export function logError(context: string, err: unknown): void {
   });
 }
 
-export function readRecentLogs(n = 20): string {
-  // Bereits geschriebene Zeilen …
-  let lines: string[] = [];
-  try {
-    if (fs.existsSync(LOG_FILE)) {
-      lines = fs.readFileSync(LOG_FILE, "utf-8").split("\n").filter(Boolean);
-    }
-  } catch {
-    /* ignore */
-  }
-  // … plus noch nicht geflushte Zeilen aus der Queue, damit /logs auch die
-  // allerletzten Eintraege zeigt.
-  for (const job of queue) {
-    if (job.human !== undefined) lines.push(job.human);
-  }
-  if (lines.length === 0) return "Keine Logs vorhanden.";
-  return lines.slice(-n).join("\n") || "Keine Logs vorhanden.";
-}
+// `readRecentLogs()` stand hier — sie fuetterte einen `/logs`-Endpunkt aus
+// der Bot-Zeit, den es nicht mehr gibt. Logs liest man auf dem Firmenserver
+// mit `docker compose logs`, nicht ueber HTTP.
 
 /** Synchroner Notfall-Flush bei Prozess-Ende: der Async-Consumer kommt beim
  *  Exit nicht mehr durch, also schreiben wir die Rest-Queue direkt raus.

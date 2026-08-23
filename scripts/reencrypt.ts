@@ -30,11 +30,22 @@ import { decryptString, encryptString, needsReencrypt } from "../src/api/crypto.
 const DRY = process.argv.includes("--dry");
 
 // Alle verschluesselten Felder (Tabelle, Primaerschluessel-Spalte, Feld).
+//
+// ── Was hier stand, und warum es irrefuehrend war ──────────────────────────
+//
+// Drei der vier Eintraege zeigten auf Spalten, die es nicht mehr gibt:
+// `user_microsoft_accounts` ist mit Migration 047 entfallen,
+// `users.telegram_bot_token` mit 056. Der try/catch darum meldete jedes Mal
+// „nicht abfragbar — uebersprungen" und liess so aussehen, als fehle eine
+// Migration. Wer das Skript vor einer Schluesselrotation las, musste
+// annehmen, dass etwas nicht stimmt.
+//
+// Uebrig bleibt genau EIN Feld. Der Verschluesselungs-Apparat bedient damit
+// heute kein aktives Feld: `totp_secret_encrypted` gehoert zum geparkten
+// Zweitfaktor (AP17). Das ist kein Grund, das Skript zu loeschen — es ist der
+// Grund, warum es vor der Reaktivierung geprueft gehoert.
 const FIELDS: Array<{ table: string; idCol: string; col: string }> = [
-  { table: "users", idCol: "id", col: "telegram_bot_token" },
   { table: "users", idCol: "id", col: "totp_secret_encrypted" },
-  { table: "user_microsoft_accounts", idCol: "user_id", col: "access_token_encrypted" },
-  { table: "user_microsoft_accounts", idCol: "user_id", col: "refresh_token_encrypted" },
 ];
 
 if (!DB_ENABLED) {

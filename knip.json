@@ -1,0 +1,32 @@
+{
+  "entry": [
+    "electron/main.ts",
+    "electron/preload.cjs",
+    "scripts/**/*.{ts,mjs}",
+    "docs/.vitepress/config.ts",
+    "docs/.vitepress/theme/index.ts",
+    "tests/**/*.test.ts"
+  ],
+  "project": [
+    "src/**/*.ts",
+    "web/src/**/*.{ts,vue}",
+    "electron/**/*.ts",
+    "scripts/**/*.{ts,mjs}"
+  ],
+  "ignore": [
+    "_archive/**"
+  ],
+  "ignoreDependencies": [
+    "angular-expressions",
+    "tailwindcss"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "vitest": {
+    "config": [
+      "vitest.config.ts"
+    ]
+  },
+  "ignoreFiles": [
+    "src/api/routes/auth-2fa.ts"
+  ]
+}

@@ -112,11 +112,6 @@ export function formatWeekdayShort(input: DateInput): string {
   return d ? _weekdayShort.format(d) : "";
 }
 
-/** Ganzzahl mit Tausendertrennung — z.B. 12.345 */
-export function formatNumber(n: number): string {
-  return _int.format(n);
-}
-
 /** Betrag in Euro, gerundet, mit nachgestelltem Zeichen — z.B. "1.500 €" */
 export function formatEUR(n: number): string {
   return _int.format(n) + " €";

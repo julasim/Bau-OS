@@ -148,50 +148,9 @@ async function resolveCompanyId(db: ReturnType<typeof getDb>, name: string | nul
   return row ? String(row.id) : null;
 }
 
-/** Bulk-Lookup: gegeben eine Liste Email-Adressen, finde die zugehoerigen
- *  Team-Mitglieder. Used vom Microsoft-Sync um Outlook-Attendees auf
- *  PATIO-team_members zu mappen. Email-Vergleich case-insensitive +
- *  getrimmt, damit Schreibvarianten ("  user@x.at  " vs "User@X.at")
- *  noch matchen. Liefert eine Map fuer O(1)-Lookup im Caller. */
-export async function findMembersByEmails(emails: string[]): Promise<Map<string, { id: string; name: string }>> {
-  const result = new Map<string, { id: string; name: string }>();
-  if (emails.length === 0) return result;
-  const db = getDb();
-  const normalized = emails.map((e) => (e || "").trim().toLowerCase()).filter((e) => e.length > 0);
-  if (normalized.length === 0) return result;
-
-  const rows = await db`
-    SELECT id, name, email FROM team_members
-     WHERE email IS NOT NULL
-       AND LOWER(TRIM(email)) = ANY(${normalized})
-  `;
-  for (const row of rows) {
-    const key = String(row.email).trim().toLowerCase();
-    result.set(key, { id: String(row.id), name: String(row.name) });
-  }
-  return result;
-}
-
-/** Inverse von findMembersByEmails: gegeben Member-IDs, liefere die Emails
- *  + Namen fuer den Push zu Outlook. Mitglieder ohne Email werden
- *  uebersprungen — Outlook kann mit ihnen nichts anfangen. */
-export async function findEmailsForMembers(
-  memberIds: string[],
-): Promise<Array<{ id: string; name: string; email: string }>> {
-  if (memberIds.length === 0) return [];
-  const db = getDb();
-  const rows = await db`
-    SELECT id, name, email FROM team_members
-     WHERE id = ANY(${memberIds})
-       AND email IS NOT NULL
-       AND TRIM(email) <> ''
-  `;
-  return rows.map((r) => ({
-    id: String(r.id),
-    name: String(r.name),
-    email: String(r.email).trim(),
-  }));
-}
+// `findMembersByEmails()` und `findEmailsForMembers()` standen hier: sie
+// uebersetzten zwischen E-Mail-Adressen und Team-Mitgliedern und wurden
+// ausschliesslich vom Outlook-Abgleich gebraucht. Der ist mit AP0 entfallen.
 
 /** Entfernt Projektzuordnungen, die der Fragende nicht sehen darf.
  *

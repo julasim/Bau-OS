@@ -4,25 +4,16 @@ import { WORKSPACE_PATH } from "../config.js";
 
 export const workspacePath = WORKSPACE_PATH;
 
-export function ensureDir(dir: string): void {
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-}
-
-/** Atomic write: schreibt in .tmp, dann rename — verhindert Datenverlust bei Crash mid-write */
-export function atomicWriteSync(filepath: string, data: string): void {
-  const tmp = filepath + ".tmp";
-  try {
-    fs.writeFileSync(tmp, data, "utf-8");
-    fs.renameSync(tmp, filepath);
-  } catch (err) {
-    try {
-      fs.unlinkSync(tmp);
-    } catch {
-      /* tmp existiert nicht — OK */
-    }
-    throw err;
-  }
-}
+// ── Was hier stand: ensureDir und atomicWriteSync ─────────────────────────
+//
+// Zwei Schreib-Helfer aus der Vault-Zeit. Seit dem Umbau zum Firmenserver
+// schreibt die Anwendung nicht mehr ins Dateisystem — beide hatten keinen
+// Aufrufer ausserhalb der Tests mehr.
+//
+// `atomicWriteSync` war gut gebaut (schreiben nach .tmp, dann umbenennen) und
+// hatte drei eigene Pruefungen. Genau das macht solchen Code gefaehrlich: er
+// liest sich wie ein benutzter Baustein. Wer ihn wieder braucht, holt ihn aus
+// der Git-Historie.
 
 /** Sicherer Pfad innerhalb des Vaults — blockiert Traversal und Symlinks */
 export function safePath(relativePath: string): string | null {

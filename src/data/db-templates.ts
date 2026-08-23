@@ -71,12 +71,6 @@ export async function getTemplate(id: string): Promise<Template | null> {
   return row ? rowToTemplate(row) : null;
 }
 
-export async function getDefaultTemplate(kind: TemplateKind): Promise<Template | null> {
-  const db = getDb();
-  const [row] = await db`SELECT * FROM templates WHERE kind = ${kind} AND is_default = true LIMIT 1`;
-  return row ? rowToTemplate(row) : null;
-}
-
 export async function createTemplate(input: TemplateInput, createdById: string | null): Promise<Template> {
   const db = getDb();
   const id = crypto.randomUUID();

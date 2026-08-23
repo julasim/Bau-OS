@@ -94,11 +94,18 @@ import { templatesRoutes } from "./routes/templates.js";
 import { exportTemplatesRoutes } from "./routes/export-templates.js";
 import { projectModulesRoutes } from "./routes/project-modules.js";
 import { uiPreferencesRoutes } from "./routes/ui-preferences.js";
-// Old TOTP-Routes (auth2faRoutes): durch Email-2FA in Migration 020
-// abgeloest. Endpoints werden nicht mehr exposed, damit nicht parallel
-// zwei 2FA-Mechanismen laufen koennen. Datei bleibt im Code als Recovery-
-// Pfad, falls die Email-2FA gar nicht zugestellt werden kann (manueller
-// Re-Enable durch Admin via direktem DB-Patch).
+// TOTP-Routen (auth2faRoutes) sind NICHT eingehaengt — siehe die Begruendung
+// weiter unten bei der Anmeldung.
+//
+// Hier stand, sie seien "durch Email-2FA abgeloest" und blieben als
+// Recovery-Pfad liegen. Beides stimmt seit dem Umbau zum Firmenserver nicht
+// mehr: der E-Mail-Zweig ist ersatzlos entfallen (er brauchte SMTP, das es
+// ohne Internet nicht gibt), und einen Wiedereinstieg ueber ihn gibt es
+// folglich auch nicht. Wer den Kommentar las, hielt einen manuellen
+// Recovery-Weg fuer moeglich, den es nicht gibt.
+//
+// Richtig ist: der zweite Faktor kommt mit dem Zugang von aussen zurueck
+// (AP17). Bis dahin liegt der Zweig unberuehrt im Baum.
 
 // Exportiert fuer Integrationstests (Hono `app.request()` gegen die echte
 // Middleware-/Routen-Kette). `startApi()` startet den HTTP-Server separat.
