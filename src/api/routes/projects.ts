@@ -225,6 +225,27 @@ projectsRoutes.get("/projects/:name", async (c) => {
   return c.json(info);
 });
 
+// ── Warum hier 404 VOR 403 steht, anders als in den Unterrouten ─────────────
+//
+// Der Statuscode verraet damit, ob es ein Projekt dieses Namens gibt. Das ist
+// geprueft und bewusst so gelassen:
+//
+// **Die Auskunft ist ohnehin nicht verschliessbar.** Projekt- und Nummernraum
+// sind eindeutig (Migrationen 006 und 052) — `POST /projects` muss auf einen
+// vergebenen Namen mit 409 antworten und auf einen freien mit 201. Wer die
+// Existenz erfragen will, fragt dort. Eine Eindeutigkeit ohne Existenzauskunft
+// gibt es nicht.
+//
+// **Der Preis waere echte Verschlechterung.** Mit vorgezogener Rechtepruefung
+// bekaeme der Ersteller eines geloeschten Projekts „kein Zugriff" statt
+// „nicht gefunden" — eine Antwort, die nicht stimmt und ihn in die falsche
+// Richtung schickt (`tests/api-papierkorb.test.ts` haelt genau das fest).
+//
+// **Was es zu schuetzen gaebe, ist ein Projektname.** Der steht im eigenen
+// Haus auf jedem Ordnerruecken. Die Unterrouten pruefen trotzdem zuerst das
+// Recht — dort geht es um INHALTE (Notizen, Aufgaben, Dossier), nicht um die
+// blosse Existenz.
+
 // Projekt-Stammdaten patchen (Migration 004).
 // Body: { [field]: string | null }. Whitelist siehe PATCHABLE_FIELDS.
 // Phase-4-Schreibschutz: nur Admin oder der Ersteller darf editieren.

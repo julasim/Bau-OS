@@ -279,11 +279,13 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 290 von 412 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 426 von 581 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
 > 34 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
-> Gemessen am 2026-08-06: `12 passed | 33 skipped (45)` Dateien,
-> `122 passed | 290 skipped (412)` Prüfungen.
+> Gemessen am 2026-08-23: `15 passed | 44 skipped (59)` Dateien,
+> `155 passed | 426 skipped (581)` Prüfungen. **Diese Zahlen wandern mit jedem
+> neuen Test** — wer sie hier liest, prüft sie besser einmal nach, statt sich
+> auf sie zu verlassen. Der Punkt bleibt derselbe: die Farbe sagt nichts.
 >
 > ⚠ **Und dieser Lauf meldet wieder GRÜN.** Hier stand bis eben, seit
 > `tests/db.test.ts` dazukam scheitere die Suite ohne Datenbank — das stimmt

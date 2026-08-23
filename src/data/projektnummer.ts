@@ -115,8 +115,26 @@ export function pruefeProjektnummer(roh: unknown): NummerErgebnis {
   return { ok: true, nummer };
 }
 
-/** Die Form, in der zwei Nummern verglichen werden — passend zum eindeutigen
- *  Index aus Migration 052 (`lower(projektnummer)`). */
+/**
+ * Die Form, in der zwei Nummern IM SPEICHER verglichen werden.
+ *
+ * ── Ausdruecklich NICHT fuer Datenbankabfragen ──────────────────────────────
+ *
+ * Der eindeutige Index aus Migration 052 liegt auf Postgres' `lower()`. Das
+ * ist NICHT dasselbe wie JavaScripts `toLowerCase()`: gemessen ueber alle 1181
+ * Zeichen der Basis-Ebene, die sich ueberhaupt kleinschreiben lassen, weichen
+ * 9 voneinander ab — praxisnah davon das tuerkische İ (U+0130), das in
+ * JavaScript zu `i` plus kombinierendem Punkt wird und in Postgres nicht.
+ *
+ * Wo eine Nummer gegen die Datenbank geprueft wird, steht deshalb `lower()`
+ * auf BEIDEN Seiten der Abfrage — dann koennen die zwei Kleinschreibungen per
+ * Bauart nicht auseinandergehen. Frueher stand hier `vergleichbar()`, und die
+ * Folge waere gewesen: die Anwendung meldet „frei", die Datenbank lehnt ab.
+ *
+ * Fuer reine Listenvergleiche im Speicher (etwa die Nummern-Historie) ist
+ * diese Funktion weiterhin richtig: dort waere eine Abweichung hoechstens ein
+ * ueberfluessiger Eintrag.
+ */
 export function vergleichbar(nummer: string): string {
   return nummer.toLowerCase();
 }

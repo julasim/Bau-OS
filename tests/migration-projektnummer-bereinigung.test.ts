@@ -111,6 +111,35 @@ describe.skipIf(!HAS_DB)("Migration: Bereinigung der Projektnummer", () => {
     }
   });
 
+  it("die Nummernsuche vergleicht mit Postgres, nicht mit JavaScript", async () => {
+    // Postgres' `lower()` und JavaScripts `toLowerCase()` sind NICHT dasselbe.
+    // Gemessen über alle 1181 kleinschreibbaren Zeichen der Basis-Ebene:
+    // 9 Abweichungen, praxisnah davon das türkische İ (U+0130) — JavaScript
+    // macht daraus `i` plus kombinierenden Punkt, Postgres nicht.
+    //
+    // Solange die Anwendung selbst kleinschrieb und die Datenbank auf ihrem
+    // `lower()`-Index verglich, hätte das geheißen: die Anwendung meldet die
+    // Nummer als frei, die Datenbank lehnt sie ab. Jetzt steht `lower()` auf
+    // beiden Seiten der Abfrage.
+    const TUERKISCH_I = String.fromCharCode(0x0130);
+    const nummer = `${TUERKISCH_I}ZMIR-2026-001`;
+
+    const { projectRepo } = await import("../src/data/index.js");
+    const name = `mig-tuerkisch-${Date.now()}`;
+    const angelegt = await projectRepo.create(name, { projektnummer: nummer });
+    expect(angelegt).toBe("ok");
+
+    try {
+      // Über die Nummer auflösbar — auch in anderer Schreibweise.
+      expect(await projectRepo.nameByNummer?.(nummer)).toBe(name);
+      // Und ein zweites Projekt mit derselben Nummer wird abgelehnt, nicht
+      // mit einem Datenbankfehler quittiert.
+      expect(await projectRepo.create(`${name}-zwei`, { projektnummer: nummer })).toBe("nummer-vergeben");
+    } finally {
+      await getDb()`DELETE FROM projects WHERE name LIKE ${"mig-tuerkisch-%"}`;
+    }
+  });
+
   it("die Funktion ist IMMUTABLE — sonst dürfte sie in keinem Index stehen", async () => {
     // Genau daran ist der erste Versuch von Migration 053 gescheitert
     // (`array_to_string` ist STABLE). Wer hier später etwas ändert, soll den

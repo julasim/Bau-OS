@@ -217,7 +217,7 @@ export const dbProjects: ProjectRepository = {
     if (nummer !== null) {
       const [belegt] = await db`
         SELECT id FROM projects
-         WHERE lower(projektnummer) = ${vergleichbar(nummer)}
+         WHERE lower(projektnummer) = lower(${nummer})
            ${existing ? db`AND id <> ${String(existing.id)}` : db``}
          LIMIT 1`;
       if (belegt) return "nummer-vergeben";
@@ -408,6 +408,15 @@ export const dbProjects: ProjectRepository = {
       // aufgefallen.
       // Alle Vergleiche ueber `vergleichbar()`, nicht zeichengenau.
       //
+      // Hier bleibt der JavaScript-Vergleich, waehrend die drei
+      // DATENBANK-Abfragen (Freigabe, Eindeutigkeit) inzwischen `lower()` auf
+      // beiden Seiten benutzen. Der Unterschied ist Absicht: dort geht es um
+      // den eindeutigen Index, hier nur um die Frage, ob ein Eintrag in einer
+      // Liste doppelt stuende. Gemessen weichen die beiden Kleinschreibungen
+      // bei 9 von 1181 Zeichen der BMP voneinander ab (praxisnah: das
+      // tuerkische İ, U+0130) — in der Historie waere die Folge hoechstens ein
+      // ueberfluessiger Eintrag, am Index waere sie ein Datenbankfehler.
+      //
       // Der eindeutige Index und jede andere Pruefstelle arbeiten ueber
       // `lower()`; hier stand ein exakter Vergleich. Folge: wer `zz-x1` auf
       // `ZZ-X1` korrigiert — also nur die Schreibweise —, bekam den Eintrag
@@ -435,7 +444,7 @@ export const dbProjects: ProjectRepository = {
     if (patch.projektnummer) {
       const [belegt] = await db`
         SELECT id FROM projects
-         WHERE lower(projektnummer) = ${vergleichbar(String(patch.projektnummer))}
+         WHERE lower(projektnummer) = lower(${String(patch.projektnummer)})
            AND id <> ${String(existing.id)}
          LIMIT 1`;
       if (belegt) return "nummer-vergeben";
@@ -617,7 +626,7 @@ export const dbProjects: ProjectRepository = {
     const db = getDb();
     const [row] = await db`
       SELECT name FROM projects
-       WHERE lower(projektnummer) = ${vergleichbar(geprueft.nummer)}
+       WHERE lower(projektnummer) = lower(${geprueft.nummer})
          AND deleted_at IS NULL
        LIMIT 1`;
     return row ? String(row.name) : null;
