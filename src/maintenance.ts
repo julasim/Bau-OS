@@ -54,6 +54,31 @@ async function runMaintenance(): Promise<void> {
   }
 }
 
+// ── Tageswechsel (Aufgabensystem, Migration 050) ────────────────────────────
+//
+// Um Mitternacht wird `im_tagesplan` fuer ALLE zurueckgesetzt. Die Aufgaben
+// selbst bleiben unveraendert.
+//
+// Das ist die wichtigste Regel des ganzen Systems und bewusst so hart: es gibt
+// KEINE Rueckstandsliste und KEINE Uebertragung. Nicht Erledigtes faellt in
+// sein Projekt zurueck und gilt ausdruecklich nicht als Rueckstand. Eine
+// wachsende Liste von „gestern nicht geschafft" ist der schnellste Weg, ein
+// Aufgabensystem aufzugeben — nach zwei Wochen sieht man nur noch das eigene
+// Versagen und macht es zu.
+//
+// Eigener Cron, nicht im 03:15-Lauf: der Tag beginnt um 0 Uhr, nicht um
+// viertel nach drei. Wer um 2 Uhr nachts arbeitet, soll noch den Plan von
+// gestern sehen.
+async function tageswechsel(): Promise<void> {
+  try {
+    const { aufgabensystemRepo } = await import("./data/index.js");
+    const anzahl = await aufgabensystemRepo.tagesplanZuruecksetzen();
+    logInfo(`[Tageswechsel] Tagesplan geleert: ${anzahl} Aufgabe(n) zurueckgesetzt.`);
+  } catch (err) {
+    logError("[Tageswechsel]", err);
+  }
+}
+
 /** Startet den Maintenance-Cron. Idempotent — mehrfache Calls registrieren
  *  trotzdem nur einen Job (boot-Time-only). */
 let _registered = false;
@@ -71,6 +96,16 @@ export function startMaintenanceCron(): void {
     { timezone: TIMEZONE },
   );
   logInfo(`[Maintenance] Cron registriert: 03:15 ${TIMEZONE} (Audit-Retention ${AUDIT_RETENTION_DAYS}d)`);
+
+  // Tageswechsel um Mitternacht — siehe Begruendung ueber `tageswechsel()`.
+  cron.schedule(
+    "0 0 * * *",
+    () => {
+      void tageswechsel();
+    },
+    { timezone: TIMEZONE },
+  );
+  logInfo(`[Tageswechsel] Cron registriert: 00:00 ${TIMEZONE}`);
 
   // Beim ersten Boot einmal direkt ausfuehren — wenn die Installation
   // 6 Monate offline war, soll nicht erst auf 03:15 gewartet werden.

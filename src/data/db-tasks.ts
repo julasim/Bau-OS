@@ -21,6 +21,13 @@ function rowToTask(row: Record<string, unknown>): Task {
     sortOrder: row.sort_order ? Number(row.sort_order) : undefined,
     completedAt: row.completed_at ? String(row.completed_at) : null,
     phaseId: row.phase_id ? String(row.phase_id) : null,
+    // Aufgabensystem (Migration 050). `rang` ist NOT NULL DEFAULT 3, der
+    // Rueckfall deckt nur den Fall ab, dass eine Abfrage die Spalte nicht
+    // mitliest — dann lieber der Standard als `undefined` in der Oberflaeche.
+    rang: (Number(row.rang ?? 3) as Task["rang"]) ?? 3,
+    aufwandMin: row.aufwand_min === null || row.aufwand_min === undefined ? null : Number(row.aufwand_min),
+    imTagesplan: row.im_tagesplan === true,
+    tagesplanVon: row.tagesplan_von ? String(row.tagesplan_von) : null,
     createdById: row.created_by ? String(row.created_by) : null,
     createdAt: String(row.created_at),
     updatedAt: String(row.updated_at),
@@ -110,6 +117,11 @@ export const dbTasks: TaskRepository = {
     const priority = "priority" in updates ? updates.priority : current.priority;
     // Migration 035: Verknuepfung mit einer Leistungsphase.
     const phaseId = "phaseId" in updates ? (updates.phaseId ?? null) : current.phase_id;
+    // Aufgabensystem (Migration 050). Bewusst mit `in`-Pruefung wie alles
+    // andere hier: nur was der Aufrufer mitschickt, wird geaendert. Sonst
+    // setzte ein Teil-Update den Rang jedes Mal auf den Standard zurueck.
+    const rang = "rang" in updates ? (updates.rang ?? 3) : current.rang;
+    const aufwandMin = "aufwandMin" in updates ? (updates.aufwandMin ?? null) : current.aufwand_min;
     // assigneeId kommt als FK dazu. Wenn gesetzt, denormalisieren wir auch
     // den assignee-Text auf den Mitglieder-Namen — das haelt Legacy-Reader
     // konsistent und vermeidet den "Freitext widerspricht FK"-Fall.
@@ -135,6 +147,8 @@ export const dbTasks: TaskRepository = {
         assignee_id = ${assigneeId ?? null},
         date = ${date}, location = ${location}, priority = ${priority},
         phase_id = ${phaseId ?? null},
+        rang = ${rang},
+        aufwand_min = ${aufwandMin},
         rev = rev + 1,
         updated_at = ${now}
       WHERE id = ${id} AND rev = ${current.rev}

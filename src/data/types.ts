@@ -35,9 +35,48 @@ export interface Task {
   /** Migration 035: FK auf project_phases. Verknuepft die Aufgabe mit einer
    *  Leistungsphase — daraus leitet sich der Phasen-Fortschritt ab. */
   phaseId?: string | null;
+
+  // ── Aufgabensystem, Stufe 1 (Migration 050) ───────────────────────────────
+  /** Der Quadrant, nicht die Wichtigkeit. Zwei Fragen in vier Werten:
+   *  1 = dringend UND wichtig (sofort, hoechstens 5 offen)
+   *  2 = wichtig (terminieren, mindestens eine pro Tag)
+   *  3 = dringend (sammeln, hoechstens 60 min/Tag) — **Standard**
+   *  4 = keins von beidem (streichen, Verfall nach 30 Tagen)
+   *
+   *  Der Standard ist 3, weil der Normalfall nicht markiert werden soll:
+   *  aktiv gesetzt wird nur 1, 2 oder 4. Nicht mit `priority` verwechseln —
+   *  das ist eine aeltere, unabhaengige Achse. */
+  rang?: 1 | 2 | 3 | 4;
+  /** Geschaetzte Dauer in Minuten, grob gerastert (15/30/60/120/180/240),
+   *  damit die Summe im Kopf nachvollziehbar bleibt. `null` heisst: liegt
+   *  noch im Eingang und ist nicht eingeschaetzt. */
+  aufwandMin?: number | null;
+  /** Fuer heute ausgewaehlt. Wird beim Tageswechsel zurueckgesetzt. */
+  imTagesplan?: boolean;
+  /** Wessen Tagesplan (users.id). Auf einem Mehrbenutzer-Server ist der
+   *  Tagesplan persoenlich — ohne diese Spalte raeumte der eine dem anderen
+   *  den Tag ab. */
+  tagesplanVon?: string | null;
+
   createdAt: string;
   updatedAt: string;
 }
+
+/** Die vier Raenge mit ihren Grenzen. Eine einzige Quelle, damit Server und
+ *  Oberflaeche nicht auseinanderlaufen — die Zahlen sind das Kernstueck des
+ *  Systems, nicht Beiwerk. */
+export const RANG_GRENZEN = {
+  /** Hoechstens so viele offene Rang-1-Aufgaben, ueber ALLE Projekte. */
+  maxRang1: 5,
+  /** Fokusstunden pro Tag in Minuten. Nicht acht: der Rest sind Termine,
+   *  Baustelle, Wege, Unterbrechungen. */
+  tagesbudgetMin: 300,
+  /** Hoechstens so viele Minuten Rang 3 pro Tag. */
+  maxRang3Min: 60,
+} as const;
+
+/** Erlaubte Aufwandsstufen. Bewusst grob. */
+export const AUFWAND_STUFEN = [15, 30, 60, 120, 180, 240] as const;
 
 export interface Termin {
   /** Zaehler fuer den Konfliktschutz (Migration 042). Wird beim Speichern
