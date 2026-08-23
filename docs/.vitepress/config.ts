@@ -40,6 +40,7 @@ export default defineConfig({
           { text: "Die Projektnummer", link: "/konzepte/projektnummer" },
           { text: "Das Aufgabensystem", link: "/konzepte/aufgabensystem" },
           { text: "Export und Volldump", link: "/konzepte/export" },
+          { text: "Neuigkeiten", link: "/konzepte/benachrichtigungen" },
         ],
       },
       {

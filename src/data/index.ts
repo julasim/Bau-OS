@@ -41,6 +41,7 @@ import { dbInvoices } from "./db-invoices.js";
 import { dbPositionskatalog } from "./db-positionskatalog.js";
 import { dbAktivitaet } from "./db-aktivitaet.js";
 import { dbAufgabensystem } from "./db-aufgabensystem.js";
+import { dbBenachrichtigungen } from "./db-benachrichtigungen.js";
 import { dbPortfolio } from "./db-portfolio.js";
 import { dbSearch } from "./db-search.js";
 
@@ -62,6 +63,8 @@ export type { AktivitaetsEintrag } from "./db-aktivitaet.js";
 /** Aufgabensystem (Migration 050): die rechnende Schicht ueber den
  *  Aufgaben — Matrix, Tagesbudget, Tageswechsel. */
 export const aufgabensystemRepo = dbAufgabensystem;
+export const benachrichtigungenRepo = dbBenachrichtigungen;
+export type { Benachrichtigung, NeueBenachrichtigung, Anlass } from "./db-benachrichtigungen.js";
 export type { Matrix, MatrixSpalte, TagesplanBudget, Sichtbarkeit } from "./db-aufgabensystem.js";
 export const portfolioRepo: PortfolioRepository = dbPortfolio;
 export const searchRepo = dbSearch;

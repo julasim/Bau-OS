@@ -144,6 +144,15 @@ interface ServerPreferences {
   weekStart: "monday" | "sunday";
   calendarDefaultView: "month" | "week" | "day" | "list";
   dateFormat: "DD.MM.YYYY" | "YYYY-MM-DD";
+  /** Welche Ereignisse eine Meldung auslösen (Migration 058). Hieß bis zur
+   *  Umbenennung `telegramNotifications` — die Struktur stammt aus der
+   *  Bot-Zeit, der Weg ist heute die Glocke im Programm. */
+  benachrichtigungen: {
+    termine: boolean;
+    tasks: boolean;
+    meetings: boolean;
+    bautagebuch: boolean;
+  };
 }
 
 const serverPrefs = ref<ServerPreferences | null>(null);
@@ -177,7 +186,11 @@ async function loadPreferences() {
 
 // Teil-Updates sind erlaubt — das Backend merged den Patch in den
 // bestehenden Stand.
-type PreferencesPatch = Partial<ServerPreferences>;
+type PreferencesPatch = Partial<Omit<ServerPreferences, "benachrichtigungen">> & {
+  // Teil-Patch: der Server merged die Benachrichtigungen tief, damit ein
+  // einzelner Schalter genügt und die anderen nicht mitgeschickt werden müssen.
+  benachrichtigungen?: Partial<ServerPreferences["benachrichtigungen"]>;
+};
 
 async function patchPreferences(patch: PreferencesPatch) {
   prefsBusy.value = true;
@@ -1248,6 +1261,42 @@ onMounted(() => {
         </template>
 
         <template v-if="activeSection === 'praeferenzen'">
+          <section v-if="serverPrefs" style="margin-bottom: 26px">
+            <h3 class="settings-h3 mb-3">Benachrichtigungen</h3>
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">
+              Wovon Sie eine Meldung in den
+              <router-link to="/neuigkeiten">Neuigkeiten</router-link> bekommen möchten. Gemeldet wird nur, was an Sie
+              gerichtet ist — Zuweisungen, Termine, Besprechungen, fällige Aufgaben.
+            </p>
+            <div class="settings-card settings-divide">
+              <label
+                v-for="opt in [
+                  { key: 'tasks', label: 'Aufgaben', desc: 'Zuweisung an Sie und Fälligkeit am selben Tag' },
+                  { key: 'termine', label: 'Termine', desc: 'Sie werden als Teilnehmer eingetragen' },
+                  { key: 'meetings', label: 'Besprechungen', desc: 'Sie werden als Teilnehmer eingetragen' },
+                ] as const"
+                :key="opt.key"
+                class="settings-row flex items-center gap-3 px-4 py-3"
+                style="cursor: pointer"
+              >
+                <input
+                  type="checkbox"
+                  :checked="serverPrefs.benachrichtigungen?.[opt.key] !== false"
+                  :disabled="prefsBusy"
+                  @change="
+                    patchPreferences({
+                      benachrichtigungen: { [opt.key]: ($event.target as HTMLInputElement).checked },
+                    })
+                  "
+                />
+                <span style="flex: 1; min-width: 0">
+                  <span class="text-sm" style="display: block; color: var(--color-text)">{{ opt.label }}</span>
+                  <span class="text-xs" style="color: var(--color-text-tertiary)">{{ opt.desc }}</span>
+                </span>
+              </label>
+            </div>
+          </section>
+
           <section>
             <h3 class="settings-h3 mb-3">Erscheinungsbild</h3>
             <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 12px">

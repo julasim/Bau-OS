@@ -12,6 +12,8 @@ import { api, clearToken } from "../../api";
 import { useBranding } from "../../composables/useBranding";
 import { useCurrentUser } from "../../composables/useCurrentUser";
 import BIcon from "../BIcon.vue";
+import { useBenachrichtigungen } from "../../composables/useBenachrichtigungen";
+import { useEvents } from "../../composables/useEvents";
 
 interface NavItem {
   to: string;
@@ -25,8 +27,16 @@ const router = useRouter();
 const route = useRoute();
 const { initials, isAdmin, darfGeld } = useCurrentUser();
 
+// ── Die Glocke ────────────────────────────────────────────────────────────
+//
+// `NavItem.badge` war seit dem Bau der Leiste deklariert und wurde im Template
+// ausgegeben — nur setzte ihn kein einziger Eintrag. Der Platz war da, die
+// Zahl fehlte.
+const { ungelesen, ladeAnzahl } = useBenachrichtigungen();
+
 const NAV_ITEMS: NavItem[] = [
   { to: "/", label: "Dashboard", icon: "grid" },
+  { to: "/neuigkeiten", label: "Neuigkeiten", icon: "bell" },
   { to: "/tasks", label: "Aufgaben", icon: "check" },
   { to: "/calendar", label: "Kalender", icon: "calendar" },
   { to: "/projects", label: "Projekte", icon: "folder" },
@@ -45,7 +55,14 @@ const ADMIN_ITEMS: NavItem[] = [
   { to: "/admin/sicherung", label: "Sicherung", icon: "archive", adminOnly: true },
 ];
 
-const visibleNav = computed(() => NAV_ITEMS);
+const visibleNav = computed(() =>
+  NAV_ITEMS.map((it) => (it.to === "/neuigkeiten" ? { ...it, badge: ungelesen.value } : it)),
+);
+
+void ladeAnzahl();
+// Der Live-Kanal trägt keine Nutzdaten — er sagt nur, DASS sich etwas geändert
+// hat. Für den Zähler reicht das: er wird dann neu geholt.
+useEvents(["task", "termin", "meeting"], () => void ladeAnzahl());
 const visibleAdmin = computed(() => (isAdmin.value ? ADMIN_ITEMS : []));
 
 // ── Projekt-Kontext: in der Projekt-Detailseite wird die Sidebar zur

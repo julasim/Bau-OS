@@ -5,8 +5,19 @@ import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
 import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
 import { AUFWAND_STUFEN } from "../../data/types.js";
+import { meldeAufgabeZugewiesen } from "../melden.js";
 
 export const tasksRoutes = new Hono<AppEnv>();
+
+/** Anzeigename des Auslösers — er wird in der Meldung MITGESPEICHERT, nicht
+ *  als Verweis. Sonst stünde nach dem Löschen eines Kontos in jeder alten
+ *  Meldung nichts mehr (Lehre aus dem Audit-Log). */
+function ausloeserName(c: {
+  var: { dbUser?: { displayName?: string | null; username?: string } | null };
+}): string | null {
+  const u = c.var.dbUser;
+  return u?.displayName ?? u?.username ?? null;
+}
 
 function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
@@ -155,6 +166,15 @@ tasksRoutes.post("/tasks", async (c) => {
       body.project,
     );
     emitForProjectName({ type: "task", action: "created", id: task.id }, body.project, { actorId: c.var.userId });
+    if (body.assigneeId) {
+      await meldeAufgabeZugewiesen({
+        aufgabeId: task.id,
+        text: task.text,
+        mitgliedId: body.assigneeId,
+        ausloeserId: c.var.userId,
+        ausloeserName: ausloeserName(c),
+      });
+    }
     return c.json(updated, 201);
   }
   emitForProjectName({ type: "task", action: "created", id: task.id }, body.project, { actorId: c.var.userId });
@@ -202,6 +222,20 @@ tasksRoutes.put("/tasks/:id", async (c) => {
   // prev.project (Stand VOR dem Update) ist hier die einzige verfuegbare
   // Projektangabe — taskRepo.update() aendert das Projekt nicht.
   emitForProjectName({ type: "task", action: "updated", id }, prev.project, { actorId: c.var.userId });
+
+  // Nur bei ECHTER Aenderung der Zuweisung melden. Der Kommentar oben
+  // („kein Spam wenn nur das Datum aktualisiert wird") stand seit dem Bau der
+  // Route da — die Meldung selbst gab es nie.
+  if ("assigneeId" in body && body.assigneeId && body.assigneeId !== prev.assigneeId) {
+    await meldeAufgabeZugewiesen({
+      aufgabeId: id,
+      text: task.text,
+      mitgliedId: body.assigneeId,
+      projectId: null,
+      ausloeserId: c.var.userId,
+      ausloeserName: ausloeserName(c),
+    });
+  }
   return c.json(task);
 });
 

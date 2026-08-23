@@ -4,8 +4,17 @@ import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../d
 import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
 import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
+import { meldeTerminTeilnahme } from "../melden.js";
 
 export const termineRoutes = new Hono<AppEnv>();
+
+/** Anzeigename des Auslösers — er wird in der Meldung mitgespeichert. */
+function ausloeserName(c: {
+  var: { dbUser?: { displayName?: string | null; username?: string } | null };
+}): string | null {
+  const u = c.var.dbUser;
+  return u?.displayName ?? u?.username ?? null;
+}
 
 function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
@@ -127,6 +136,16 @@ termineRoutes.post("/termine", async (c) => {
     if (updated) result = updated;
   }
   emitForProjectName({ type: "termin", action: "created", id: termin.id }, body.project, { actorId: c.var.userId });
+  if (body.assigneeIds?.length) {
+    await meldeTerminTeilnahme({
+      terminId: termin.id,
+      text: result.text,
+      datum: result.datum,
+      mitgliedIds: body.assigneeIds,
+      ausloeserId: c.var.userId,
+      ausloeserName: ausloeserName(c),
+    });
+  }
   return c.json(result, 201);
 });
 

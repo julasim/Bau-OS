@@ -64,6 +64,13 @@ export const AUDIT_RETENTION_DAYS = parseInt(process.env.AUDIT_RETENTION_DAYS ||
 // 0 = abgeschaltet.
 export const RANG4_VERFALL_TAGE = parseInt(process.env.RANG4_VERFALL_TAGE || "30", 10);
 
+// ── Benachrichtigungen (Migration 058) ─────────────────────────────────────
+// Wie lange GELESENE Meldungen aufbewahrt werden. Ungelesene bleiben immer —
+// eine Meldung, die niemand gesehen hat, verschwindet nicht, nur weil sie alt
+// ist. Genau das unterscheidet sie vom fluechtigen Live-Kanal.
+// 0 = nie loeschen.
+export const MELDUNGEN_AUFBEWAHREN_TAGE = parseInt(process.env.MELDUNGEN_AUFBEWAHREN_TAGE || "60", 10);
+
 // ── Passwoerter ──────────────────────────────────────────────────────────────
 // Seit dem Umbau zum Firmenserver ist das Passwort der EINZIGE Faktor: der
 // Email-Code-Zweig ist entfallen (er brauchte SMTP und war ohne Internet nicht

@@ -25,6 +25,7 @@ Vorlage: `.env.example`. Was hier nicht steht, wird nirgends ausgewertet.
 | `MAX_UPLOAD_MB` | Nein | `50` | Maximale Dateigröße beim Upload |
 | `AUDIT_RETENTION_DAYS` | Nein | `365` | Aufbewahrung der Audit-Einträge in Tagen, `0` = nie löschen |
 | `RANG4_VERFALL_TAGE` | Nein | `30` | Verfall von Rang-4-Aufgaben in Tagen, `0` = aus |
+| `MELDUNGEN_AUFBEWAHREN_TAGE` | Nein | `60` | Aufbewahrung gelesener Benachrichtigungen in Tagen |
 | `API_RATE_LIMIT_REQUESTS` | Nein | `600` | Anfragen pro Zeitfenster und IP |
 | `API_RATE_LIMIT_WINDOW_MS` | Nein | `60000` | Zeitfenster des globalen Limits in Millisekunden |
 | `LOG_JSONL_MAX_BYTES` | Nein | `5242880` | Dateigröße, ab der das JSONL-Log rotiert |

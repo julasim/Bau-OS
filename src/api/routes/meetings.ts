@@ -21,8 +21,17 @@ import { canSeeProject, canSeeProjectByName, getVisibleProjectIds, type UserCtx 
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import type { MeetingInput } from "../../data/types.js";
+import { meldeBesprechungTeilnahme } from "../melden.js";
 
 export const meetingsRoutes = new Hono<AppEnv>();
+
+/** Anzeigename des Auslösers — er wird in der Meldung mitgespeichert. */
+function ausloeserName(c: {
+  var: { dbUser?: { displayName?: string | null; username?: string } | null };
+}): string | null {
+  const u = c.var.dbUser;
+  return u?.displayName ?? u?.username ?? null;
+}
 
 function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
@@ -68,6 +77,17 @@ meetingsRoutes.post("/projects/:projectName/meetings", async (c) => {
   const result = await meetingRepo.create(proj.id, body, c.var.userId);
   if (typeof result === "string") return c.json({ error: result }, 400);
   emit({ type: "meeting", action: "created", id: result.id, projectId: proj.id }, { actorId: c.var.userId });
+  if (result.attendeeIds?.length) {
+    await meldeBesprechungTeilnahme({
+      meetingId: result.id,
+      titel: result.title,
+      datum: result.date,
+      mitgliedIds: result.attendeeIds,
+      projectId: proj.id,
+      ausloeserId: c.var.userId,
+      ausloeserName: ausloeserName(c),
+    });
+  }
   return c.json(result, 201);
 });
 

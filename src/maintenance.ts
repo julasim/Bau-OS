@@ -22,7 +22,7 @@
 // ============================================================
 
 import cron from "node-cron";
-import { TIMEZONE, AUDIT_RETENTION_DAYS, RANG4_VERFALL_TAGE } from "./config.js";
+import { TIMEZONE, AUDIT_RETENTION_DAYS, RANG4_VERFALL_TAGE, MELDUNGEN_AUFBEWAHREN_TAGE } from "./config.js";
 import { logInfo, logError } from "./logger.js";
 
 /** Loescht Audit-Eintraege aelter als AUDIT_RETENTION_DAYS.
@@ -44,6 +44,61 @@ async function rang4Verfall(): Promise<number | null> {
   return aufgabensystemRepo.rang4Verfall(RANG4_VERFALL_TAGE);
 }
 
+/** Raeumt gelesene Meldungen weg. Ungelesene bleiben — siehe
+ *  `MELDUNGEN_AUFBEWAHREN_TAGE` in src/config.ts. */
+async function meldungenAufraeumen(): Promise<number | null> {
+  if (MELDUNGEN_AUFBEWAHREN_TAGE <= 0) return null;
+  const { benachrichtigungenRepo } = await import("./data/index.js");
+  return benachrichtigungenRepo.aufraeumen(MELDUNGEN_AUFBEWAHREN_TAGE);
+}
+
+/**
+ * Meldet faellige Aufgaben — einmal taeglich, an die zugewiesene Person.
+ *
+ * ── Warum genau einmal, und warum am Faelligkeitstag ──────────────────────
+ *
+ * Eine Erinnerung, die jeden Tag wiederkommt, wird nach drei Tagen
+ * weggeklickt, ohne gelesen zu werden. Deshalb genau an dem Tag, an dem die
+ * Aufgabe faellig ist — und nur, wenn es fuer diese Aufgabe an diesem Tag noch
+ * keine Meldung gibt (der Lauf koennte zweimal starten, etwa nach einem
+ * Neustart des Containers).
+ */
+async function faelligeAufgabenMelden(): Promise<number> {
+  const { getDb } = await import("./db/client.js");
+  const { benachrichtigungenRepo } = await import("./data/index.js");
+  const db = getDb();
+
+  // Die Bruecke team_members.user_id (Migration 013) steht IM SQL: eine
+  // Aufgabe zeigt auf ein Team-Mitglied, eine Meldung auf ein Konto.
+  const faellig = await db`
+    SELECT t.id, t.text, t.project_id, tm.user_id
+      FROM tasks t
+      JOIN team_members tm ON tm.id = t.assignee_id
+     WHERE t.status <> 'done'
+       AND t.deleted_at IS NULL
+       AND t.date = to_char(now() AT TIME ZONE ${TIMEZONE}, 'YYYY-MM-DD')
+       AND tm.user_id IS NOT NULL
+       AND NOT EXISTS (
+         SELECT 1 FROM benachrichtigungen b
+          WHERE b.ziel_id = t.id AND b.anlass = 'aufgabe-faellig'
+            AND b.erstellt_am > now() - interval '20 hours'
+       )`;
+
+  if (faellig.length === 0) return 0;
+  return benachrichtigungenRepo.anlegen(
+    faellig.map((r) => ({
+      empfaengerId: String(r.user_id),
+      anlass: "aufgabe-faellig" as const,
+      titel: `Heute fällig: ${String(r.text).slice(0, 60)}`,
+      // Kein Ausloeser: das war niemand, das war der Kalender.
+      ausloeser: null,
+      zielTyp: "task",
+      zielId: String(r.id),
+      projectId: r.project_id ? String(r.project_id) : null,
+    })),
+  );
+}
+
 async function runMaintenance(): Promise<void> {
   // Jeder Schritt einzeln abgesichert. Vorher lagen sie in EINEM try: warf
   // der zweite, blieb die Erfolgsmeldung des ersten ungeschrieben, und im
@@ -57,6 +112,22 @@ async function runMaintenance(): Promise<void> {
   } catch (err) {
     logError("[Maintenance] Audit-Retention", err);
     parts.push("Audit: FEHLER (siehe Log)");
+  }
+
+  try {
+    const gemeldet = await faelligeAufgabenMelden();
+    if (gemeldet > 0) parts.push(`Faellig heute: ${gemeldet} Meldung(en)`);
+  } catch (err) {
+    logError("[Maintenance] Faellige Aufgaben", err);
+    parts.push("Faelligkeits-Meldungen: FEHLER (siehe Log)");
+  }
+
+  try {
+    const weg = await meldungenAufraeumen();
+    if (weg !== null && weg > 0) parts.push(`Meldungen: ${weg} gelesene > ${MELDUNGEN_AUFBEWAHREN_TAGE}d weg`);
+  } catch (err) {
+    logError("[Maintenance] Meldungen aufraeumen", err);
+    parts.push("Meldungen aufraeumen: FEHLER (siehe Log)");
   }
 
   try {

@@ -37,7 +37,7 @@ src/
 │   ├── client.ts         — postgres.js-Verbindungspool
 │   ├── migrate.ts        — SQL-Migrations-Runner
 │   ├── index.ts          — Barrel-Export
-│   └── migrations/       — 59 SQL-Dateien, Nummern bis 057
+│   └── migrations/       — 60 SQL-Dateien, Nummern bis 058
 ├── workspace/            — LESENDER Dateizugriff auf WORKSPACE_PATH
 │   ├── index.ts          — Re-Export (nur `readFile`)
 │   ├── helpers.ts        — `safePath` (Traversal-Schutz)
@@ -220,6 +220,7 @@ unten steht.
 | `notes.ts` | Notizen |
 | `tasks.ts` | Aufgaben |
 | `aufgabensystem.ts` | Eingang, Matrix und Tagesplan — die drei Arbeitsweisen des Aufgabenreiters |
+| `benachrichtigungen.ts` | Neuigkeiten je Person, mit Lesestatus |
 | `termine.ts` | Termine |
 | `projects.ts` | Projekte und Stammdaten |
 | `search.ts` | Volltextsuche |
@@ -405,6 +406,7 @@ Nicht-Admins, weil Admins gar nicht gefiltert werden.
 | `db-entscheidungen.ts` | Entscheidungslog je Projekt |
 | `db-aktivitaet.ts` | Was zuletzt passiert ist — abgeleitet, ohne eigene Tabelle |
 | `db-aufgabensystem.ts` | Rang, Aufwand und Tagesplan der Aufgaben |
+| `db-benachrichtigungen.ts` | Neuigkeiten je Person |
 | `db-portfolio.ts` | Portfolio-Kennzahlen über alle Projekte |
 | `db-search.ts` | Volltextsuche |
 | `db-audit.ts` | Audit-Log |
@@ -446,7 +448,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 
 ### `src/db/migrations/`
 
-59 Dateien, `001` bis `057` (zwei Nummern sind doppelt vergeben: `005` und
+60 Dateien, `001` bis `058` (zwei Nummern sind doppelt vergeben: `005` und
 `006`). Die inhaltlich wichtigsten:
 
 | Migration | Inhalt |
@@ -487,6 +489,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 | `055_telegram_pair_tokens.sql` | Letzter Rest der Bot-Ära: die Pair-Token-Tabelle (nur wenn leer) |
 | `056_altbestand_spalten.sql` | Die sieben Outlook-Spalten an `termine` und die drei Bot-Spalten an `users` |
 | `057_import_zuordnung.sql` | Zuordnung Quell-ID → UUID für die [Datenübernahme](/betrieb/datenuebernahme) |
+| `058_benachrichtigungen.sql` | [Neuigkeiten](/konzepte/benachrichtigungen) mit Lesestatus je Person |
 
 ::: tip Die Projektnummer ist die Kennung des Hauses
 `052` bis `054` machen aus einem optionalen Stammdatenfeld die Kennung, unter

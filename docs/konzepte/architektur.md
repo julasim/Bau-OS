@@ -130,6 +130,8 @@ src/
 │   ├── auth.ts          JWT, Benutzerkonten, Passwörter (bcrypt)
 │   ├── geld.ts          EINE Filterschicht für alle Geldbeträge
 │   ├── projekt-bezug.ts löst `?projectId=`, `?projektnummer=` und `?project=` auf
+│   ├── melden.ts        wer bekommt wovon eine Benachrichtigung
+│   ├── persoenlich.ts   gehoert dieser projektlose Datensatz mir?
 │   ├── crypto.ts        Feld-Verschlüsselung (AES-GCM)
 │   ├── events.ts        Event-Bus mit Rechtefilter
 │   ├── sse-tickets.ts   Einmal-Tickets für den SSE-Aufbau
@@ -146,7 +148,7 @@ src/
 ├── db/
 │   ├── client.ts  Verbindungspool (postgres.js)
 │   ├── migrate.ts Migrations-Runner mit Advisory-Lock
-│   └── migrations/ 59 SQL-Dateien, forward-only (bis `057`)
+│   └── migrations/ 60 SQL-Dateien, forward-only (bis `058`)
 ├── workspace/     NUR Lesezugriff auf die Netzfreigabe (Rueckfall fuer alte
 │                  Datei-Datensaetze) + Text aus PDF und DOCX ziehen
 └── export/        DOCX-Erzeugung aus Word-Vorlagen
