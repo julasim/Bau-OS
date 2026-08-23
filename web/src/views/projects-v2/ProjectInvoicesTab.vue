@@ -4,7 +4,7 @@ import { formatEUR } from "../../utils/format";
 // Zeigt die Honorar-Bilanz je Projekt (aus /finance) und verwaltet die
 // Teilrechnungen (CRUD). Optionale Zuordnung jeder Rechnung zu einer
 // Leistungsphase. DB-only.
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { api } from "../../api";
 import BIcon from "../../components/BIcon.vue";
 
@@ -186,18 +186,48 @@ async function newInvoice() {
   }
 }
 
-/** Traegt eine ANDERE Rechnung dieses Projekts bereits diese Nummer?
+/** Trägt eine andere Rechnung im HAUS bereits diese Nummer?
  *
  *  Warnung, keine Sperre. Ein Doppel kann gewollt sein (Korrektur, Storno,
- *  uebernommener Vorgang) — die Software kennt die Buchhaltung des Hauses
- *  nicht gut genug, um das zu verbieten. */
-const nummerDoppelt = computed(() => {
-  const d = draft.value;
-  if (!d) return false;
-  const n = d.nummer.trim().toLowerCase();
-  if (!n) return false;
-  return invoices.value.some((i) => i.id !== d.id && (i.nummer ?? "").trim().toLowerCase() === n);
-});
+ *  übernommener Vorgang) — die Software kennt die Buchhaltung des Hauses nicht
+ *  gut genug, um das zu verbieten.
+ *
+ *  ── Warum das der Server beantwortet ──────────────────────────────────────
+ *
+ *  Die erste Fassung durchsuchte `invoices.value`, also nur die Rechnungen
+ *  DIESES Projekts. Der Nummernraum ist aber hausweit: nach einer Korrektur
+ *  der Projektnummer wird die freigewordene Nummer neu vergeben, und dann
+ *  schlägt PATIO in zwei Projekten `…-R01` vor. Die projektlokale Warnung
+ *  schwieg dazu — und § 11 UStG verlangt Einmaligkeit.
+ *
+ *  Die Antwort ist ein blankes Ja/Nein. Welches Projekt die Nummer trägt,
+ *  bleibt ungenannt: es kann eines sein, das der Fragende nicht sehen darf. */
+const nummerDoppelt = ref(false);
+
+let nummerLauf = 0;
+watch(
+  () => draft.value?.nummer ?? "",
+  async (roh) => {
+    const lauf = ++nummerLauf;
+    if (!roh.trim()) {
+      nummerDoppelt.value = false;
+      return;
+    }
+    try {
+      const frage = new URLSearchParams({ nummer: roh.trim() });
+      if (draft.value?.id) frage.set("ausserId", draft.value.id);
+      const { vergeben } = await api.get<{ vergeben: boolean }>(
+        `/projects/${encodeURIComponent(props.projectName)}/invoices/nummer-frei?${frage}`,
+      );
+      // Nur übernehmen, wenn seither nicht weitergetippt wurde — sonst zeigt
+      // die Warnung das Ergebnis einer veralteten Anfrage.
+      if (lauf === nummerLauf) nummerDoppelt.value = vergeben;
+    } catch {
+      // Eine nicht erreichbare Prüfung darf das Speichern nicht behindern.
+      if (lauf === nummerLauf) nummerDoppelt.value = false;
+    }
+  },
+);
 function selectInvoice(inv: ProjectInvoice) {
   draft.value = {
     id: inv.id,
@@ -382,9 +412,7 @@ onMounted(() => void load());
               <input v-model="draft.nummer" type="text" class="stamm-input" placeholder="z. B. SAZTG-2026-014-R01" />
               <!-- Warnung, keine Sperre: ein Doppel kann gewollt sein
                    (Korrektur, Storno, übernommener Vorgang). -->
-              <p v-if="nummerDoppelt" class="inv-nr-warnung">
-                Diese Nummer trägt bereits eine andere Rechnung dieses Projekts.
-              </p>
+              <p v-if="nummerDoppelt" class="inv-nr-warnung">Diese Nummer trägt bereits eine andere Rechnung.</p>
             </div>
             <div class="ph-field">
               <label class="ph-label">

@@ -95,17 +95,25 @@ DO $$
 DECLARE
   dubletten TEXT;
 BEGIN
-  SELECT string_agg(t.nr || ' (' || t.anzahl || 'x)', ', ')
+  -- Die Meldung nennt die PROJEKTNAMEN, nicht nur den Indexwert.
+  --
+  -- Vorher stand hier `lower(projektnummer)` allein. Der Abbruch rollt aber
+  -- die Normalisierung aus Schritt 1 mit zurueck — der genannte Wert stand
+  -- danach in KEINER Zeile mehr. Der Betreiber suchte danach und fand nichts.
+  SELECT string_agg(t.zeile, E'
+  ')
     INTO dubletten
     FROM (
-      SELECT lower(projektnummer) AS nr, count(*) AS anzahl
+      SELECT lower(projektnummer) || ' → ' || string_agg(name, ', ' ORDER BY name) AS zeile
         FROM projects
        GROUP BY lower(projektnummer)
       HAVING count(*) > 1
     ) t;
   IF dubletten IS NOT NULL THEN
     RAISE EXCEPTION
-      'Migration 052: mehrfach vergebene Projektnummern gefunden: %. Bitte in der Datenbank vereindeutigen und den Dienst erneut starten.',
+      E'Migration 052: mehrfach vergebene Projektnummern:
+  %
+Bitte in der Datenbank vereindeutigen und den Dienst erneut starten.',
       dubletten;
   END IF;
 END $$;

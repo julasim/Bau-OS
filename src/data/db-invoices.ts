@@ -144,6 +144,47 @@ export const dbInvoices: InvoiceRepository = {
     return `${basis}-R${String(hoechste + 1).padStart(2, "0")}`;
   },
 
+  /**
+   * Traegt eine ANDERE Rechnung im Haus bereits diese Nummer?
+   *
+   * ── Warum hausweit und nicht je Projekt ──────────────────────────────────
+   *
+   * Weil der Nummernraum hausweit ist. Die Warnung in der Oberflaeche
+   * durchsuchte bis hierher nur die Rechnungen DIESES Projekts — und der
+   * Vorschlag zaehlt ebenfalls nur dort. Nachgestellt ueber die echten Routen:
+   *
+   *   1. Projekt 1 stellt `SAZTG-2026-014-R01`.
+   *   2. Die Projektnummer von Projekt 1 wird auf `-015` korrigiert;
+   *      Migration 053 gibt `-014` bewusst wieder frei.
+   *   3. Projekt 2 uebernimmt `-014`.
+   *   4. Projekt 2 bekommt als Vorschlag ebenfalls `SAZTG-2026-014-R01`.
+   *
+   * Zweimal dieselbe Rechnungsnummer im Haus. § 11 UStG verlangt Einmaligkeit.
+   *
+   * ── Warum eine Warnung und keine Sperre ─────────────────────────────────
+   *
+   * Dieselbe Linie wie beim Vorschlag: Stornos, uebernommene Vorgaenge und
+   * Korrekturen folgen keinem Schema, und die Software kennt die Buchhaltung
+   * des Hauses nicht gut genug, um zu verbieten. Sie sagt es nur.
+   */
+  async nummerBereitsVergeben(nummer, ausserId) {
+    const roh = nummer.trim();
+    if (!roh) return null;
+    const db = getDb();
+    const [zeile] = ausserId
+      ? await db`
+          SELECT p.name AS projekt FROM project_invoices i
+            JOIN projects p ON p.id = i.project_id
+           WHERE lower(btrim(i.nummer)) = ${roh.toLowerCase()} AND i.id <> ${ausserId}
+           LIMIT 1`
+      : await db`
+          SELECT p.name AS projekt FROM project_invoices i
+            JOIN projects p ON p.id = i.project_id
+           WHERE lower(btrim(i.nummer)) = ${roh.toLowerCase()}
+           LIMIT 1`;
+    return zeile ? String(zeile.projekt) : null;
+  },
+
   async get(id) {
     const db = getDb();
     const rows = await db.unsafe(`${SELECT} WHERE i.id = $1 LIMIT 1`, [id]);

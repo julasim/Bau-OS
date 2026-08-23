@@ -62,6 +62,26 @@ invoicesRoutes.get("/projects/:projectName/invoices/naechste-nummer", async (c) 
   return c.json({ vorschlag });
 });
 
+// Ist diese Rechnungsnummer im HAUS schon vergeben?
+//
+// Die Warnung in der Oberflaeche durchsuchte bis hierher nur die Rechnungen
+// des offenen Projekts — der Nummernraum ist aber hausweit. Nach einer
+// Korrektur der Projektnummer wird eine freigewordene Nummer neu vergeben, und
+// dann schlaegt PATIO in zwei Projekten `…-R01` vor.
+//
+// Antwortet mit `{ vergeben: boolean }`. Bewusst OHNE den Projektnamen der
+// kollidierenden Rechnung: der Fragende darf jenes Projekt womoeglich nicht
+// sehen. Fuer die Warnung genuegt das Ja.
+invoicesRoutes.get("/projects/:projectName/invoices/nummer-frei", async (c) => {
+  const proj = await resolveProject(c);
+  if ("error" in proj) return proj.error;
+  const nummer = c.req.query("nummer") ?? "";
+  if (!nummer.trim()) return c.json({ vergeben: false });
+  const ausser = c.req.query("ausserId") ?? undefined;
+  const treffer = invoiceRepo.nummerBereitsVergeben ? await invoiceRepo.nummerBereitsVergeben(nummer, ausser) : null;
+  return c.json({ vergeben: treffer !== null });
+});
+
 // Rechnungen anlegen, aendern und loeschen ist Geldarbeit. Lesen faellt
 // ohnehin durch den Antwort-Filter (die Betraege fehlen dann), aber Schreiben
 // muss ausdruecklich verwehrt werden — sonst koennte jemand Betraege setzen,

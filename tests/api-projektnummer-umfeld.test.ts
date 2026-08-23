@@ -185,7 +185,7 @@ Inhalt`,
       mitPlatzhalter = `pnu-${P}-platz`;
       await getDb()`
         INSERT INTO projects (name, projektnummer, status)
-        VALUES (${mitPlatzhalter}, ${"OHNE-NUMMER-" + P.slice(0, 8)}, 'aktiv')`;
+        VALUES (${mitPlatzhalter}, ${"OHNE-NUMMER-" + P.slice(-8)}, 'aktiv')`;
     });
 
     it("das Markdown-Dossier zeigt ihn nicht", async () => {

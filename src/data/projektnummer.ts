@@ -44,7 +44,7 @@ export function istPlatzhalter(nummer: string | null | undefined): boolean {
 }
 
 /** Warum eine Eingabe nicht als Projektnummer taugt. */
-export type NummerFehler = "fehlt" | "zu-lang" | "steuerzeichen";
+export type NummerFehler = "fehlt" | "zu-lang" | "steuerzeichen" | "ohne-inhalt";
 
 /** Ergebnis der Pruefung: entweder die bereinigte Nummer oder ein Grund. */
 export type NummerErgebnis = { ok: true; nummer: string } | { ok: false; grund: NummerFehler; text: string };
@@ -61,7 +61,18 @@ export function pruefeProjektnummer(roh: unknown): NummerErgebnis {
   if (typeof roh !== "string") {
     return { ok: false, grund: "fehlt", text: `Projektnummer erforderlich (z. B. ${PROJEKTNUMMER_BEISPIEL})` };
   }
-  const nummer = roh.trim().replace(/\s+/g, " ");
+
+  // Unicode-Normalform C, BEVOR irgendetwas verglichen wird.
+  //
+  // `Ä` gibt es als ein Zeichen (U+00C4) und als `A` plus kombinierendem
+  // Akzent (U+0041 U+0308). Beide sehen gleich aus, und ohne diesen Schritt
+  // sind sie fuer den eindeutigen Index aus Migration 052 zwei verschiedene
+  // Nummern — gemessen: `vergleichbar()` sagt ungleich, nach NFC gleich.
+  //
+  // Postgres kann dasselbe (`normalize(text, NFC)`); Migration 054 tut es in
+  // `patio_nummer_normal()`, und ein Test haelt beide Seiten gegeneinander.
+  const nummer = roh.normalize("NFC").trim().replace(/\s+/g, " ");
+
   if (nummer === "") {
     return { ok: false, grund: "fehlt", text: `Projektnummer erforderlich (z. B. ${PROJEKTNUMMER_BEISPIEL})` };
   }
@@ -72,18 +83,35 @@ export function pruefeProjektnummer(roh: unknown): NummerErgebnis {
       text: `Projektnummer darf höchstens ${PROJEKTNUMMER_MAX} Zeichen haben`,
     };
   }
-  // Steuerzeichen. Sie sind unsichtbar, kommen beim Einfuegen aus anderen
-  // Programmen mit und machen aus zwei gleich AUSSEHENDEN Nummern zwei
-  // verschiedene — der eindeutige Index greift dann nicht. Als Escape
-  // geschrieben, nicht als echtes Zeichen im Quelltext: ein unsichtbares
-  // Zeichen in einer Regex ist genau der Fehler, den diese Zeile abfaengt.
-  // Die Regel `no-control-regex` warnt vor VERSEHENTLICHEN Steuerzeichen in
-  // einer Regex. Diese hier ist die Stelle, die sie absichtlich aufspuert —
-  // deshalb hier und nur hier ausgenommen.
+
+  // Steuer- UND Formatzeichen.
+  //
+  // Steuerzeichen (C0, DEL) sind der offensichtliche Fall. Die
+  // Formatzeichen der Kategorie Cf sind der gefaehrlichere: Zero-Width-Space
+  // (U+200B), Wortverbinder (U+2060), Rechts-nach-links-Marke (U+202E) und
+  // das weiche Trennzeichen (U+00AD, Kategorie Cf ist es nicht, es kommt
+  // deshalb einzeln dazu) sind vollstaendig unsichtbar.
+  //
+  // Gemessen, bevor diese Zeile stand: alle fuenf kamen durch, und eine
+  // „Nummer" aus zwei Zero-Width-Spaces wurde angenommen — sie haette NOT
+  // NULL und die CHECK-Bedingung aus 052 passiert und waere in Dateinamen
+  // und Rechnungsvorschlag gewandert.
   // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f\u007f]/.test(nummer)) {
+  if (/[\u0000-\u001f\u007f\u00ad]|\p{Cf}/u.test(nummer)) {
     return { ok: false, grund: "steuerzeichen", text: "Projektnummer enthält unerlaubte Zeichen" };
   }
+
+  // Mindestens ein Buchstabe oder eine Ziffer. Eine „Nummer" aus lauter
+  // Bindestrichen ist keine, und sie waere im Dateinamen und in der
+  // Rechnungsnummer nicht von einem Formatierungsfehler zu unterscheiden.
+  if (!/[\p{L}\p{N}]/u.test(nummer)) {
+    return {
+      ok: false,
+      grund: "ohne-inhalt",
+      text: "Projektnummer braucht mindestens einen Buchstaben oder eine Ziffer",
+    };
+  }
+
   return { ok: true, nummer };
 }
 

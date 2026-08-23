@@ -1313,6 +1313,13 @@ export interface InvoiceRepository {
    *  uebernommene Vorgaenge und Korrekturen folgen keinem Schema.
    *  `null`, wenn das Projekt keine echte Nummer hat. */
   naechsteNummer?(projectId: string): Promise<string | null>;
+  /** Traegt eine ANDERE Rechnung im HAUS bereits diese Nummer? Liefert den
+   *  Projektnamen der kollidierenden Rechnung, sonst `null`.
+   *
+   *  Hausweit, weil der Nummernraum hausweit ist: nach einer Korrektur der
+   *  Projektnummer kann eine freigewordene Nummer neu vergeben werden, und
+   *  dann schlaegt PATIO in zwei Projekten `…-R01` vor. */
+  nummerBereitsVergeben?(nummer: string, ausserId?: string): Promise<string | null>;
 
   list(projectId: string): Promise<ProjectInvoice[]>;
   /** Einzelne Rechnung — fuer ACL-Pruefung vor Mutationen. */

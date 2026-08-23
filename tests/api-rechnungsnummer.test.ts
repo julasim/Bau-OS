@@ -91,7 +91,7 @@ describe.skipIf(!HAS_DB)("Rechnungsnummer aus der Projektnummer", () => {
     const ohne = `rnr-${P}-ohne`;
     await getDb()`
       INSERT INTO projects (name, projektnummer, status)
-      VALUES (${ohne}, ${"OHNE-NUMMER-" + P.slice(0, 8)}, 'aktiv')`;
+      VALUES (${ohne}, ${"OHNE-NUMMER-" + P.slice(-8)}, 'aktiv')`;
     expect(await vorschlag(ohne)).toBeNull();
   });
 
@@ -108,6 +108,68 @@ describe.skipIf(!HAS_DB)("Rechnungsnummer aus der Projektnummer", () => {
     expect(await vorschlag(speziell)).toBe(`${speziellNr}-R01`);
     expect((await anlegen(`${speziellNr}-R01`, speziell)).status).toBe(200);
     expect(await vorschlag(speziell)).toBe(`${speziellNr}-R02`);
+  });
+
+  // ── Der Nummernraum ist hausweit ──────────────────────────────────────────
+
+  describe("Doppelte Nummer im Haus", () => {
+    const frei = async (nummer: string, projektName: string) => {
+      const res = await fx.app.request(
+        `/api/projects/${encodeURIComponent(projektName)}/invoices/nummer-frei?nummer=${encodeURIComponent(nummer)}`,
+        { headers: authHeader(fx.admin.token) },
+      );
+      expect(res.status).toBe(200);
+      return ((await res.json()) as { vergeben: boolean }).vergeben;
+    };
+
+    it("erkennt eine Nummer, die in einem ANDEREN Projekt vergeben ist", async () => {
+      // Der eigentliche Punkt. Die Warnung in der Oberfläche durchsuchte nur
+      // das offene Projekt — nach einer Korrektur der Projektnummer wird eine
+      // freigewordene Nummer neu vergeben, und dann schlägt PATIO in zwei
+      // Projekten `…-R01` vor. § 11 UStG verlangt Einmaligkeit.
+      const { getDb } = await import("../src/db/client.js");
+      const zweites = `rnr-${P}-zweit`;
+      await getDb()`
+        INSERT INTO projects (name, projektnummer, status)
+        VALUES (${zweites}, ${`SAZTG-${P}-888`}, 'aktiv')`;
+
+      // `-R01` liegt in `projekt`, gefragt wird aus `zweites` heraus.
+      expect(await frei(`${nummer}-R01`, zweites)).toBe(true);
+    });
+
+    it("eine freie Nummer meldet sie als frei", async () => {
+      expect(await frei(`${nummer}-R99`, projekt)).toBe(false);
+    });
+
+    it("unempfindlich gegen Groß-/Kleinschreibung und Leerraum", async () => {
+      expect(await frei(`  ${nummer.toLowerCase()}-r01  `, projekt)).toBe(true);
+    });
+
+    it("die eigene Rechnung zählt beim Bearbeiten nicht gegen sich selbst", async () => {
+      const liste = (await (
+        await fx.app.request(`/api/projects/${encodeURIComponent(projekt)}/invoices`, {
+          headers: authHeader(fx.admin.token),
+        })
+      ).json()) as { id: string; nummer: string | null }[];
+      const eigene = liste.find((i) => i.nummer === `${nummer}-R01`)!;
+
+      const res = await fx.app.request(
+        `/api/projects/${encodeURIComponent(projekt)}/invoices/nummer-frei` +
+          `?nummer=${encodeURIComponent(`${nummer}-R01`)}&ausserId=${eigene.id}`,
+        { headers: authHeader(fx.admin.token) },
+      );
+      expect(((await res.json()) as { vergeben: boolean }).vergeben).toBe(false);
+    });
+
+    it("die Antwort nennt das fremde Projekt nicht", async () => {
+      // Es kann eines sein, das der Fragende gar nicht sehen darf. Für die
+      // Warnung genügt das Ja.
+      const res = await fx.app.request(
+        `/api/projects/${encodeURIComponent(projekt)}/invoices/nummer-frei?nummer=${encodeURIComponent(`${nummer}-R01`)}`,
+        { headers: authHeader(fx.admin.token) },
+      );
+      expect(JSON.stringify(await res.json())).not.toContain(projekt);
+    });
   });
 
   it("der Vorschlag folgt einer korrigierten Projektnummer", async () => {

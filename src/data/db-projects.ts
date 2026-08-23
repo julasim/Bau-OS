@@ -406,12 +406,24 @@ export const dbProjects: ProjectRepository = {
       // diesen Schritt stuende nach einer Rueckkorrektur (016 → 014 → 016) die
       // aktuelle Nummer unter „frueher: …" — gemessen, so ist dieser Fall
       // aufgefallen.
-      const anhaengen = alteNummer && !istPlatzhalter(alteNummer) && !bisher.includes(alteNummer) ? [alteNummer] : [];
-      const neueListe = [...bisher, ...anhaengen].filter((n) => n !== patch.projektnummer);
+      // Alle Vergleiche ueber `vergleichbar()`, nicht zeichengenau.
+      //
+      // Der eindeutige Index und jede andere Pruefstelle arbeiten ueber
+      // `lower()`; hier stand ein exakter Vergleich. Folge: wer `zz-x1` auf
+      // `ZZ-X1` korrigiert — also nur die Schreibweise —, bekam den Eintrag
+      // „frueher: zz-x1" fuer dieselbe Akte. Bei vier Schreibweisen sammelten
+      // sich drei Eintraege, die alle dasselbe meinen.
+      const neu = vergleichbar(String(patch.projektnummer));
+      const bereitsDrin = (n: string) => bisher.some((b) => vergleichbar(b) === vergleichbar(n));
+      const anhaengen =
+        alteNummer && !istPlatzhalter(alteNummer) && vergleichbar(alteNummer) !== neu && !bereitsDrin(alteNummer)
+          ? [alteNummer]
+          : [];
+      const neueListe = [...bisher, ...anhaengen].filter((n) => vergleichbar(n) !== neu);
       // Nur schreiben, wenn sich wirklich etwas aendert — sonst zaehlt jeder
       // Speichervorgang den Konflikt-Zaehler hoch, ohne dass etwas passiert.
       const gleich = neueListe.length === bisher.length && neueListe.every((n, i) => n === bisher[i]);
-      if (alteNummer !== patch.projektnummer && !gleich) {
+      if (!gleich) {
         patch = { ...patch, projektnummerFrueher: neueListe };
       }
     }

@@ -55,5 +55,22 @@ ALTER TABLE projects
 -- aber eine Funktion im Schema fuer einen Suchfall, den es selten gibt: die
 -- Teilstueck-Suche auf einer FRUEHEREN Nummer. Die Tabelle hat einige hundert
 -- Zeilen; dafuer genuegt der Durchlauf, den die Suche ohnehin macht.
+--
+-- ── Was dieser Zweig den ANDEREN Index kostet ──────────────────────────────
+--
+-- Der ILIKE-Zweig, den `db-search.ts` fuer frueher vergebene Nummern
+-- hinzufuegt, ist nicht indizierbar — und ein nicht indizierbarer Zweig zwingt
+-- die ganze Disjunktion in einen sequenziellen Durchlauf. Damit wird auch der
+-- Trigramm-Index aus 052 von der Suche nicht mehr benutzt.
+--
+-- Nachgemessen: bei 5.000 Zeilen ohne Unterschied (Seq Scan ist dort ohnehin
+-- billiger), bei 200.000 Zeilen wird aus zwei Index-Scans ein paralleler Seq
+-- Scan. Fuer ein Buero mit einigen hundert Projekten ohne Bedeutung; die
+-- Begruendung steht ausfuehrlich in `src/data/db-search.ts`.
+--
+-- Der Index hier bleibt trotzdem: er traegt den exakten Fall (`@>`), der
+-- kommt, sobald jemand ueber MCP oder eine Auswertung gezielt nach einer alten
+-- Nummer fragt. Kosten gemessen: ein WAL-Satz und rund 166 Byte je
+-- Projekt-Aenderung.
 CREATE INDEX IF NOT EXISTS idx_projects_projektnummer_frueher
   ON projects USING GIN (projektnummer_frueher);

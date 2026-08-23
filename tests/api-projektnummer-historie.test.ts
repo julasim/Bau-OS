@@ -99,6 +99,23 @@ describe.skipIf(!HAS_DB)("Projektnummer — Historie", () => {
     expect([...p.projektnummerFrueher].sort()).toEqual([nr("014"), nr("015")].sort());
   });
 
+  it("eine reine Schreibweisen-Korrektur landet NICHT in der Historie", async () => {
+    // `zz-x1` auf `ZZ-X1` zu korrigieren ist keine neue Aktennummer, sondern
+    // dieselbe. Die Vergleiche liefen zeichengenau, während der eindeutige
+    // Index und jede andere Prüfstelle über `lower()` gehen — bei vier
+    // Schreibweisen sammelten sich drei Einträge, die alle dasselbe meinten.
+    const klein = `saztg-${P}-777`;
+    const gross = klein.toUpperCase();
+
+    await aendern(klein);
+    const vorher = (await lesen()).projektnummerFrueher;
+
+    expect((await aendern(gross)).status).toBe(200);
+    const p = await lesen();
+    expect(p.projektnummer).toBe(gross);
+    expect(p.projektnummerFrueher).toEqual(vorher);
+  });
+
   it("der Platzhalter aus Migration 052 landet nicht in der Historie", async () => {
     // Er war nie eine Aktennummer. Stünde er unter „früher: …", sähe es aus,
     // als hätte das Büro einmal so nummeriert.
@@ -106,7 +123,7 @@ describe.skipIf(!HAS_DB)("Projektnummer — Historie", () => {
     const mitPlatzhalter = `pnh-${P}-alt`;
     await getDb()`
       INSERT INTO projects (name, projektnummer, status)
-      VALUES (${mitPlatzhalter}, ${"OHNE-NUMMER-" + P.slice(0, 8)}, 'aktiv')`;
+      VALUES (${mitPlatzhalter}, ${"OHNE-NUMMER-" + P.slice(-8)}, 'aktiv')`;
 
     expect((await aendern(nr("100"), mitPlatzhalter)).status).toBe(200);
     const p = await lesen(mitPlatzhalter);

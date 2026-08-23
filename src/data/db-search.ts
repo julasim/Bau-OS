@@ -125,6 +125,32 @@ function clampLimit(limit: number): number {
 // Trigramm-Index `idx_projects_projektnummer_trgm` an. Ohne diese Zeile im
 // WHERE waere er totes Gewicht.
 //
+// ── Der Index wird von DIESER Abfrage trotzdem nicht benutzt ────────────────
+//
+// Weil der Zweig fuer FRUEHER vergebene Nummern (Migration 053) daneben in
+// derselben Disjunktion steht: `array_to_string(...) ILIKE ...`. Fuer diesen
+// Ausdruck kann kein Index existieren (053 begruendet das — `array_to_string`
+// ist STABLE), und ein einziger nicht indizierbarer Zweig zwingt die GANZE
+// Disjunktion in einen sequenziellen Durchlauf.
+//
+// Nachgemessen an einer Wegwerf-Datenbank:
+//
+//   Zeilen    nur Nummer          Nummer ODER Name     plus 053-Zweig
+//   -------   -----------------   ------------------   --------------------
+//     5.000   Seq Scan            Seq Scan             Seq Scan
+//   200.000   Bitmap Index Scan   BitmapOr (2 Index)   Parallel Seq Scan
+//
+// Bei 5.000 Zeilen ist Seq Scan ohnehin billiger, den Unterschied gibt es erst
+// weit darueber. Ein Buero fuehrt einige hundert Projekte — der Durchlauf
+// kostet dort nichts, und die Suche macht ihn fuer Notizen, Aufgaben und
+// Dateien ohnehin.
+//
+// Bewusst NICHT umgebaut: die naheliegende Reparatur (zweiter UNION-Zweig nur
+// fuer frueher vergebene Nummern) braucht ein `DISTINCT ON`, weil ein Projekt
+// beide Zweige treffen kann — mehr Maschinerie fuer einen Unterschied, den
+// dieses Haus in absehbarer Zeit nicht misst. Wer die Tabelle einmal
+// fuenfstellig sieht, findet hier die Begruendung und die Messung.
+//
 // Ein Treffer auf der Nummer zaehlt wie ein Treffer im Namen (TITEL_BONUS):
 // wer eine Aktennummer eintippt, sucht dieses eine Projekt und nichts sonst.
 //
