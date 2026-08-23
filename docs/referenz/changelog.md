@@ -513,3 +513,46 @@ Update-Dienst. Einzelheiten: [Arbeitsplatz-Programm](/betrieb/arbeitsplatz).
   auf einem Rechner ohne Internet erst in einen Timeout
 - Das Programmpaket enthielt den **kompletten Server-Code** samt Datenbank-
   Treiber — 2896 Einträge statt sechs, auf jedem Bürorechner
+
+## Die Projektnummer wird zur Kennung
+**23.08.2026** · Migrationen 052/053
+
+Jedes Projekt trägt jetzt eine Nummer, die Sie vergeben — und unter der es im
+ganzen Programm geführt wird. Bisher war das ein optionales Freitextfeld unter
+den Stammdaten, angezeigt an vier Stellen und sonst folgenlos.
+
+Ausführlich: [Die Projektnummer](/konzepte/projektnummer).
+
+- **Pflicht und eindeutig.** Ohne Nummer kein Projekt; keine zweite trägt
+  dieselbe, auch nicht in anderer Groß-/Kleinschreibung
+- **Das Format bleibt frei** (`SAZTG-2026-014`, `A-14/2`, `Altbestand 1998/7`).
+  Jedes erzwungene Muster steht irgendwann einem echten Vorgang im Weg
+- **Überall sichtbar** — Aufgaben, Notizen, Termine, Dateien, Suche,
+  Aktivität, Papierkorb, Portfolio, Projektliste
+- **Als Verweis nutzbar:** `?projektnummer=SAZTG-2026-014` steht neben Name
+  und technischer Kennung. An den Rechten ändert das nichts — die Auflösung
+  liefert nur einen Namen, geprüft wird danach wie bisher
+- **In Dateinamen:** `SAZTG-2026-014 Besprechungsprotokoll 2026-08-23.docx`
+- **Korrigierbar, ohne etwas zu verlieren.** Die alte Nummer bleibt auffindbar
+  und steht im Projektkopf als „früher: …" — ein bereits versendetes Dokument
+  führt weiterhin zum richtigen Projekt
+- **Rechnungsnummern** werden als `<Projektnummer>-R<NN>` vorgeschlagen.
+  Ein Vorschlag, keine Vergabe: überschreibbar, ein Doppel wird gewarnt und
+  nicht gesperrt
+
+### Beim Bauen gefunden
+
+- **Acht Unterrouten eines Projekts prüften den Zugriff nicht.** Darunter der
+  volle Inhalt jeder Notiz, das komplette Projekt-Dossier — und schreibend:
+  eine fremde Aufgabe abhaken, einen fremden Termin löschen. Die Lücke stand
+  direkt neben dem richtigen Code: die POST-Route prüfte, die PATCH-Route drei
+  Zeilen weiter nicht
+- **Das Portfolio zeigte gelöschte Projekte.** Seit der Einführung des
+  Papierkorbs löscht PATIO nur noch weich; das Cockpit filterte das nicht
+- **Zeitstempel verließen den Server in zwei verschiedenen Formaten.** Die
+  Folge war unsichtbar und trotzdem falsch: Aufgaben- und Notizenliste
+  sortierten „zuletzt geändert" nach dem **Wochentagsnamen**
+- **Der Aufgaben-Status hieß in der Datenbank anders als im Programm.** Die
+  Registerkarte „Offen" zeigte deshalb nichts an, während über tausend offene
+  Aufgaben vorlagen, und der Statuswechsel in der Detailansicht tat still gar
+  nichts

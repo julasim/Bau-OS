@@ -91,8 +91,16 @@ auftauchen.
 
 ## 5. Projekte anlegen und freigeben
 
-Beim Anlegen eines Projekts werden Stammdaten erfasst (Projektnummer,
-Bauherr, Standort, Projektart, Nutzung, Phase). Danach:
+Beim Anlegen eines Projekts ist die **Projektnummer Pflicht** — sie ist die
+Kennung, unter der das Projekt im ganzen Programm geführt wird
+(`SAZTG-2026-014`). Sie vergeben sie selbst; PATIO erfindet keine, zeigt aber
+die zuletzt vergebenen fünf zur Orientierung an. Eine bereits vergebene
+Nummer wird abgelehnt.
+
+Details: [Die Projektnummer](/konzepte/projektnummer).
+
+Daneben werden die übrigen Stammdaten erfasst (Bauherr, Standort, Projektart,
+Nutzung, Phase). Danach:
 
 - **Module zuschalten** — welche Reiter das Projekt zeigt (Bautagebuch,
   Stunden, Rechnungen und so weiter)

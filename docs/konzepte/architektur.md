@@ -69,6 +69,33 @@ Systemschriften mit Inter als erster Wahl, falls vorhanden.
    Inhalte, nur „was hat sich geändert". Die Oberfläche lädt über die reguläre
    Route nach.
 
+## Wie ein Projekt adressiert wird
+
+Drei Formen, aufgelöst an **einer** Stelle (`src/api/projekt-bezug.ts`):
+
+| Form | Beispiel | Eigenschaft |
+|---|---|---|
+| `?projectId=` | `9db792d3-8042-…` | Technische Kennung. Unveränderlich, aber unlesbar — steht in keinem Dokument. |
+| `?projektnummer=` | `SAZTG-2026-014` | Die Kennung des Büros (Migration 052). Eindeutig, aussprechbar, korrigierbar. |
+| `?project=` | `Villa Müller` | Der Name. Gut lesbar, aber änderbar — die schwächste Angabe. |
+
+Vorrang bei mehreren: **Kennung > Nummer > Name.**
+
+::: warning Eine zweite Adressierung ist keine zweite Tür
+Die Auflösung liefert nur einen **Namen**. Ob der Fragende das Projekt sehen
+darf, entscheidet danach unverändert die Route über `canSeeProjectByName()`.
+Eine Projektnummer öffnet damit keinen Weg an den Rechten vorbei, sondern
+einen zweiten Weg zum selben Tor — festgehalten in
+`tests/api-projektnummer.test.ts`: über die Nummer muss dieselbe Antwort
+kommen wie über den Namen.
+
+Eine Nummer, die ins Leere zeigt, ergibt einen **404** und nicht die
+projektübergreifende Liste. Sonst bekäme ein Aufrufer mit veralteter Angabe
+mehr zu sehen statt weniger.
+:::
+
+Ausführlich: [Die Projektnummer](/konzepte/projektnummer).
+
 ::: warning Der Filter wird in den Routen ERMITTELT, nicht in den Repositories
 Die Aufteilung ist wichtig, weil sie erklärt, wo Lücken entstehen:
 

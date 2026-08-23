@@ -35,7 +35,10 @@ export default defineConfig({
       },
       {
         text: "Konzepte",
-        items: [{ text: "Architektur", link: "/konzepte/architektur" }],
+        items: [
+          { text: "Architektur", link: "/konzepte/architektur" },
+          { text: "Die Projektnummer", link: "/konzepte/projektnummer" },
+        ],
       },
       {
         text: "Konfiguration",
