@@ -30,6 +30,11 @@ export interface Task {
   dueDate?: string | null;
   location: string | null;
   project: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben `project` (dem Namen),
+   *  damit jede Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen.
+   *  `null`, wenn der Datensatz zu keinem Projekt gehoert. */
+  projektnummer?: string | null;
   sortOrder?: number;
   completedAt?: string | null;
   /** Migration 035: FK auf project_phases. Verknuepft die Aufgabe mit einer
@@ -98,6 +103,11 @@ export interface Termin {
   assigneeIds?: string[];
   assigneesResolved?: { id: string; name: string }[];
   project: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben `project` (dem Namen),
+   *  damit jede Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen.
+   *  `null`, wenn der Datensatz zu keinem Projekt gehoert. */
+  projektnummer?: string | null;
   recurring?: string | null;
   color?: string | null;
   /** Migration 035: FK auf project_phases (optional). */
@@ -359,6 +369,10 @@ export interface BautagebuchEntry {
   id: string;
   projectId: string;
   projectName?: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben dem Namen, damit jede
+   *  Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen. */
+  projektnummer?: string | null;
   date: string; // YYYY-MM-DD
   weather: WeatherType | null;
   temperatureMin: number | null;
@@ -448,6 +462,10 @@ export interface Meeting {
   id: string;
   projectId: string;
   projectName?: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben dem Namen, damit jede
+   *  Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen. */
+  projektnummer?: string | null;
   date: string; // YYYY-MM-DD
   startTime: string | null; // HH:MM
   endTime: string | null;
@@ -515,6 +533,10 @@ export interface TimeEntry {
   id: string;
   projectId: string;
   projectName?: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben dem Namen, damit jede
+   *  Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen. */
+  projektnummer?: string | null;
   /** Optionale Zuordnung zu einer Leistungsphase (Migration 036). */
   phaseId?: string | null;
   memberId: string | null;
@@ -600,6 +622,10 @@ export interface Entscheidung {
   id: string;
   projectId: string;
   projectName?: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben dem Namen, damit jede
+   *  Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen. */
+  projektnummer?: string | null;
   /** YYYY-MM-DD */
   datum: string;
   titel: string;
@@ -663,6 +689,11 @@ export interface FileEntry {
   contentText: string | null;
   summary: string | null;
   project: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben `project` (dem Namen),
+   *  damit jede Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen.
+   *  `null`, wenn der Datensatz zu keinem Projekt gehoert. */
+  projektnummer?: string | null;
   tags: string[];
   analyzed: boolean;
   createdAt: string;
@@ -693,6 +724,11 @@ export interface PapierkorbEintrag {
   id: string;
   titel: string;
   projectName: string | null;
+  /** Projektnummer (Migration 052). Sie steht hier, weil der Papierkorb sonst
+   *  eine Sackgasse waere: die Eindeutigkeit gilt bewusst auch fuer geloeschte
+   *  Projekte, und wer die Meldung „Nummer bereits vergeben" bekommt, muss
+   *  hier nachsehen koennen, welcher geloeschte Datensatz sie belegt. */
+  projektnummer?: string | null;
   geloeschtAm: string;
   /** Wer den Datensatz angelegt hat — entscheidet bei Eintraegen ohne Projekt
    *  darueber, wer sie im Papierkorb sieht. */
@@ -763,6 +799,11 @@ export interface NoteMeta {
   id: string;
   title: string;
   project: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben `project` (dem Namen),
+   *  damit jede Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen.
+   *  `null`, wenn der Datensatz zu keinem Projekt gehoert. */
+  projektnummer?: string | null;
   createdById: string | null;
   rev: number;
 }
@@ -1084,6 +1125,10 @@ export interface ProjectPhase {
   id: string;
   projectId: string;
   projectName?: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben dem Namen, damit jede
+   *  Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen. */
+  projektnummer?: string | null;
   name: string;
   sortOrder: number;
   status: PhaseStatus;

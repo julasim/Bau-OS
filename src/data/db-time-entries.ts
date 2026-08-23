@@ -34,6 +34,7 @@ function rowToEntry(row: Record<string, unknown>): TimeEntry {
     id: String(row.id),
     projectId: String(row.project_id),
     projectName: row.project_name ? String(row.project_name) : null,
+    projektnummer: row.project_nummer ? String(row.project_nummer) : null,
     phaseId: row.phase_id ? String(row.phase_id) : null,
     hourlyRate: row.hourly_rate != null ? Number(row.hourly_rate) : null,
     memberId: row.member_id ? String(row.member_id) : null,
@@ -58,7 +59,7 @@ function rowToEntry(row: Record<string, unknown>): TimeEntry {
 
 const SELECT = `
   SELECT t.*,
-         p.name AS project_name,
+         p.name AS project_name, p.projektnummer AS project_nummer,
          u.username AS created_by_username
     FROM time_entries t
     LEFT JOIN projects p ON p.id = t.project_id

@@ -35,6 +35,7 @@ import { api } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import FileGlyph from "../components/FileGlyph.vue";
 import { useConfirm } from "../composables/useConfirm";
+import ProjektBezug from "../components/ProjektBezug.vue";
 
 const { confirm } = useConfirm();
 
@@ -54,6 +55,8 @@ interface FileNode {
   size?: string;
   /** Original-Projekt (fuer Files unter Projekte/) */
   project?: string | null;
+  /** Projektnummer dazu (Migration 052). */
+  projektnummer?: string | null;
   /** Markiert (vom aktuellen User) */
   starred?: boolean;
   children?: FileNode[];
@@ -67,12 +70,15 @@ interface ApiFile {
   modified: string;
   extension: string;
   project?: string | null;
+  projektnummer?: string | null;
   analyzed?: boolean;
   starred?: boolean;
 }
 
 interface ProjectEntry {
   name: string;
+  /** Projektnummer (Migration 052) — fuer den Kopf des Projektordners. */
+  projektnummer?: string | null;
 }
 
 interface AdminUserMini {
@@ -216,6 +222,7 @@ function fileToNode(f: ApiFile): FileNode {
     sizeBytes: f.size,
     size: formatSize(f.size),
     project: f.project ?? null,
+    projektnummer: f.projektnummer ?? null,
     starred: f.starred === true,
   };
 }
@@ -271,9 +278,17 @@ const tree = computed<FileNode>(() => {
     .filter((name) => (term ? byProject.has(name) : true))
     .sort((a, b) => a.localeCompare(b));
 
+  // Die Projektnummer haengt am ORDNER, nicht an jeder Datei: diese Ansicht
+  // gruppiert ohnehin nach Projekt, und die Nummer zwanzigmal unter demselben
+  // Kopf zu wiederholen waere Laerm.
+  //
+  // Quelle ist die Projektliste, nicht die Dateien — ein Projekt ohne Dateien
+  // bekommt hier trotzdem einen Ordner, und der soll seine Nummer tragen.
+  const nummerZuProjekt = new Map(allProjects.value.map((p) => [p.name, p.projektnummer ?? null]));
   const projectFolders: FileNode[] = sortedProjectNames.map((name) => ({
     name,
     kind: "folder",
+    projektnummer: nummerZuProjekt.get(name) ?? null,
     children: (byProject.get(name) ?? []).map(fileToNode).sort(byNameThenKind),
   }));
 
@@ -850,7 +865,7 @@ onBeforeUnmount(() => {
           <template v-if="top.name === 'Projekte' && mode === 'all'">
             <template v-for="(proj, pi) in top.children ?? []" :key="'p' + pi">
               <div class="ap-group-h">
-                {{ proj.name }}
+                <ProjektBezug :name="proj.name" :nummer="proj.projektnummer" />
                 <span class="ct">· {{ proj.children?.length ?? 0 }}</span>
                 <span class="ln"></span>
               </div>
@@ -956,7 +971,7 @@ onBeforeUnmount(() => {
                   <div class="pt-li-title fb-doc-name" :class="{ 'fb-mono': isMonoKind(it.kind) }">{{ it.name }}</div>
                   <div class="pt-li-meta fb-doc-meta fb-mono">
                     {{ kindLabel(it.kind) }} · {{ it.size ?? "—" }} · {{ it.updated ?? "—" }}
-                    <span v-if="it.project"> · {{ it.project }}</span>
+                    <span v-if="it.project"> · <ProjektBezug :name="it.project" :nummer="it.projektnummer" /></span>
                   </div>
                 </div>
                 <div class="fb-doc-actions">

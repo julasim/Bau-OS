@@ -29,6 +29,7 @@
 import { ref, computed, onMounted } from "vue";
 import { api } from "../../api";
 import { useEvents } from "../../composables/useEvents";
+import ProjektBezug from "../../components/ProjektBezug.vue";
 import { useAufgabensystem, alsStunden, RANG_TEXT, type Aufgabe } from "../../composables/useAufgabensystem";
 
 const { tagesbudget, tagesplanAufgaben, ladeZaehler } = useAufgabensystem();
@@ -203,7 +204,7 @@ useEvents(["task"], () => void laden());
           <div class="au-zeile-mitte">
             <div class="au-zeile-text">{{ a.text }}</div>
             <div class="au-zeile-meta">
-              <span v-if="a.project">{{ a.project }}</span>
+              <ProjektBezug v-if="a.project" :name="a.project" :nummer="a.projektnummer" />
               <span v-if="a.aufwandMin" class="au-zeile-aufwand">{{ alsStunden(a.aufwandMin) }}</span>
               <span v-else class="au-zeile-offen">ohne Schätzung</span>
             </div>

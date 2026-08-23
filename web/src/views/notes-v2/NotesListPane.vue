@@ -14,10 +14,12 @@ import { api } from "../../api";
 import { useEvents } from "../../composables/useEvents";
 import ListPane from "../../components/shell/ListPane.vue";
 import BIcon from "../../components/BIcon.vue";
+import ProjektBezug from "../../components/ProjektBezug.vue";
 
 interface NoteSummary {
   title: string;
   project: string | null;
+  projektnummer?: string | null;
   createdAt: string;
   updatedAt: string;
   size: number;
@@ -127,7 +129,7 @@ useEvents(["note"], () => load());
         <span class="li-time">{{ relativeTime(note.updatedAt) }}</span>
       </div>
       <div v-if="note.project" class="li-meta">
-        <span>{{ note.project }}</span>
+        <ProjektBezug :name="note.project" :nummer="note.projektnummer" />
       </div>
     </button>
 

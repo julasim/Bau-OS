@@ -8,10 +8,12 @@
 // Navigiert bei Klick auf /projects/:name (Detail-Ansicht).
 // ============================================================
 
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, nextTick, useTemplateRef } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../../api";
 import BIcon from "../../components/BIcon.vue";
+import ProjektBezug from "../../components/ProjektBezug.vue";
+import { PROJEKTNUMMER_BEISPIEL, anzeigeNummer } from "../../utils/projektnummer";
 
 interface Project {
   name: string;
@@ -40,8 +42,32 @@ const view = ref<"cards" | "table">((localStorage.getItem("patio-projects-view")
 
 // ── Create-Dialog ─────────────────────────────────────────────
 const showCreate = ref(false);
+/** Das Nummernfeld beim Oeffnen scharfstellen.
+ *
+ *  `autofocus` allein reicht hier nicht: das Attribut wirkt beim Laden der
+ *  Seite, nicht wenn ein Element spaeter eingehaengt wird — und der Dialog
+ *  liegt in einem `v-if` samt `Teleport`. Gemessen: der Fokus lag auf `body`,
+ *  der Nutzer musste erst klicken. */
+const nummernFeld = useTemplateRef<HTMLInputElement>("nummernFeld");
 const createSaving = ref(false);
 const createError = ref<string | null>(null);
+/** Die zuletzt vergebenen Nummern — als ANSICHT, nicht als Vorbelegung.
+ *
+ *  Der Nutzer soll eine hausweit eindeutige Kennung eintippen; ohne diese
+ *  Zeile müßte er dafür das Schema des Hauses im Kopf haben oder den Dialog
+ *  wieder schließen. Bewusst kein automatischer Vorschlag: das Format ist
+ *  frei, Nummern werden teils im Papierakt vergeben, und ein vorbelegtes Feld
+ *  wird per Enter übernommen — auch wenn es falsch ist.
+ *
+ *  Absteigend sortiert, weil die zuletzt vergebene die interessanteste ist. */
+const letzteNummern = computed(() =>
+  projects.value
+    .map((p) => anzeigeNummer(p.projektnummer))
+    .filter((n): n is string => !!n)
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, 5),
+);
+
 const createForm = ref({
   name: "",
   projektnummer: "",
@@ -156,6 +182,7 @@ function openCreate() {
     description: "",
   };
   showCreate.value = true;
+  void nextTick(() => nummernFeld.value?.focus());
 }
 
 async function submitCreate() {
@@ -309,6 +336,11 @@ onMounted(load);
           </span>
         </div>
 
+        <!-- Die Nummer steht ueber dem Namen, nicht daneben: auf einer Karte
+             ist sie die Zeile, an der man die Akte wiedererkennt. -->
+        <div class="ov-card-nr">
+          <ProjektBezug :nummer="p.projektnummer" hinweis nur-nummer />
+        </div>
         <h3 class="ov-card-title">{{ p.name }}</h3>
         <div v-if="p.bauherrName || p.bauherr" class="ov-card-meta">
           {{ p.bauherrName ?? p.bauherr }}
@@ -365,6 +397,7 @@ onMounted(load);
         <table class="ov-table">
           <thead>
             <tr>
+              <th style="width: 170px">Nummer</th>
               <th>Projekt</th>
               <th>Nutzung</th>
               <th>Phase</th>
@@ -375,6 +408,9 @@ onMounted(load);
           </thead>
           <tbody>
             <tr v-for="p in filtered" :key="p.name" @click="openProject(p.name)">
+              <td class="ov-tnr">
+                <ProjektBezug :nummer="p.projektnummer" hinweis nur-nummer />
+              </td>
               <td>
                 <div class="ov-tname">{{ p.name }}</div>
                 <div v-if="p.bauherrName || p.bauherr || p.standort" class="ov-tsub">
@@ -440,6 +476,21 @@ onMounted(load);
         </div>
 
         <div class="ov-ed-body">
+          <!-- Die Projektnummer steht VOR dem Namen und ist Pflicht (Migration
+               052). Sie ist die Kennung, unter der das Projekt im Haus geführt
+               wird — der Name ist die Beschriftung dazu. -->
+          <div class="ov-field">
+            <label class="ov-label">Projektnummer *</label>
+            <input
+              ref="nummernFeld"
+              v-model="createForm.projektnummer"
+              class="pt-input"
+              :placeholder="PROJEKTNUMMER_BEISPIEL"
+            />
+            <p v-if="letzteNummern.length" class="ov-hint">
+              Zuletzt vergeben: <span class="ov-hint-nr">{{ letzteNummern.join(" · ") }}</span>
+            </p>
+          </div>
           <div class="ov-field">
             <label class="ov-label">Name *</label>
             <input
@@ -447,14 +498,9 @@ onMounted(load);
               class="pt-input"
               placeholder="z.B. Wohnhaus Huber"
               @keyup.enter="submitCreate"
-              autofocus
             />
           </div>
           <div class="ov-form-row">
-            <div class="ov-field">
-              <label class="ov-label">Projektnummer</label>
-              <input v-model="createForm.projektnummer" class="pt-input" placeholder="2026-001" />
-            </div>
             <div class="ov-field">
               <label class="ov-label">Projektart</label>
               <select v-model="createForm.projektart" class="pt-select">
@@ -508,7 +554,7 @@ onMounted(load);
           <button
             type="button"
             class="pt-btn pt-btn--primary"
-            :disabled="!createForm.name.trim() || createSaving"
+            :disabled="!createForm.name.trim() || !createForm.projektnummer.trim() || createSaving"
             @click="submitCreate"
           >
             {{ createSaving ? "Lege an …" : "Anlegen" }}
@@ -520,6 +566,25 @@ onMounted(load);
 </template>
 
 <style scoped>
+.ov-card-nr {
+  margin-bottom: 2px;
+  font-size: var(--fs-11);
+}
+.ov-tnr {
+  font-size: var(--fs-12);
+  white-space: nowrap;
+}
+
+.ov-hint {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-11);
+  color: var(--fg-subtle);
+}
+.ov-hint-nr {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+}
+
 /* ── Wrapper ─────────────────────────────────────────────── */
 .ov-wrap {
   width: 100%;

@@ -468,7 +468,7 @@ export const dbProjects: ProjectRepository = {
   async listChildren(parentName) {
     const db = getDb();
     const rows = await db`
-      SELECT child.id, child.name, child.status
+      SELECT child.id, child.name, child.status, child.projektnummer
       FROM projects parent
       JOIN projects child ON child.parent_id = parent.id
       WHERE parent.name = ${parentName} AND child.deleted_at IS NULL
@@ -548,13 +548,14 @@ export const dbProjects: ProjectRepository = {
   async listDeleted() {
     const db = getDb();
     const rows = await db`
-      SELECT id, name, deleted_at FROM projects
+      SELECT id, name, projektnummer, deleted_at FROM projects
        WHERE deleted_at IS NOT NULL
        ORDER BY deleted_at DESC
     `;
     return rows.map((r) => ({
       id: String(r.id),
       name: String(r.name),
+      projektnummer: r.projektnummer ? String(r.projektnummer) : null,
       deletedAt: alsIso(r.deleted_at),
     }));
   },

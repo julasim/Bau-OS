@@ -50,6 +50,10 @@ export interface SearchHit {
   /** Kurzer Textausschnitt zum Einordnen des Treffers. */
   snippet: string | null;
   project: string | null;
+  /** Projektnummer des Treffers (Migration 052). Ohne sie muesste die
+   *  Trefferliste den Namen allein anzeigen — und bei zwei Bauvorhaben
+   *  „Sanierung Hauptstrasse" sieht man dann nicht, welches gemeint ist. */
+  projektnummer?: string | null;
 }
 
 /** Obergrenze und Vorgabe fuer `limit`. Bewusst hier und nicht in der Route:
@@ -199,7 +203,7 @@ export const dbSearch = {
         treffer AS (
           SELECT 'note'::text AS typ, n.id::text AS id, n.title AS titel,
                  left(n.content, ${SNIPPET_SOURCE_MAX}::int) AS auszug,
-                 p.name AS project_name, n.updated_at AS updated_at,
+                 p.name AS project_name, p.projektnummer AS project_nummer, n.updated_at AS updated_at,
                  ts_rank(n.such_text, frage.tsq) +
                    CASE WHEN n.title ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END AS rang
             FROM notes n LEFT JOIN projects p ON n.project_id = p.id, frage
@@ -208,7 +212,7 @@ export const dbSearch = {
              AND (${projectId === null} OR n.project_id = ${projectId}::uuid)
           UNION ALL
           SELECT 'task'::text, t.id::text, t.text,
-                 NULL, p.name, t.updated_at,
+                 NULL, p.name, p.projektnummer, t.updated_at,
                  ts_rank(t.such_text, frage.tsq) +
                    CASE WHEN t.text ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END
             FROM tasks t LEFT JOIN projects p ON t.project_id = p.id, frage
@@ -217,7 +221,7 @@ export const dbSearch = {
              AND (${projectId === null} OR t.project_id = ${projectId}::uuid)
           UNION ALL
           SELECT 'project'::text, pr.id::text, pr.name,
-                 left(pr.description, ${SNIPPET_SOURCE_MAX}::int), pr.name, pr.updated_at,
+                 left(pr.description, ${SNIPPET_SOURCE_MAX}::int), pr.name, pr.projektnummer, pr.updated_at,
                  ts_rank(pr.such_text, frage.tsq) +
                    CASE WHEN pr.name ILIKE ${like} OR pr.projektnummer ILIKE ${like}
                         THEN ${TITEL_BONUS}::real ELSE 0 END
@@ -229,7 +233,7 @@ export const dbSearch = {
              AND (${projectId === null} OR pr.id = ${projectId}::uuid)
           UNION ALL
           SELECT 'file'::text, f.id::text, f.filename,
-                 left(f.content_text, ${SNIPPET_SOURCE_MAX}::int), p.name, f.updated_at,
+                 left(f.content_text, ${SNIPPET_SOURCE_MAX}::int), p.name, p.projektnummer, f.updated_at,
                  ts_rank(f.such_text, frage.tsq) +
                    CASE WHEN f.filename ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END
             FROM files f LEFT JOIN projects p ON f.project_id = p.id, frage
@@ -237,7 +241,7 @@ export const dbSearch = {
              AND (${all} OR f.project_id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR f.project_id = ${projectId}::uuid)
         )
-        SELECT typ, id, titel, auszug, project_name
+        SELECT typ, id, titel, auszug, project_name, project_nummer
           FROM treffer
          ORDER BY rang DESC, updated_at DESC, id
          LIMIT ${max}
@@ -255,6 +259,11 @@ export const dbSearch = {
       title: String(r.titel),
       snippet: snippet(r.auszug),
       project: r.project_name ? String(r.project_name) : null,
+      /** Die Projektnummer des Projekts (Migration 052). Sie steht neben
+       *  dem Namen, weil die Oberflaeche sie ueberall dort zeigt, wo heute
+       *  nur der Name stand — ohne sie muesste jede Ansicht sie einzeln
+       *  nachschlagen. */
+      projektnummer: r.project_nummer ? String(r.project_nummer) : null,
     }));
   },
 };

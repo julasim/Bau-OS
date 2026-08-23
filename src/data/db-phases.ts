@@ -37,6 +37,7 @@ function rowToPhase(row: Record<string, unknown>): ProjectPhase {
     id: String(row.id),
     projectId: String(row.project_id),
     projectName: row.project_name ? String(row.project_name) : null,
+    projektnummer: row.project_nummer ? String(row.project_nummer) : null,
     name: String(row.name),
     sortOrder: Number(row.sort_order ?? 0),
     status: row.status as ProjectPhase["status"],
@@ -61,7 +62,7 @@ function rowToPhase(row: Record<string, unknown>): ProjectPhase {
 // SELECT mit korrelierten Subqueries fuer den abgeleiteten Fortschritt.
 const SELECT = `
   SELECT ph.*,
-         p.name AS project_name,
+         p.name AS project_name, p.projektnummer AS project_nummer,
          (SELECT COUNT(*) FROM tasks t WHERE t.phase_id = ph.id) AS task_total,
          (SELECT COUNT(*) FROM tasks t WHERE t.phase_id = ph.id AND t.status = 'done') AS task_done
     FROM project_phases ph

@@ -25,6 +25,11 @@ function rowToTermin(row: Record<string, unknown>): Termin {
     assigneeIds,
     assigneesResolved,
     project: row.project_name ? String(row.project_name) : null,
+    /** Die Projektnummer des Projekts (Migration 052). Sie steht neben
+     *  dem Namen, weil die Oberflaeche sie ueberall dort zeigt, wo heute
+     *  nur der Name stand — ohne sie muesste jede Ansicht sie einzeln
+     *  nachschlagen. */
+    projektnummer: row.project_nummer ? String(row.project_nummer) : null,
     recurring: row.recurring ? String(row.recurring) : null,
     color: row.color ? String(row.color) : null,
     phaseId: row.phase_id ? String(row.phase_id) : null,
@@ -42,7 +47,7 @@ function rowToTermin(row: Record<string, unknown>): Termin {
 // zurueckbekommen, ohne N+1.
 const TERMIN_SELECT = `
   SELECT t.*,
-    p.name as project_name,
+    p.name as project_name, p.projektnummer AS project_nummer,
     COALESCE(
       (SELECT json_agg(json_build_object('id', tm.id, 'name', tm.name))
          FROM team_members tm
@@ -197,7 +202,7 @@ export const dbTermine: TerminRepository = {
     if (eingeschraenkt && sichtbareProjekte.length === 0) return [];
     const rows = eingeschraenkt
       ? await db`
-          SELECT t.id, t.text AS titel, p.name AS project_name, t.deleted_at, t.created_by
+          SELECT t.id, t.text AS titel, p.name AS project_name, p.projektnummer AS project_nummer, t.deleted_at, t.created_by
             FROM termine t LEFT JOIN projects p ON p.id = t.project_id
            WHERE t.deleted_at IS NOT NULL
              AND (t.project_id = ANY(${db.array(sichtbareProjekte)}::uuid[])
@@ -207,7 +212,7 @@ export const dbTermine: TerminRepository = {
                   OR t.project_id IS NULL)
            ORDER BY t.deleted_at DESC`
       : await db`
-          SELECT t.id, t.text AS titel, p.name AS project_name, t.deleted_at, t.created_by
+          SELECT t.id, t.text AS titel, p.name AS project_name, p.projektnummer AS project_nummer, t.deleted_at, t.created_by
             FROM termine t LEFT JOIN projects p ON p.id = t.project_id
            WHERE t.deleted_at IS NOT NULL
            ORDER BY t.deleted_at DESC`;
@@ -215,6 +220,7 @@ export const dbTermine: TerminRepository = {
       id: String(r.id),
       titel: String(r.titel),
       projectName: r.project_name ? String(r.project_name) : null,
+      projektnummer: r.project_nummer ? String(r.project_nummer) : null,
       geloeschtAm: alsIso(r.deleted_at),
       createdById: r.created_by ? String(r.created_by) : null,
     }));

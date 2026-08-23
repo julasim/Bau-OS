@@ -13,6 +13,7 @@ import { api } from "../../api";
 import { useEvents } from "../../composables/useEvents";
 import ListPane from "../../components/shell/ListPane.vue";
 import StatusDot from "../../components/shell/StatusDot.vue";
+import ProjektBezug from "../../components/ProjektBezug.vue";
 
 interface Task {
   id: string;
@@ -22,6 +23,7 @@ interface Task {
   assignee: string | null;
   date: string | null;
   project: string | null;
+  projektnummer?: string | null;
   updatedAt: string;
 }
 
@@ -247,7 +249,7 @@ useEvents(["task"], () => load());
             <div class="pt-list-grow">
               <div class="pt-li-title" :class="{ 'is-done': task.status === 'done' }">{{ task.text }}</div>
               <div v-if="displayAssignee(task) || task.project" class="pt-li-meta ap-proj-tag">
-                <b v-if="task.project">{{ task.project }}</b>
+                <ProjektBezug v-if="task.project" :name="task.project" :nummer="task.projektnummer" />
                 <template v-if="task.project && displayAssignee(task)"> · </template>
                 <span v-if="displayAssignee(task)">{{ displayAssignee(task) }}</span>
               </div>

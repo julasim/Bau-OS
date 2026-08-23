@@ -211,6 +211,10 @@ exportTemplatesRoutes.get("/exports/meeting/:id", async (c) => {
     const result = await renderDocxExport({
       kind: "meeting",
       meetingId: id,
+      // Der Projektbezug geht mit, damit die Projektnummer im Dateinamen
+      // stehen kann (Migration 052). Die Route kennt ihn ohnehin — sie hat
+      // damit gerade die Rechte geprueft.
+      projectName: meeting.projectName ?? undefined,
       templateId,
       currentUserName: userName(c),
     });
@@ -235,6 +239,7 @@ exportTemplatesRoutes.get("/exports/bautagebuch/:id", async (c) => {
     const result = await renderDocxExport({
       kind: "bautagebuch",
       bautagebuchId: id,
+      projectName: eintrag.projectName ?? undefined,
       templateId: c.req.query("templateId") ?? undefined,
       currentUserName: userName(c),
     });

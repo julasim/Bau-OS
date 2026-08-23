@@ -42,6 +42,7 @@ function rowToEntry(row: Record<string, unknown>): BautagebuchEntry {
     id: String(row.id),
     projectId: String(row.project_id),
     projectName: row.project_name ? String(row.project_name) : null,
+    projektnummer: row.project_nummer ? String(row.project_nummer) : null,
     date: dateStr,
     weather: row.weather ? (String(row.weather) as BautagebuchEntry["weather"]) : null,
     temperatureMin:
@@ -61,7 +62,7 @@ function rowToEntry(row: Record<string, unknown>): BautagebuchEntry {
 
 const SELECT = `
   SELECT b.*,
-         p.name AS project_name,
+         p.name AS project_name, p.projektnummer AS project_nummer,
          u.username AS created_by_username
     FROM bautagebuch b
     LEFT JOIN projects p ON p.id = b.project_id

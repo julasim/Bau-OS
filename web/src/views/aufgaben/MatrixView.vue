@@ -24,6 +24,7 @@
 import { ref, computed, onMounted } from "vue";
 import { api } from "../../api";
 import { useEvents } from "../../composables/useEvents";
+import ProjektBezug from "../../components/ProjektBezug.vue";
 import { useAufgabensystem, alsStunden, RANG_TEXT, type Aufgabe } from "../../composables/useAufgabensystem";
 
 const { matrix, ladeZaehler } = useAufgabensystem();
@@ -168,7 +169,7 @@ useEvents(["task"], () => {
           <li v-for="a in s.aufgaben" :key="a.id" class="au-karte" :class="{ 'au-karte--geplant': a.imTagesplan }">
             <div class="au-karte-text">{{ a.text }}</div>
             <div class="au-karte-meta">
-              <span v-if="a.project" class="au-karte-projekt">{{ a.project }}</span>
+              <ProjektBezug v-if="a.project" class="au-karte-projekt" :name="a.project" :nummer="a.projektnummer" />
               <span v-if="a.aufwandMin" class="au-karte-aufwand">{{ alsStunden(a.aufwandMin) }}</span>
               <span v-else class="au-karte-offen">ohne Schätzung</span>
             </div>

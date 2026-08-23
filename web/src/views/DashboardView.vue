@@ -6,6 +6,7 @@ import { api } from "../api";
 import { useEvents } from "../composables/useEvents";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import BIcon from "../components/BIcon.vue";
+import ProjektBezug from "../components/ProjektBezug.vue";
 
 const { displayName } = useCurrentUser();
 // Die Begruessung nutzt nur den Vornamen (erstes Wort des displayName),
@@ -28,6 +29,7 @@ interface Task {
   assignee: string | null;
   date: string | null;
   project?: string | null;
+  projektnummer?: string | null;
 }
 
 interface Termin {
@@ -267,7 +269,7 @@ const statCards = computed(() => [
                 class="flex items-center"
                 style="gap: 8px; font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px"
               >
-                <span v-if="task.project">{{ task.project }}</span>
+                <ProjektBezug v-if="task.project" :name="task.project" :nummer="task.projektnummer" />
                 <span v-if="task.date" class="font-mono">{{ formatDate(task.date) }}</span>
                 <span v-if="task.assignee">{{ task.assignee }}</span>
               </div>

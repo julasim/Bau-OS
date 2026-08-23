@@ -11,6 +11,7 @@ import ProjectInvoicesTab from "./projects-v2/ProjectInvoicesTab.vue";
 import ProjectEntscheidungenTab from "./projects-v2/ProjectEntscheidungenTab.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
+import { anzeigeNummer, PROJEKTNUMMER_BEISPIEL } from "../utils/projektnummer";
 
 const { isAdmin, darfGeld } = useCurrentUser();
 const { confirm } = useConfirm();
@@ -547,7 +548,7 @@ interface FieldCfg {
   placeholder?: string;
 }
 const STAMMDATEN_FIELDS: readonly FieldCfg[] = [
-  { key: "projektnummer", label: "Projektnummer", inputType: "text", placeholder: "z.B. 2026-037" },
+  { key: "projektnummer", label: "Projektnummer", inputType: "text", placeholder: PROJEKTNUMMER_BEISPIEL },
   { key: "bauherr", label: "Bauherr", inputType: "text", placeholder: "Name + Kontakt" },
   { key: "standort", label: "Standort", inputType: "text", placeholder: "Ort / Adresse" },
   {
@@ -634,6 +635,16 @@ function cancelEdit() {
 
 async function saveField(key: EditableKey) {
   if (!info.value || saving.value) return;
+
+  // Die Projektnummer laesst sich nicht leeren (Migration 052: NOT NULL).
+  // Ohne diese Bremse ginge die Anfrage hinaus, der Server antwortete mit 400,
+  // und der optimistisch geleerte Wert rollte zurueck — fuer den Benutzer sieht
+  // das aus wie ein Programmfehler, nicht wie eine Regel.
+  if (key === "projektnummer" && draftValue.value.trim() === "") {
+    saveError.value = `Projektnummer erforderlich (z. B. ${PROJEKTNUMMER_BEISPIEL})`;
+    return;
+  }
+
   saving.value = true;
   saveError.value = null;
 
@@ -1453,8 +1464,13 @@ const statusLabel = computed(() => {
 /** Fuer die Stat-Zeile im Hero: zeigt ob Stammdaten-Vervollstaendigung faellig ist. */
 const emptyStammCount = computed(() => {
   if (!info.value) return 0;
-  const keys: (keyof ProjectInfo)[] = ["projektnummer", "bauherr", "standort", "projektart", "nutzung"];
-  return keys.filter((k) => !info.value![k]).length;
+  const keys: (keyof ProjectInfo)[] = ["bauherr", "standort", "projektart", "nutzung"];
+  const offen = keys.filter((k) => !info.value![k]).length;
+  // Die Projektnummer wird gesondert gezaehlt: seit Migration 052 ist sie NIE
+  // leer, sondern traegt notfalls den Platzhalter `OHNE-NUMMER-…`. Ein
+  // schlichtes `!info.projektnummer` waere darum immer falsch — und die
+  // einzige Erinnerung an eine fehlende Aktennummer waere verschwunden.
+  return offen + (anzeigeNummer(info.value.projektnummer) ? 0 : 1);
 });
 
 // ── Bautagebuch (Migration 011) ───────────────────────────────────────────
@@ -2194,7 +2210,12 @@ async function deleteMeeting() {
             <span style="color: var(--color-text-faint)"> / </span>
           </span>
           <span v-else>PROJEKT</span>
-          <span v-if="info.projektnummer" style="color: var(--color-text-faint)"> — {{ info.projektnummer }}</span>
+          <!-- `anzeigeNummer` filtert den Platzhalter aus Migration 052 heraus.
+               Ungefiltert stuende hier eine Aktennummer, die niemand vergeben
+               hat — und genau die wuerde man dann abtippen. -->
+          <span v-if="anzeigeNummer(info.projektnummer)" style="color: var(--color-text-faint)">
+            — {{ anzeigeNummer(info.projektnummer) }}
+          </span>
         </div>
 
         <!-- Badges: Phase + Nutzung -->
@@ -2219,8 +2240,10 @@ async function deleteMeeting() {
           <a v-if="info.standort" :href="mapsLink(info.standort)" target="_blank" rel="noopener" class="maps-link">
             {{ info.standort }}
           </a>
-          <span v-if="info.projektnummer && info.standort" class="sep"></span>
-          <span v-if="info.projektnummer">Nr. {{ info.projektnummer }}</span>
+          <span v-if="anzeigeNummer(info.projektnummer) && info.standort" class="sep"></span>
+          <span v-if="anzeigeNummer(info.projektnummer)">Nr. {{ anzeigeNummer(info.projektnummer) }}</span>
+          <!-- Fehlt sie, ist das keine Luecke, sondern eine offene Aufgabe. -->
+          <span v-else class="pd-nr-fehlt">Projektnummer fehlt</span>
         </div>
       </div>
 
@@ -3952,6 +3975,10 @@ async function deleteMeeting() {
 </template>
 
 <style scoped>
+.pd-nr-fehlt {
+  color: var(--warn);
+}
+
 /* ── Module-Popover (Phase 6e) ──────────────────────────────────────── */
 .pm-popover-overlay {
   position: fixed;

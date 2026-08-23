@@ -33,6 +33,10 @@ export interface AktivitaetsEintrag {
   titel: string;
   projectId: string | null;
   projectName: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052) — die Kennung,
+   *  unter der es im Haus gefuehrt wird. Steht neben dem Namen, damit jede
+   *  Ansicht sie zeigen kann, ohne sie einzeln nachzuschlagen. */
+  projektnummer?: string | null;
   /** Zuletzt geändert. */
   geaendertAm: string;
   /** Wer den Datensatz ANGELEGT hat — nicht, wer zuletzt gespeichert hat.
@@ -94,7 +98,7 @@ export const dbAktivitaet = {
 
     // Datensätze aus Projekten im Papierkorb (Migration 044) bleiben draußen.
     const sql = `
-      SELECT a.*, p.name AS project_name, u.username AS angelegt_von
+      SELECT a.*, p.name AS project_name, p.projektnummer AS project_nummer, u.username AS angelegt_von
         FROM (${roh}) a
         LEFT JOIN projects p ON p.id = a.project_id
         LEFT JOIN users u ON u.id = a.created_by
@@ -113,6 +117,7 @@ export const dbAktivitaet = {
         titel: String(row.titel),
         projectId: row.project_id ? String(row.project_id) : null,
         projectName: row.project_name ? String(row.project_name) : null,
+        projektnummer: row.project_nummer ? String(row.project_nummer) : null,
         geaendertAm: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at ?? ""),
         angelegtVon: row.angelegt_von ? String(row.angelegt_von) : null,
       };

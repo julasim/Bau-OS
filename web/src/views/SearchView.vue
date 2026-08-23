@@ -3,6 +3,7 @@ import { ref } from "vue";
 import { useRouter, type RouteLocationRaw } from "vue-router";
 import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
+import ProjektBezug from "../components/ProjektBezug.vue";
 
 // Die Suche vergleicht den Eingabe-String als Ganzes (ILIKE '%…%') — sie
 // zerlegt ihn NICHT in einzelne Woerter. Mehrwortige Vorschlaege wie
@@ -21,6 +22,7 @@ interface SearchHit {
   title: string;
   snippet: string | null;
   project: string | null;
+  projektnummer?: string | null;
 }
 
 const TYPE_LABEL: Record<HitType, string> = {
@@ -194,7 +196,7 @@ async function search() {
             class="font-mono"
             style="font-size: 11px; color: var(--color-text-tertiary)"
           >
-            {{ r.project }}
+            <ProjektBezug :name="r.project" :nummer="r.projektnummer" />
           </span>
         </div>
         <p v-if="r.snippet" style="font-size: 12px; color: var(--color-text-muted); line-height: 1.5; margin: 0">

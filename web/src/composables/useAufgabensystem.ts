@@ -25,6 +25,9 @@ export interface Aufgabe {
   text: string;
   status: "open" | "in_progress" | "done";
   project: string | null;
+  /** Projektnummer des zugehoerigen Projekts (Migration 052). Kommt vom
+   *  Server mit, damit die Ansicht sie nicht nachschlagen muss. */
+  projektnummer: string | null;
   date: string | null;
   assigneeName?: string | null;
   rang: 1 | 2 | 3 | 4;

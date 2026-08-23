@@ -17,6 +17,7 @@ import BIcon from "../components/BIcon.vue";
 import { useConfirm } from "../composables/useConfirm";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { formatDate } from "../utils/format";
+import ProjektBezug from "../components/ProjektBezug.vue";
 
 type Art = "notiz" | "aufgabe" | "termin";
 
@@ -25,6 +26,7 @@ interface Eintrag {
   id: string;
   titel: string;
   projectName: string | null;
+  projektnummer?: string | null;
   geloeschtAm: string;
 }
 
@@ -143,7 +145,7 @@ onMounted(laden);
               {{ ART[e.typ].label }}
             </span>
             <span class="pk-titel">{{ e.titel }}</span>
-            <span v-if="e.projectName" class="pk-projekt">{{ e.projectName }}</span>
+            <ProjektBezug v-if="e.projectName" class="pk-projekt" :name="e.projectName" :nummer="e.projektnummer" />
             <span v-else class="pk-projekt pk-privat">persönlich</span>
             <span class="pk-datum font-mono">{{ formatDate(e.geloeschtAm) }}</span>
             <div class="pk-actions">

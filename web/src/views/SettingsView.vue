@@ -127,6 +127,7 @@ async function changePassword() {
 import { useBranding } from "../composables/useBranding";
 import { useTheme } from "../composables/useTheme";
 import { useWorkspaceShell } from "../composables/useWorkspaceShell";
+import BIcon from "../components/BIcon.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 
 const themeApi = useTheme();

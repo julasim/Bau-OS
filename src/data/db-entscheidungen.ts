@@ -45,6 +45,7 @@ function rowToEntscheidung(row: Record<string, unknown>): Entscheidung {
     id: String(row.id),
     projectId: String(row.project_id),
     projectName: row.project_name ? String(row.project_name) : null,
+    projektnummer: row.project_nummer ? String(row.project_nummer) : null,
     datum,
     titel: String(row.titel),
     begruendung: row.begruendung ? String(row.begruendung) : null,
@@ -80,7 +81,7 @@ function rowToEntscheidung(row: Record<string, unknown>): Entscheidung {
 // Andersherum verschwaende ein Datensatz still aus der Liste.
 const SELECT = `
   SELECT e.*,
-         p.name AS project_name,
+         p.name AS project_name, p.projektnummer AS project_nummer,
          u.username AS created_by_username,
          (SELECT json_agg(json_build_object('id', tm.id, 'name', tm.name))
             FROM team_members tm

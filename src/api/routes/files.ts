@@ -106,6 +106,7 @@ filesRoutes.get("/files", async (c) => {
         extension: f.filetype || "",
         id: f.id,
         project: f.project,
+        projektnummer: f.projektnummer ?? null,
         analyzed: f.analyzed,
       })),
     );
@@ -214,6 +215,7 @@ filesRoutes.get("/files/recent", async (c) => {
       extension: f.filetype || "",
       id: f.id,
       project: f.project,
+      projektnummer: f.projektnummer ?? null,
       analyzed: f.analyzed,
     })),
   );
@@ -229,7 +231,7 @@ filesRoutes.get("/files/starred", async (c) => {
   const rows = await db`
     SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize,
            f.mime_type, f.analyzed, f.created_at, f.updated_at,
-           p.name as project_name
+           p.name as project_name, p.projektnummer as project_nummer
     FROM files f
     JOIN file_stars fs ON f.id = fs.file_id
     LEFT JOIN projects p ON f.project_id = p.id
@@ -246,6 +248,7 @@ filesRoutes.get("/files/starred", async (c) => {
       extension: f.filetype ? String(f.filetype) : "",
       id: String(f.id),
       project: f.project_name ? String(f.project_name) : null,
+      projektnummer: f.project_nummer ? String(f.project_nummer) : null,
       analyzed: !!f.analyzed,
       starred: true,
     })),
@@ -261,7 +264,7 @@ filesRoutes.get("/files/shared", async (c) => {
   const rows = await db`
     SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize,
            f.mime_type, f.analyzed, f.created_at, f.updated_at,
-           p.name as project_name, fs2.can_edit
+           p.name as project_name, p.projektnummer as project_nummer, fs2.can_edit
     FROM files f
     JOIN file_shares fs2 ON f.id = fs2.file_id
     LEFT JOIN projects p ON f.project_id = p.id
@@ -278,6 +281,7 @@ filesRoutes.get("/files/shared", async (c) => {
       extension: f.filetype ? String(f.filetype) : "",
       id: String(f.id),
       project: f.project_name ? String(f.project_name) : null,
+      projektnummer: f.project_nummer ? String(f.project_nummer) : null,
       analyzed: !!f.analyzed,
       canEdit: f.can_edit === true,
     })),

@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
+  alsDateinamensteil,
+  mitProjektnummer,
   pruefeProjektnummer,
   vergleichbar,
   istPlatzhalter,
@@ -127,6 +129,53 @@ describe("Projektnummer — die Regeln", () => {
       expect(istPlatzhalter("SAZTG-2026-014")).toBe(false);
       expect(istPlatzhalter(null)).toBe(false);
       expect(istPlatzhalter(undefined)).toBe(false);
+    });
+  });
+
+  describe("Als Bestandteil eines Dateinamens", () => {
+    it("nimmt eine gewöhnliche Nummer unverändert", () => {
+      expect(alsDateinamensteil("SAZTG-2026-014")).toBe("SAZTG-2026-014");
+    });
+
+    it("ersetzt den Schrägstrich", () => {
+      // `A-14/2` ist in Österreich eine übliche Aktenschreibweise. Unter
+      // Windows ist der Schrägstrich im Dateinamen aber kein Zeichen, sondern
+      // eine Pfadtrennung — der Download hieße dann `2` und läge angeblich in
+      // einem Ordner `A-14`.
+      expect(alsDateinamensteil("A-14/2")).toBe("A-14-2");
+    });
+
+    it("ersetzt alle Zeichen, die Windows in Dateinamen verbietet", () => {
+      const verboten = ["\\", "/", ":", "*", "?", '"', "<", ">", "|"];
+      for (const z of verboten) {
+        const gebaut = alsDateinamensteil(`A${z}B`);
+        expect(gebaut, z).toBe("A-B");
+      }
+    });
+
+    it("schneidet Punkte am Ende ab", () => {
+      // Windows entfernt sie stillschweigend — dann hieße die Datei anders,
+      // als hier steht.
+      expect(alsDateinamensteil("SAZTG-2026-014..")).toBe("SAZTG-2026-014");
+    });
+
+    it("liefert für den Platzhalter nichts", () => {
+      expect(alsDateinamensteil("OHNE-NUMMER-49911aa9")).toBe("");
+      expect(alsDateinamensteil(null)).toBe("");
+    });
+
+    it("stellt die Nummer voran", () => {
+      expect(mitProjektnummer("SAZTG-2026-014", "Besprechungsprotokoll 2026-08-23.docx")).toBe(
+        "SAZTG-2026-014 Besprechungsprotokoll 2026-08-23.docx",
+      );
+    });
+
+    it("lässt den Namen unverändert, wenn keine Nummer da ist", () => {
+      // Ein Dateiname, der mit einem Trennzeichen anfängt, weil die Nummer
+      // fehlte, wäre schlechter als gar keine Nummer.
+      for (const nr of [null, undefined, "OHNE-NUMMER-abc12345"]) {
+        expect(mitProjektnummer(nr, "Bautagebuch 2026-08-23.docx")).toBe("Bautagebuch 2026-08-23.docx");
+      }
     });
   });
 

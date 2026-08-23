@@ -120,7 +120,7 @@ export const dbNotes: NoteRepository = {
   async listDetailed(limit = 50) {
     const db = getDb();
     const rows = await db`
-      SELECT n.title, p.name as project_name, n.created_by,
+      SELECT n.title, p.name as project_name, p.projektnummer AS project_nummer, n.created_by,
              n.created_at, n.updated_at, length(n.content) as size
       FROM notes n
       LEFT JOIN projects p ON n.project_id = p.id
@@ -131,6 +131,11 @@ export const dbNotes: NoteRepository = {
     return rows.map((r) => ({
       title: String(r.title),
       project: r.project_name ? String(r.project_name) : null,
+      /** Die Projektnummer des Projekts (Migration 052). Sie steht neben
+       *  dem Namen, weil die Oberflaeche sie ueberall dort zeigt, wo heute
+       *  nur der Name stand — ohne sie muesste jede Ansicht sie einzeln
+       *  nachschlagen. */
+      projektnummer: r.project_nummer ? String(r.project_nummer) : null,
       createdAt: alsIso(r.created_at),
       updatedAt: alsIso(r.updated_at),
       size: Number(r.size || 0),
@@ -147,7 +152,7 @@ export const dbNotes: NoteRepository = {
     if (!treffer) return null;
     const db = getDb();
     const [row] = await db`
-      SELECT n.id, n.title, n.created_by, n.rev, p.name AS project_name
+      SELECT n.id, n.title, n.created_by, n.rev, p.name AS project_name, p.projektnummer AS project_nummer
         FROM notes n LEFT JOIN projects p ON p.id = n.project_id
        WHERE n.id = ${treffer.id} AND n.deleted_at IS NULL
        LIMIT 1
@@ -157,6 +162,11 @@ export const dbNotes: NoteRepository = {
       id: String(row.id),
       title: String(row.title),
       project: row.project_name ? String(row.project_name) : null,
+      /** Die Projektnummer des Projekts (Migration 052). Sie steht neben
+       *  dem Namen, weil die Oberflaeche sie ueberall dort zeigt, wo heute
+       *  nur der Name stand — ohne sie muesste jede Ansicht sie einzeln
+       *  nachschlagen. */
+      projektnummer: row.project_nummer ? String(row.project_nummer) : null,
       createdById: row.created_by ? String(row.created_by) : null,
       rev: Number(row.rev ?? 1),
     };
@@ -213,7 +223,7 @@ export const dbNotes: NoteRepository = {
     if (eingeschraenkt && sichtbareProjekte.length === 0) return [];
     const rows = eingeschraenkt
       ? await db`
-          SELECT n.id, n.title AS titel, p.name AS project_name, n.deleted_at, n.created_by
+          SELECT n.id, n.title AS titel, p.name AS project_name, p.projektnummer AS project_nummer, n.deleted_at, n.created_by
             FROM notes n LEFT JOIN projects p ON p.id = n.project_id
            WHERE n.deleted_at IS NOT NULL
              AND (n.project_id = ANY(${db.array(sichtbareProjekte)}::uuid[])
@@ -223,7 +233,7 @@ export const dbNotes: NoteRepository = {
                   OR n.project_id IS NULL)
            ORDER BY n.deleted_at DESC`
       : await db`
-          SELECT n.id, n.title AS titel, p.name AS project_name, n.deleted_at, n.created_by
+          SELECT n.id, n.title AS titel, p.name AS project_name, p.projektnummer AS project_nummer, n.deleted_at, n.created_by
             FROM notes n LEFT JOIN projects p ON p.id = n.project_id
            WHERE n.deleted_at IS NOT NULL
            ORDER BY n.deleted_at DESC`;
@@ -231,6 +241,7 @@ export const dbNotes: NoteRepository = {
       id: String(r.id),
       titel: String(r.titel),
       projectName: r.project_name ? String(r.project_name) : null,
+      projektnummer: r.project_nummer ? String(r.project_nummer) : null,
       geloeschtAm: alsIso(r.deleted_at),
       createdById: r.created_by ? String(r.created_by) : null,
     }));

@@ -34,7 +34,7 @@ import { getVisibleProjectIds, canSeeProjectByName, type UserCtx } from "../../d
 import type { ProjectUpdate } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit, emitForProjectName } from "../events.js";
-import { pruefeProjektnummer, PROJEKTNUMMER_BEISPIEL } from "../../data/projektnummer.js";
+import { pruefeProjektnummer, PROJEKTNUMMER_BEISPIEL, mitProjektnummer } from "../../data/projektnummer.js";
 
 // Hilfs-Builder: holt UserCtx aus dem Hono-Context — eine Stelle weniger,
 // an der man c.var-Felder vergisst.
@@ -373,7 +373,12 @@ projectsRoutes.get("/projects/:name/export.md", async (c) => {
 
   const body = lines.join("\n");
   c.header("Content-Type", "text/markdown; charset=utf-8");
-  c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(info.name)}.md"`);
+  // Die Projektnummer steht vorne im Dateinamen (Migration 052) — wer zwanzig
+  // Dossiers in einem Ordner hat, sortiert sie damit nach Akte statt nach
+  // Projektname. Bereinigt, weil die Nummer Freitext ist und ein `/` unter
+  // Windows keine Zeichenfolge, sondern eine Pfadtrennung waere.
+  const dateiname = mitProjektnummer(info.projektnummer, `${info.name}.md`);
+  c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(dateiname)}"`);
   return c.body(body);
 });
 

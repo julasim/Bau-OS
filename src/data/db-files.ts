@@ -15,6 +15,11 @@ function rowToFile(row: Record<string, unknown>): FileEntry {
     contentText: row.content_text ? String(row.content_text) : null,
     summary: row.summary ? String(row.summary) : null,
     project: row.project_name ? String(row.project_name) : null,
+    /** Die Projektnummer des Projekts (Migration 052). Sie steht neben
+     *  dem Namen, weil die Oberflaeche sie ueberall dort zeigt, wo heute
+     *  nur der Name stand — ohne sie muesste jede Ansicht sie einzeln
+     *  nachschlagen. */
+    projektnummer: row.project_nummer ? String(row.project_nummer) : null,
     tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
     analyzed: !!row.analyzed,
     createdAt: alsIso(row.created_at),
@@ -65,7 +70,7 @@ export const dbFiles: FileRepository = {
     const [row] = await db`
       INSERT INTO files (id, filename, filepath, filetype, filesize, mime_type, content_text, project_id, blob, uploaded_by, created_at, updated_at)
       VALUES (${id}, ${file.filename}, ${file.filepath}, ${ext}, ${file.filesize}, ${file.mimeType ?? null}, ${safeContentText}, ${projectId}, ${file.blob ?? null}, ${file.uploadedById ?? null}, ${now}, ${now})
-      RETURNING id, filename, filepath, filetype, filesize, mime_type, content_text, summary, tags, analyzed, created_at, updated_at, (SELECT name FROM projects WHERE id = project_id) as project_name
+      RETURNING id, filename, filepath, filetype, filesize, mime_type, content_text, summary, tags, analyzed, created_at, updated_at, (SELECT name FROM projects WHERE id = project_id) as project_name, (SELECT projektnummer FROM projects WHERE id = project_id) as project_nummer
     `;
 
     if (!row) throw new Error("Datei konnte nicht gespeichert werden");
@@ -87,7 +92,7 @@ export const dbFiles: FileRepository = {
       }
       return (
         await db`
-        SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
+        SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name, p.projektnummer AS project_nummer FROM files f
         LEFT JOIN projects p ON f.project_id = p.id
         WHERE p.name = ${project}
         ORDER BY f.created_at DESC
@@ -101,7 +106,7 @@ export const dbFiles: FileRepository = {
     if (visibleProjectIds !== undefined && visibleProjectIds.length > 0) {
       return (
         await db`
-        SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
+        SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name, p.projektnummer AS project_nummer FROM files f
         LEFT JOIN projects p ON f.project_id = p.id
         -- ::uuid[] ist Pflicht: project_id ist uuid, die Scope-IDs kommen als
         -- JS-Strings. Ohne Cast wirft Postgres "operator does not exist:
@@ -120,7 +125,7 @@ export const dbFiles: FileRepository = {
     }
     return (
       await db`
-      SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
+      SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name, p.projektnummer AS project_nummer FROM files f
       LEFT JOIN projects p ON f.project_id = p.id
       ORDER BY f.created_at DESC
       LIMIT ${limit}
@@ -133,7 +138,7 @@ export const dbFiles: FileRepository = {
     // f.id::text verhindert "invalid input syntax for type uuid" wenn filename
     // oder filepath statt einer UUID uebergeben wird.
     const [row] = await db`
-      SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
+      SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name, p.projektnummer AS project_nummer FROM files f
       LEFT JOIN projects p ON f.project_id = p.id
       WHERE f.id::text = ${id} OR f.filename = ${id} OR f.filepath = ${id}
       LIMIT 1
@@ -176,7 +181,7 @@ export const dbFiles: FileRepository = {
       // "operator does not exist: uuid = text" — und zwar nur bei Non-Admins.
       return (
         await db`
-        SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
+        SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name, p.projektnummer AS project_nummer FROM files f
         LEFT JOIN projects p ON f.project_id = p.id
         WHERE f.project_id = ANY(${db.array(visibleProjectIds)}::uuid[])
           AND (
@@ -191,7 +196,7 @@ export const dbFiles: FileRepository = {
     }
     return (
       await db`
-      SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name FROM files f
+      SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name, p.projektnummer AS project_nummer FROM files f
       LEFT JOIN projects p ON f.project_id = p.id
       WHERE f.filename ILIKE ${like}
         OR f.content_text ILIKE ${like}

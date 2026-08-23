@@ -16,6 +16,7 @@ import BIcon from "../../components/BIcon.vue";
 // wird ausgeblendet statt leer angezeigt — eine leere Zelle sieht nach einem
 // Fehler aus, eine fehlende Spalte nach einer Regel.
 import { useCurrentUser } from "../../composables/useCurrentUser";
+import ProjektBezug from "../../components/ProjektBezug.vue";
 
 type Health = "red" | "amber" | "green";
 
@@ -143,8 +144,10 @@ onMounted(load);
             </span>
           </td>
           <td>
+            <!-- Nummer ueber dem Namen: die Spalte liest sich als Aktenliste,
+                 und alle Eintraege beginnen an derselben Stelle. -->
+            <div class="pf-num"><ProjektBezug :nummer="r.projektnummer" hinweis nur-nummer /></div>
             <div class="pf-name">{{ r.name }}</div>
-            <div v-if="r.projektnummer" class="pf-num">{{ r.projektnummer }}</div>
           </td>
           <td>{{ r.currentPhase ?? "—" }}</td>
           <td class="pf-col-prog">

@@ -62,6 +62,7 @@ function rowToMeeting(row: Record<string, unknown>): Meeting {
     id: String(row.id),
     projectId: String(row.project_id),
     projectName: row.project_name ? String(row.project_name) : null,
+    projektnummer: row.project_nummer ? String(row.project_nummer) : null,
     date: dateStr,
     startTime: cleanTime(row.start_time),
     endTime: cleanTime(row.end_time),
@@ -88,7 +89,7 @@ function rowToMeeting(row: Record<string, unknown>): Meeting {
 
 const SELECT = `
   SELECT m.*,
-         p.name AS project_name,
+         p.name AS project_name, p.projektnummer AS project_nummer,
          u.username AS created_by_username,
          COALESCE(
            (SELECT json_agg(json_build_object('id', tm.id, 'name', tm.name))

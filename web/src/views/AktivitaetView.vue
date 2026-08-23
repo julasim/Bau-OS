@@ -17,6 +17,7 @@ import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
 import { useEvents } from "../composables/useEvents";
 import { formatDate } from "../utils/format";
+import ProjektBezug from "../components/ProjektBezug.vue";
 
 interface Eintrag {
   typ: "note" | "task" | "termin" | "meeting" | "bautagebuch" | "phase" | "invoice" | "entscheidung" | "file";
@@ -24,6 +25,7 @@ interface Eintrag {
   titel: string;
   projectId: string | null;
   projectName: string | null;
+  projektnummer?: string | null;
   geaendertAm: string;
   angelegtVon: string | null;
 }
@@ -134,7 +136,7 @@ onMounted(laden);
             {{ ART[e.typ]?.label ?? e.typ }}
           </span>
           <span class="akt-titel">{{ e.titel }}</span>
-          <span v-if="e.projectName" class="akt-projekt">{{ e.projectName }}</span>
+          <ProjektBezug v-if="e.projectName" class="akt-projekt" :name="e.projectName" :nummer="e.projektnummer" />
           <span v-if="e.angelegtVon" class="akt-wer" :title="'Angelegt von ' + e.angelegtVon">
             {{ e.angelegtVon }}
           </span>

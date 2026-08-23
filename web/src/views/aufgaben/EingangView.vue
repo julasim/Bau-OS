@@ -19,6 +19,7 @@
 import { ref, computed, onMounted, nextTick, useTemplateRef } from "vue";
 import { api } from "../../api";
 import { useEvents } from "../../composables/useEvents";
+import ProjektBezug from "../../components/ProjektBezug.vue";
 import {
   useAufgabensystem,
   alsStunden,
@@ -159,7 +160,7 @@ useEvents(["task"], () => {
         <li v-for="a in gezeigt" :key="a.id" class="au-zeile">
           <div class="au-zeile-kopf">
             <span class="au-zeile-text">{{ a.text }}</span>
-            <span v-if="a.project" class="au-zeile-projekt">{{ a.project }}</span>
+            <ProjektBezug v-if="a.project" class="au-zeile-projekt" :name="a.project" :nummer="a.projektnummer" />
           </div>
 
           <div class="au-zeile-steuerung">
