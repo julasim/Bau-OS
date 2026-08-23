@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
-import { HAS_DB } from "./helpers/acl-fixture.js";
+import { HAS_DB, namensraum } from "./helpers/acl-fixture.js";
 
 // Wie `db-notes` eine Notiz anhand eines Namens findet.
 //
@@ -24,7 +24,7 @@ import { HAS_DB } from "./helpers/acl-fixture.js";
 describe.skipIf(!HAS_DB)("db-notes — welche Notiz wird getroffen", () => {
   let noteRepo: (typeof import("../src/data/index.js"))["noteRepo"];
   let db: ReturnType<(typeof import("../src/db/client.js"))["getDb"]>;
-  const PRAEFIX = `sel-${Date.now()}`;
+  const PRAEFIX = `sel-${namensraum()}`;
 
   beforeAll(async () => {
     ({ noteRepo } = await import("../src/data/index.js"));

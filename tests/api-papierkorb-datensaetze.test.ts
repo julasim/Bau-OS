@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from "./helpers/acl-fixture.js";
+import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture, namensraum } from "./helpers/acl-fixture.js";
 
 // Papierkorb für einzelne Datensätze (Migration 049).
 //
@@ -13,7 +13,7 @@ import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from
 // noch zu sehen bekommt.
 describe.skipIf(!HAS_DB)("Papierkorb für Notizen, Aufgaben und Termine", () => {
   let fx: AclFixture;
-  const S = Date.now();
+  const S = namensraum();
 
   const korb = (token: string) => fx.app.request("/api/papierkorb", { headers: authHeader(token) });
 

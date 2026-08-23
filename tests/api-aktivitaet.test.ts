@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from "./helpers/acl-fixture.js";
+import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture, namensraum } from "./helpers/acl-fixture.js";
 
 // Aktivität — „was hat sich zuletzt getan".
 //
@@ -16,7 +16,7 @@ describe.skipIf(!HAS_DB)("Aktivität", () => {
   // Konten, die Waisen früherer Läufe bleiben in der Test-Datenbank liegen
   // und tauchen für Admins weiter im Feed auf. Mit festen Titeln schlug
   // deshalb die Papierkorb-Prüfung ab dem zweiten Lauf fehl.
-  const P = `aktiv-${Date.now()}`;
+  const P = `aktiv-${namensraum()}`;
 
   beforeAll(async () => {
     fx = await setupAclFixture("aktiv", { geldRecht: true });

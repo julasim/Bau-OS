@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from "./helpers/acl-fixture.js";
+import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture, namensraum } from "./helpers/acl-fixture.js";
 
 // `?projectId=` als umbenennungsfeste Alternative zu `?project=<Name>`.
 //
@@ -9,7 +9,7 @@ import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from
 // Antwort ist dann eine leere Liste, kein Fehler.
 describe.skipIf(!HAS_DB)("Projektbezug über die stabile ID", () => {
   let fx: AclFixture;
-  const P = `pid-${Date.now()}`;
+  const P = `pid-${namensraum()}`;
 
   beforeAll(async () => {
     fx = await setupAclFixture("pid");

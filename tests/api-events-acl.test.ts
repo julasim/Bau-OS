@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { HAS_DB, setupAclFixture, jsonHeader, type AclFixture, type FixtureUser } from "./helpers/acl-fixture.js";
+import {
+  HAS_DB,
+  setupAclFixture,
+  jsonHeader,
+  type AclFixture,
+  type FixtureUser,
+  namensraum,
+} from "./helpers/acl-fixture.js";
 
 // Der Live-Kanal (SSE) war die letzte Stelle im System ohne Rechtefilter:
 // `emit()` schrieb JEDES Ereignis an JEDEN verbundenen Client, und das Ereignis
@@ -26,7 +33,7 @@ describe.skipIf(!HAS_DB)("API — Live-Kanal: Ereignisse und Rechte", () => {
   let resolveScope: EventsRoute["resolveScope"];
   let projectRepo: ProjectRepo;
 
-  const STAMP = Date.now();
+  const STAMP = namensraum();
 
   // Sammelt alles, was ein Abonnent mit dem Scope dieses Nutzers bekaeme.
   // Rueckgabe: die empfangenen Ereignisse + unsubscribe.

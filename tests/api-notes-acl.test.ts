@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from "./helpers/acl-fixture.js";
+import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture, namensraum } from "./helpers/acl-fixture.js";
 
 // Notizen: Rechte und persönliche Notizen.
 //
@@ -23,7 +23,7 @@ import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from
 // betreffen Entscheidung und Zugriff nachweislich dieselbe Zeile.
 describe.skipIf(!HAS_DB)("Notizen — Rechte und persönliche Notizen", () => {
   let fx: AclFixture;
-  const S = Date.now();
+  const S = namensraum();
 
   const notiz = (token: string, content: string, project?: string) =>
     fx.app.request("/api/notes", {

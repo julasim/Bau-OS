@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from "./helpers/acl-fixture.js";
+import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture, namensraum } from "./helpers/acl-fixture.js";
 
 // Type-Queries fuers entity-spezifische Setup (kein Laufzeit-`any`).
 type FileRepo = (typeof import("../src/data/index.js"))["fileRepo"];
@@ -32,7 +32,7 @@ describe.skipIf(!HAS_DB)("API — Volltextsuche: Treffer und Rechte", () => {
   // Eindeutig genug, dass kein Altbestand in der Test-DB mitzaehlt. Jeder
   // Zweig bekommt seinen eigenen Begriff, damit die Tests sich nicht
   // gegenseitig Treffer in die Ergebnisliste schieben.
-  const STAMP = Date.now();
+  const STAMP = namensraum();
   const BEGRIFF = `Zwischendecke${STAMP}`; // Notiz + Aufgabe
   const PROJEKT_BEGRIFF = `Dachgeschossausbau${STAMP}`; // nur Projektbeschreibung
   const DATEI_BEGRIFF = `Bewehrungsplan${STAMP}`; // nur files.content_text

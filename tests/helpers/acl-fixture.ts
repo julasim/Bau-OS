@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 // Gemeinsamer Fixture-Helper fuer ACL-/IDOR-/Auth-Integrationstests (INF-6).
 //
 // Legt gegen die echte DB drei Nutzer an — A (Ersteller mit Projektzugriff),
@@ -124,3 +125,33 @@ export const jsonHeader = (token: string) => ({
   Authorization: `Bearer ${token}`,
   "Content-Type": "application/json",
 });
+
+/**
+ * Ein Namensraum, der sich mit dem keiner anderen Testdatei überschneiden kann.
+ *
+ * ── Wofür das gebraucht wird ───────────────────────────────────────────────
+ *
+ * Die Testdateien laufen parallel gegen DIESELBE Datenbank. Damit jede nur
+ * ihre eigenen Datensätze wieder abräumt, hängt sie eine Kennung an ihre
+ * Texte und löscht am Ende `... WHERE text LIKE '%<Kennung>%'`. Der
+ * Platzhalter vorn ist nötig, weil die Kennung meist am Textende steht.
+ *
+ * Bis hierher war die Kennung ein blankes `Date.now()` — und genau daran
+ * scheiterte der Gesamtlauf etwa jedes vierte Mal an wechselnden Stellen:
+ * im parallelen Lauf werden alle Dateien nahezu gleichzeitig geladen, zwei
+ * `Date.now()` in derselben Millisekunde sind der Normalfall, nicht die
+ * Ausnahme. Dann räumt die eine Datei mitten im Lauf die Datensätze der
+ * anderen weg. Sichtbar wurde das als 404 auf einen Datensatz, dessen Anlage
+ * zwei Zeilen darüber mit 201 quittiert worden war.
+ *
+ * ── Warum die Länge zählt ──────────────────────────────────────────────────
+ *
+ * Die Kennung ist IMMER gleich lang (13 Stellen Zeitstempel + 4 Stellen
+ * Zufall). Zwei verschiedene Zeichenketten gleicher Länge können einander
+ * nicht als Teilzeichenkette enthalten — damit kann kein `%…%` einer Datei
+ * je auf den Text einer anderen passen. Der Zeitstempel bleibt vorn, weil er
+ * beim Nachsehen in der Datenbank verrät, aus welchem Lauf ein Rest stammt.
+ */
+export function namensraum(): string {
+  return `${Date.now()}${randomUUID().slice(0, 4)}`;
+}
