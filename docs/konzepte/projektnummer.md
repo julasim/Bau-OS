@@ -138,36 +138,64 @@ Umlaute werden auf eine Schreibweise gebracht (Unicode-Normalform C), damit
 Datenbank und Programm tun das gleich; ein Test hält beide Seiten
 gegeneinander.
 
-## Beim Umstellen einer bestehenden Datenbank
+## Was beim Übernehmen fremder Daten passiert
 
-Migration 052 schreibt Bestandsdaten um. Sie bereinigt dabei auch Leerraum in
-vorhandenen Nummern — dadurch können zwei Einträge, die für Menschen schon
-immer dieselbe Nummer waren, erstmals als Doppel auffallen.
+PATIO läuft noch nicht mit Echtdaten — die Migrationen 052 und 054 sind
+deshalb keine Umstellung eines Bestands, sondern die **Vorbereitung auf die
+Datenübernahme**. Sie greifen erst, wenn Projekte aus einer anderen Quelle
+hereinkommen: aus einer Excel-Liste, aus dem alten Vault, aus einer Papierakte,
+die jemand abtippt.
 
-In dem Fall **bricht die Migration mit Klartext ab** und nennt die
-betroffenen Nummern:
+### Projekte ohne Nummer
+
+Ein Projekt, das ohne Nummer hereinkommt, bekommt einen Platzhalter
+(`OHNE-NUMMER-…`), damit die Spalte überhaupt Pflicht sein kann. Er ist
+erkennbar und wird nirgends wie eine Aktennummer angezeigt — siehe oben. Das
+Übernahme-Skript (`scripts/migrate-vault-to-db.ts`) setzt ihn ebenfalls: aus
+einem Ordnernamen lässt sich keine Aktennummer ableiten, und eine erfundene
+wäre schlimmer als ein sichtbares Loch.
+
+### Leerraum, den man nicht sieht
+
+Aus Excel-Ausgaben und handeditierten Dateien kommen regelmäßig Zeichen mit,
+die niemand tippt: Tabulator, Zeilenumbruch, geschütztes Leerzeichen,
+Byte-Reihenfolge-Marke. Migration 054 entfernt sie mit **derselben Regel, die
+PATIO auf jede Eingabe anwendet** — und ein Test hält beide Seiten
+gegeneinander, weil sie beim ersten Bau auseinandergingen.
+
+### Wenn dabei zwei gleiche Nummern auftauchen
+
+Die Bereinigung kann Doppel sichtbar machen, die vorher versteckt waren: zwei
+Einträge, die sich nur durch ein unsichtbares Zeichen unterschieden, sind
+danach dieselbe Nummer. In dem Fall **bricht die Migration ab und der Dienst
+kommt nicht hoch** — mit dieser Meldung:
 
 ```
-Migration 052: mehrfach vergebene Projektnummern:
+Migration 054: mehrfach vergebene Projektnummern:
   saztg-2026-001 → Sanierung Hauptstraße, Wohnhaus Huber
 Bitte in der Datenbank vereindeutigen und den Dienst erneut starten.
 ```
 
-Die Meldung nennt die **Projektnamen**, nicht nur die Nummer: der Abbruch
-rollt die Bereinigung mit zurück, die genannte Nummer stünde danach in keiner
-Zeile mehr — man würde danach suchen und nichts finden.
+Die Meldung nennt die **Projektnamen**, nicht nur die Nummer: der Abbruch rollt
+die Bereinigung mit zurück, die genannte Nummer stünde danach in keiner Zeile
+mehr — man würde danach suchen und nichts finden.
 
-Das ist Absicht: eine Datenbank, die ohne die Eindeutigkeit startet, während
-das Programm sich darauf verlässt, wäre schlechter als ein Dienst, der mit
-einer klaren Meldung stehen bleibt. Die Migration läuft in einer Transaktion —
-beim Abbruch bleibt das Schema unversehrt.
+Das Stehenbleiben ist Absicht. Eine Datenbank, die ohne die Eindeutigkeit
+startet, während das Programm sich darauf verlässt, wäre schlechter als ein
+Dienst, der mit einer klaren Meldung wartet. Die Migration läuft in einer
+Transaktion — beim Abbruch bleibt das Schema unversehrt, es geht nichts
+verloren.
 
-**Vor dem ersten Start auf einem Server mit echten Daten eine Sicherung
-ziehen** (siehe [Sicherung](/betrieb/sicherung)).
+### Was nicht angefasst wird
 
-Migration 054 bereinigt zusätzlich Leerraum, den 052 stehen ließ — Tabulator,
-Zeilenumbruch, geschütztes Leerzeichen, Byte-Reihenfolge-Marke. Solche Werte
-entstehen nicht über PATIO, wohl aber beim Übernehmen fremder Daten. Dabei
-können zwei Einträge, die für Menschen schon immer dieselbe Nummer waren,
-erstmals als Doppel auffallen; dann bricht 054 mit derselben Klartext-Meldung
-ab und nennt die **Projektnamen**.
+Nummern, die länger als 60 Zeichen sind oder Steuerzeichen enthalten, meldet
+054 als Warnung und lässt sie stehen. Eine Aktennummer stillschweigend
+abzuschneiden ist keine Aufgabe einer Migration — das entscheidet das Büro.
+Betroffen ist nur, wer die Nummer selbst ändern will; die übrigen Stammdaten
+bleiben bearbeitbar.
+
+::: tip Vor einer Datenübernahme
+Erst eine Sicherung ziehen (siehe [Sicherung](/betrieb/sicherung)), dann
+importieren. Solange PATIO leer läuft, kostet ein Fehlversuch nichts — danach
+schon.
+:::

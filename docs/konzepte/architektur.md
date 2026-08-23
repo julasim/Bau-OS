@@ -99,16 +99,18 @@ Ausführlich: [Die Projektnummer](/konzepte/projektnummer).
 ::: warning Der Filter wird in den Routen ERMITTELT, nicht in den Repositories
 Die Aufteilung ist wichtig, weil sie erklärt, wo Lücken entstehen:
 
-- **16 Routen** rufen `getVisibleProjectIds()` auf und reichen das Ergebnis
-  weiter.
+- **17 Routen** rufen `getVisibleProjectIds()` auf und reichen das Ergebnis
+  weiter; **15** prüfen einzeln über `canSeeProject()` bzw.
+  `canSeeProjectByName()`.
 - **6 Repositories** (`db-search`, `db-files`, `db-portfolio`, `db-meetings`,
   `db-bautagebuch`, `db-entscheidungen`) wenden eine übergebene Liste an —
   **keines ermittelt sie selbst.**
 
 Das heißt: ein Repository filtert zwar, aber nur mit dem, was die Route ihm
 gibt. Eine neue Route, die den Aufruf vergisst, liefert ungefiltert aus. Genau
-so sind in diesem Projekt mehrere Lücken entstanden — die auffälligste war der
-Word-Export, über den sich die gesamte Rechteprüfung umgehen ließ.
+so sind in diesem Projekt **dreizehn** Lücken entstanden — die vollständige
+Liste mit dem, was jeweils offen lag, steht unter
+[Zugriffsrechte](/sicherheit/zugriff).
 
 Die Umkehrung — Filterung fest als `WHERE`-Klausel im Repository, wo man sie
 nicht vergessen kann — ist als eigenes Arbeitspaket vorgesehen. Bis dahin gilt
@@ -127,31 +129,41 @@ src/
 │   ├── server.ts        Hono-App, Anmeldung, Middleware, statische Auslieferung
 │   ├── auth.ts          JWT, Benutzerkonten, Passwörter (bcrypt)
 │   ├── geld.ts          EINE Filterschicht für alle Geldbeträge
-│   ├── projekt-bezug.ts löst `?projectId=` auf einen Projektnamen auf
+│   ├── projekt-bezug.ts löst `?projectId=`, `?projektnummer=` und `?project=` auf
 │   ├── crypto.ts        Feld-Verschlüsselung (AES-GCM)
 │   ├── events.ts        Event-Bus mit Rechtefilter
 │   ├── sse-tickets.ts   Einmal-Tickets für den SSE-Aufbau
 │   ├── file-validation.ts  Endung + Magic Bytes bei Uploads
-│   └── routes/          29 Route-Dateien je Domäne
+│   └── routes/          30 Route-Dateien je Domäne
 ├── data/
 │   ├── index.ts   einzige Import-Fläche für alle Repositories
 │   ├── access.ts  Sichtbarkeit und ACL
 │   ├── types.ts   Entities und Repository-Verträge
-│   └── db-*.ts    24 Postgres-Repositories
+│   ├── konflikt.ts      Konflikt-Zähler `rev`
+│   ├── projektnummer.ts Regeln der Projektnummer
+│   ├── zeitstempel.ts   jedes Datum verlässt den Server als ISO 8601
+│   └── db-*.ts    25 Postgres-Repositories
 ├── db/
 │   ├── client.ts  Verbindungspool (postgres.js)
 │   ├── migrate.ts Migrations-Runner mit Advisory-Lock
-│   └── migrations/ 51 SQL-Dateien, forward-only
+│   └── migrations/ 56 SQL-Dateien, forward-only (bis `054`)
 ├── workspace/     Lesezugriff auf die Netzfreigabe (Rueckfall fuer alte
 │                  Datei-Datensaetze) + Text aus PDF und DOCX ziehen
 └── export/        DOCX-Erzeugung aus Word-Vorlagen
 
-web/               Vue 3 + Pinia + Vue Router (eigenes Vite-Projekt)
+web/               Vue 3 + Vue Router (eigenes Vite-Projekt)
 electron/          Hülle des Arbeitsplatz-Programms (lädt die Oberfläche vom Server)
 docs/              diese Dokumentation (VitePress) — der Server liefert sie unter /docs/
 ```
 
 Detaillierte Auflistung: [Dateistruktur](/referenz/dateistruktur).
+
+::: info Pinia ist eingebunden, aber leer
+`web/src/main.ts` registriert Pinia; einen Store gibt es nicht. Geteilter
+Zustand liegt in Composables (`useAufgabensystem`, `useEvents`, `useTheme`) —
+das reicht für eine Oberfläche dieser Größe und spart eine zweite Schicht,
+in der derselbe Zustand ein zweites Mal steht.
+:::
 
 ## Stack
 
@@ -160,7 +172,7 @@ Detaillierte Auflistung: [Dateistruktur](/referenz/dateistruktur).
 | Laufzeit | Node.js 24 (Container), TypeScript |
 | HTTP-API | Hono |
 | Datenbank | PostgreSQL 16 via `postgres.js` |
-| Frontend | Vue 3 + Pinia + Vue Router + Vite + Tailwind v4 |
+| Frontend | Vue 3 + Vue Router + Vite + Tailwind v4 |
 | Live-Updates | Server-Sent Events |
 | Dokumenten-Export | `docxtemplater` auf Basis eigener Word-Vorlagen |
 | Zeitplanung | `node-cron` (Europe/Vienna) |

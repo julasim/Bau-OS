@@ -514,8 +514,69 @@ Update-Dienst. Einzelheiten: [Arbeitsplatz-Programm](/betrieb/arbeitsplatz).
 - Das Programmpaket enthielt den **kompletten Server-Code** samt Datenbank-
   Treiber — 2896 Einträge statt sechs, auf jedem Bürorechner
 
+## Die Oberfläche aus PATIO Desktop
+**21.08.2026**
+
+Der Server trägt jetzt dasselbe Erscheinungsbild wie PATIO Desktop:
+Helvetica statt Inter, 13 px Grundschrift, durchgehend 7 px Radius, keine
+Schatten, schwarze Navigationsleiste über eine eigene Hell/Dunkel-Achse.
+
+- **Eine globale Leiste oben** mit Bereichsnamen und Brotkrumen. Dadurch
+  bleiben Navigations- und Listenspalte über die volle Höhe stehen — vorher
+  lag der Inhalt als Grid-Kind daneben
+- **Seitenleiste hell oder dunkel** umschaltbar
+- **Auf schmalen Bildschirmen** lässt sich die Listenspalte einblenden; unter
+  768 px war sie vorher unerreichbar
+
+### Beim Bauen gefunden
+
+- Die Einstellungen boten einen Umschalter **„Workspace-Variante: Studio /
+  Atelier"**. Das neue Stylesheet kennt nur noch „Studio" — der Knopf wäre
+  stehengeblieben und hätte bei „Atelier" eine Oberfläche ohne eine einzige
+  Regel hinterlassen. Er ist mit raus, und ein alter Eintrag im
+  Browserspeicher kann den ungültigen Wert nicht mehr weitertragen
+- Die neue Leiste lud das **Firmen-Branding ein zweites Mal**; die
+  Navigationsleiste tat es längst. Jetzt eine geteilte Quelle — gemessen genau
+  ein Aufruf je Seite statt zwei
+
+Nicht dabei: der Fokus-Modus. Er setzt eine Kontext-Seitenleiste voraus, die
+es hier noch nicht gibt; ohne sie wäre das Projekt eine 60 px schmale Leiste
+ohne Navigation.
+
+---
+
+## Der Aufgabenreiter bekommt vier Arbeitsweisen
+**23.08.2026** · Migrationen 050/051
+
+Neben der gewohnten Liste stehen jetzt **Eingang**, **Matrix** und **Mein
+Tag**. Umgeschaltet wird über einen Streifen oben in der Leiste.
+
+Ausführlich: [Das Aufgabensystem](/konzepte/aufgabensystem).
+
+- **Rang 1 bis 4** statt der nie benutzten Priorität — dringend und wichtig
+  sind zwei Fragen, nicht eine Achse. Der Standard ist 3: der Normalfall wird
+  nicht markiert
+- **Geschätzter Aufwand** in groben Stufen (15/30/60/120/180/240 Minuten),
+  damit sich die Tagessumme im Kopf nachrechnen lässt
+- **Mein Tag** rechnet gegen ein Budget von fünf Fokusstunden und zeigt die
+  Auslastung. **Gesperrt wird nichts** — eine harte Grenze wird nach der
+  zweiten Umgehung zur Gewohnheit, eine sichtbare Zahl nicht
+- **Der Tagesplan gehört der Person, nicht dem Büro**, und wird um Mitternacht
+  für alle geleert. Keine Rückstandsliste, keine Übertragung
+
+### Beim Bauen gefunden
+
+- Das Tagesbudget hieß zuerst `budget` — und der **Geld-Filter warf es weg**,
+  weil er Geldbeträge am Feldnamen erkennt. Für jedes Konto ohne Geld-Recht
+  kam ein leeres Objekt zurück: Status 200, kein Fehler, kein Log, ein Balken,
+  der auf null stehenblieb
+- Der **Gesamtlauf der Tests war flackernd**, weil sich Namensräume paralleler
+  Testdateien überlappen konnten
+
+---
+
 ## Die Projektnummer wird zur Kennung
-**23.08.2026** · Migrationen 052/053
+**23.08.2026** · Migrationen 052–054
 
 Jedes Projekt trägt jetzt eine Nummer, die Sie vergeben — und unter der es im
 ganzen Programm geführt wird. Bisher war das ein optionales Freitextfeld unter
@@ -556,3 +617,29 @@ Ausführlich: [Die Projektnummer](/konzepte/projektnummer).
   Registerkarte „Offen" zeigte deshalb nichts an, während über tausend offene
   Aufgaben vorlagen, und der Statuswechsel in der Detailansicht tat still gar
   nichts
+- **`POST /api/projects` mit einem fremden Projektnamen war ein Beitritt.**
+  Wer den Namen kannte, trug sich damit selbst in die Berechtigungstabelle ein
+  — und überschrieb im selben Zug Projektnummer und Standort. Ein Projekt im
+  Papierkorb kam dabei zurück
+- **Drei Team-Routen prüften den Zugriff nicht.** Über sie ließen sich
+  Mitglieder eines fremden Projekts anlegen, ändern und entfernen. Die
+  Zuordnung kennt keinen Papierkorb — das Entfernen war endgültig
+- **Der Vorlagen-Export gab fremde Stammdaten aus.** `?project=` wurde
+  eingesetzt, ohne zu prüfen, ob der Fragende das Projekt sehen darf
+- **Der Platzhalter für Projekte ohne Nummer stand in Word-Vorlagen, im
+  Bericht und im Dossier** — als wäre `OHNE-NUMMER-…` eine Aktennummer
+- **Die Projektauswahl in der Aufgaben-Detailansicht zeigte seit Mai JSON.**
+  Sie erwartete eine Liste von Namen, die Route liefert Objekte
+- **Die Bereinigung der Migration stimmte nicht mit dem Programm überein.**
+  Sie versprach im Kopfkommentar, „genauso zu normalisieren, wie es die
+  Anwendung tut" — gemessen entfernte sie Tabulator, Zeilenumbruch,
+  geschütztes Leerzeichen und Byte-Reihenfolge-Marke nicht. Migration `054`
+  bringt beide Seiten zusammen, und ein Test hält sie gegeneinander
+- **`lower()` in Postgres und `toLowerCase()` in JavaScript sind nicht
+  dasselbe** — gemessen in 9 von 1181 Zeichen. Verglichen wird die Nummer
+  jetzt auf beiden Seiten der Abfrage von der Datenbank
+- **Vier Ansichten benutzten eine Komponente, die sie nicht importiert
+  hatten.** Vue rendert so etwas als unbekanntes HTML-Element: keine Warnung,
+  kein Fehler, die Stelle bleibt einfach leer. Weder Typprüfung noch Linter
+  noch Bau noch die Testsuite haben es bemerkt — jetzt prüft ein eigener Test
+  jede `.vue`-Datei, und er fand sofort einen zweiten, älteren Fall

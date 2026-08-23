@@ -70,8 +70,9 @@ Stundenerfassung, im Bautagebuch), bedienen es aber nicht.
 
 | Bereich | Umfang |
 |---|---|
-| **Projekte** | Stammdaten, Sub-Projekte, Bauherr-Verknüpfung, Module je Projekt zuschaltbar |
+| **Projekte** | Stammdaten, Sub-Projekte, Bauherr-Verknüpfung, Module je Projekt zuschaltbar. Die [Projektnummer](/konzepte/projektnummer) vergeben Sie, und das Projekt wird überall unter ihr geführt |
 | **Aufgaben & Termine** | Zuweisung an Team-Mitglieder, Kalenderansicht |
+| **[Aufgabensystem](/konzepte/aufgabensystem)** | Eingang, Matrix und Tagesplan im selben Reiter — Rang statt Priorität, Tagesbudget mit sichtbarer Auslastung |
 | **Notizen** | Markdown-Aktenvermerke, projektverknüpft |
 | **Meetings** | Protokolle mit Action-Items, die per Klick zu Aufgaben werden |
 | **Bautagebuch** | Tageseinträge mit Wetter, Personal, Vorkommnissen |

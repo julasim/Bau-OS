@@ -37,6 +37,36 @@
 
 > ## ⇥ Woran gerade gearbeitet wird
 >
+> ### Stand 23.08.2026 — 582 Tests, Migrationen bis 054
+>
+> Seit AP12 kamen drei Runden dazu (HEAD `ad9dde8`, gepusht):
+>
+> - **AP9 Schritt 1+2** (21.08.): SIMA-Designsystem und globale Topbar aus
+>   PATIO Desktop übernommen. Schritt 3 (Fokus-Modus) fehlt noch — er setzt
+>   eine Kontext-Seitenleiste voraus, die es serverseitig nicht gibt.
+> - **Aufgabensystem Stufe 1** (Migrationen 050/051): Rang 1–4, grob
+>   gerasterter Aufwand, Tagesplan je Person, Tageswechsel um Mitternacht.
+>   Drei neue Ansichten im Aufgabenreiter (Eingang, Matrix, Mein Tag), der
+>   Umschalter sitzt in der **Topbar** — die einzige Stelle, die in allen vier
+>   Arbeitsweisen gleich liegt. Doku: `docs/konzepte/aufgabensystem.md`.
+>   **Noch nicht gebaut:** der Verfall von Rang 4 nach 30 Tagen.
+> - **Die Projektnummer ist die Kennung** (Migrationen 052–054): Pflicht,
+>   eindeutig über `lower()` (Papierkorb eingeschlossen), frei im Format,
+>   dritte Adressierungsform `?projektnummer=`, in 14 Ansichten, in Dateinamen
+>   und als Vorschlag für Rechnungsnummern; frühere Nummern bleiben auffindbar.
+>   Doku: `docs/konzepte/projektnummer.md`.
+>
+> **Dabei dreizehn Rechte-Lücken geschlossen** (alle Altbestand, jede vor dem
+> Fix rot nachgewiesen) — acht Projekt-Unterrouten ohne Prüfung, `POST
+> /projects` als Beitritt zu jedem fremden Projekt, drei Team-Routen, der
+> Vorlagen-Export. Vollständige Liste: `docs/sicherheit/zugriff.md`.
+>
+> ⚠ **Zwei Fallen, die hier viel Zeit gekostet haben:** ein in einer `.vue`
+> benutzter, aber nicht importierter Komponentenname fällt durch *jede*
+> Prüfung (`tests/vue-komponenten-importiert.test.ts` fängt das jetzt), und
+> Postgres' `lower()` weicht von JavaScripts `toLowerCase()` ab — Nummern
+> werden deshalb auf beiden Seiten der Abfrage von der Datenbank verglichen.
+>
 > **Die Warteschlange aus Abschnitt 0 des Plans
 > (`~/.claude/plans/dynamic-floating-pearl.md`) ist vollständig abgearbeitet —
 > Stufe 1 bis 6.** 265 → 399 Tests, Migrationen 042–049.
@@ -259,7 +289,7 @@ npm run build:electron   # Arbeitsplatz-Huelle nach dist-electron/
 npm run electron:dev     # Huelle lokal starten
 npm run dist             # portable .exe bauen (signiert, braucht das Zertifikat)
 
-npm test             # vitest run (alle Tests, 410 — nur MIT Datenbank, siehe unten)
+npm test             # vitest run (582 Tests — nur MIT Datenbank vollstaendig, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -279,11 +309,11 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 426 von 581 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 427 von 582 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
 > 34 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
 > Gemessen am 2026-08-23: `15 passed | 44 skipped (59)` Dateien,
-> `155 passed | 426 skipped (581)` Prüfungen. **Diese Zahlen wandern mit jedem
+> `155 passed | 427 skipped (582)` Prüfungen; mit Datenbank `580 passed | 2 skipped`. **Diese Zahlen wandern mit jedem
 > neuen Test** — wer sie hier liest, prüft sie besser einmal nach, statt sich
 > auf sie zu verlassen. Der Punkt bleibt derselbe: die Farbe sagt nichts.
 >

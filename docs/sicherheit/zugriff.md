@@ -89,15 +89,62 @@ Die gesamte Logik liegt in `src/data/access.ts` — niemand setzt sich die
 Sichtbarkeit selbst aus `user_projects` zusammen, deshalb ist genau diese eine
 Stelle prüfbar.
 
-**Wichtig ist aber, wo sie ausgewertet wird:** 16 Routen rufen
-`getVisibleProjectIds()` auf und reichen das Ergebnis weiter; sechs
-Repositories wenden eine übergebene Liste an, **ermitteln sie aber nie selbst**.
-Eine neue Route, die den Aufruf vergisst, liefert damit ungefiltert aus. Genau
-so sind hier mehrere Lücken entstanden — die auffälligste war der Word-Export,
-über den sich die Rechteprüfung vollständig umgehen ließ.
+**Wichtig ist aber, wo sie ausgewertet wird:** die Routen rufen
+`getVisibleProjectIds()` bzw. `canSeeProjectByName()` auf und reichen das
+Ergebnis weiter; die Repositories wenden eine übergebene Liste an, **ermitteln
+sie aber nie selbst**. Eine neue Route, die den Aufruf vergisst, liefert damit
+ungefiltert aus.
 
 Projekt-Zugriff vergeben und entziehen: `POST` und `DELETE` auf
 `/api/projects/:name/access`.
+
+::: danger Genau so sind hier Lücken entstanden — dreizehn Stück
+Das Verfahren ist richtig, aber es vergisst sich leicht. Am 23.08.2026 hat eine
+systematische Durchsicht **dreizehn Routen** gefunden, die den Aufruf nicht
+machten. Alle sind geschlossen; jede ist durch eine Prüfung festgehalten, die
+vor der Reparatur rot war.
+
+**Was möglich war — mit einem gültigen Konto und dem Projektnamen:**
+
+| Weg | Was ging |
+|---|---|
+| `POST /projects` mit fremdem Namen | Beitritt zu jedem fremden Projekt: Eintrag in `user_projects`, danach Notizen, Aufgaben, Dossier — und **schreibend** die Projektnummer überschreiben |
+| derselbe POST | ein gelöschtes Projekt aus dem Papierkorb zurückholen |
+| `GET .../notes/:note` | den vollen Inhalt jeder Notiz lesen |
+| `GET .../export.md` | das komplette Projekt-Dossier laden |
+| `GET .../notes`, `.../tasks`, `.../termine`, `.../children` | Listen fremder Projekte |
+| `PATCH .../tasks` | eine fremde Aufgabe abhaken |
+| `DELETE .../termine` | einen fremden Termin löschen |
+| `POST/PATCH/DELETE /team/:id/projects…` | Projektzuordnungen fremder Projekte setzen, ändern, löschen — ohne Papierkorb |
+| `GET /templates/:id/render?project=` | Stammdaten fremder Projekte (Nummer, Bauherr, Standort, Nutzung, Phase) |
+
+**Warum es so lange unsichtbar war:** die Lücken standen jeweils direkt neben
+richtigem Code. `POST /projects/:name/tasks` prüft sauber — das drei Zeilen
+weiter stehende `PATCH /projects/:name/tasks` prüfte nicht. In `team.ts`
+benutzen die beiden lesenden Routen den Sichtbarkeitsfilter korrekt, die drei
+schreibenden nicht. Beim Lesen sieht eine solche Datei bewacht aus.
+
+**Was daraus folgt:** wer hier eine Route ergänzt, ergänzt eine Zeile in
+`tests/api-projects-acl-luecke.test.ts`, `api-projekt-beitritt.test.ts` oder
+`api-team-projekt-acl.test.ts`. Der Projektname aus dem Pfad ist eine
+Behauptung des Aufrufers, keine Berechtigung.
+:::
+
+::: info Dass ein Projektname existiert, ist keine geschützte Auskunft
+`GET /projects/:name` antwortet mit 404, wenn es das Projekt nicht gibt, und
+mit 403, wenn man es nicht sehen darf. Der Statuscode verrät damit die
+Existenz. Das ist geprüft und bewusst so gelassen:
+
+Projekt- und Nummernraum sind eindeutig. `POST /projects` **muss** auf einen
+vergebenen Namen mit 409 antworten und auf einen freien mit 201 — eine
+Eindeutigkeit ohne Existenzauskunft gibt es nicht. Die Auskunft an einer
+Stelle zu schließen, während sie an der anderen offen bleiben muss, kostet nur
+Verständlichkeit: der Ersteller eines gelöschten Projekts bekäme dann „kein
+Zugriff" statt „nicht gefunden".
+
+Die Unterrouten prüfen trotzdem zuerst das Recht — dort geht es um **Inhalte**,
+nicht um die bloße Existenz eines Namens.
+:::
 
 ## Das Geld-Recht
 

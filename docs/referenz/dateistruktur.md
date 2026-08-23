@@ -10,31 +10,33 @@ src/
 ├── index.ts              — Einstiegspunkt und Boot-Sequenz
 ├── config.ts             — alle Konstanten und Umgebungsvariablen
 ├── logger.ts             — Logging (Konsole + Textlog + JSONL)
-├── maintenance.ts        — täglicher Wartungs-Cron
-├── format.ts             — Altbestand aus der Bot-Zeit, ohne Konsumenten
+├── maintenance.ts        — täglicher Wartungs-Cron (Audit-Retention, Tageswechsel)
 ├── api/                  — Hono HTTP-API
 │   ├── server.ts         — Hono-App, Login, CORS, Security-Header, Rate-Limit
 │   ├── auth.ts           — JWT, Benutzerverwaltung, Auth-Middleware
 │   ├── crypto.ts         — Feld-Verschlüsselung (AES-GCM)
-│   ├── email-template.ts — Platzhalter-Renderer für die HTML-Vorlagen
 │   ├── events.ts         — Event-Bus für Live-Updates (mit Rechtefilter)
 │   ├── sse-tickets.ts    — Einmal-Tickets für den SSE-Verbindungsaufbau
 │   ├── file-validation.ts— Upload-Prüfung: Endung und Magic Bytes
 │   ├── totp.ts           — TOTP-Hilfsfunktionen (derzeit nicht eingebunden)
 │   ├── geld.ts           — EINE Filterschicht für alle Geldbeträge
-│   ├── projekt-bezug.ts  — löst ?projectId= auf einen Projektnamen auf
-│   └── routes/           — 29 Route-Dateien, siehe unten
+│   ├── projekt-bezug.ts  — löst ?projectId=, ?projektnummer= und ?project= auf
+│   └── routes/           — 30 Route-Dateien, siehe unten
 ├── data/                 — Repository-Schicht (ausschließlich PostgreSQL)
 │   ├── index.ts          — einzige Import-Fläche für alle Repositories
 │   ├── types.ts          — Entity- und Repository-Interfaces
 │   ├── access.ts         — Sichtbarkeit und ACL-Prüfungen
+│   ├── konflikt.ts       — Konflikt-Zähler `rev` (Migration 042)
+│   ├── projektnummer.ts  — Regeln der Projektnummer (Migration 052)
+│   ├── zeitstempel.ts    — jedes Datum verlässt den Server als ISO 8601
+│   ├── sql-like.ts       — Maskierung für LIKE-Muster
 │   ├── termin-validation.ts — Validierung von Termin-Eingaben
-│   └── db-*.ts           — 24 Repositories, siehe unten
+│   └── db-*.ts           — 25 Repositories, siehe unten
 ├── db/                   — Datenbankschicht
 │   ├── client.ts         — postgres.js-Verbindungspool
 │   ├── migrate.ts        — SQL-Migrations-Runner
 │   ├── index.ts          — Barrel-Export
-│   └── migrations/       — 51 SQL-Dateien, Nummern bis 049
+│   └── migrations/       — 56 SQL-Dateien, Nummern bis 054
 ├── workspace/            — echter Dateizugriff auf WORKSPACE_PATH
 │   ├── index.ts          — Re-Export
 │   ├── helpers.ts        — safePath, ensureDir, Pfad-Utilities
@@ -60,10 +62,10 @@ docs/                     — diese Dokumentation (VitePress → dist/docs, /doc
 Die Compose-Datei des Firmenservers liegt im **Repo-Root**
 (`docker-compose.yml`); unter `docker/` steht nur noch die alte VPS-Fassung.
 
-::: info src/format.ts ist weg
-Hier stand eine Warnung vor `src/format.ts`, dem Markdown-nach-Telegram-Konverter
-ohne Aufrufer. Die Datei existiert nicht mehr — sie ist mit dem Bot-Altbestand
-entfallen (`find src -name format.ts` findet nichts).
+::: info Was aus der Bot-Zeit verschwunden ist
+`src/format.ts` (Markdown-nach-Telegram) und `src/api/email-template.ts`
+(Platzhalter für die HTML-Anmeldemails) standen hier lange im Baum, obwohl es
+sie nicht mehr gibt. Beide sind mit dem Bot- bzw. E-Mail-Altbestand entfallen.
 :::
 
 ---
@@ -189,8 +191,11 @@ Erlaubte Endungen: `pdf`, `docx`, `doc`, `xlsx`, `xls`, `csv`, `txt`, `md`,
 
 ### `src/api/email.ts` und `email-template.ts`
 
-`src/api/email.ts`, `email-template.ts` und `src/emails/` sind mit dem
-Ausbau des Mailversands entfallen — PATIO verschickt nichts mehr.
+`src/api/email.ts` und `email-template.ts` sind mit dem Ausbau des
+Mailversands entfallen — PATIO verschickt nichts mehr. `src/emails/` liegt
+noch als **leerer Ordner** herum: Git speichert keine leeren Verzeichnisse,
+er steht also nur auf Arbeitsrechnern, die den Ordner noch von früher haben.
+Dasselbe gilt für `web/src/stores/` aus der Pinia-Zeit.
 
 ### `src/api/totp.ts`
 
@@ -202,7 +207,7 @@ bleibt als Wiederherstellungspfad im Code.
 
 ### `src/api/routes/`
 
-**29 Route-Dateien.** Alle unter `/api` eingehängt — mit einer Ausnahme, die
+**30 Route-Dateien.** Alle unter `/api` eingehängt — mit einer Ausnahme, die
 unten steht.
 
 | Datei | Beschreibung |
@@ -210,6 +215,7 @@ unten steht.
 | `dashboard.ts` | Aggregierte Startseiten-Daten |
 | `notes.ts` | Notizen |
 | `tasks.ts` | Aufgaben |
+| `aufgabensystem.ts` | Eingang, Matrix und Tagesplan — die drei Arbeitsweisen des Aufgabenreiters |
 | `termine.ts` | Termine |
 | `projects.ts` | Projekte und Stammdaten |
 | `search.ts` | Volltextsuche |
@@ -235,7 +241,7 @@ unten steht.
 | `export-templates.ts` | Word-Exportvorlagen und die Export-Endpunkte |
 | `project-modules.ts` | Aktivierbare Module je Projekt |
 | `ui-preferences.ts` | Oberflächen-Einstellungen je Benutzer |
-| `auth-2fa.ts` | TOTP-Routen — **nicht eingebunden** (`server.ts:486` auskommentiert) |
+| `auth-2fa.ts` | TOTP-Routen — **nicht eingebunden** (`server.ts:509` auskommentiert) |
 
 ### `src/api/geld.ts`
 
@@ -295,6 +301,37 @@ Sichtbarkeitsregeln: Admins sehen alles. Benutzer sehen die Projekte aus der
 persönlich (erstellt von mir oder mir zugewiesen), Notizen ohne Projektbezug
 ebenso, Dateien zusätzlich über Freigaben.
 
+### `src/data/projektnummer.ts`
+
+Die Regeln der Projektnummer an **einer** Stelle: prüfen und normalisieren
+(`pruefeProjektnummer`), Platzhalter erkennen (`istPlatzhalter`), als
+Dokumentwert oder Dateinamensteil ausgeben (`alsDokumentwert`,
+`alsDateinamensteil`), Doppelvergabe an der Datenbankmeldung erkennen
+(`istNummerVergeben`, SQLSTATE 23505).
+
+Was die Nummer fachlich bedeutet, steht unter
+[Die Projektnummer](/konzepte/projektnummer).
+
+::: warning `vergleichbar()` gehört nicht in eine Abfrage
+Die Funktion schreibt für Vergleiche im Arbeitsspeicher klein. Für die
+Datenbank ist sie **falsch**: Postgres' `lower()` und JavaScripts
+`toLowerCase()` gehen in 9 von 1181 kleinschreibbaren Zeichen auseinander
+(praxisnah das türkische `İ`). Wer damit vorab „ist frei?" prüft, bekommt ein
+Ja und danach den eindeutigen Index um die Ohren. Verglichen wird auf beiden
+Seiten der Abfrage mit `lower()`.
+:::
+
+### `src/data/zeitstempel.ts`
+
+`alsIso()` und `alsIsoOderNull()`. Jedes Datum verlässt den Server als ISO
+8601 — auch dann, wenn der Treiber ein `Date`-Objekt liefert und nicht den
+Text aus der Spalte.
+
+Vorher gab es zwei Formate nebeneinander: die Oberfläche sortierte
+Zeitstempel als Zeichenketten, und `Fri Aug 22 2026 …` sortiert nach dem
+**Wochentagsnamen**. `tests/zeitstempel-vertrag.test.ts` hält den Vertrag
+fest.
+
 ### `src/data/db-search.ts`
 
 Volltextsuche über Notizen, Aufgaben, Projekte und Dateien. Filtert nach
@@ -331,6 +368,10 @@ Nicht-Admins, weil Admins gar nicht gefiltert werden.
 | `db-time-entries.ts` | Stundenerfassung |
 | `db-phases.ts` | Leistungsphasen, Abhängigkeiten, Meilensteine |
 | `db-invoices.ts` | Rechnungen |
+| `db-positionskatalog.ts` | Wiederverwendbare Rechnungspositionen |
+| `db-entscheidungen.ts` | Entscheidungslog je Projekt |
+| `db-aktivitaet.ts` | Was zuletzt passiert ist — abgeleitet, ohne eigene Tabelle |
+| `db-aufgabensystem.ts` | Rang, Aufwand und Tagesplan der Aufgaben |
 | `db-portfolio.ts` | Portfolio-Kennzahlen über alle Projekte |
 | `db-search.ts` | Volltextsuche |
 | `db-audit.ts` | Audit-Log |
@@ -372,7 +413,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 
 ### `src/db/migrations/`
 
-43 Dateien, `001` bis `041` (zwei Nummern sind doppelt vergeben: `005` und
+56 Dateien, `001` bis `054` (zwei Nummern sind doppelt vergeben: `005` und
 `006`). Die inhaltlich wichtigsten:
 
 | Migration | Inhalt |
@@ -397,6 +438,26 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 | `039_rename_calendar_enum.sql` | Umbenennung des internen Kalender-Enums |
 | `040_drop_embeddings.sql` | Entfernt die Embedding-Spalten und HNSW-Indizes |
 | `041_drop_vector_extension.sql` | Entfernt den `vector`-Eintrag aus `pg_extension` |
+| `042_rev_konfliktschutz.sql` | Konflikt-Zähler `rev` auf allen bearbeitbaren Datenarten |
+| `043_geld_recht.sql` | `users.can_see_money` — das Geld-Recht |
+| `044_papierkorb.sql` | Projekte werden weich gelöscht (`deleted_at`) |
+| `045_entscheidungen.sql` | Entscheidungslog |
+| `046_rechnungspositionen.sql` | Rechnungspositionen und Positionskatalog |
+| `047_drop_bot_tabellen.sql` | Sechs Tabellen der Bot- und Outlook-Ära entfernt |
+| `048_volltextsuche.sql` | `tsvector` mit deutschen Wortstämmen |
+| `049_papierkorb_datensaetze.sql` | Papierkorb auch für Notizen, Aufgaben, Termine |
+| `050_aufgabensystem.sql` | Rang, geschätzter Aufwand, Tagesplan |
+| `051_aufgaben_status.sql` | Aufgaben-Status auf eine Schreibweise (`offen` → `open`) |
+| `052_projektnummer.sql` | Die Projektnummer wird Pflicht und eindeutig |
+| `053_projektnummer_historie.sql` | Früher vergebene Nummern bleiben auffindbar |
+| `054_projektnummer_bereinigung.sql` | Bereinigung deckungsgleich mit der Anwendung |
+
+::: tip Die Projektnummer ist die Kennung des Hauses
+`052` bis `054` machen aus einem optionalen Stammdatenfeld die Kennung, unter
+der ein Projekt geführt wird — Pflicht, eindeutig, korrigierbar, überall
+sichtbar. Was das im Betrieb bedeutet, steht auf einer eigenen Seite:
+[Die Projektnummer](/konzepte/projektnummer).
+:::
 
 ::: tip pgvector ist abgelöst
 `040` räumt Spalten und Indizes, `041` den Extension-Eintrag selbst, und
@@ -462,17 +523,44 @@ web/src/
 ├── components/
 │   ├── AppLayout.vue     — 3-Spalten-Shell: NavRail, ListPane, Detail
 │   ├── BIcon.vue         — Line-Icons (keine Emojis in der Oberfläche)
-│   └── shell/            — NavRail, ListPane, DetailPane, IconBtn, Avatar, StatusDot
-├── composables/          — u.a. Event-Abo für Live-Updates
-├── stores/               — Pinia
-├── utils/
+│   ├── ProjektBezug.vue  — Projektnummer und -name, überall gleich
+│   ├── ConfirmDialog.vue, MarkdownRenderer.vue, FileGlyph.vue,
+│   │   TeamPicker.vue, SystemStatusBanner.vue
+│   └── shell/            — NavRail, AppTopbar, ListPane, DetailPane,
+│                           IconBtn, Avatar, StatusDot
+├── composables/          — useEvents (Live-Updates), useAufgabensystem,
+│                           useBranding, useTheme, useConfirm,
+│                           useCurrentUser, useWorkspaceShell
+├── utils/                — format.ts (Datum, Zahlen, EUR),
+│                           projektnummer.ts (Anzeige und Platzhalter)
+├── constants.ts, style.css
 └── views/
     ├── DashboardView.vue, CalendarView.vue, SearchView.vue,
     │   FileBrowserView.vue, SettingsView.vue, LoginView.vue, SetupView.vue,
-    │   AdminUsersView.vue, AdminAuditView.vue, TeamDetailView.vue,
-    │   ProjectDetailView.vue
+    │   AdminUsersView.vue, AdminAuditView.vue, AdminSicherungView.vue,
+    │   AktivitaetView.vue, PapierkorbView.vue, FirmenView.vue,
+    │   TeamDetailView.vue, ProjectDetailView.vue
+    ├── aufgaben/         — Eingang, Matrix, Mein Tag + Umschalter
     └── notes-v2/, tasks-v2/, team-v2/, projects-v2/, portfolio/
 ```
+
+::: info Der Aufgabenreiter hat vier Arbeitsweisen
+`views/aufgaben/` ist kein eigener Bereich, sondern die drei zusätzlichen
+Ansichten des Aufgabenreiters — Eingang, Matrix, Mein Tag — neben der
+gewohnten Liste aus `tasks-v2/`. Umgeschaltet wird über einen Streifen in der
+Topbar, weil das die einzige Stelle ist, die in allen vier Ansichten gleich
+liegt: drei laufen vollbreit, die Liste im Listen-/Detail-Raster.
+:::
+
+::: warning Ein fehlender Komponenten-Import fällt hier durch jede Prüfung
+Vue rendert eine im Template benutzte, aber nicht importierte Komponente als
+unbekanntes HTML-Element — ohne Fehler, ohne Warnung im Produktionsbau. Die
+Stelle bleibt schlicht leer. Weder `vue-tsc` noch ESLint beanstanden es
+(`eslint-plugin-vue` ist in diesem Projekt bewusst nicht installiert).
+
+Dagegen prüft `tests/vue-komponenten-importiert.test.ts` alle `.vue`-Dateien
+und braucht dafür keine Datenbank.
+:::
 
 Die `-v2`-Verzeichnisse folgen dem ListPane/DetailPane-Muster des PATIO
 Design System v2 und sind beim Weiterbauen den älteren Top-Level-Views
@@ -484,7 +572,7 @@ vorzuziehen.
 
 | Verzeichnis | Inhalt |
 |---|---|
-| `tests/` | Vitest-Suite. Die ACL-, Auth- und Datenbanktests überspringen sich still ohne `DATABASE_URL` — 290 von 412 |
+| `tests/` | Vitest-Suite. Ohne `DATABASE_URL` überspringen sich die ACL-, Auth- und Datenbanktests **still** — gemessen am 23.08.2026 laufen 155 von 582, die übrigen 427 werden übersprungen, und der Lauf meldet trotzdem grün |
 | `scripts/` | Installation, Sicherung, Rücksicherung, Offline-Pakete, Neuverschlüsselung, Prüfstand des Arbeitsplatz-Programms |
 | `electron/` | Hülle des Arbeitsplatz-Programms |
 | `docker/` | Caddyfile, Init-SQL für den Postgres-Container, alte VPS-Compose-Datei. **Der Firmenserver-Stack liegt im Repo-Root** (`docker-compose.yml`) |

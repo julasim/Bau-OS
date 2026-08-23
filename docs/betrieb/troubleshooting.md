@@ -245,8 +245,38 @@ Zu beachten:
   bereits angewendete Migration nachträglich zu ändern bleibt folgenlos —
   und führt zu Systemen, die auf demselben Stand behaupten zu sein und es
   nicht sind.
-- **Doppelte Nummern.** `005` und `006` existieren je zweimal. Historisch
-  gewachsen, unproblematisch — der Runner arbeitet nach Dateinamen.
+- **Doppelte Dateinummern.** `005` und `006` existieren je zweimal.
+  Historisch gewachsen, unproblematisch — der Runner arbeitet nach Dateinamen.
+
+### Der Dienst bleibt bei `052` oder `054` stehen
+
+```
+Migration 054: mehrfach vergebene Projektnummern:
+  saztg-2026-001 → Sanierung Hauptstraße, Wohnhaus Huber
+Bitte in der Datenbank vereindeutigen und den Dienst erneut starten.
+```
+
+Das ist **kein Defekt, sondern Absicht.** Beide Migrationen machen die
+Projektnummer eindeutig; finden sie zwei Projekte mit derselben, brechen sie
+ab und der Dienst kommt nicht hoch.
+
+Die Meldung nennt die **Projektnamen**, nicht nur die Nummer — der Abbruch
+rollt die Bereinigung mit zurück, die genannte Nummer stünde danach in keiner
+Zeile mehr, und wer nach ihr sucht, fände nichts.
+
+So finden Sie die betroffenen Projekte selbst:
+
+```bash
+docker compose exec postgres psql -U patio -d patio -c "SELECT lower(projektnummer) AS nummer, array_agg(name) AS projekte FROM projects GROUP BY 1 HAVING count(*) > 1;"
+```
+
+Eine der beiden Nummern ändern, dann `docker compose up -d app`. Die
+Migration läuft in einer Transaktion — beim Abbruch bleibt das Schema
+unversehrt, es geht nichts verloren.
+
+Eine zweite Meldung derselben Art nennt Projekte **ohne brauchbare Nummer**.
+Dieselbe Behandlung: nachtragen, neu starten. Hintergrund:
+[Die Projektnummer](/konzepte/projektnummer).
 
 ---
 
