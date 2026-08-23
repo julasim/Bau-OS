@@ -123,6 +123,21 @@ Projektliste, Portfolio und Projektkopf steht stattdessen „ohne Nummer" in
 Warnfarbe, und in Dateinamen und Exporten fehlt er ersatzlos. Er ist eine
 sichtbare offene Aufgabe, keine Nummer.
 
+## Was PATIO als Nummer ablehnt
+
+Neben leer und länger als 60 Zeichen auch:
+
+- **Steuerzeichen** und **unsichtbare Formatzeichen** — Zero-Width-Space,
+  Wortverbinder, Rechts-nach-links-Marke, weiches Trennzeichen. Sie kommen
+  beim Einfügen aus Word oder Outlook mit und machen aus zwei *gleich
+  aussehenden* Nummern zwei verschiedene.
+- **Eine Nummer ohne Buchstabe oder Ziffer** — `---` ist keine Aktennummer.
+
+Umlaute werden auf eine Schreibweise gebracht (Unicode-Normalform C), damit
+`Ä` als ein Zeichen und `A` mit angehängtem Akzent dieselbe Nummer sind.
+Datenbank und Programm tun das gleich; ein Test hält beide Seiten
+gegeneinander.
+
 ## Beim Umstellen einer bestehenden Datenbank
 
 Migration 052 schreibt Bestandsdaten um. Sie bereinigt dabei auch Leerraum in
@@ -145,3 +160,10 @@ beim Abbruch bleibt das Schema unversehrt.
 
 **Vor dem ersten Start auf einem Server mit echten Daten eine Sicherung
 ziehen** (siehe [Sicherung](/betrieb/sicherung)).
+
+Migration 054 bereinigt zusätzlich Leerraum, den 052 stehen ließ — Tabulator,
+Zeilenumbruch, geschütztes Leerzeichen, Byte-Reihenfolge-Marke. Solche Werte
+entstehen nicht über PATIO, wohl aber beim Übernehmen fremder Daten. Dabei
+können zwei Einträge, die für Menschen schon immer dieselbe Nummer waren,
+erstmals als Doppel auffallen; dann bricht 054 mit derselben Klartext-Meldung
+ab und nennt die **Projektnamen**.
