@@ -1,0 +1,28 @@
+{
+ "id": "r0000001",
+ "type": "invoice",
+ "schemaVersion": 1,
+ "data": {
+  "projectId": "p0000001",
+  "phaseId": "ph000001",
+  "nummer": "SAZTG-2026-014-R01",
+  "betrag": 12000,
+  "positions": [
+   {
+    "bezeichnung": "LPH 4",
+    "menge": 1,
+    "einzelpreis": 12000
+   }
+  ],
+  "datum": "2026-06-01",
+  "status": "gestellt",
+  "note": null
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

@@ -1,0 +1,31 @@
+{
+ "id": "p0000002",
+ "type": "project",
+ "schemaVersion": 1,
+ "data": {
+  "name": "Wohnhaus Mueller Garage",
+  "description": null,
+  "status": "aktiv",
+  "color": null,
+  "tags": [],
+  "projektnummer": null,
+  "bauherr": null,
+  "standort": null,
+  "projektart": null,
+  "nutzung": null,
+  "phase": null,
+  "startDate": null,
+  "endDate": null,
+  "bauherrId": null,
+  "parentId": "p0000001",
+  "budget": null,
+  "budgetUsed": null
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

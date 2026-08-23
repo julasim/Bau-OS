@@ -1,0 +1,25 @@
+{
+ "id": "a0000003",
+ "type": "task",
+ "schemaVersion": 1,
+ "data": {
+  "text": "Kaffeemaschine entkalken",
+  "status": "open",
+  "priority": "niedrig",
+  "assignee": null,
+  "assigneeId": null,
+  "date": null,
+  "location": null,
+  "project": null,
+  "projectId": null,
+  "sortOrder": 0,
+  "completedAt": null
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

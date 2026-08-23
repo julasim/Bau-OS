@@ -1,0 +1,25 @@
+{
+ "id": "ph000002",
+ "type": "phase",
+ "schemaVersion": 1,
+ "data": {
+  "projectId": "p0000001",
+  "name": "LPH 5 Ausfuehrungsplanung",
+  "sortOrder": 5,
+  "status": "offen",
+  "progressManual": null,
+  "feeShare": 25,
+  "sollStart": null,
+  "sollEnde": null,
+  "istStart": null,
+  "istEnde": null,
+  "dependsOnPhaseId": "ph000001"
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

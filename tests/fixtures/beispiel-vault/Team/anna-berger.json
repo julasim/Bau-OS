@@ -1,0 +1,23 @@
+{
+ "id": "t0000001",
+ "type": "team",
+ "schemaVersion": 1,
+ "data": {
+  "name": "Anna Berger",
+  "role": "Projektleitung",
+  "email": "a.berger@example.at",
+  "phone": "+43 316 111",
+  "company": "Holzbau Huber GmbH",
+  "companyId": "c0000001",
+  "memberType": "intern",
+  "hourlyRate": 95,
+  "contactLog": []
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

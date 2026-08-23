@@ -1,0 +1,26 @@
+{
+ "id": "a0000001",
+ "type": "task",
+ "schemaVersion": 1,
+ "data": {
+  "text": "Einreichplan zeichnen",
+  "status": "in_progress",
+  "priority": "hoch",
+  "assignee": "Anna Berger",
+  "assigneeId": "t0000001",
+  "date": "2026-06-15",
+  "location": null,
+  "project": "Wohnhaus Mueller",
+  "projectId": "p0000001",
+  "phaseId": "ph000001",
+  "sortOrder": 1,
+  "completedAt": null
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

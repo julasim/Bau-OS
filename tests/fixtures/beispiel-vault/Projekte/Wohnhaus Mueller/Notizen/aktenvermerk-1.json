@@ -1,0 +1,20 @@
+{
+ "id": "n0000001",
+ "type": "note",
+ "schemaVersion": 1,
+ "data": {
+  "title": "Aktenvermerk",
+  "content": "Inhalt Nummer 1",
+  "project": "Wohnhaus Mueller",
+  "projectId": "p0000001",
+  "tags": [],
+  "source": "vault"
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

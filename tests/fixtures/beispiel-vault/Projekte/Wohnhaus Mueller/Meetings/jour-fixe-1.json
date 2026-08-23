@@ -1,0 +1,38 @@
+{
+ "id": "m0000001",
+ "type": "meeting",
+ "schemaVersion": 1,
+ "data": {
+  "projectId": "p0000001",
+  "date": "2026-05-12",
+  "startTime": "09:00",
+  "endTime": "10:00",
+  "title": "Jour fixe 1",
+  "meetingType": null,
+  "location": "Baustelle",
+  "attendeeIds": [
+   "t0000001",
+   "t0000002"
+  ],
+  "attendeesExternal": [
+   "Hr. Mueller"
+  ],
+  "agenda": "Fassade",
+  "minutes": "Sichtbeton besprochen",
+  "decisions": null,
+  "actionItems": [
+   {
+    "text": "Muster bestellen",
+    "done": false
+   }
+  ],
+  "nextMeetingDate": "2026-06-12"
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

@@ -1,0 +1,25 @@
+{
+ "id": "ph000001",
+ "type": "phase",
+ "schemaVersion": 1,
+ "data": {
+  "projectId": "p0000001",
+  "name": "LPH 4 Einreichplanung",
+  "sortOrder": 4,
+  "status": "laufend",
+  "progressManual": 60,
+  "feeShare": 12,
+  "sollStart": "2026-03-01",
+  "sollEnde": "2026-06-30",
+  "istStart": "2026-03-05",
+  "istEnde": null,
+  "dependsOnPhaseId": null
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

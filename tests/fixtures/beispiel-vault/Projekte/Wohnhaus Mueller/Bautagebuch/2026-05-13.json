@@ -1,0 +1,28 @@
+{
+ "id": "b0000001",
+ "type": "bautagebuch",
+ "schemaVersion": 1,
+ "data": {
+  "projectId": "p0000001",
+  "date": "2026-05-13",
+  "weather": "sonnig",
+  "temperatureMin": 12,
+  "temperatureMax": 24,
+  "personnel": [
+   {
+    "name": "Max Huber",
+    "hours": 8
+   }
+  ],
+  "machines": "Kran",
+  "activities": "Schalung Decke ueber EG",
+  "incidents": null
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

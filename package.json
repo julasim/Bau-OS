@@ -19,7 +19,7 @@
     "docs:preview": "vitepress preview docs",
     "db:migrate": "tsx scripts/db-migrate.ts migrate",
     "db:status": "tsx scripts/db-migrate.ts status",
-    "db:import": "tsx scripts/migrate-vault-to-db.ts",
+    "db:import": "tsx scripts/import-vault.ts",
     "db:reencrypt": "tsx scripts/reencrypt.ts",
     "test": "vitest run",
     "test:watch": "vitest",

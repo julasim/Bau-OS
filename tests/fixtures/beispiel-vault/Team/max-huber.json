@@ -1,0 +1,22 @@
+{
+ "id": "t0000002",
+ "type": "team",
+ "schemaVersion": 1,
+ "data": {
+  "name": "Max Huber",
+  "role": "Zimmerei",
+  "email": null,
+  "phone": null,
+  "company": null,
+  "companyId": "c0000001",
+  "memberType": "Ausführende",
+  "contactLog": []
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

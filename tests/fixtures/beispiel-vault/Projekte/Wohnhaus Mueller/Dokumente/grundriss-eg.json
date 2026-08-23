@@ -1,0 +1,21 @@
+{
+ "id": "f0000001",
+ "type": "file",
+ "schemaVersion": 1,
+ "data": {
+  "filename": "Grundriss EG.txt",
+  "project": "Wohnhaus Mueller",
+  "projectId": "p0000001",
+  "mimeType": "text/plain",
+  "filesize": 16,
+  "contentText": "Grundriss-Inhalt",
+  "tags": []
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

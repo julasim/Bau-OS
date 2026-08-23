@@ -37,7 +37,7 @@ src/
 │   ├── client.ts         — postgres.js-Verbindungspool
 │   ├── migrate.ts        — SQL-Migrations-Runner
 │   ├── index.ts          — Barrel-Export
-│   └── migrations/       — 58 SQL-Dateien, Nummern bis 056
+│   └── migrations/       — 59 SQL-Dateien, Nummern bis 057
 ├── workspace/            — LESENDER Dateizugriff auf WORKSPACE_PATH
 │   ├── index.ts          — Re-Export (nur `readFile`)
 │   ├── helpers.ts        — `safePath` (Traversal-Schutz)
@@ -444,7 +444,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 
 ### `src/db/migrations/`
 
-58 Dateien, `001` bis `056` (zwei Nummern sind doppelt vergeben: `005` und
+59 Dateien, `001` bis `057` (zwei Nummern sind doppelt vergeben: `005` und
 `006`). Die inhaltlich wichtigsten:
 
 | Migration | Inhalt |
@@ -484,6 +484,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 | `054_projektnummer_bereinigung.sql` | Bereinigung deckungsgleich mit der Anwendung |
 | `055_telegram_pair_tokens.sql` | Letzter Rest der Bot-Ära: die Pair-Token-Tabelle (nur wenn leer) |
 | `056_altbestand_spalten.sql` | Die sieben Outlook-Spalten an `termine` und die drei Bot-Spalten an `users` |
+| `057_import_zuordnung.sql` | Zuordnung Quell-ID → UUID für die [Datenübernahme](/betrieb/datenuebernahme) |
 
 ::: tip Die Projektnummer ist die Kennung des Hauses
 `052` bis `054` machen aus einem optionalen Stammdatenfeld die Kennung, unter

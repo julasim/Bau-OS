@@ -54,6 +54,7 @@ export default defineConfig({
           { text: "Zertifikat", link: "/betrieb/zertifikat" },
           { text: "Arbeitsplatz-Programm", link: "/betrieb/arbeitsplatz" },
           { text: "Netzfreigabe", link: "/betrieb/freigabe" },
+          { text: "Datenübernahme", link: "/betrieb/datenuebernahme" },
           { text: "Updates", link: "/betrieb/updates" },
           { text: "Sicherung", link: "/betrieb/sicherung" },
           { text: "Monitoring", link: "/betrieb/monitoring" },

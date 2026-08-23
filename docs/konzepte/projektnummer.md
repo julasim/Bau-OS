@@ -151,7 +151,8 @@ die jemand abtippt.
 Ein Projekt, das ohne Nummer hereinkommt, bekommt einen Platzhalter
 (`OHNE-NUMMER-…`), damit die Spalte überhaupt Pflicht sein kann. Er ist
 erkennbar und wird nirgends wie eine Aktennummer angezeigt — siehe oben. Das
-Übernahme-Skript (`scripts/migrate-vault-to-db.ts`) setzt ihn ebenfalls: aus
+Übernahme-Programm (siehe [Datenübernahme](/betrieb/datenuebernahme)) setzt
+ihn ebenfalls: aus
 einem Ordnernamen lässt sich keine Aktennummer ableiten, und eine erfundene
 wäre schlimmer als ein sichtbares Loch.
 

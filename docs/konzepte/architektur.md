@@ -146,7 +146,7 @@ src/
 ├── db/
 │   ├── client.ts  Verbindungspool (postgres.js)
 │   ├── migrate.ts Migrations-Runner mit Advisory-Lock
-│   └── migrations/ 58 SQL-Dateien, forward-only (bis `056`)
+│   └── migrations/ 59 SQL-Dateien, forward-only (bis `057`)
 ├── workspace/     NUR Lesezugriff auf die Netzfreigabe (Rueckfall fuer alte
 │                  Datei-Datensaetze) + Text aus PDF und DOCX ziehen
 └── export/        DOCX-Erzeugung aus Word-Vorlagen

@@ -1,0 +1,18 @@
+{
+ "id": "c0000001",
+ "type": "company",
+ "schemaVersion": 1,
+ "data": {
+  "name": "Holzbau Huber GmbH",
+  "address": "Industriestrasse 4, 8010 Graz",
+  "website": "",
+  "notes": "Zimmerei"
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

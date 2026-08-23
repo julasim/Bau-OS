@@ -1,0 +1,21 @@
+{
+ "id": "f0000002",
+ "type": "file",
+ "schemaVersion": 1,
+ "data": {
+  "filename": "Verschwunden.pdf",
+  "project": "Wohnhaus Mueller",
+  "projectId": "p0000001",
+  "mimeType": "application/pdf",
+  "filesize": 999,
+  "contentText": null,
+  "tags": []
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}

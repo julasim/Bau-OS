@@ -1,0 +1,32 @@
+{
+ "id": "e0000001",
+ "type": "entscheidung",
+ "schemaVersion": 1,
+ "data": {
+  "projectId": "p0000001",
+  "datum": "2026-05-12",
+  "titel": "Fassade in Sichtbeton",
+  "begruendung": "Wunsch des Bauherrn",
+  "alternativen": [
+   {
+    "titel": "Putz",
+    "grund": "guenstiger"
+   }
+  ],
+  "beteiligteIds": [
+   "t0000001"
+  ],
+  "beteiligteExtern": [
+   "Hr. Mueller"
+  ],
+  "status": "bestaetigt",
+  "relatedMeetingId": "m0000001"
+ },
+ "meta": {
+  "createdBy": "Julius",
+  "createdAt": "2026-05-01T08:00:00.000Z",
+  "updatedBy": "Julius",
+  "updatedAt": "2026-05-01T08:00:00.000Z",
+  "rev": 1
+ }
+}
