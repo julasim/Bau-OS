@@ -91,6 +91,18 @@ teamRoutes.patch("/team/:id", async (c) => {
     }>
   >();
 
+  // ── projectId braucht dieselbe Pruefung wie die drei Nachbarrouten ───────
+  //
+  // POST/PATCH/DELETE /team/:id/projects… pruefen seit dem 23.08. jeweils
+  // `canSeeProject`. Diese Route nimmt dasselbe Feld entgegen — ueber das
+  // ALTE Einzelfeld `projectId` statt ueber die M:N-Zuordnung — und tat es
+  // nicht. Die Oberflaeche schickt es nicht, ein Aufruf von Hand schon.
+  if ("projectId" in body && body.projectId) {
+    if (!(await canSeeProject({ userId: c.var.userId, role: c.var.userRole }, body.projectId))) {
+      return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+    }
+  }
+
   const updates: Record<string, unknown> = {};
   // Nur Felder uebernehmen, die explizit im Body sind (inkl. null = leeren).
   for (const key of ["name", "role", "email", "phone", "company", "companyId", "companyName", "projectId"] as const) {

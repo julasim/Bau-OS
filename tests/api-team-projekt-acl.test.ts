@@ -124,6 +124,28 @@ describe.skipIf(!HAS_DB)("Team-Projektzuordnungen: kein Zugriff ohne Recht", () 
     expect(res.status).toBe(200);
   });
 
+  it("PATCH /team/:id kann das alte Einzelfeld projectId nicht umbiegen", async () => {
+    // Vierte Route derselben Klasse, beim ersten Durchgang übersehen: neben der
+    // M:N-Zuordnung gibt es noch das alte Einzelfeld `projectId` am Mitglied.
+    // Die drei Routen darüber prüfen es, diese nahm es ungeprüft entgegen —
+    // die Oberfläche sendet es nicht, ein Aufruf von Hand schon.
+    const res = await fx.app.request(`/api/team/${mitgliedId}`, {
+      method: "PATCH",
+      headers: jsonHeader(fx.b.token),
+      body: JSON.stringify({ projectId: fx.projectId }),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("PATCH /team/:id bleibt für das eigene Projekt erlaubt", async () => {
+    const res = await fx.app.request(`/api/team/${mitgliedId}`, {
+      method: "PATCH",
+      headers: jsonHeader(fx.b.token),
+      body: JSON.stringify({ projectId: fx.projectBId }),
+    });
+    expect(res.status).toBe(200);
+  });
+
   it("die Antwort verrät B nichts über A's Projekt", async () => {
     // Nebenleck: die POST-Route gibt am Ende `teamRepo.get(memberId)` ohne
     // Sichtbarkeitsfilter zurück — damit stünden Name und ID von A's Projekt

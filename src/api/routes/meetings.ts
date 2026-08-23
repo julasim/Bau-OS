@@ -17,7 +17,7 @@
 
 import { Hono } from "hono";
 import { meetingRepo, projectRepo } from "../../data/index.js";
-import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import { canSeeProject, canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import type { MeetingInput } from "../../data/types.js";
@@ -75,12 +75,20 @@ meetingsRoutes.get("/meetings/:id", async (c) => {
   const id = c.req.param("id");
   const meeting = await meetingRepo.get(id);
   if (!meeting) return c.json({ error: "Meeting nicht gefunden" }, 404);
-  // ACL ueber Projekt-Name aus dem Join.
+  // ── Warum ueber die ID und nicht ueber den Projektnamen ─────────────────
+  //
+  // Hier stand `if (ctx.role !== "admin" && meeting.projectName)`. Das ist ein
+  // Skip-Muster: fehlt der Projektname, faellt die GANZE Pruefung aus, und der
+  // Datensatz wird ausgeliefert. Heute ist der Fall nicht ausloesbar
+  // (`project_id` ist NOT NULL, der Name kommt aus dem Join) — aber es ist
+  // eine gestellte Falle: ein LEFT JOIN, ein umbenanntes Feld, ein Projekt im
+  // Papierkorb, und die Rechtepruefung schaltet sich still ab.
+  //
+  // Ueber die UUID gibt es den Fall gar nicht erst. Nebenbei spart es die
+  // Namensaufloesung, die `canSeeProjectByName` sonst zusaetzlich macht.
   const ctx = userCtx(c);
-  if (ctx.role !== "admin" && meeting.projectName) {
-    if (!(await canSeeProjectByName(ctx, meeting.projectName))) {
-      return c.json({ error: "Kein Zugriff" }, 403);
-    }
+  if (!(await canSeeProject(ctx, meeting.projectId))) {
+    return c.json({ error: "Kein Zugriff" }, 403);
   }
   return c.json(meeting);
 });
@@ -91,10 +99,8 @@ meetingsRoutes.patch("/meetings/:id", async (c) => {
   const meeting = await meetingRepo.get(id);
   if (!meeting) return c.json({ error: "Meeting nicht gefunden" }, 404);
   const ctx = userCtx(c);
-  if (ctx.role !== "admin" && meeting.projectName) {
-    if (!(await canSeeProjectByName(ctx, meeting.projectName))) {
-      return c.json({ error: "Kein Zugriff" }, 403);
-    }
+  if (!(await canSeeProject(ctx, meeting.projectId))) {
+    return c.json({ error: "Kein Zugriff" }, 403);
   }
 
   let body: Partial<MeetingInput>;
@@ -116,10 +122,8 @@ meetingsRoutes.delete("/meetings/:id", async (c) => {
   const meeting = await meetingRepo.get(id);
   if (!meeting) return c.json({ ok: false }, 404);
   const ctx = userCtx(c);
-  if (ctx.role !== "admin" && meeting.projectName) {
-    if (!(await canSeeProjectByName(ctx, meeting.projectName))) {
-      return c.json({ error: "Kein Zugriff" }, 403);
-    }
+  if (!(await canSeeProject(ctx, meeting.projectId))) {
+    return c.json({ error: "Kein Zugriff" }, 403);
   }
   const ok = await meetingRepo.delete(id);
   if (ok) emit({ type: "meeting", action: "deleted", id, projectId: meeting.projectId }, { actorId: c.var.userId });

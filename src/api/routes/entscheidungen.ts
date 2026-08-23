@@ -15,7 +15,7 @@
 
 import { Hono } from "hono";
 import { entscheidungRepo, projectRepo } from "../../data/index.js";
-import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import { canSeeProject, canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import type { EntscheidungInput } from "../../data/types.js";
@@ -52,11 +52,20 @@ async function ladenMitRecht(c: {
   const id = c.req.param("id");
   const entscheidung = await entscheidungRepo.get(id);
   if (!entscheidung) return { error: c.json({ error: "Entscheidung nicht gefunden" }, 404) };
+  // ── Warum ueber die ID und nicht ueber den Projektnamen ─────────────────
+  //
+  // Hier stand `if (ctx.role !== "admin" && entscheidung.projectName)`. Das ist ein
+  // Skip-Muster: fehlt der Projektname, faellt die GANZE Pruefung aus, und der
+  // Datensatz wird ausgeliefert. Heute ist der Fall nicht ausloesbar
+  // (`project_id` ist NOT NULL, der Name kommt aus dem Join) — aber es ist
+  // eine gestellte Falle: ein LEFT JOIN, ein umbenanntes Feld, ein Projekt im
+  // Papierkorb, und die Rechtepruefung schaltet sich still ab.
+  //
+  // Ueber die UUID gibt es den Fall gar nicht erst. Nebenbei spart es die
+  // Namensaufloesung, die `canSeeProjectByName` sonst zusaetzlich macht.
   const ctx = userCtx(c);
-  if (ctx.role !== "admin" && entscheidung.projectName) {
-    if (!(await canSeeProjectByName(ctx, entscheidung.projectName))) {
-      return { error: c.json({ error: "Kein Zugriff" }, 403) };
-    }
+  if (!(await canSeeProject(ctx, entscheidung.projectId))) {
+    return { error: c.json({ error: "Kein Zugriff" }, 403) };
   }
   return { id, entscheidung };
 }

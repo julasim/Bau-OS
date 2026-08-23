@@ -98,11 +98,11 @@ ungefiltert aus.
 Projekt-Zugriff vergeben und entziehen: `POST` und `DELETE` auf
 `/api/projects/:name/access`.
 
-::: danger Genau so sind hier Lücken entstanden — dreizehn Stück
-Das Verfahren ist richtig, aber es vergisst sich leicht. Am 23.08.2026 hat eine
-systematische Durchsicht **dreizehn Routen** gefunden, die den Aufruf nicht
-machten. Alle sind geschlossen; jede ist durch eine Prüfung festgehalten, die
-vor der Reparatur rot war.
+::: danger Genau so sind hier Lücken entstanden — siebzehn Stück
+Das Verfahren ist richtig, aber es vergisst sich leicht. Am 23.08.2026 haben
+zwei systematische Durchsichten **siebzehn Routen** gefunden, die den Aufruf
+nicht machten. Alle sind geschlossen; jede ist durch eine Prüfung festgehalten,
+die vor der Reparatur rot war.
 
 **Was möglich war — mit einem gültigen Konto und dem Projektnamen:**
 
@@ -117,17 +117,38 @@ vor der Reparatur rot war.
 | `DELETE .../termine` | einen fremden Termin löschen |
 | `POST/PATCH/DELETE /team/:id/projects…` | Projektzuordnungen fremder Projekte setzen, ändern, löschen — ohne Papierkorb |
 | `GET /templates/:id/render?project=` | Stammdaten fremder Projekte (Nummer, Bauherr, Standort, Nutzung, Phase) |
+| `POST /files/upload` | Dateien samt extrahiertem Volltext in ein fremdes Projekt einstellen |
+| `POST /files/:id/star` | jede beliebige Datei markieren — Name, Projekt und Projektnummer standen danach in der eigenen Merkliste |
+| `GET /files/starred` | dieselbe Liste ungefiltert ausliefern |
+| `PATCH /team/:id` | das alte Einzelfeld `projectId` auf ein fremdes Projekt umbiegen |
 
 **Warum es so lange unsichtbar war:** die Lücken standen jeweils direkt neben
 richtigem Code. `POST /projects/:name/tasks` prüft sauber — das drei Zeilen
 weiter stehende `PATCH /projects/:name/tasks` prüfte nicht. In `team.ts`
 benutzen die beiden lesenden Routen den Sichtbarkeitsfilter korrekt, die drei
-schreibenden nicht. Beim Lesen sieht eine solche Datei bewacht aus.
+schreibenden nicht. In `files.ts` haben `GET /files`, `/files/read`,
+`/files/search`, `/files/download` und `DELETE` jeweils ihren Wachposten — der
+einzige schreibende Weg, `POST /files/upload`, hatte keinen. Beim Lesen sieht
+eine solche Datei bewacht aus.
+
+**Dazu ein Recht, das es nur auf dem Papier gab:** der Upload trug den
+Hochladenden nicht ein (`uploaded_by` blieb `NULL`). Damit war jede
+Eigentümer-Prüfung wirkungslos — wer eine Datei hochlud, konnte sie weder
+löschen noch freigeben, und ein Upload ohne Projekt war für niemanden ausser
+dem Administrator je wieder erreichbar. Sieben Testdateien prüften das
+Eigentümer-Recht und keine davon rief die Upload-Route auf; sie setzten das
+Feld selbst am Repository vorbei.
 
 **Was daraus folgt:** wer hier eine Route ergänzt, ergänzt eine Zeile in
-`tests/api-projects-acl-luecke.test.ts`, `api-projekt-beitritt.test.ts` oder
-`api-team-projekt-acl.test.ts`. Der Projektname aus dem Pfad ist eine
-Behauptung des Aufrufers, keine Berechtigung.
+`tests/api-projects-acl-luecke.test.ts`, `api-projekt-beitritt.test.ts`,
+`api-team-projekt-acl.test.ts` oder `api-dateien-acl.test.ts`. Der Projektname
+aus dem Pfad ist eine Behauptung des Aufrufers, keine Berechtigung.
+
+**Und ein Muster, das sich als Falle herausgestellt hat:** eine Prüfung der
+Form `if (rolle !== "admin" && datensatz.projectName)` schaltet sich selbst ab,
+sobald der Projektname fehlt — ein `LEFT JOIN`, ein Projekt im Papierkorb, ein
+umbenanntes Feld genügt. Besprechungen und Entscheidungen prüfen deshalb jetzt
+über die Projekt-UUID, die immer da ist.
 :::
 
 ::: info Dass ein Projektname existiert, ist keine geschützte Auskunft

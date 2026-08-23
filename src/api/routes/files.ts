@@ -10,6 +10,7 @@ import { emitForProjectName } from "../events.js";
 import { validateUpload } from "../file-validation.js";
 import type { AppEnv } from "../server.js";
 import { projektBezugAusQuery } from "../projekt-bezug.js";
+import { canSeeProjectByName } from "../../data/access.js";
 import { alsIso } from "../../data/zeitstempel.js";
 
 export const filesRoutes = new Hono<AppEnv>();
@@ -228,7 +229,33 @@ filesRoutes.get("/files/starred", async (c) => {
   const userId = c.get("userId");
   if (!userId) return c.json([]);
   const db = getDb();
-  const rows = await db`
+
+  // Der Sichtbarkeitsfilter gehoert in die ABFRAGE, nicht ins Mapping
+  // danach: sonst zaehlt `LIMIT 50` die aussortierten Zeilen mit, und die
+  // Liste bricht ab, bevor die sichtbaren Dateien alle drin sind.
+  //
+  // Zu sehen ist eine markierte Datei unter derselben Regel wie ueberall
+  // sonst (`canAccessFile`): eigenes Projekt, selbst hochgeladen, oder
+  // ausdruecklich freigegeben.
+  const sichtbar = await getVisibleProjectIds(c);
+  const rows = sichtbar
+    ? await db`
+    SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize,
+           f.mime_type, f.analyzed, f.created_at, f.updated_at,
+           p.name as project_name, p.projektnummer as project_nummer
+    FROM files f
+    JOIN file_stars fs ON f.id = fs.file_id
+    LEFT JOIN projects p ON f.project_id = p.id
+    WHERE fs.user_id = ${userId}
+      AND (
+        f.uploaded_by = ${userId}
+        OR (f.project_id IS NOT NULL AND f.project_id = ANY(${sichtbar}::uuid[]))
+        OR EXISTS (SELECT 1 FROM file_shares sh WHERE sh.file_id = f.id AND sh.user_id = ${userId})
+      )
+    ORDER BY fs.starred_at DESC
+    LIMIT 50
+  `
+    : await db`
     SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize,
            f.mime_type, f.analyzed, f.created_at, f.updated_at,
            p.name as project_name, p.projektnummer as project_nummer
@@ -309,11 +336,29 @@ filesRoutes.get("/files/search", async (c) => {
 // vorerst stehen, weil sein Ausbau die Upload-Route umbaut — das gehoert in
 // einen eigenen Schritt, nicht in eine Aufraeumrunde.
 filesRoutes.post("/files/upload", async (c) => {
+  const userId = c.get("userId");
+  if (!userId) return c.json({ error: "Nicht authentifiziert" }, 401);
+
   const formData = await c.req.formData();
   // Ein `path`-Feld wird nicht mehr ausgewertet: Dateien liegen in der
   // Datenbank, es gibt keine Ordner, in die man sie legen koennte. Der
   // Projektbezug ist der einzige Ort, an dem eine Datei „hingehoert".
   const project = (formData.get("project") as string) || undefined;
+
+  // ── Rechtepruefung ────────────────────────────────────────────────────────
+  //
+  // Hier stand keine. Die Datei sah bewacht aus — GET /files, /files/read,
+  // /files/search, /files/download und DELETE haben alle ihren Wachposten —,
+  // aber der einzige SCHREIBENDE Weg nahm jeden Projektnamen entgegen und
+  // reichte ihn an `fileRepo.save()` durch. Damit konnte jedes angemeldete
+  // Konto Dateien samt extrahiertem Volltext in ein fremdes Projekt
+  // einstellen, und die Datei tauchte dort bei allen Berechtigten auf.
+  //
+  // Genau dasselbe Muster hatten die drei Team-Routen, die am 23.08.
+  // geschlossen wurden: die lesende Seite bewacht, die schreibende vergessen.
+  if (project && !(await canSeeProjectByName({ userId, role: c.get("userRole") }, project))) {
+    return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
+  }
 
   const files = formData.getAll("files") as File[];
   if (files.length === 0) return c.json({ error: "Keine Dateien gesendet" }, 400);
@@ -354,6 +399,19 @@ filesRoutes.post("/files/upload", async (c) => {
         contentText,
         project,
         blob: buffer,
+        // ── Ohne dieses Feld ist das Eigentuemer-Recht wirkungslos ──────────
+        //
+        // `uploaded_by` blieb NULL, weil die einzige Route, die es setzen
+        // koennte, es nicht tat. Folge: `canAccessFile` und
+        // `isFileOwnerOrAdmin` pruefen gegen NULL und sagen immer nein — wer
+        // eine Datei hochlud, konnte sie weder loeschen noch freigeben, und
+        // ein Upload OHNE Projekt war fuer niemanden ausser dem Admin je
+        // wieder erreichbar.
+        //
+        // Die sieben Datei-Rechte-Tests setzten das Feld selbst am Repo
+        // vorbei. Sie belegten damit, dass das Recht greift, WENN es gesetzt
+        // ist — die Route, die es setzen muss, kam in keinem Test vor.
+        uploadedById: userId,
       });
       dbEntries.push({ id: entry.id, filename: entry.filename });
       saved.push(safeName);
@@ -406,6 +464,10 @@ filesRoutes.post("/files/:id/star", async (c) => {
   const userId = c.get("userId");
   if (!userId) return c.json({ error: "Nicht authentifiziert" }, 401);
   const fileId = c.req.param("id");
+  // Ohne diese Pruefung liess sich jede beliebige UUID markieren — und
+  // Dateiname, Projektname und Projektnummer standen danach in der eigenen
+  // Merkliste. Ein Leseweg in fremde Projekte, gebaut aus einem Lesezeichen.
+  if (!(await canAccessFile(c, fileId))) return c.json({ error: "Zugriff verweigert" }, 403);
   const db = getDb();
   await db`
     INSERT INTO file_stars (file_id, user_id)
