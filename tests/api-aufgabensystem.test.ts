@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from "./helpers/acl-fixture.js";
+import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture, namensraum } from "./helpers/acl-fixture.js";
 
 // Aufgabensystem, Baustufe 1 — die rechnende Schicht über den Aufgaben.
 //
@@ -14,7 +14,22 @@ import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from
 // Umgehung zur Gewohnheit — und dann ist das ganze System entwertet.
 describe.skipIf(!HAS_DB)("Aufgabensystem — die rechnende Schicht", () => {
   let fx: AclFixture;
-  const P = `aufg-${Date.now()}`;
+
+  // ── Warum hier `namensraum()` steht und kein `Date.now()` ───────────────
+  //
+  // Drei andere Testdateien raeumen mit `DELETE FROM tasks WHERE text LIKE
+  // '%<Kennung>%'` auf. Solange jede Datei ihre Kennung aus einem blanken
+  // `Date.now()` bildete, war das ein Treffer quer ueber Dateigrenzen: im
+  // parallelen Lauf starten zwei Dateien regelmaessig in derselben
+  // Millisekunde, und dann loescht die fremde Datei MEINE Aufgaben mitten im
+  // Test. Sichtbar wurde das als 404 auf einen Datensatz, dessen Anlage zwei
+  // Zeilen darueber mit 201 quittiert worden war.
+  //
+  // Begruendung und Bauform stehen bei `namensraum()` in
+  // `tests/helpers/acl-fixture.ts`. Das eigene Aufraeumen unten bleibt am
+  // Praefix verankert (`LIKE 'aufg-…%'`) und kann darum niemand anderem
+  // etwas wegnehmen.
+  const P = `aufg-${namensraum()}`;
 
   /** Legt eine Aufgabe an und setzt Rang/Aufwand. Liefert die ID. */
   async function aufgabe(titel: string, rang: number, aufwandMin: number | null): Promise<string> {
@@ -48,6 +63,16 @@ describe.skipIf(!HAS_DB)("Aufgabensystem — die rechnende Schicht", () => {
     const res = await fx.app.request("/api/aufgabensystem/tagesplan", { headers: authHeader(token) });
     expect(res.status).toBe(200);
     return ((await res.json()) as { tagesbudget: Record<string, number | boolean> }).tagesbudget;
+  };
+
+  /** Der komplette Tagesplan — Budget UND Aufgabenliste in einer Antwort. */
+  const tagesplan = async (token: string) => {
+    const res = await fx.app.request("/api/aufgabensystem/tagesplan", { headers: authHeader(token) });
+    expect(res.status).toBe(200);
+    return (await res.json()) as {
+      tagesbudget: Record<string, number | boolean>;
+      aufgaben: { id: string; text: string; rang: number; aufwandMin: number | null }[];
+    };
   };
 
   const inDenPlan = (token: string, id: string, drin: boolean) =>
@@ -241,6 +266,107 @@ describe.skipIf(!HAS_DB)("Aufgabensystem — die rechnende Schicht", () => {
     expect(t.text).toBe(`${P}-wechsel`);
     expect(t.rang).toBe(1);
     expect(t.status).not.toBe("done");
+  });
+
+  // ── Der Tagesplan liefert die Aufgaben mit ────────────────────────────────
+
+  it("der Tagesplan liefert Budget und Aufgabenliste in EINER Antwort", async () => {
+    // Zwei Aufrufe waeren zwei Zeitpunkte — und damit ein Balken, der kurz
+    // etwas anderes behauptet als die Liste darunter.
+    const id = await aufgabe("liste-a", 2, 60);
+    expect((await inDenPlan(fx.admin.token, id, true)).status).toBe(200);
+
+    const tp = await tagesplan(fx.admin.token);
+    expect(tp.tagesbudget.belegtMin).toBe(60);
+    expect(tp.aufgaben.map((a) => a.id)).toContain(id);
+    const a = tp.aufgaben.find((x) => x.id === id)!;
+    expect(a.text).toBe(`${P}-liste-a`);
+    expect(a.rang).toBe(2);
+    expect(a.aufwandMin).toBe(60);
+
+    await inDenPlan(fx.admin.token, id, false);
+  });
+
+  it("die Liste ist nach Rang sortiert — Rang 1 zuerst", async () => {
+    // Wer den Tag von oben abarbeitet, soll das Wichtigste zuerst sehen.
+    const spaet = await aufgabe("sort-r3", 3, 15);
+    const frueh = await aufgabe("sort-r1", 1, 15);
+    await inDenPlan(fx.admin.token, spaet, true);
+    await inDenPlan(fx.admin.token, frueh, true);
+
+    const tp = await tagesplan(fx.admin.token);
+    const ids = tp.aufgaben.map((a) => a.id);
+    expect(ids.indexOf(frueh)).toBeLessThan(ids.indexOf(spaet));
+
+    await inDenPlan(fx.admin.token, spaet, false);
+    await inDenPlan(fx.admin.token, frueh, false);
+  });
+
+  it("die Liste ist persönlich — B sieht die Auswahl von A nicht", async () => {
+    // Dieselbe Trennung wie beim Budget. Ohne sie raeumte auf einem Server
+    // mit acht Arbeitsplaetzen der eine dem anderen den Tag ab.
+    const id = await aufgabe("privat", 1, 30);
+    await inDenPlan(fx.admin.token, id, true);
+
+    const beiB = await tagesplan(fx.b.token);
+    expect(beiB.aufgaben.map((a) => a.id)).not.toContain(id);
+
+    await inDenPlan(fx.admin.token, id, false);
+  });
+
+  it("eine erledigte Aufgabe faellt aus der Liste, ohne dass jemand sie herausnimmt", async () => {
+    const id = await aufgabe("fertig", 1, 60);
+    await inDenPlan(fx.admin.token, id, true);
+    expect((await tagesplan(fx.admin.token)).aufgaben.map((a) => a.id)).toContain(id);
+
+    const ab = await fx.app.request(`/api/tasks/${id}`, {
+      method: "PUT",
+      headers: jsonHeader(fx.admin.token),
+      body: JSON.stringify({ status: "done" }),
+    });
+    expect(ab.status).toBe(200);
+
+    const danach = await tagesplan(fx.admin.token);
+    expect(danach.aufgaben.map((a) => a.id)).not.toContain(id);
+    expect(danach.tagesbudget.belegtMin).toBe(0);
+  });
+
+  // ── Rang und Aufwand werden geprueft, nicht durchgereicht ─────────────────
+
+  it("ein ungueltiger Rang kommt als 400 zurueck, nicht als 500", async () => {
+    // An beiden Feldern haengt eine CHECK-Bedingung. Ohne Pruefung in der
+    // Route kaeme ein Tippfehler als Datenbankfehler zurueck — und der sagt
+    // dem Aufrufer nicht, was erlaubt ist.
+    const id = await aufgabe("rang-pruef", 2, 30);
+    const res = await fx.app.request(`/api/tasks/${id}`, {
+      method: "PUT",
+      headers: jsonHeader(fx.admin.token),
+      body: JSON.stringify({ rang: 7 }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/Rang/);
+  });
+
+  it("ein Aufwand neben dem Raster kommt als 400 zurueck", async () => {
+    const id = await aufgabe("aufwand-pruef", 2, 30);
+    const res = await fx.app.request(`/api/tasks/${id}`, {
+      method: "PUT",
+      headers: jsonHeader(fx.admin.token),
+      body: JSON.stringify({ aufwandMin: 45 }),
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/Aufwand/);
+  });
+
+  it("aufwandMin: null bleibt erlaubt — es heisst „liegt wieder im Eingang“", async () => {
+    const id = await aufgabe("zurueck", 2, 60);
+    const res = await fx.app.request(`/api/tasks/${id}`, {
+      method: "PUT",
+      headers: jsonHeader(fx.admin.token),
+      body: JSON.stringify({ aufwandMin: null }),
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).aufwandMin).toBeNull();
   });
 
   // ── Rechte ────────────────────────────────────────────────────────────────

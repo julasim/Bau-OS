@@ -4,6 +4,7 @@ import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../d
 import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
 import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
+import { AUFWAND_STUFEN } from "../../data/types.js";
 
 export const tasksRoutes = new Hono<AppEnv>();
 
@@ -164,8 +165,22 @@ tasksRoutes.put("/tasks/:id", async (c) => {
       date: string | null;
       location: string | null;
       phaseId: string | null;
+      // Aufgabensystem (Migration 050).
+      rang: 1 | 2 | 3 | 4;
+      aufwandMin: number | null;
     }>
   >();
+  // Beide Felder haengen an einer CHECK-Bedingung in der Datenbank. Ohne
+  // Pruefung hier kaeme ein Tippfehler als 500 zurueck statt als Hinweis,
+  // was erlaubt ist.
+  if ("rang" in body && body.rang !== undefined && ![1, 2, 3, 4].includes(body.rang)) {
+    return c.json({ error: "Rang muss 1, 2, 3 oder 4 sein" }, 400);
+  }
+  if ("aufwandMin" in body && body.aufwandMin !== null && body.aufwandMin !== undefined) {
+    if (!(AUFWAND_STUFEN as readonly number[]).includes(body.aufwandMin)) {
+      return c.json({ error: `Aufwand muss eine der Stufen ${AUFWAND_STUFEN.join(", ")} Minuten sein` }, 400);
+    }
+  }
   // Vorherigen Stand laden, damit wir nur bei echter Assignee-Aenderung
   // benachrichtigen (kein Spam wenn nur Datum aktualisiert wird).
   const prev = await taskRepo.get(id);

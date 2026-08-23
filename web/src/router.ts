@@ -25,6 +25,31 @@ const router = createRouter({
         },
         // Backward-Compat: alte note-editor-Route leitet auf neue Master-Detail.
         { path: "notes-old/:name", redirect: (to) => `/notes/${to.params.name}` },
+        // ── Aufgabenreiter: vier Arbeitsweisen auf denselben Daten ──────────
+        // Eingang / Matrix / Mein Tag sind vollbreit (keine Listenspalte), die
+        // gewohnte Liste behaelt ihr Master-Detail. Umgeschaltet wird ueber
+        // `views/aufgaben/AufgabenUmschalter.vue`, der in allen vier steht —
+        // bewusst KEIN eigener Eintrag in der Navigationsleiste, es ist ein
+        // und dieselbe Sache.
+        //
+        // Die drei statischen Pfade stehen VOR `tasks/:id?`. Vue Router
+        // bewertet statische Segmente ohnehin hoeher als Parameter, aber wer
+        // die Datei liest, soll das nicht erst nachschlagen muessen.
+        {
+          path: "tasks/eingang",
+          name: "tasks-eingang",
+          component: () => import("./views/aufgaben/EingangView.vue"),
+        },
+        {
+          path: "tasks/matrix",
+          name: "tasks-matrix",
+          component: () => import("./views/aufgaben/MatrixView.vue"),
+        },
+        {
+          path: "tasks/heute",
+          name: "tasks-heute",
+          component: () => import("./views/aufgaben/MeinTagView.vue"),
+        },
         // Workspace v2: Tasks Master/Detail mit Tabs (Offen/Aktiv/Erledigt/Alle).
         {
           path: "tasks/:id?",

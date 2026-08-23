@@ -54,8 +54,15 @@ aufgabensystemRoutes.get("/aufgabensystem/matrix", async (c) => {
 
 aufgabensystemRoutes.get("/aufgabensystem/tagesplan", async (c) => {
   const s = await sichtbarkeit(c);
-  // Das Feld heisst `tagesbudget` und NICHT `budget` — siehe Kasten unten.
-  return c.json({ tagesbudget: await aufgabensystemRepo.tagesplanBudget(s) });
+  // Beides in EINER Antwort: die Oberflaeche zeigt Balken und Liste
+  // nebeneinander, zwei Aufrufe waeren zwei Zeitpunkte — und damit ein
+  // Balken, der kurz etwas anderes behauptet als die Liste darunter.
+  const [tagesbudget, aufgaben] = await Promise.all([
+    aufgabensystemRepo.tagesplanBudget(s),
+    aufgabensystemRepo.tagesplanAufgaben(s),
+  ]);
+  // Das Feld heisst `tagesbudget` und NICHT `budget` — siehe Kasten oben.
+  return c.json({ tagesbudget, aufgaben });
 });
 
 aufgabensystemRoutes.put("/aufgabensystem/tagesplan/:id", async (c) => {

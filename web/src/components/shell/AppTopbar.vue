@@ -22,10 +22,13 @@
 //   Dateien, Kalender, Suche, Projekte, Portfolio).
 // ============================================================
 
-import { computed, onMounted } from "vue";
+import { computed, onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useBranding } from "../../composables/useBranding";
 import { useTheme } from "../../composables/useTheme";
+import { useEvents } from "../../composables/useEvents";
+import { useAufgabensystem } from "../../composables/useAufgabensystem";
+import AufgabenUmschalter from "../../views/aufgaben/AufgabenUmschalter.vue";
 import BIcon from "../BIcon.vue";
 
 const route = useRoute();
@@ -37,6 +40,12 @@ const { prefs, isDark, toggle: toggleTheme, toggleSidebarTheme } = useTheme();
 const BEREICH: Record<string, string> = {
   dashboard: "Dashboard",
   tasks: "Aufgaben",
+  // Die drei Arbeitsweisen des Aufgabenreiters heissen im Brotkrumenpfad
+  // ebenfalls „Aufgaben" — welche gerade laeuft, sagt der Umschalter
+  // direkt darunter. Zweimal dieselbe Auskunft waere Laerm.
+  "tasks-eingang": "Aufgaben",
+  "tasks-matrix": "Aufgaben",
+  "tasks-heute": "Aufgaben",
   calendar: "Termine",
   notes: "Notizen",
   projects: "Projekte",
@@ -54,6 +63,19 @@ const BEREICH: Record<string, string> = {
   "admin-sicherung": "Sicherung",
 };
 
+// ── Umschalter des Aufgabenreiters ──────────────────────────────────────────
+//
+// Er steht HIER und nicht in den vier Ansichten, weil das die einzige Stelle
+// ist, die in allen vieren dieselbe ist: „Eingang", „Matrix" und „Mein Tag"
+// laufen vollbreit, die gewohnte Liste dagegen im Listen-/Detail-Raster. Ein
+// Streifen in den Ansichten selbst saesse in drei Faellen ueber der ganzen
+// Seite und im vierten in der schmalen Listenspalte — an derselben Stelle zu
+// suchen und woanders zu finden ist schlimmer als kein Umschalter.
+const AUFGABEN_ROUTEN = ["tasks", "tasks-eingang", "tasks-matrix", "tasks-heute"];
+const imAufgabenreiter = computed(() => AUFGABEN_ROUTEN.includes(String(route.name ?? "")));
+
+const { ladeZaehler, eingangAnzahl, rang1Anzahl, tagesplanAnzahl } = useAufgabensystem();
+
 const projektName = computed(() => decodeURIComponent((route.params.name as string) ?? ""));
 const bereich = computed(() => {
   // Im Projekt steht der Projektname selbst da — er sagt mehr als „Projekt".
@@ -69,6 +91,14 @@ const bereich = computed(() => {
 const { branding, ensureBranding } = useBranding();
 const firma = computed(() => branding.value.companyName || "PATIO");
 onMounted(() => void ensureBranding());
+
+// Die Zaehler nur laden, solange man im Aufgabenreiter ist. Die Leiste haengt
+// ueber JEDER Seite — ohne diese Bedingung holte jeder Seitenaufbau im ganzen
+// Programm Matrix und Tagesplan, fuer einen Streifen, den dort niemand sieht.
+watch(imAufgabenreiter, (drin) => drin && void ladeZaehler(), { immediate: true });
+useEvents(["task"], () => {
+  if (imAufgabenreiter.value) void ladeZaehler();
+});
 
 const seitenleisteHell = computed(() => prefs.value.sidebarTheme === "light");
 
@@ -86,6 +116,14 @@ function neueAufgabe() {
         <span class="ap-crumb-here">{{ bereich }}</span>
       </template>
     </nav>
+
+    <AufgabenUmschalter
+      v-if="imAufgabenreiter"
+      class="ap-topbar-umschalter"
+      :eingang="eingangAnzahl"
+      :rang1="rang1Anzahl"
+      :tagesplan="tagesplanAnzahl"
+    />
 
     <div class="ap-topbar-spacer"></div>
 
@@ -128,6 +166,14 @@ function neueAufgabe() {
   background: var(--surface);
   border-bottom: 1px solid var(--line);
 }
+/* Der Umschalter darf schrumpfen, bevor der Brotkrumen es tut — im Zweifel
+   ist wichtiger, WO man ist, als womit man dort umschaltet. */
+.ap-topbar-umschalter {
+  margin-left: 16px;
+  min-width: 0;
+  overflow: hidden;
+}
+
 .ap-crumb {
   display: flex;
   align-items: center;

@@ -33,7 +33,8 @@
 // ============================================================
 
 import { getDb } from "../db/client.js";
-import { RANG_GRENZEN } from "./types.js";
+import { rowToTask, TASK_SELECT } from "./db-tasks.js";
+import { RANG_GRENZEN, type Task } from "./types.js";
 
 /** Eine Spalte der Matrix. */
 export interface MatrixSpalte {
@@ -86,8 +87,13 @@ export interface Sichtbarkeit {
 }
 
 /** Baut die WHERE-Bedingung für „darf ich das sehen".
- *  Bewusst als Fragment mit Parametern, nicht als String-Verkettung. */
-function sichtbarkeitsBedingung(s: Sichtbarkeit): { sql: string; werte: unknown[] } {
+ *  Bewusst als Fragment mit Parametern, nicht als String-Verkettung.
+ *
+ *  `ab` sagt, bei welcher Parameternummer das Fragment anfangen darf. Ohne
+ *  diesen Parameter müsste jede Abfrage, die noch eigene Werte mitbringt, die
+ *  Nummerierung im Kopf nachrechnen — und die zweite, die das tut, rechnet
+ *  falsch. */
+function sichtbarkeitsBedingung(s: Sichtbarkeit, ab = 1): { sql: string; werte: unknown[] } {
   if (s.sichtbareProjekte === "all") {
     // Admin: alles, auch fremde persönliche Aufgaben. Das ist dieselbe
     // Entscheidung wie überall sonst im System (siehe Papierkorb, Suche).
@@ -97,7 +103,7 @@ function sichtbarkeitsBedingung(s: Sichtbarkeit): { sql: string; werte: unknown[
   // die eigenen. Ohne den zweiten Teil verschwänden die persönlichen
   // Aufgaben komplett — `project_id = ANY(...)` ist bei NULL nicht wahr.
   return {
-    sql: "(t.project_id = ANY($1::uuid[]) OR (t.project_id IS NULL AND t.created_by = $2::uuid))",
+    sql: `(t.project_id = ANY($${ab}::uuid[]) OR (t.project_id IS NULL AND t.created_by = $${ab + 1}::uuid))`,
     werte: [s.sichtbareProjekte, s.benutzerId],
   };
 }
@@ -203,6 +209,35 @@ export const dbAufgabensystem = {
        RETURNING id
     `;
     return rows.length > 0;
+  },
+
+  /**
+   * Die Aufgaben im Tagesplan des Fragenden — nach Rang, dann nach Aufwand.
+   *
+   * Warum die Route das nicht aus `GET /tasks` filtert: dort steht zwar
+   * `tagesplanVon`, aber die Oberflaeche kennt die eigene `users.id` nicht.
+   * Sie muesste sie erst irgendwo herholen und dann selbst vergleichen — ein
+   * Filter, der bei jedem zweiten Aufrufer anders falsch waere. Hier weiss
+   * der Server ohnehin, wer fragt.
+   *
+   * `sichtbareProjekte` wird trotzdem angewandt: eine Aufgabe kann nach der
+   * Auswahl aus einem Projekt herausfallen, das man nicht mehr sehen darf.
+   */
+  async tagesplanAufgaben(s: Sichtbarkeit): Promise<Task[]> {
+    const db = getDb();
+    // Der eigene Benutzer ist $1, die Sichtbarkeit faengt darum bei $2 an.
+    const b = sichtbarkeitsBedingung(s, 2);
+    const sql = `
+      ${TASK_SELECT}
+       WHERE t.im_tagesplan = true
+         AND t.tagesplan_von = $1::uuid
+         AND ${OFFEN}
+         AND ${b.sql}
+       ORDER BY t.rang ASC, t.aufwand_min ASC NULLS LAST, t.created_at ASC
+    `;
+    const werte = [s.benutzerId, ...b.werte];
+    const rows = await db.unsafe(sql, werte as never[]);
+    return rows.map((r) => rowToTask(r as Record<string, unknown>));
   },
 
   /**
