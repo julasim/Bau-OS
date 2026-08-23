@@ -112,6 +112,28 @@ export function istNummerVergeben(fehler: unknown): boolean {
 }
 
 /**
+ * Die Projektnummer, wie sie in einem DOKUMENT stehen darf.
+ *
+ * Leer, wenn keine echte Nummer vorliegt. Das Gegenstueck zu `anzeigeNummer()`
+ * in `web/src/utils/projektnummer.ts`, nur fuer die Server-Seite.
+ *
+ * ── Warum das noetig ist ────────────────────────────────────────────────────
+ *
+ * Migration 052 hat Bestandsprojekten `OHNE-NUMMER-<id>` eingetragen, damit die
+ * Spalte Pflicht werden konnte. Ungefiltert landet dieser Platzhalter in jedem
+ * Dokument, das eine Projektnummer ausweist — Word-Vorlagen
+ * (`{Projekt.Projektnummer}`), Projektbericht, Markdown-Dossier. Also genau in
+ * dem, was das Haus verlaesst, und in einer Form, die wie eine Aktennummer
+ * aussieht. Jemand tippt sie dann ab.
+ *
+ * Ein leeres Feld ist die ehrlichere Auskunft: das Projekt hat (noch) keine
+ * Nummer.
+ */
+export function alsDokumentwert(nummer: string | null | undefined): string {
+  return !nummer || istPlatzhalter(nummer) ? "" : nummer;
+}
+
+/**
  * Die Projektnummer als Bestandteil eines DATEINAMENS.
  *
  * Die Nummer ist Freitext — eine Aktenordnung kennt `A-14/2` und

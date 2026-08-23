@@ -6,6 +6,7 @@ import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
+import ProjektBezug from "../components/ProjektBezug.vue";
 
 const { isAdmin, darfGeld } = useCurrentUser();
 const { confirm } = useConfirm();
@@ -62,6 +63,7 @@ interface Task {
   assigneeName?: string | null;
   date: string | null;
   project: string | null;
+  projektnummer?: string | null;
 }
 interface Termin {
   id: string;
@@ -71,6 +73,7 @@ interface Termin {
   assignees: string[];
   assigneeIds?: string[];
   project: string | null;
+  projektnummer?: string | null;
 }
 
 // ── State ────────────────────────────────────────────────
@@ -796,7 +799,7 @@ onUnmounted(() => {
                   style="color: inherit; text-decoration: none"
                   @click.stop
                 >
-                  {{ t.project }}
+                  <ProjektBezug :name="t.project" :nummer="t.projektnummer" />
                 </router-link>
                 <span v-if="t.project && t.date"> · </span>
                 <span v-if="t.date">{{ t.date }}</span>
@@ -837,7 +840,7 @@ onUnmounted(() => {
                     style="color: inherit; text-decoration: none"
                     @click.stop
                   >
-                    {{ te.project }}
+                    <ProjektBezug :name="te.project" :nummer="te.projektnummer" />
                   </router-link>
                 </template>
               </div>

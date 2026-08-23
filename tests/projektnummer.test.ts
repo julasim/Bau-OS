@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   alsDateinamensteil,
+  alsDokumentwert,
   mitProjektnummer,
   pruefeProjektnummer,
   vergleichbar,
@@ -129,6 +130,25 @@ describe("Projektnummer — die Regeln", () => {
       expect(istPlatzhalter("SAZTG-2026-014")).toBe(false);
       expect(istPlatzhalter(null)).toBe(false);
       expect(istPlatzhalter(undefined)).toBe(false);
+    });
+  });
+
+  describe("Als Wert in einem Dokument", () => {
+    it("gibt eine echte Nummer unverändert weiter", () => {
+      expect(alsDokumentwert("SAZTG-2026-014")).toBe("SAZTG-2026-014");
+    });
+
+    it("gibt für den Platzhalter nichts aus", () => {
+      // Sonst stünde `OHNE-NUMMER-49911aa9` in einem Schreiben, das das Haus
+      // verlässt — in einer Form, die wie eine Aktennummer aussieht. Jemand
+      // tippt sie dann ab.
+      expect(alsDokumentwert("OHNE-NUMMER-49911aa9")).toBe("");
+    });
+
+    it("gibt für fehlende Werte nichts aus", () => {
+      expect(alsDokumentwert(null)).toBe("");
+      expect(alsDokumentwert(undefined)).toBe("");
+      expect(alsDokumentwert("")).toBe("");
     });
   });
 

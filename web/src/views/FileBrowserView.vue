@@ -1117,7 +1117,14 @@ onBeforeUnmount(() => {
               </div>
               <div class="fb-preview-row">
                 <span class="fb-preview-key">Projekt</span>
-                <span class="fb-preview-val">{{ selected.node.project ?? "—" }}</span>
+                <span class="fb-preview-val">
+                  <ProjektBezug
+                    v-if="selected.node.project"
+                    :name="selected.node.project"
+                    :nummer="selected.node.projektnummer"
+                  />
+                  <template v-else>—</template>
+                </span>
               </div>
             </div>
             <div class="fb-preview-actions">

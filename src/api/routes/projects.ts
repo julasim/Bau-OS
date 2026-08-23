@@ -34,7 +34,12 @@ import { getVisibleProjectIds, canSeeProjectByName, type UserCtx } from "../../d
 import type { ProjectUpdate } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit, emitForProjectName } from "../events.js";
-import { pruefeProjektnummer, PROJEKTNUMMER_BEISPIEL, mitProjektnummer } from "../../data/projektnummer.js";
+import {
+  pruefeProjektnummer,
+  PROJEKTNUMMER_BEISPIEL,
+  mitProjektnummer,
+  alsDokumentwert,
+} from "../../data/projektnummer.js";
 
 // Hilfs-Builder: holt UserCtx aus dem Hono-Context — eine Stelle weniger,
 // an der man c.var-Felder vergisst.
@@ -322,7 +327,9 @@ projectsRoutes.get("/projects/:name/export.md", async (c) => {
   lines.push(`| Feld | Wert |`);
   lines.push(`|---|---|`);
   lines.push(`| Status | ${md(info.status)} |`);
-  lines.push(`| Projektnummer | ${md(info.projektnummer)} |`);
+  // `alsDokumentwert` statt des Rohwerts: der Platzhalter aus Migration 052
+  // saehe in einem Dossier wie eine Aktennummer aus.
+  lines.push(`| Projektnummer | ${md(alsDokumentwert(info.projektnummer) || null)} |`);
   lines.push(`| Bauherr | ${md(info.bauherr)} |`);
   lines.push(`| Standort | ${md(info.standort)} |`);
   lines.push(`| Projektart | ${md(info.projektart)} |`);

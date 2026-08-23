@@ -37,7 +37,7 @@ import {
   type ExportKind,
 } from "../data/db-export-templates.js";
 import { logError } from "../logger.js";
-import { mitProjektnummer } from "../data/projektnummer.js";
+import { mitProjektnummer, alsDokumentwert } from "../data/projektnummer.js";
 
 /** Wandelt einen beliebigen DB-Datumswert in TT.MM.JJJJ.
  *  postgres.js liefert DATE/TIMESTAMP als Date-Objekt; String(date) gibt
@@ -317,7 +317,8 @@ async function buildProjectSummaryData(projectName: string): Promise<Record<stri
   return {
     Projekt: {
       Name: String(p.name),
-      Projektnummer: p.projektnummer ? String(p.projektnummer) : "",
+      // Kein Platzhalter im Bericht — siehe alsDokumentwert().
+      Projektnummer: alsDokumentwert(p.projektnummer ? String(p.projektnummer) : null),
       Bauherr: p.bauherr_name ? String(p.bauherr_name) : p.bauherr ? String(p.bauherr) : "",
       Standort: p.standort ? String(p.standort) : "",
       Projektart: p.projektart ? String(p.projektart) : "",

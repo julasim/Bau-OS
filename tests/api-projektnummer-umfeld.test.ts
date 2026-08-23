@@ -171,6 +171,53 @@ Inhalt`,
     });
   });
 
+  // ── Der Platzhalter erreicht kein Dokument ────────────────────────────────
+
+  describe("Platzhalter in Ausgaben", () => {
+    // Migration 052 trägt Bestandsprojekten `OHNE-NUMMER-<id>` ein, damit die
+    // Spalte Pflicht werden konnte. Ungefiltert landet der in jedem Dokument,
+    // das eine Projektnummer ausweist — und sieht dort aus wie eine
+    // Aktennummer. Beim ersten Bau war genau das der Fall.
+    let mitPlatzhalter: string;
+
+    beforeAll(async () => {
+      const { getDb } = await import("../src/db/client.js");
+      mitPlatzhalter = `pnu-${P}-platz`;
+      await getDb()`
+        INSERT INTO projects (name, projektnummer, status)
+        VALUES (${mitPlatzhalter}, ${"OHNE-NUMMER-" + P.slice(0, 8)}, 'aktiv')`;
+    });
+
+    it("das Markdown-Dossier zeigt ihn nicht", async () => {
+      const res = await fx.app.request(`/api/projects/${encodeURIComponent(mitPlatzhalter)}/export.md`, {
+        headers: authHeader(fx.admin.token),
+      });
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      expect(text).not.toContain("OHNE-NUMMER");
+    });
+
+    it("und auch nicht im Dateinamen", async () => {
+      const res = await fx.app.request(`/api/projects/${encodeURIComponent(mitPlatzhalter)}/export.md`, {
+        headers: authHeader(fx.admin.token),
+      });
+      const name = decodeURIComponent(res.headers.get("content-disposition") ?? "");
+      expect(name).not.toContain("OHNE-NUMMER");
+      // Der Name bleibt unverändert — kein führendes Trennzeichen, weil die
+      // Nummer fehlte.
+      expect(name).toContain(`${mitPlatzhalter}.md`);
+    });
+
+    it("ein Projekt MIT Nummer trägt sie sehr wohl im Dossier", async () => {
+      // Gegenprobe: ohne sie wäre ein Filter, der einfach alles wegwirft,
+      // ebenfalls grün.
+      const res = await fx.app.request(`/api/projects/${encodeURIComponent(projekt)}/export.md`, {
+        headers: authHeader(fx.admin.token),
+      });
+      expect(await res.text()).toContain(nummer);
+    });
+  });
+
   // ── Eine belegte Nummer ist im Änderungspfad ein 409, kein 500 ────────────
 
   describe("Wettlauf beim Speichern", () => {

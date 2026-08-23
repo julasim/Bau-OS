@@ -12,6 +12,7 @@
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { alsIso } from "./zeitstempel.js";
+import { alsDokumentwert } from "./projektnummer.js";
 
 export type TemplateKind = "note" | "meeting" | "bautagebuch";
 
@@ -179,7 +180,9 @@ async function buildVariables(ctx: RenderContext): Promise<Record<string, string
     `;
     if (proj) {
       vars.Projekt = String(proj.name);
-      vars.Projektnummer = proj.projektnummer ? String(proj.projektnummer) : "";
+      // Ueber `alsDokumentwert`: der Platzhalter aus Migration 052 darf nicht
+      // in ein Schreiben geraten, das das Haus verlaesst.
+      vars.Projektnummer = alsDokumentwert(proj.projektnummer ? String(proj.projektnummer) : null);
       vars.Standort = proj.standort ? String(proj.standort) : "";
       vars.Ort = proj.standort ? String(proj.standort) : "";
       vars.Projektart = proj.projektart ? String(proj.projektart) : "";

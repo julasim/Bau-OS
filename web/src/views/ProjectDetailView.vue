@@ -1475,6 +1475,23 @@ const emptyStammCount = computed(() => {
   return offen + (anzeigeNummer(info.value.projektnummer) ? 0 : 1);
 });
 
+/**
+ * Der Anzeigewert eines Stammdatenfelds.
+ *
+ * Die Tabelle rendert alle Felder generisch über `info[f.key]`. Für die
+ * Projektnummer geht das seit Migration 052 nicht mehr: sie ist nie leer,
+ * sondern trägt notfalls den Platzhalter `OHNE-NUMMER-…`. Ungefiltert stünde
+ * er hier wie eine Aktennummer — und genau die würde jemand abtippen.
+ *
+ * Für alle anderen Felder bleibt es beim bisherigen Verhalten (Wert oder
+ * Gedankenstrich).
+ */
+function stammwert(key: EditableKey): string {
+  if (key === "projektnummer") return anzeigeNummer(info.value?.projektnummer) ?? "ohne Nummer";
+  const wert = info.value?.[key as keyof ProjectInfo];
+  return (wert as string) || "—";
+}
+
 // ── Bautagebuch (Migration 011) ───────────────────────────────────────────
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -2573,9 +2590,20 @@ async function deleteMeeting() {
                         </button>
                       </div>
                     </div>
-                    <!-- Anzeige (Klick = Bearbeiten) -->
-                    <button v-else class="ueb-stamm-value" @click="startEdit(f.key)" title="Bearbeiten">
-                      {{ (info[f.key as keyof ProjectInfo] as string) || "—" }}
+                    <!-- Anzeige (Klick = Bearbeiten)
+                         Die Projektnummer geht durch `stammwert()`: sie ist seit
+                         Migration 052 NIE leer, sondern trägt notfalls den
+                         Platzhalter `OHNE-NUMMER-…`. Ungefiltert stünde der hier
+                         wie eine Aktennummer — und genau die würde jemand
+                         abtippen. -->
+                    <button
+                      v-else
+                      class="ueb-stamm-value"
+                      :class="{ 'ueb-stamm-fehlt': f.key === 'projektnummer' && !anzeigeNummer(info.projektnummer) }"
+                      @click="startEdit(f.key)"
+                      title="Bearbeiten"
+                    >
+                      {{ stammwert(f.key) }}
                     </button>
                   </dd>
                 </template>
@@ -5735,6 +5763,12 @@ async function deleteMeeting() {
 }
 
 /* ── ueb-stamm-value (click-to-edit in ap-dl) ──────── */
+/* Fehlt die Projektnummer, ist das keine Formatierungsluecke, sondern eine
+   offene Aufgabe — deshalb die Warnfarbe und nicht das uebliche Grau. */
+.ueb-stamm-fehlt {
+  color: var(--warn);
+}
+
 .ueb-stamm-value {
   color: var(--color-text);
   background: transparent;

@@ -14,6 +14,7 @@ import DetailPane from "../../components/shell/DetailPane.vue";
 import StatusDot from "../../components/shell/StatusDot.vue";
 import BIcon from "../../components/BIcon.vue";
 import { useConfirm } from "../../composables/useConfirm";
+import { projektZeile } from "../../utils/projektnummer";
 
 const { confirm } = useConfirm();
 
@@ -43,7 +44,18 @@ const route = useRoute();
 const router = useRouter();
 const task = ref<Task | null>(null);
 const team = ref<TeamMini[]>([]);
-const projects = ref<string[]>([]);
+/** Die Projekte fuer das Auswahlfeld.
+ *
+ *  Der Typ stand hier seit dem 2026-05-10 als `string[]` — `GET /projects`
+ *  liefert aber vollstaendige Projekt-Objekte (`projectRepo.listInfos`). Die
+ *  Auswahl zeigte deshalb nicht Projektnamen, sondern das JSON jedes Projekts,
+ *  und ein Klick band ein Objekt an `task.project` statt eines Namens.
+ *
+ *  Gemessen ueber die laufende API: `GET /api/projects` gibt Objekte mit
+ *  `id, rev, name, description, status, color, projektnummer, …`.
+ *
+ *  Ein Typ, der nur behauptet statt zu pruefen, faellt eben nicht auf. */
+const projects = ref<{ name: string; projektnummer?: string | null }[]>([]);
 // Leistungsphasen des aktuellen Projekts (fuer das Phase-Dropdown).
 const phases = ref<{ id: string; name: string }[]>([]);
 const loading = ref(false);
@@ -82,7 +94,7 @@ async function loadAux() {
   try {
     [team.value, projects.value] = await Promise.all([
       api.get<TeamMini[]>("/team").catch(() => []),
-      api.get<string[]>("/projects").catch(() => []),
+      api.get<{ name: string; projektnummer?: string | null }[]>("/projects").catch(() => []),
     ]);
   } catch {
     /* no-op */
@@ -283,7 +295,12 @@ loadAux();
           <label class="pt-label" for="td-project">Projekt</label>
           <select id="td-project" v-model="task.project" class="pt-select" @change="onProjectChange">
             <option :value="null">—</option>
-            <option v-for="p in projects" :key="p" :value="p">{{ p }}</option>
+            <!-- Gebunden wird der NAME, angezeigt Nummer und Name. Ein
+                 <option> nimmt nur Text; die Baustein-Komponente laesst sich
+                 hier nicht verwenden. -->
+            <option v-for="p in projects" :key="p.name" :value="p.name">
+              {{ projektZeile(p.name, p.projektnummer) }}
+            </option>
           </select>
         </div>
 
