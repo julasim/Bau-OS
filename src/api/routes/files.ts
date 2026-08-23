@@ -12,6 +12,7 @@ import type { AppEnv } from "../server.js";
 import { projektBezugAusQuery } from "../projekt-bezug.js";
 import { canSeeProjectByName } from "../../data/access.js";
 import { alsIso } from "../../data/zeitstempel.js";
+import { contentDisposition } from "../dateiname.js";
 
 export const filesRoutes = new Hono<AppEnv>();
 
@@ -449,12 +450,12 @@ filesRoutes.get("/files/download", async (c) => {
     }
     const buf = fs.readFileSync(legacyPath);
     c.header("Content-Type", file.mimeType || "application/octet-stream");
-    c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(file.filename)}"`);
+    c.header("Content-Disposition", contentDisposition(file.filename));
     return c.body(new Uint8Array(buf));
   }
 
   c.header("Content-Type", result.mimeType || "application/octet-stream");
-  c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(result.filename)}"`);
+  c.header("Content-Disposition", contentDisposition(result.filename));
   return c.body(new Uint8Array(result.blob));
 });
 

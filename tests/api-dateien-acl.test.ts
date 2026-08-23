@@ -96,6 +96,24 @@ describe.skipIf(!HAS_DB)("Dateien — der schreibende Weg", () => {
     expect(fremd.status).toBe(403);
   });
 
+  it("ein Umlaut im Dateinamen kommt beim Download heil an", async () => {
+    // Ende-zu-Ende: hochladen, herunterladen, Header lesen. Vorher stand dort
+    // `filename="${encodeURIComponent(name)}"` — der Nutzer bekam wörtlich
+    // `Angebot%20M%C3%BCller.txt` auf die Platte. Ein Leerzeichen genügte.
+    const res = await upload(fx.a.token, "datei-acl-Angebot Müller & Söhne.txt", fx.projectName);
+    const id = await ersteId(res);
+
+    const geladen = await fx.app.request(`/api/files/download?id=${id}`, { headers: authHeader(fx.a.token) });
+    expect(geladen.status).toBe(200);
+    const cd = geladen.headers.get("Content-Disposition") ?? "";
+    expect(cd).toContain("filename*=UTF-8''");
+    // Die EINFACHE Angabe darf keine Prozentkodierung tragen — genau die
+    // landete vorher wörtlich auf der Platte des Nutzers.
+    expect(cd.match(/filename="([^"]*)"/)![1]).not.toMatch(/%[0-9A-F]{2}/i);
+    const wert = cd.split("filename*=UTF-8''")[1];
+    expect(decodeURIComponent(wert)).toBe("datei-acl-Angebot Müller & Söhne.txt");
+  });
+
   // ── Merkliste ─────────────────────────────────────────────────────────────
 
   it("B kann eine fremde Datei nicht markieren", async () => {

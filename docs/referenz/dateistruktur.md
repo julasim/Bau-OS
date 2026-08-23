@@ -21,6 +21,7 @@ src/
 │   ├── totp.ts           — TOTP-Hilfsfunktionen (derzeit nicht eingebunden)
 │   ├── geld.ts           — EINE Filterschicht für alle Geldbeträge
 │   ├── projekt-bezug.ts  — löst ?projectId=, ?projektnummer= und ?project= auf
+│   ├── dateiname.ts     — Dateiname im Content-Disposition-Header (RFC 5987)
 │   └── routes/           — 30 Route-Dateien, siehe unten
 ├── data/                 — Repository-Schicht (ausschließlich PostgreSQL)
 │   ├── index.ts          — einzige Import-Fläche für alle Repositories
@@ -243,6 +244,35 @@ unten steht.
 | `project-modules.ts` | Aktivierbare Module je Projekt |
 | `ui-preferences.ts` | Oberflächen-Einstellungen je Benutzer |
 | `auth-2fa.ts` | TOTP-Routen — **nicht eingebunden** (`server.ts:509` auskommentiert) |
+
+### `src/api/dateiname.ts`
+
+`contentDisposition(name, art)` baut den Header für jeden Download.
+
+In einem österreichischen Büro trägt fast jede zweite Datei einen Umlaut oder
+ein Leerzeichen, ein HTTP-Header darf aber nur ASCII enthalten. RFC 5987 löst
+das mit **zwei** Angaben im selben Header: `filename=` trägt eine
+ASCII-Notlösung für alte Clients, `filename*=UTF-8''…` den echten Namen
+prozentkodiert.
+
+::: warning `filename="${encodeURIComponent(name)}"` ist der falscheste Fall
+Genau das stand an drei Stellen. Ein Browser dekodiert innerhalb der
+Anführungszeichen **nichts** — der Nutzer bekam wörtlich
+`Angebot%20M%C3%BCller%20%26%20S%C3%B6hne.pdf` auf die Platte. Ein einziges
+Leerzeichen genügte.
+
+Insgesamt gab es zehn Stellen mit drei verschiedenen und drei falschen
+Antworten. Deshalb eine Funktion: bei zehn Einzelkorrekturen macht es die elfte
+Stelle wieder falsch.
+:::
+
+CR und LF werden entfernt, bevor irgendetwas in den Header geht — Node wirft
+darauf `ERR_INVALID_CHAR`, und aus dem Download würde ein 500er. Dateinamen
+entstehen bei Exporten aus Freitext (Projektname, Besprechungstitel).
+
+Die Gegenstelle steht im Frontend: `web/src/utils/dateiname.ts` liest
+`filename*` **bevorzugt**. Wer nur die einfache Angabe liest, speichert
+„Mueller" statt „Müller" und merkt es nie, weil beides plausibel aussieht.
 
 ### `src/api/geld.ts`
 

@@ -40,6 +40,7 @@ import {
   mitProjektnummer,
   alsDokumentwert,
 } from "../../data/projektnummer.js";
+import { contentDisposition } from "../dateiname.js";
 
 // Hilfs-Builder: holt UserCtx aus dem Hono-Context — eine Stelle weniger,
 // an der man c.var-Felder vergisst.
@@ -432,7 +433,7 @@ projectsRoutes.get("/projects/:name/export.md", async (c) => {
   // Projektname. Bereinigt, weil die Nummer Freitext ist und ein `/` unter
   // Windows keine Zeichenfolge, sondern eine Pfadtrennung waere.
   const dateiname = mitProjektnummer(info.projektnummer, `${info.name}.md`);
-  c.header("Content-Disposition", `attachment; filename="${encodeURIComponent(dateiname)}"`);
+  c.header("Content-Disposition", contentDisposition(dateiname));
   return c.body(body);
 });
 

@@ -35,6 +35,7 @@ import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
 import { meetingRepo, bautagebuchRepo } from "../../data/index.js";
 import { logError } from "../../logger.js";
 import { adminMiddleware } from "../auth.js";
+import { contentDisposition } from "../dateiname.js";
 
 export const exportTemplatesRoutes = new Hono<AppEnv>();
 
@@ -113,7 +114,7 @@ exportTemplatesRoutes.get("/export-templates/:id/test", async (c) => {
   try {
     const result = await renderDocxTest(id, userName(c));
     c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", `attachment; filename="${result.filename}"`);
+    c.header("Content-Disposition", contentDisposition(result.filename));
     return c.body(new Uint8Array(result.buffer));
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
@@ -127,7 +128,7 @@ exportTemplatesRoutes.get("/export-templates/:id/file", async (c) => {
   const blob = await loadExportTemplateBlob(c.req.param("id"));
   if (!blob) return c.json({ error: "Template nicht gefunden" }, 404);
   c.header("Content-Type", DOCX_MIME);
-  c.header("Content-Disposition", `attachment; filename="${blob.filename.replace(/"/g, "")}"`);
+  c.header("Content-Disposition", contentDisposition(blob.filename));
   return c.body(new Uint8Array(blob.buffer));
 });
 
@@ -219,7 +220,7 @@ exportTemplatesRoutes.get("/exports/meeting/:id", async (c) => {
       currentUserName: userName(c),
     });
     c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", `attachment; filename="${result.filename}"`);
+    c.header("Content-Disposition", contentDisposition(result.filename));
     return c.body(new Uint8Array(result.buffer));
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
@@ -244,7 +245,7 @@ exportTemplatesRoutes.get("/exports/bautagebuch/:id", async (c) => {
       currentUserName: userName(c),
     });
     c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", `attachment; filename="${result.filename}"`);
+    c.header("Content-Disposition", contentDisposition(result.filename));
     return c.body(new Uint8Array(result.buffer));
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
@@ -279,7 +280,7 @@ exportTemplatesRoutes.get("/exports/time-entries", async (c) => {
       currentUserName: userName(c),
     });
     c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", `attachment; filename="${result.filename}"`);
+    c.header("Content-Disposition", contentDisposition(result.filename));
     return c.body(new Uint8Array(result.buffer));
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
@@ -300,7 +301,7 @@ exportTemplatesRoutes.get("/exports/project/:name/summary", async (c) => {
       currentUserName: userName(c),
     });
     c.header("Content-Type", DOCX_MIME);
-    c.header("Content-Disposition", `attachment; filename="${result.filename}"`);
+    c.header("Content-Disposition", contentDisposition(result.filename));
     return c.body(new Uint8Array(result.buffer));
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);

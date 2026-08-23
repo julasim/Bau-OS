@@ -17,6 +17,7 @@ import type { AppEnv } from "../server.js";
 import { getBranding, updateBranding, setLogo, loadLogo } from "../../data/db-branding.js";
 import { logError } from "../../logger.js";
 import { adminMiddleware } from "../auth.js";
+import { contentDisposition } from "../dateiname.js";
 
 export const brandingRoutes = new Hono<AppEnv>();
 
@@ -116,7 +117,7 @@ publicBrandingRoutes.get("/branding/logo", async (c) => {
   c.header("Content-Type", logo.mimeType);
   c.header("Cache-Control", "public, max-age=300"); // 5min Browser-Cache
   if (logo.filename) {
-    c.header("Content-Disposition", `inline; filename="${logo.filename.replace(/"/g, "")}"`);
+    c.header("Content-Disposition", contentDisposition(logo.filename, "inline"));
   }
   // Buffer ist eine Subclass von Uint8Array — Hono auf @hono/node-server
   // akzeptiert Uint8Array direkt. Der frueher verwendete .buffer.slice()-

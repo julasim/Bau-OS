@@ -13,6 +13,7 @@ import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 import { anzeigeNummer, PROJEKTNUMMER_BEISPIEL } from "../utils/projektnummer";
 import { copyToClipboard } from "../utils/clipboard";
+import { dateinameAusHeader } from "../utils/dateiname";
 
 const { isAdmin, darfGeld } = useCurrentUser();
 const { confirm } = useConfirm();
@@ -1760,9 +1761,9 @@ async function downloadDocx(url: string, fallbackFilename: string) {
       return;
     }
     const blob = await res.blob();
-    const cd = res.headers.get("Content-Disposition") ?? "";
-    const m = cd.match(/filename="([^"]+)"/);
-    const filename = m ? m[1] : fallbackFilename;
+    // Liest `filename*=UTF-8''…` bevorzugt — sonst gewinnt der ASCII-Ersatzname,
+    // und aus „Müller" wird „Mueller" auf der Platte des Nutzers.
+    const filename = dateinameAusHeader(res.headers.get("Content-Disposition"), fallbackFilename ?? "export");
     const objUrl = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = objUrl;
