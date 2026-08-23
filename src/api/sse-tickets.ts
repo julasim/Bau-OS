@@ -15,6 +15,7 @@
 // ============================================================
 
 import crypto from "crypto";
+import type { Rolle } from "../data/access.js";
 
 /** Wer hinter einem Ticket steckt.
  *
@@ -28,7 +29,7 @@ import crypto from "crypto";
 export interface TicketIdentity {
   /** `users.id`. `null` bei Legacy-Konten ohne UUID. */
   userId: string | null;
-  role: "admin" | "user";
+  role: Rolle;
 }
 
 type TicketEntry = TicketIdentity & { expiresAt: number };

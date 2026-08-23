@@ -17,7 +17,13 @@
 
 import { Hono } from "hono";
 import { meetingRepo, projectRepo } from "../../data/index.js";
-import { canSeeProject, canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import {
+  canSeeProject,
+  canSeeProjectByName,
+  getVisibleProjectIds,
+  type UserCtx,
+  type Rolle,
+} from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import type { MeetingInput } from "../../data/types.js";
@@ -33,7 +39,7 @@ function ausloeserName(c: {
   return u?.displayName ?? u?.username ?? null;
 }
 
-function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
 }
 
@@ -41,7 +47,7 @@ function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" }
 async function resolveProject(c: {
   req: { param: (k: string) => string };
   json: (obj: unknown, status?: number) => Response;
-  var: { userId: string | null; userRole: "admin" | "user" };
+  var: { userId: string | null; userRole: Rolle };
 }): Promise<{ id: string; name: string } | { error: Response }> {
   const projectName = decodeURIComponent(c.req.param("projectName") ?? "");
   if (!projectName) return { error: c.json({ error: "Projektname fehlt" }, 400) };

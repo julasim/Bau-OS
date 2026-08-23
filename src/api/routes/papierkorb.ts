@@ -25,7 +25,7 @@
 
 import { Hono } from "hono";
 import { noteRepo, taskRepo, terminRepo, projectRepo } from "../../data/index.js";
-import { getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import { getVisibleProjectIds, type UserCtx, type Rolle } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import type { PapierkorbEintrag, PapierkorbFaehig } from "../../data/types.js";
 import { emit } from "../events.js";
@@ -42,7 +42,7 @@ const ARTEN = {
 };
 type Art = keyof typeof ARTEN;
 
-function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
 }
 
@@ -82,7 +82,7 @@ papierkorbRoutes.get("/papierkorb", async (c) => {
  *  entscheidet dieselbe Menge ueber die Rechte, die auch angezeigt wird. Wer
  *  einen Eintrag nicht sieht, kann ihn auch nicht zurueckholen. */
 async function eintragMitRecht(c: {
-  var: { userId: string | null; userRole: "admin" | "user" };
+  var: { userId: string | null; userRole: Rolle };
   req: { param: (k: string) => string };
 }): Promise<{ art: (typeof ARTEN)[Art]; id: string; eintrag: PapierkorbEintrag } | { fehler: 400 | 403 | 404 }> {
   const typ = c.req.param("typ") as Art;

@@ -19,7 +19,7 @@ import type { DataEvent, EventScope } from "../events.js";
 import type { AppEnv } from "../server.js";
 import { consumeTicket, createTicket } from "../sse-tickets.js";
 import type { TicketIdentity } from "../sse-tickets.js";
-import { getVisibleProjectIds } from "../../data/access.js";
+import { getVisibleProjectIds, alsRolle } from "../../data/access.js";
 import { findDbUserById } from "../auth.js";
 import { logError } from "../../logger.js";
 
@@ -69,7 +69,7 @@ eventsRoutes.post("/events/ticket", (c) => {
   const user = c.get("user");
   const ticket = createTicket({
     userId: c.get("userId") ?? user?.sub ?? null,
-    role: c.get("userRole") === "admin" ? "admin" : "user",
+    role: alsRolle(c.get("userRole")),
   });
   return c.json({ ticket });
 });
@@ -91,7 +91,7 @@ eventsRoutes.get("/events", async (c) => {
   } else {
     const role = c.get("userRole");
     if (!role) return c.json({ error: "Nicht autorisiert" }, 401);
-    identity = { userId: c.get("userId") ?? null, role: role === "admin" ? "admin" : "user" };
+    identity = { userId: c.get("userId") ?? null, role: alsRolle(role) };
   }
 
   // Optionaler Filter auf Event-Typen

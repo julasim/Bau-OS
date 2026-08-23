@@ -10,7 +10,7 @@ export type AppEnv = {
   Variables: {
     user: JwtPayload;
     userId: string | null;
-    userRole: "admin" | "user";
+    userRole: Rolle;
     dbUser: DbUser | null;
   };
 };
@@ -43,6 +43,8 @@ import {
 import { logEvent as audit } from "../data/db-audit.js";
 import { KonfliktFehler } from "../data/konflikt.js";
 import { geldFilter } from "./geld.js";
+import { personendatenFilter, schreibschutz } from "./personendaten.js";
+import type { Rolle } from "../data/access.js";
 
 /** Liefert die Client-IP fuer Rate-Limiting und Audit-Eintraege.
  *  Wichtig: nur die ERSTE IP aus x-forwarded-for verwenden — sonst kann
@@ -81,6 +83,7 @@ import { positionskatalogRoutes } from "./routes/positionskatalog.js";
 import { aktivitaetRoutes } from "./routes/aktivitaet.js";
 import { aufgabensystemRoutes } from "./routes/aufgabensystem.js";
 import { benachrichtigungenRoutes } from "./routes/benachrichtigungen.js";
+import { boardRoutes } from "./routes/board.js";
 import { sicherungRoutes } from "./routes/sicherung.js";
 import { papierkorbRoutes } from "./routes/papierkorb.js";
 import { timeEntriesRoutes } from "./routes/time-entries.js";
@@ -498,6 +501,19 @@ app.use("/api/*", authMiddleware);
 // aus dicht.
 app.use("/api/*", geldFilter);
 
+// ── Praesentationsrolle: Schreibschutz und Personendaten ─────────────────────
+//
+// Der Schreibschutz steht VOR allen Routen: es gibt 94 schreibende Endpunkte,
+// und jeden einzeln zu bewachen heisst, den 95. zu vergessen — genau so sind
+// die siebzehn Rechte-Luecken entstanden, die im August geschlossen wurden.
+//
+// Der Personendaten-Filter arbeitet wie der Geld-Filter auf dem Rueckweg:
+// `GET /api/team` liefert sonst jedem angemeldeten Konto E-Mail und
+// Telefonnummer aller Mitglieder. Im Buero richtig, im Besprechungsraum nicht
+// — dort sitzen auch Bauherren.
+app.use("/api/*", schreibschutz);
+app.use("/api/*", personendatenFilter);
+
 // ── Auth-Check ───────────────────────────────────────────────────────────────
 // Liefert minimales Profil fuer die Web-UI (Avatar, Begruessung, Settings).
 // displayName kommt aus user.settings.displayName — falls nicht gesetzt,
@@ -539,6 +555,7 @@ app.route("/api", positionskatalogRoutes);
 app.route("/api", aktivitaetRoutes);
 app.route("/api", aufgabensystemRoutes);
 app.route("/api", benachrichtigungenRoutes);
+app.route("/api", boardRoutes);
 app.route("/api", sicherungRoutes);
 app.route("/api", papierkorbRoutes);
 app.route("/api", timeEntriesRoutes);

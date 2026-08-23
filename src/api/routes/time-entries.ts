@@ -15,14 +15,14 @@
 
 import { Hono } from "hono";
 import { timeEntryRepo, projectRepo } from "../../data/index.js";
-import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
+import { canSeeProjectByName, type UserCtx, type Rolle } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import type { TimeEntryInput } from "../../data/types.js";
 
 export const timeEntriesRoutes = new Hono<AppEnv>();
 
-function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
 }
 
@@ -38,7 +38,7 @@ timeEntriesRoutes.use("/team/:memberId/time-entries", dbGuard);
 async function resolveProject(c: {
   req: { param: (k: string) => string };
   json: (obj: unknown, status?: number) => Response;
-  var: { userId: string | null; userRole: "admin" | "user" };
+  var: { userId: string | null; userRole: Rolle };
 }): Promise<{ id: string; name: string } | { error: Response }> {
   const projectName = decodeURIComponent(c.req.param("projectName") ?? "");
   if (!projectName) return { error: c.json({ error: "Projektname fehlt" }, 400) };

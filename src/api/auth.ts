@@ -7,6 +7,8 @@ import { encryptString, decryptString } from "./crypto.js";
 import { peekTicket } from "./sse-tickets.js";
 import type { Context, Next } from "hono";
 import { alsIso } from "../data/zeitstempel.js";
+import type { Rolle } from "../data/access.js";
+import { alsRolle } from "../data/access.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,7 +33,7 @@ export interface DbUser {
   username: string;
   passwordHash: string;
   displayName: string | null;
-  role: "admin" | "user";
+  role: Rolle;
   isProtected: boolean;
   /** Darf Betraege sehen — Stundensaetze, Rechnungen, Budgets,
    *  Deckungsbeitrag (Migration 043). Voreinstellung geschlossen; Admins sind
@@ -67,7 +69,7 @@ function rowToDbUser(row: Record<string, unknown>): DbUser {
     username: String(row.username),
     passwordHash: String(row.password_hash),
     displayName: row.display_name ? String(row.display_name) : null,
-    role: (row.role === "admin" ? "admin" : "user") as DbUser["role"],
+    role: alsRolle(row.role),
     isProtected: row.is_protected === true,
     canSeeMoney: row.can_see_money === true,
     totpEnabled: row.totp_enabled === true,
@@ -128,7 +130,7 @@ export async function listDbUsers(): Promise<DbUser[]> {
 export async function createDbUser(input: {
   username: string;
   password: string;
-  role: "admin" | "user";
+  role: Rolle;
   displayName?: string | null;
   /** Optional. Wenn gesetzt: User ueberspringt den Email-Setup-Gate beim
    *  ersten Login — Admin hat die Email schon hinterlegt. */
@@ -185,7 +187,7 @@ export async function updateDbUser(
   id: string,
   patch: {
     username?: string;
-    role?: "admin" | "user";
+    role?: Rolle;
     displayName?: string | null;
     email?: string | null;
     canSeeMoney?: boolean;
@@ -341,7 +343,7 @@ export async function importLegacyJsonUsers(): Promise<{ imported: number; skipp
     }
 
     const isAdmin = ju.role === "admin";
-    const role: "admin" | "user" = isAdmin ? "admin" : "user";
+    const role: Rolle = isAdmin ? "admin" : "user";
     const shouldProtect = isAdmin && needsProtected;
     if (shouldProtect) needsProtected = false; // nur den ersten
 
@@ -525,7 +527,7 @@ export async function authMiddleware(c: Context, next: Next): Promise<Response |
   // Die Rolle kommt IMMER aus der Datenbank, nie aus dem JWT — sonst behielte
   // ein altes Admin-Token nach einer Herabstufung sieben Tage lang seine
   // Rechte.
-  const userRole = dbUser.role === "admin" ? "admin" : "user";
+  const userRole = alsRolle(dbUser.role);
   c.set("userRole", userRole);
 
   await next();

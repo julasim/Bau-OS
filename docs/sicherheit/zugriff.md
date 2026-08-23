@@ -71,10 +71,17 @@ antwortet der Endpunkt mit 410.
 
 ## Rollen
 
-| Rolle | Sichtbarkeit |
-|---|---|
-| **admin** | Alles. `getVisibleProjectIds()` liefert den Sentinel `"all"`, es wird gar nicht gefiltert |
-| **user** | Nur die Projekte aus der Zuordnungstabelle `user_projects` |
+| Rolle | Sichtbarkeit | Schreiben | Beträge | Kontaktdaten |
+|---|---|---|---|---|
+| **admin** | Alles (`getVisibleProjectIds()` liefert `"all"`) | ja | ja | ja |
+| **user** | Nur die Projekte aus `user_projects` | ja | nur mit Geld-Recht | ja |
+| **praesentation** | Alle Projekte | **nein** | **nie** | **nie** |
+
+Die dritte Rolle ist das [Board für den Besprechungsraum](/betrieb/board). Sie
+ist eine Beschränkung, kein Zugangsschlüssel: der Schreibschutz ist **eine**
+Middleware vor allen Routen, und das Geld-Recht wird für sie hart auf „nein"
+gesetzt — sonst genügte ein versehentlich gesetzter Schalter im
+Benutzerdialog, um Honorare an die Wand zu werfen.
 
 Datensätze **ohne** Projektbezug sind persönlich:
 

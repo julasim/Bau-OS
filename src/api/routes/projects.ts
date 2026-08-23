@@ -30,7 +30,7 @@
 import { Hono } from "hono";
 import { projectRepo, taskRepo, terminRepo, teamRepo } from "../../data/index.js";
 import { findDbUserById } from "../auth.js";
-import { getVisibleProjectIds, canSeeProjectByName, type UserCtx } from "../../data/access.js";
+import { getVisibleProjectIds, canSeeProjectByName, type UserCtx, type Rolle } from "../../data/access.js";
 import type { ProjectUpdate } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit, emitForProjectName } from "../events.js";
@@ -44,7 +44,7 @@ import { contentDisposition } from "../dateiname.js";
 
 // Hilfs-Builder: holt UserCtx aus dem Hono-Context — eine Stelle weniger,
 // an der man c.var-Felder vergisst.
-function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
 }
 

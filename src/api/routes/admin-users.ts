@@ -28,6 +28,8 @@ import { PASSWORD_MIN_LENGTH } from "../../config.js";
 import { emit } from "../events.js";
 import { logEvent as audit } from "../../data/db-audit.js";
 import type { Context } from "hono";
+import type { Rolle } from "../../data/access.js";
+import { alsRolle } from "../../data/access.js";
 
 export const adminUsersRoutes = new Hono<AppEnv>();
 
@@ -123,7 +125,17 @@ adminUsersRoutes.post("/admin/users", async (c) => {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return c.json({ error: "Ungueltige Email-Adresse" }, 400);
   }
-  const role = body.role === "admin" ? "admin" : "user";
+  // ── Ein unbekanntes Rollenwort ist ein Fehler, keine stille Korrektur ────
+  //
+  // Hier stand `body.role === "admin" ? "admin" : "user"`. Wer sich vertippte,
+  // bekam wortlos ein Benutzerkonto — und beim naechsten Speichern kam es als
+  // „Benutzer" zurueck, ohne dass irgendwo etwas rot wurde. Mit einer dritten
+  // Rolle ist das kein Schoenheitsfehler mehr: ein Praesentationskonto, das
+  // sich stillschweigend in ein normales verwandelt, darf danach schreiben.
+  if (body.role !== undefined && !["admin", "user", "praesentation"].includes(String(body.role))) {
+    return c.json({ error: `Unbekannte Rolle: "${String(body.role)}"` }, 400);
+  }
+  const role = alsRolle(body.role);
 
   // Duplicate-Check: bevor wir ans bcrypt-Hashing gehen.
   const existing = await findDbUserByUsername(username);
@@ -176,7 +188,7 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
 
   const patch: {
     username?: string;
-    role?: "admin" | "user";
+    role?: Rolle;
     displayName?: string | null;
     email?: string | null;
     canSeeMoney?: boolean;
@@ -200,7 +212,10 @@ adminUsersRoutes.patch("/admin/users/:id", async (c) => {
   }
 
   if ("role" in body) {
-    const newRole = body.role === "admin" ? "admin" : "user";
+    if (!["admin", "user", "praesentation"].includes(String(body.role))) {
+      return c.json({ error: `Unbekannte Rolle: "${String(body.role)}"` }, 400);
+    }
+    const newRole = alsRolle(body.role);
     // Schutzregel A: geschuetzter Admin bleibt Admin.
     if (target.isProtected && newRole !== "admin") {
       return c.json({ error: "Geschuetzter Admin kann nicht herabgestuft werden" }, 403);

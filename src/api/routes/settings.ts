@@ -27,12 +27,13 @@ type AppEnv = {
   Variables: {
     user: JwtPayload;
     userId: string | null;
-    userRole: "admin" | "user";
+    userRole: Rolle;
     dbUser: DbUser | null;
   };
 };
 import { LANGUAGE, LOCALE, TIMEZONE, DB_ENABLED } from "../../config.js";
 import { logInfo } from "../../logger.js";
+import type { Rolle } from "../../data/access.js";
 
 export const settingsRoutes = new Hono<AppEnv>();
 

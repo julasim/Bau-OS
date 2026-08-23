@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { taskRepo, projectRepo, teamRepo } from "../../data/index.js";
-import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import { canSeeProjectByName, getVisibleProjectIds, type UserCtx, type Rolle } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
 import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
@@ -19,7 +19,7 @@ function ausloeserName(c: {
   return u?.displayName ?? u?.username ?? null;
 }
 
-function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
 }
 

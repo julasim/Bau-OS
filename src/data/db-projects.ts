@@ -9,6 +9,7 @@ import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Project, ProjectAccessEntry, ProjectCreateOptions, ProjectRepository, ProjectUpdate } from "./types.js";
 import { alsIso } from "./zeitstempel.js";
 import { pruefeProjektnummer, vergleichbar, istNummerVergeben, istPlatzhalter } from "./projektnummer.js";
+import { alsRolle } from "./access.js";
 
 // Mapping: camelCase-API-Feld ↔ snake_case-Spaltenname.
 // Wird beim dynamischen UPDATE genutzt, um tippfest aus dem Patch auf
@@ -524,7 +525,7 @@ export const dbProjects: ProjectRepository = {
       userId: String(r.id),
       username: String(r.username),
       displayName: r.display_name ? String(r.display_name) : null,
-      role: r.role === "admin" ? "admin" : "user",
+      role: alsRolle(r.role),
       addedAt: alsIso(r.added_at),
     }));
   },

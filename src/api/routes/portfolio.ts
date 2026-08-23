@@ -7,12 +7,12 @@
 
 import { Hono } from "hono";
 import { portfolioRepo } from "../../data/index.js";
-import { getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import { getVisibleProjectIds, type UserCtx, type Rolle } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 
 export const portfolioRoutes = new Hono<AppEnv>();
 
-function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
 }
 

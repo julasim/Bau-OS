@@ -32,11 +32,11 @@ import {
   deleteCustomVariable,
 } from "../../data/db-custom-placeholders.js";
 import { adminMiddleware } from "../auth.js";
-import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
+import { canSeeProjectByName, type UserCtx, type Rolle } from "../../data/access.js";
 
 /** Hilfs-Builder: holt UserCtx aus dem Hono-Context — dieselbe Form wie in
  *  src/api/routes/projects.ts. */
-function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
 }
 

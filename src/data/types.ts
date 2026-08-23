@@ -1,4 +1,5 @@
 // ============================================================
+import type { Rolle } from "../data/access.js";
 // PATIO — Data Layer: Entity-Typen & Repository-Interfaces
 // Gemeinsame Typen fuer Filesystem- und DB-Implementierungen.
 // ============================================================
@@ -217,7 +218,7 @@ export interface ProjectAccessEntry {
   userId: string;
   username: string;
   displayName: string | null;
-  role: "admin" | "user";
+  role: Rolle;
   addedAt: string;
 }
 

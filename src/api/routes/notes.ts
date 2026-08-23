@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { noteRepo, projectRepo } from "../../data/index.js";
-import { canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import { canSeeProjectByName, getVisibleProjectIds, type UserCtx, type Rolle } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import type { NoteMeta, NoteSummary } from "../../data/types.js";
 import { emitForProjectName } from "../events.js";
@@ -8,7 +8,7 @@ import { projektBezug } from "../projekt-bezug.js";
 
 export const notesRoutes = new Hono<AppEnv>();
 
-function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
 }
 

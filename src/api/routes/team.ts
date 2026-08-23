@@ -4,7 +4,7 @@ import type { MemberType, ContactLogEntry } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import { darfGeldSehen } from "../geld.js";
-import { getVisibleProjectIds, canSeeProject } from "../../data/access.js";
+import { getVisibleProjectIds, canSeeProject, type Rolle } from "../../data/access.js";
 
 export const teamRoutes = new Hono<AppEnv>();
 
@@ -18,7 +18,7 @@ function normalizeMemberType(v: unknown): MemberType | null {
 
 /** Sichtbare Projekte des Aufrufers — begrenzt die Projektzuordnungen, die
  *  an den Mitgliedern haengen. */
-async function sichtbar(c: { var: { userId: string | null; userRole: "admin" | "user" } }) {
+async function sichtbar(c: { var: { userId: string | null; userRole: Rolle } }) {
   return getVisibleProjectIds({ userId: c.var.userId, role: c.var.userRole });
 }
 

@@ -95,6 +95,15 @@ export function ohneGeld(wert: unknown): unknown {
  *  Admins implizit ja — sonst sperrte sich die Person, die das Recht vergibt,
  *  beim ersten Start selbst aus. */
 export function darfGeldSehen(c: Context): boolean {
+  // ── Die Praesentationsrolle sieht NIE Betraege ───────────────────────────
+  //
+  // Hart, vor allem anderen. Sonst genuegte ein versehentlich gesetzter
+  // Schalter im Benutzerdialog, um Honorare an die Wand des
+  // Besprechungsraums zu werfen — in dem auch Bauherren sitzen.
+  //
+  // Das Recht steht an einer Person („darf Betraege sehen"), die Rolle an
+  // einem Geraet. Bei einem Geraet ist die Antwort immer nein.
+  if (c.var.userRole === "praesentation") return false;
   if (c.var.userRole === "admin") return true;
   return c.var.dbUser?.canSeeMoney === true;
 }

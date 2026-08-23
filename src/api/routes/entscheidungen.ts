@@ -15,14 +15,20 @@
 
 import { Hono } from "hono";
 import { entscheidungRepo, projectRepo } from "../../data/index.js";
-import { canSeeProject, canSeeProjectByName, getVisibleProjectIds, type UserCtx } from "../../data/access.js";
+import {
+  canSeeProject,
+  canSeeProjectByName,
+  getVisibleProjectIds,
+  type UserCtx,
+  type Rolle,
+} from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
 import type { EntscheidungInput } from "../../data/types.js";
 
 export const entscheidungenRoutes = new Hono<AppEnv>();
 
-function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" } }): UserCtx {
+function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };
 }
 
@@ -30,7 +36,7 @@ function userCtx(c: { var: { userId: string | null; userRole: "admin" | "user" }
 async function resolveProject(c: {
   req: { param: (k: string) => string };
   json: (obj: unknown, status?: number) => Response;
-  var: { userId: string | null; userRole: "admin" | "user" };
+  var: { userId: string | null; userRole: Rolle };
 }): Promise<{ id: string; name: string } | { error: Response }> {
   const projectName = decodeURIComponent(c.req.param("projectName") ?? "");
   if (!projectName) return { error: c.json({ error: "Projektname fehlt" }, 400) };
@@ -47,7 +53,7 @@ async function resolveProject(c: {
 async function ladenMitRecht(c: {
   req: { param: (k: string) => string };
   json: (obj: unknown, status?: number) => Response;
-  var: { userId: string | null; userRole: "admin" | "user" };
+  var: { userId: string | null; userRole: Rolle };
 }) {
   const id = c.req.param("id");
   const entscheidung = await entscheidungRepo.get(id);

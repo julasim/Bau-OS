@@ -55,6 +55,7 @@ export default defineConfig({
           { text: "PATIO installieren", link: "/betrieb/installation" },
           { text: "Zertifikat", link: "/betrieb/zertifikat" },
           { text: "Arbeitsplatz-Programm", link: "/betrieb/arbeitsplatz" },
+          { text: "Board (Besprechungsraum)", link: "/betrieb/board" },
           { text: "Netzfreigabe", link: "/betrieb/freigabe" },
           { text: "Datenübernahme", link: "/betrieb/datenuebernahme" },
           { text: "Updates", link: "/betrieb/updates" },

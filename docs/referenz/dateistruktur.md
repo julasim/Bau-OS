@@ -20,6 +20,9 @@ src/
 │   ├── file-validation.ts— Upload-Prüfung: Endung und Magic Bytes
 │   ├── totp.ts           — TOTP-Hilfsfunktionen (derzeit nicht eingebunden)
 │   ├── geld.ts           — EINE Filterschicht für alle Geldbeträge
+│   ├── personendaten.ts  — Kontaktdaten-Filter + Schreibschutz (Präsentationsrolle)
+│   ├── melden.ts         — wer bekommt wovon eine Benachrichtigung
+│   ├── persoenlich.ts    — gehört dieser projektlose Datensatz mir?
 │   ├── projekt-bezug.ts  — löst ?projectId=, ?projektnummer= und ?project= auf
 │   ├── dateiname.ts     — Dateiname im Content-Disposition-Header (RFC 5987)
 │   └── routes/           — 30 Route-Dateien, siehe unten
@@ -221,6 +224,7 @@ unten steht.
 | `tasks.ts` | Aufgaben |
 | `aufgabensystem.ts` | Eingang, Matrix und Tagesplan — die drei Arbeitsweisen des Aufgabenreiters |
 | `benachrichtigungen.ts` | Neuigkeiten je Person, mit Lesestatus |
+| `board.ts` | Vier Aggregate für den [Bildschirm im Besprechungsraum](/betrieb/board) |
 | `termine.ts` | Termine |
 | `projects.ts` | Projekte und Stammdaten |
 | `search.ts` | Volltextsuche |

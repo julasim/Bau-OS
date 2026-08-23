@@ -24,7 +24,7 @@ import {
   deleteCustomModule,
 } from "../../data/db-custom-modules.js";
 import { adminMiddleware } from "../auth.js";
-import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
+import { canSeeProjectByName, type UserCtx, type Rolle } from "../../data/access.js";
 
 export const projectModulesRoutes = new Hono<AppEnv>();
 
@@ -47,7 +47,7 @@ projectModulesRoutes.on(["POST", "PATCH", "DELETE"], ["/project-modules", "/proj
 /** Sichtbarkeit des Projekts aus dem Pfad. Liefert die fertige Antwort, wenn
  *  der Aufrufer es nicht sehen darf — sonst `null`. */
 async function projektGesperrt(c: {
-  var: { userId: string | null; userRole: "admin" | "user" };
+  var: { userId: string | null; userRole: Rolle };
   json: (o: unknown, s: 403) => Response;
   req: { param: (k: string) => string };
 }): Promise<Response | null> {

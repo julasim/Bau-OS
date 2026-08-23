@@ -45,7 +45,7 @@ import {
   type ExportKind,
 } from "../../data/db-export-templates.js";
 import { renderDocxExport, renderDocxTest, listExportVariables, DocxRenderError } from "../../export/docx-render.js";
-import { canSeeProjectByName, type UserCtx } from "../../data/access.js";
+import { canSeeProjectByName, type UserCtx, type Rolle } from "../../data/access.js";
 import { meetingRepo, bautagebuchRepo, invoiceRepo, projectRepo } from "../../data/index.js";
 import { darfGeldSehen } from "../geld.js";
 import { logError } from "../../logger.js";
@@ -112,7 +112,7 @@ function isDocxFilename(name: string): boolean {
   return /\.docx$/i.test(name);
 }
 
-type CtxTraeger = { var: { userId: string | null; userRole: "admin" | "user" } };
+type CtxTraeger = { var: { userId: string | null; userRole: Rolle } };
 
 function userCtx(c: CtxTraeger): UserCtx {
   return { userId: c.var.userId, role: c.var.userRole };

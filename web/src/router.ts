@@ -6,6 +6,15 @@ const router = createRouter({
   routes: [
     { path: "/login", name: "login", component: () => import("./views/LoginView.vue") },
     { path: "/setup", name: "setup", component: () => import("./views/SetupView.vue") },
+    // ── Board fuer den Besprechungsraum ───────────────────────────────────
+    //
+    // Bewusst NEBEN dem AppLayout und nicht darin: es hat keine
+    // Navigationsleiste, keine Listenspalte, keine Bedienung ausser dem
+    // Umschalten. Ein Bildschirm an der Wand ist kein Arbeitsplatz.
+    //
+    // Angemeldet sein muss man trotzdem — der Wachposten unten greift auch
+    // hier.
+    { path: "/board", name: "board", component: () => import("./views/BoardView.vue") },
     {
       path: "/",
       component: () => import("./components/AppLayout.vue"),
