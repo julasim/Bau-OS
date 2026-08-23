@@ -160,6 +160,27 @@ app.onError((err, c) => {
     );
   }
 
+  // 23505 = unique_violation. Zwei Arbeitsplaetze speichern gleichzeitig
+  // dieselbe eindeutige Angabe — das ist ein Konflikt, kein Serverfehler.
+  //
+  // Die Repos pruefen vorher, ob der Wert frei ist, und fangen den Wettlauf im
+  // INSERT ab. Der Schreibpfad von `projectRepo.update()` geht aber ueber
+  // `db.unsafe()` mit dynamisch gebautem SET und hat keinen eigenen Rueckfall;
+  // dort wurde daraus bisher „Interner Fehler". Hier steht die letzte
+  // Auffanglinie fuer alle eindeutigen Spalten des Hauses — heute der
+  // Projektname (Migration 006) und die Projektnummer (052).
+  if (code === "23505") {
+    const bedingung = String((err as { constraint_name?: string }).constraint_name ?? "");
+    const text = bedingung.includes("projektnummer")
+      ? "Diese Projektnummer ist bereits vergeben"
+      : bedingung.includes("projects_name_unique")
+        ? "Ein Projekt mit diesem Namen existiert bereits"
+        : "Dieser Wert ist bereits vergeben";
+    // Bewusst OHNE Nennung des Datensatzes, der den Wert traegt: das waere
+    // eine Auskunft ueber etwas, das der Fragende womoeglich nicht sehen darf.
+    return c.json({ error: text }, 409);
+  }
+
   // Postgres-SQLSTATEs, die eine sinnvolle Antwort erlauben:
   //   57014 = abgebrochen durch statement_timeout (z.B. eine zu teure Suche)
   //   53300 = zu viele Verbindungen

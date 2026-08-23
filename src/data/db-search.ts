@@ -100,6 +100,29 @@ function clampLimit(limit: number): number {
   return Math.min(Math.trunc(limit), SEARCH_LIMIT_MAX);
 }
 
+// ── Warum Projekte zusaetzlich per ILIKE auf der Nummer gesucht werden ──────
+//
+// (Steht HIER und nicht im SQL: Backticks in einem Template-Literal beenden
+// die Zeichenkette. Genau dieser Kommentar hat die Datei beim Schreiben schon
+// einmal zerlegt.)
+//
+// Die Volltextsuche kennt die Projektnummer laengst — `such_text` ist eine
+// GENERATED-Spalte und enthaelt sie seit Migration 048. Sie zerlegt die
+// Nummer aber in ganze Woerter. Gemessen an
+// `to_tsvector('german', 'SAZTG-2026-014')`:
+//
+//     'saztg':1  '-2026':2  '-014':3
+//
+// Damit findet man `SAZTG-2026-014`, `SAZTG` und `SAZTG-2026` — aber NICHT
+// `2026-014`. Und genau so tippt jemand, der das Buerokuerzel weglaesst, weil
+// es bei jedem Projekt des Hauses gleich ist.
+//
+// Fuer solche Teilstuecke ist ILIKE zustaendig; Migration 052 legt dafuer den
+// Trigramm-Index `idx_projects_projektnummer_trgm` an. Ohne diese Zeile im
+// WHERE waere er totes Gewicht.
+//
+// Ein Treffer auf der Nummer zaehlt wie ein Treffer im Namen (TITEL_BONUS):
+// wer eine Aktennummer eintippt, sucht dieses eine Projekt und nichts sonst.
 export const dbSearch = {
   /**
    * Sucht ueber Notizen, Aufgaben, Projekte und Dateien.
@@ -196,9 +219,11 @@ export const dbSearch = {
           SELECT 'project'::text, pr.id::text, pr.name,
                  left(pr.description, ${SNIPPET_SOURCE_MAX}::int), pr.name, pr.updated_at,
                  ts_rank(pr.such_text, frage.tsq) +
-                   CASE WHEN pr.name ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END
+                   CASE WHEN pr.name ILIKE ${like} OR pr.projektnummer ILIKE ${like}
+                        THEN ${TITEL_BONUS}::real ELSE 0 END
             FROM projects pr, frage
-           WHERE (pr.such_text @@ frage.tsq OR pr.name ILIKE ${like})
+           -- ILIKE auch auf der Projektnummer -- Begruendung ueber der Funktion.
+           WHERE (pr.such_text @@ frage.tsq OR pr.name ILIKE ${like} OR pr.projektnummer ILIKE ${like})
              AND pr.deleted_at IS NULL
              AND (${all} OR pr.id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR pr.id = ${projectId}::uuid)

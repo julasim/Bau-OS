@@ -36,6 +36,7 @@ import path from "path";
 import crypto from "crypto";
 import { DB_ENABLED, WORKSPACE_PATH } from "../src/config.js";
 import { getDb, checkDbHealth, closeDb } from "../src/db/index.js";
+import { PLATZHALTER_PRAEFIX } from "../src/data/projektnummer.js";
 
 // ── Validierung ─────────────────────────────────────────────
 
@@ -173,9 +174,21 @@ try {
 
     const folderPath = path.join(projektePath, name);
     const id = crypto.randomUUID();
+    // Die Projektnummer ist seit Migration 052 Pflicht und eindeutig. Aus dem
+    // Vault laesst sie sich nicht ableiten — dort gibt es nur Ordnernamen.
+    //
+    // Deshalb derselbe Platzhalter, den auch 052 fuer Bestandsprojekte setzt:
+    // erkennbar als „noch keine Nummer", eindeutig von Bauart, und in der
+    // Oberflaeche als nachzutragen ausgewiesen. Eine erfundene Nummer waere
+    // schlimmer als ein sichtbares Loch — sie saehe aus wie eine Aktennummer.
+    //
+    // Ohne diese Zeile bricht der Import nach 052 mit einem NOT-NULL-Fehler
+    // ab. Dasselbe Skript ist schon einmal monatelang unbemerkt beim Start
+    // gescheitert, deshalb steht die Begruendung hier und nicht im Commit.
+    const platzhalter = `${PLATZHALTER_PRAEFIX}${id.slice(0, 8)}`;
     await db`
-      INSERT INTO projects (id, name, folder_path, status)
-      VALUES (${id}, ${name}, ${folderPath}, 'aktiv')
+      INSERT INTO projects (id, name, folder_path, status, projektnummer)
+      VALUES (${id}, ${name}, ${folderPath}, 'aktiv', ${platzhalter})
     `;
     projectIds.set(name, id);
     totalProjects++;

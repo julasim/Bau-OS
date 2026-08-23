@@ -26,12 +26,17 @@ export const dbPortfolio: PortfolioRepository = {
     const db = getDb();
 
     // Projekt-Grunddaten (gefiltert auf Sichtbarkeit).
+    // `deleted_at IS NULL` in BEIDEN Zweigen. Es fehlte hier ganz — seit
+    // Migration 044 loescht PATIO nur noch weich, und das Portfolio-Cockpit
+    // zeigte darum weiterhin Projekte, die im Papierkorb liegen. Betroffen war
+    // nicht nur die Verwaltung: `"all"` liefert `access.ts` auch dann, wenn
+    // das Repository kein `listVisibleProjectIds` hat.
     const projects =
       visibleProjectIds === "all"
-        ? await db`SELECT id, name, projektnummer, status, budget FROM projects ORDER BY name`
+        ? await db`SELECT id, name, projektnummer, status, budget FROM projects WHERE deleted_at IS NULL ORDER BY name`
         : visibleProjectIds.length === 0
           ? []
-          : await db`SELECT id, name, projektnummer, status, budget FROM projects WHERE id = ANY(${visibleProjectIds}::uuid[]) ORDER BY name`;
+          : await db`SELECT id, name, projektnummer, status, budget FROM projects WHERE id = ANY(${visibleProjectIds}::uuid[]) AND deleted_at IS NULL ORDER BY name`;
 
     if (projects.length === 0) return [];
 
