@@ -201,35 +201,6 @@ useEvents(["task"], () => {
 </template>
 
 <style scoped>
-.au-seite {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-6);
-  padding: var(--space-8) var(--space-8) var(--space-12);
-  max-width: 940px;
-}
-
-.au-eyebrow {
-  font-size: var(--fs-10);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--fg-subtle);
-}
-.au-titel {
-  margin: var(--space-2) 0 0;
-  font-size: var(--fs-34);
-  font-weight: var(--fw-medium);
-  color: var(--fg);
-  letter-spacing: -0.02em;
-}
-.au-lead {
-  margin: var(--space-3) 0 0;
-  max-width: 62ch;
-  font-size: var(--fs-13);
-  line-height: 1.6;
-  color: var(--fg-muted);
-}
-
 .au-erfassen {
   display: flex;
   gap: var(--space-2);
@@ -239,33 +210,6 @@ useEvents(["task"], () => {
   height: 44px;
   font-size: var(--fs-15);
 }
-
-.au-fehler {
-  margin: 0;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--danger);
-  border-radius: var(--radius-md);
-  background: var(--danger-bg);
-  color: var(--danger-fg);
-  font-size: var(--fs-13);
-}
-
-.au-block-kopf {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-3);
-}
-.au-block-titel {
-  margin: 0;
-  font-size: var(--fs-14);
-  font-weight: var(--fw-medium);
-  color: var(--fg);
-}
-.au-block-zahl {
-  font-size: var(--fs-20);
-  font-variant-numeric: tabular-nums;
-  color: var(--warn);
-}
 .au-block-zahl--leer {
   color: var(--ok);
 }
@@ -274,56 +218,17 @@ useEvents(["task"], () => {
   font-size: var(--fs-12);
   color: var(--fg-subtle);
 }
-
-.au-rest {
-  margin: var(--space-3) 0 0;
-  font-size: var(--fs-11);
-  line-height: 1.5;
-  color: var(--fg-subtle);
-}
-
-.au-hinweis {
-  margin: 0;
-  padding: var(--space-6);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius-md);
-  text-align: center;
-  font-size: var(--fs-13);
-  color: var(--fg-muted);
-}
 .au-hinweis--gut {
   border-style: solid;
   border-color: var(--ok);
   background: var(--ok-bg);
   color: var(--ok);
 }
-
-.au-liste {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
-.au-zeile {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  padding: var(--space-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
 .au-zeile-kopf {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-4);
-}
-.au-zeile-text {
-  font-size: var(--fs-14);
-  color: var(--fg-body);
 }
 .au-zeile-projekt {
   flex: none;
@@ -349,9 +254,6 @@ useEvents(["task"], () => {
 }
 
 @media (max-width: 720px) {
-  .au-seite {
-    padding: var(--space-5) var(--space-4) var(--space-10);
-  }
   .au-zeile-steuerung {
     gap: var(--space-3);
   }

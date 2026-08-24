@@ -89,12 +89,4 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown));
   gap: 8px;
   margin-top: 20px;
 }
-.patio-btn.danger {
-  background: #dc2626;
-  color: #fff;
-  border-color: #dc2626;
-}
-.patio-btn.danger:hover {
-  opacity: 0.9;
-}
 </style>

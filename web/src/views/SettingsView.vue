@@ -2520,12 +2520,6 @@ onMounted(() => {
   color: var(--fg, var(--color-text));
 }
 
-.settings-card {
-  border: 1px solid var(--border, var(--color-border));
-  border-radius: var(--radius-lg, 8px);
-  background: var(--surface, var(--color-bg));
-}
-
 .settings-divide > .settings-row + .settings-row,
 .settings-divide > label.settings-row + .settings-row,
 .settings-divide > .settings-row + label.settings-row,

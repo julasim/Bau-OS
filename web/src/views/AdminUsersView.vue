@@ -606,9 +606,6 @@ function formatDate(iso?: string) {
   color: var(--color-text);
   background: var(--color-bg-subtle);
 }
-.row-action-danger:hover:not(:disabled) {
-  color: var(--color-danger-text);
-}
 .row-action:disabled {
   opacity: 0.3;
   cursor: not-allowed;

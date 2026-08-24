@@ -160,32 +160,4 @@ useEvents(["note"], () => load());
   text-align: center;
   color: var(--fg-muted);
 }
-.empty-icon {
-  font-size: 32px;
-  margin-bottom: 4px;
-}
-.empty-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--fg-secondary);
-  margin: 0;
-}
-.empty-sub {
-  font-size: 12px;
-  margin: 0;
-}
-.empty-cta {
-  margin-top: 8px;
-  padding: 7px 16px;
-  background: var(--fg-primary);
-  color: var(--bg-app);
-  border: none;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.empty-cta:hover {
-  opacity: 0.85;
-}
 </style>

@@ -2,6 +2,9 @@ import { createApp } from "vue";
 import "./patio-tokens.css";
 import "./patio-components.css";
 import "./patio-shell.css";
+// Klassen, die mehrere Fach-Ansichten teilen. Stand frueher scoped in je
+// einer Ansicht und wirkte dort, wo sie geliehen war, nicht.
+import "./patio-fach.css";
 import App from "./App.vue";
 import { router } from "./router";
 import "./style.css";

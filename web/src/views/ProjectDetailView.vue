@@ -13,7 +13,7 @@ import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
 import { anzeigeNummer, PROJEKTNUMMER_BEISPIEL } from "../utils/projektnummer";
 import { copyToClipboard } from "../utils/clipboard";
-import { dateiHolen } from "../utils/download";
+import { useWordExport } from "../composables/useWordExport";
 import { istProjektTab, type ProjektTab } from "./projekt-tabs";
 
 const { isAdmin, darfGeld } = useCurrentUser();
@@ -1798,85 +1798,32 @@ async function newMeeting() {
  *  Die eigentliche Arbeit steht in `utils/download.ts` — sie wird inzwischen
  *  auch vom Rechnungs-Reiter gebraucht, und eine zweite Kopie hätte irgendwann
  *  eine andere Fehlerbehandlung. */
-async function downloadDocx(url: string, fallbackFilename: string) {
-  const fehler = await dateiHolen(url, fallbackFilename || "export");
-  if (fehler) await confirm({ message: fehler, confirmLabel: "OK", cancelLabel: "" });
-}
-
-// ── Welche Word-Vorlage wird benutzt? ────────────────────────────────────
-//
-// Alle vier Export-Endpunkte lesen `?templateId=`, die Oberfläche hat es
-// **nie gesendet**. Damit war jede Vorlage ausser der als Standard markierten
-// im Betrieb unerreichbar — obwohl Upload, Testdruck, Download und
-// Variablen-Dokumentation vollständig gebaut sind. Wer eine zweite Vorlage
-// anlegte („Protokoll kurz"), konnte sie nur im Testdruck sehen.
-//
-// Die Auswahl erscheint nur, wenn es für diese Art mehr als eine Vorlage
-// gibt. Bei einer einzigen wäre ein Auswahlfeld mit einem Eintrag nur
-// Bedienlast.
-interface ExportVorlage {
-  id: string;
-  name: string;
-  kind: string;
-  isDefault: boolean;
-}
-
-const exportVorlagen = ref<ExportVorlage[]>([]);
-// Kann dieser Server PDF? LibreOffice ist optional (rund 350 MB, und jedes
-// Offline-Update trägt sie mit). Ein PDF-Knopf, der auf jedem zweiten Server
-// einen Fehler liefert, ist schlechter als keiner.
-const pdfMoeglich = ref(false);
-const gewaehlteVorlage = ref<Record<string, string>>({});
-
-async function ladeExportVorlagen() {
-  try {
-    exportVorlagen.value = await api.get<ExportVorlage[]>("/export-templates");
-  } catch {
-    exportVorlagen.value = [];
-  }
-  try {
-    pdfMoeglich.value = (await api.get<{ pdf: boolean }>("/exports/faehigkeiten")).pdf;
-  } catch {
-    pdfMoeglich.value = false;
-  }
-}
-
-function vorlagenFuer(kind: string): ExportVorlage[] {
-  return exportVorlagen.value.filter((v) => v.kind === kind);
-}
-
-/** Hängt `?templateId=` und bei Bedarf `?format=pdf` an. */
-function mitVorlage(pfad: string, kind: string, alsPdf = false): string {
-  const teile: string[] = [];
-  const id = gewaehlteVorlage.value[kind];
-  if (id) teile.push("templateId=" + encodeURIComponent(id));
-  if (alsPdf) teile.push("format=pdf");
-  if (teile.length === 0) return pfad;
-  return pfad + (pfad.includes("?") ? "&" : "?") + teile.join("&");
-}
-
-/** Endung passend zum Format — sonst liegt eine PDF als .docx auf der Platte. */
-const endung = (alsPdf: boolean) => (alsPdf ? "pdf" : "docx");
+// Vorlagen-Auswahl und Download stehen jetzt in `composables/useWordExport.ts`
+// — sie werden von mehreren Reitern gebraucht, und beim Aufteilen der Akte in
+// eigene Reiter-Komponenten waere daraus eine Kopie je Reiter geworden.
+const { pdfMoeglich, gewaehlteVorlage, ladeExportVorlagen, vorlagenFuer, mitVorlage, endung, download } = useWordExport(
+  (fehler) => confirm({ message: fehler, confirmLabel: "OK", cancelLabel: "" }).then(() => undefined),
+);
 
 async function exportMeetingDocx(id: string, alsPdf = false) {
-  await downloadDocx(mitVorlage(`/api/exports/meeting/${id}`, "meeting", alsPdf), `Meeting-${id}.${endung(alsPdf)}`);
+  await download(mitVorlage(`/api/exports/meeting/${id}`, "meeting", alsPdf), `Meeting-${id}.${endung(alsPdf)}`);
 }
 async function exportBautagebuchDocx(id: string, alsPdf = false) {
-  await downloadDocx(
+  await download(
     mitVorlage(`/api/exports/bautagebuch/${id}`, "bautagebuch", alsPdf),
     `Bautagebuch-${id}.${endung(alsPdf)}`,
   );
 }
 async function exportTimeEntriesDocx(alsPdf = false) {
   const project = encodeURIComponent(projectName.value);
-  await downloadDocx(
+  await download(
     mitVorlage(`/api/exports/time-entries?project=${project}`, "time-entry", alsPdf),
     `Stundenzettel-${projectName.value}.${endung(alsPdf)}`,
   );
 }
 async function exportProjectSummaryDocx(alsPdf = false) {
   const n = encodeURIComponent(projectName.value);
-  await downloadDocx(
+  await download(
     mitVorlage(`/api/exports/project/${n}/summary`, "project-summary", alsPdf),
     `Projekt-${projectName.value}.${endung(alsPdf)}`,
   );
@@ -1885,7 +1832,7 @@ async function exportProjectSummaryDocx(alsPdf = false) {
 /** Rechnung als Word oder PDF. Die fünfte Export-Art — sie fehlte ganz,
  *  obwohl alle Daten im System stehen. */
 async function exportRechnung(id: string, nummer: string | null, alsPdf = false) {
-  await downloadDocx(
+  await download(
     mitVorlage(`/api/exports/invoice/${id}`, "invoice", alsPdf),
     `Rechnung ${nummer ?? id}.${endung(alsPdf)}`,
   );
@@ -4226,16 +4173,6 @@ async function deleteMeeting() {
 <style scoped>
 /* ── Vorlagen-Wähler beim Export ────────────────────────────
    Erscheint nur, wenn es für diese Art mehr als eine Vorlage gibt. */
-.vorlagen-waehler {
-  margin-left: auto;
-  font-size: 11px;
-  padding: 3px 6px;
-  border: 1px solid var(--color-border);
-  border-radius: 5px;
-  background: var(--color-bg);
-  color: var(--color-text-muted);
-  max-width: 180px;
-}
 .pd-nr-fehlt {
   color: var(--warn);
 }
@@ -4263,15 +4200,6 @@ async function deleteMeeting() {
   width: 100%;
   max-width: 380px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
-}
-.settings-row {
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-.settings-row:last-child {
-  border-bottom: 0;
-}
-.settings-divide > .settings-row + .settings-row {
-  border-top: 0;
 }
 
 /* ── Back-Link ──────────────────────────────────────────── */
@@ -4387,66 +4315,8 @@ async function deleteMeeting() {
     grid-template-columns: repeat(2, 1fr);
   }
 }
-
-.stamm-field {
-  min-width: 0;
-}
 .stamm-field-editing {
   grid-column: span 2;
-}
-
-.stamm-label {
-  margin-bottom: 4px;
-}
-
-.stamm-value {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: transparent;
-  border: none;
-  padding: 2px 0;
-  font-size: 13px;
-  color: var(--color-text);
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
-  border-radius: 3px;
-  transition: background 180ms ease;
-}
-.stamm-value:hover {
-  background: var(--color-bg-subtle);
-}
-.stamm-value-empty {
-  color: var(--color-text-faint);
-  font-style: italic;
-}
-.stamm-value-text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.stamm-edit-icon {
-  color: var(--color-text-faint);
-  opacity: 0;
-  transition: opacity 180ms ease;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-.stamm-value:hover .stamm-edit-icon {
-  opacity: 1;
-}
-
-.stamm-input {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--color-primary);
-  border-radius: 6px;
-  font-size: 13px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  outline: none;
 }
 
 .chip-suggest {
@@ -4547,10 +4417,6 @@ async function deleteMeeting() {
 .tab-btn:hover {
   color: var(--color-text);
 }
-.tab-btn-active {
-  color: var(--color-text);
-  border-bottom-color: var(--color-primary);
-}
 
 .detail-row {
   display: flex;
@@ -4630,14 +4496,6 @@ async function deleteMeeting() {
   font-size: 14px;
   line-height: 1.7;
   color: var(--color-text-secondary);
-}
-
-.empty-hint {
-  font-size: 13px;
-  color: var(--color-text-tertiary);
-  text-align: center;
-  padding: 28px;
-  margin: 0;
 }
 
 .placeholder-tab {
@@ -5315,72 +5173,6 @@ async function deleteMeeting() {
 /* ── Aktions-Menue ─────────────────────────────────────── */
 .action-menu-wrapper {
   position: relative;
-}
-.action-btn {
-  width: 28px;
-  height: 24px;
-  border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-subtle);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 180ms ease;
-}
-.action-btn:hover {
-  color: var(--color-text);
-  border-color: var(--color-text-faint);
-}
-
-.action-menu {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 180px;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 4px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  z-index: 50;
-}
-.action-menu-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 10px;
-  background: transparent;
-  border: none;
-  border-radius: 5px;
-  font-size: 12px;
-  color: var(--color-text);
-  cursor: pointer;
-  text-align: left;
-  transition: background 120ms ease;
-}
-.action-menu-item:hover {
-  background: var(--color-bg-subtle);
-}
-.action-menu-item svg {
-  color: var(--color-text-muted);
-  flex-shrink: 0;
-}
-.action-menu-danger {
-  color: var(--color-danger-text);
-}
-.action-menu-danger svg {
-  color: var(--color-danger-text);
-}
-.action-menu-danger:hover {
-  background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
-}
-.action-menu-divider {
-  height: 1px;
-  background: var(--color-border-subtle);
-  margin: 4px 2px;
 }
 
 /* ── Modal (Loesch-Bestaetigung) ───────────────────────── */

@@ -1181,16 +1181,6 @@ onUnmounted(() => {
 .stamm-value:hover .stamm-edit-icon {
   opacity: 1;
 }
-.stamm-input {
-  width: 100%;
-  padding: 6px 10px;
-  border: 1px solid var(--color-primary);
-  border-radius: 6px;
-  font-size: 13px;
-  background: var(--color-bg);
-  color: var(--color-text);
-  outline: none;
-}
 
 /* Tabs */
 .stunden-tabelle {
@@ -1309,14 +1299,6 @@ onUnmounted(() => {
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.empty-hint {
-  font-size: 13px;
-  color: var(--color-text-tertiary);
-  text-align: center;
-  padding: 28px;
-  margin: 0;
 }
 
 .placeholder-tab {

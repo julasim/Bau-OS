@@ -1,0 +1,345 @@
+/* ============================================================
+   PATIO — Geteilte Klassen der Fach-Ansichten
+   ============================================================
+   Alles hier stand vorher im `<style scoped>` EINER Ansicht und wurde von
+   mindestens einer ZWEITEN benutzt. Scoped-CSS gilt nur in der eigenen
+   Komponente: dort, wo die Klasse „geliehen“ war, hatte sie keine Wirkung —
+   ohne Fehlermeldung, ohne Build-Problem, ohne Typfehler.
+
+   Nachgemessen im Browser vor dem Umzug (Ansicht „Firmen“): `.stamm-input`
+   ohne Rahmen, ohne Radius, ohne Innenabstand. Betroffen waren ausserdem die
+   Aufgaben-Ansichten „Matrix“ und „Mein Tag“ (die gesamte `.au-*`-Ebene),
+   die Team-Detailseite (Stammdaten-Felder und Zeilen-Menü) sowie die rote
+   Lösch-Schaltfläche in drei Ansichten.
+
+   `tests/web/geteilte-klassen.test.ts` hält das fest: eine scoped definierte
+   Klasse darf in keiner anderen Komponente auftauchen.
+   ============================================================ */
+
+/* ── Stammdaten-Felder und Zeilen-Menue (Projektakte + Team-Detail) ──
+   Herkunft: web/src/views/ProjectDetailView.vue */
+.settings-row {
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.settings-row:last-child {
+  border-bottom: 0;
+}
+.settings-divide > .settings-row + .settings-row {
+  border-top: 0;
+}
+
+.stamm-field {
+  min-width: 0;
+}
+
+.stamm-label {
+  margin-bottom: 4px;
+}
+
+.stamm-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  font-size: 13px;
+  color: var(--color-text);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  border-radius: 3px;
+  transition: background 180ms ease;
+}
+.stamm-value:hover {
+  background: var(--color-bg-subtle);
+}
+.stamm-value-empty {
+  color: var(--color-text-faint);
+  font-style: italic;
+}
+.stamm-value-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stamm-edit-icon {
+  color: var(--color-text-faint);
+  opacity: 0;
+  transition: opacity 180ms ease;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.stamm-value:hover .stamm-edit-icon {
+  opacity: 1;
+}
+.tab-btn-active {
+  color: var(--color-text);
+  border-bottom-color: var(--color-primary);
+}
+.action-btn {
+  width: 28px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-subtle);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 180ms ease;
+}
+.action-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-faint);
+}
+
+.action-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 180px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 50;
+}
+.action-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--color-text);
+  cursor: pointer;
+  text-align: left;
+  transition: background 120ms ease;
+}
+.action-menu-item:hover {
+  background: var(--color-bg-subtle);
+}
+.action-menu-item svg {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+.action-menu-danger {
+  color: var(--color-danger-text);
+}
+.action-menu-danger svg {
+  color: var(--color-danger-text);
+}
+.action-menu-danger:hover {
+  background: color-mix(in srgb, var(--color-danger-text) 10%, transparent);
+}
+.action-menu-divider {
+  height: 1px;
+  background: var(--color-border-subtle);
+  margin: 4px 2px;
+}
+
+/* ── Karten-Abschnitt der Einstellungen (auch in der Projektakte benutzt) ──
+   Herkunft: web/src/views/SettingsView.vue */
+.settings-card {
+  border: 1px solid var(--border, var(--color-border));
+  border-radius: var(--radius-lg, 8px);
+  background: var(--surface, var(--color-bg));
+}
+
+/* ── Aufgaben-Ansichten (Eingang, Matrix, Mein Tag) ──
+   Herkunft: web/src/views/aufgaben/EingangView.vue */
+.au-seite {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-8) var(--space-8) var(--space-12);
+  max-width: 940px;
+}
+
+.au-eyebrow {
+  font-size: var(--fs-10);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-subtle);
+}
+.au-titel {
+  margin: var(--space-2) 0 0;
+  font-size: var(--fs-34);
+  font-weight: var(--fw-medium);
+  color: var(--fg);
+  letter-spacing: -0.02em;
+}
+.au-lead {
+  margin: var(--space-3) 0 0;
+  max-width: 62ch;
+  font-size: var(--fs-13);
+  line-height: 1.6;
+  color: var(--fg-muted);
+}
+
+.au-fehler {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-md);
+  background: var(--danger-bg);
+  color: var(--danger-fg);
+  font-size: var(--fs-13);
+}
+
+.au-block-kopf {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.au-block-titel {
+  margin: 0;
+  font-size: var(--fs-14);
+  font-weight: var(--fw-medium);
+  color: var(--fg);
+}
+.au-block-zahl {
+  font-size: var(--fs-20);
+  font-variant-numeric: tabular-nums;
+  color: var(--warn);
+}
+
+.au-rest {
+  margin: var(--space-3) 0 0;
+  font-size: var(--fs-11);
+  line-height: 1.5;
+  color: var(--fg-subtle);
+}
+
+.au-hinweis {
+  margin: 0;
+  padding: var(--space-6);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  font-size: var(--fs-13);
+  color: var(--fg-muted);
+}
+
+.au-liste {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.au-zeile {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.au-zeile-text {
+  font-size: var(--fs-14);
+  color: var(--fg-body);
+}
+
+@media (max-width: 720px) {
+  .au-seite {
+    padding: var(--space-5) var(--space-4) var(--space-10);
+  }
+}
+
+/* ── Formularfelder der Projekt-Reiter (Phasen, Rechnungen) ──
+   Herkunft: web/src/views/projects-v2/ProjectInvoicesTab.vue */
+.ph-field {
+  margin-bottom: 12px;
+}
+.ph-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ph-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-faint);
+  margin-bottom: 5px;
+}
+.ph-error {
+  font-size: 13px;
+  color: var(--color-danger-text);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+.ph-editor-empty {
+  border: 1px dashed var(--color-border);
+  border-radius: 12px;
+  padding: 28px 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-faint);
+  font-size: 13px;
+}
+
+/* ── Loeschen-Aktion in Listenzeilen ──
+   Herkunft: web/src/views/AdminUsersView.vue */
+.row-action-danger:hover:not(:disabled) {
+  color: var(--color-danger-text);
+}
+
+/* ── Leerzustand einer Listenspalte ──
+   Herkunft: web/src/views/notes-v2/NotesListPane.vue */
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 4px;
+}
+.empty-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg-secondary);
+  margin: 0;
+}
+.empty-sub {
+  font-size: 12px;
+  margin: 0;
+}
+.empty-cta {
+  margin-top: 8px;
+  padding: 7px 16px;
+  background: var(--fg-primary);
+  color: var(--bg-app);
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.empty-cta:hover {
+  opacity: 0.85;
+}
+
+/* ── Gefahren-Schaltflaeche ──
+   Herkunft: web/src/components/ConfirmDialog.vue */
+.patio-btn.danger {
+  background: #dc2626;
+  color: #fff;
+  border-color: #dc2626;
+}
+.patio-btn.danger:hover {
+  opacity: 0.9;
+}

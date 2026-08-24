@@ -744,43 +744,6 @@ onMounted(async () => {
   font-weight: 600;
   flex: 1;
 }
-.ph-field {
-  margin-bottom: 12px;
-}
-.ph-field-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-.ph-label {
-  display: block;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--color-text-faint);
-  margin-bottom: 5px;
-}
-.ph-error {
-  font-size: 13px;
-  color: var(--color-danger-text);
-  background: var(--color-danger-bg);
-  border: 1px solid var(--color-danger-border);
-  border-radius: 8px;
-  padding: 8px 12px;
-  margin-bottom: 12px;
-}
-.ph-editor-empty {
-  border: 1px dashed var(--color-border);
-  border-radius: 12px;
-  padding: 28px 16px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: var(--color-text-faint);
-  font-size: 13px;
-}
 
 /* ── Positionen (Migration 046) ─────────────────────────────────────────── */
 .pos-head {
