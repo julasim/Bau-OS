@@ -14,6 +14,7 @@ import { useConfirm } from "../composables/useConfirm";
 import { anzeigeNummer, PROJEKTNUMMER_BEISPIEL } from "../utils/projektnummer";
 import { copyToClipboard } from "../utils/clipboard";
 import { dateiHolen } from "../utils/download";
+import { istProjektTab, type ProjektTab } from "./projekt-tabs";
 
 const { isAdmin, darfGeld } = useCurrentUser();
 const { confirm } = useConfirm();
@@ -189,43 +190,16 @@ const newTerminAssigneeFree = ref<string[]>([]);
 // Task-Quick-Add: ein Team-Mitglied als Assignee (Single-Mode)
 const newTaskAssigneeId = ref<string | null>(null);
 // Stufe 3d: Uebersicht ist jetzt der Start-Tab.
-type Tab =
-  | "uebersicht"
-  | "phasen"
-  | "rechnungen"
-  | "entscheidungen"
-  | "notes"
-  | "tasks"
-  | "termine"
-  | "files"
-  | "team"
-  | "bautagebuch"
-  | "meetings"
-  | "stunden"
-  | "zugriff";
+//
+// Welche Reiter es gibt, steht in `views/projekt-tabs.ts` — dieselbe Quelle,
+// aus der die ContextSidebar ihre Eintraege nimmt. Frueher stand die Liste
+// hier ein zweites Mal; lief sie auseinander, setzte die Leiste ein `?tab=`,
+// das hier auf "uebersicht" zurueckfiel — und blieb trotzdem aktiv markiert.
+type Tab = ProjektTab;
 const tab = ref<Tab>("uebersicht");
+const isValidTab = istProjektTab;
 
-// Gueltige Tab-Keys (fuer URL-Query-Validierung via NavRail-Sidebar).
-const VALID_TABS: Tab[] = [
-  "uebersicht",
-  "phasen",
-  "rechnungen",
-  "entscheidungen",
-  "notes",
-  "tasks",
-  "termine",
-  "files",
-  "team",
-  "bautagebuch",
-  "meetings",
-  "stunden",
-  "zugriff",
-];
-function isValidTab(t: unknown): t is Tab {
-  return typeof t === "string" && (VALID_TABS as string[]).includes(t);
-}
-
-// NavRail (Projekt-Sidebar) navigiert ueber ?tab=. Aenderung der Query →
+// Die ContextSidebar navigiert ueber ?tab=. Aenderung der Query →
 // internen Tab umschalten. Der Guard in openTab verhindert eine Push-Schleife.
 watch(
   () => route.query.tab,

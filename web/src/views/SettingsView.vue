@@ -4,6 +4,11 @@ import { ref, onMounted, computed, watch } from "vue";
 import { api } from "../api";
 import { useConfirm } from "../composables/useConfirm";
 import { PASSWORD_MIN_LENGTH } from "../constants";
+import { useRoute, useRouter } from "vue-router";
+import { SETTINGS_NAV, bereichNachRechten, sichtbareSektionen, type SettingsSection } from "./settings-nav";
+
+const route = useRoute();
+const router = useRouter();
 
 const { confirm } = useConfirm();
 
@@ -1060,51 +1065,9 @@ async function deleteCustomModule(m: CustomProjectModule) {
 // Liste, rechts der Inhalt der aktiven Sektion. Der gewaehlte Tab bleibt
 // in localStorage, damit Refresh nicht zurueck auf "profil" springt.
 
-type SettingsSection =
-  | "profil"
-  | "praeferenzen"
-  | "branding"
-  | "vorlagen"
-  | "word-export"
-  | "projekt-module"
-  | "positionskatalog"
-  | "ki-freigabe"
-  | "system";
+const { isAdmin, darfGeld, geladen } = useCurrentUser();
 
-const { isAdmin, darfGeld } = useCurrentUser();
-
-// `adminOnly` deckt sich mit dem Serverstand: diese vier Bereiche gelten fuers
-// ganze Buero (Logo, Textbausteine, Word-Vorlagen, Modul-Voreinstellungen) und
-// duerfen seit der Rechte-Runde nur noch vom Verwalter geaendert werden.
-// Ohne diese Kennzeichnung saehe ein normaler Nutzer weiterhin alle Knoepfe —
-// und liefe beim Klick in ein unerklaertes „Kein Zugriff".
-const SETTINGS_NAV: {
-  id: SettingsSection;
-  label: string;
-  icon: string;
-  group: string;
-  adminOnly?: boolean;
-  geldOnly?: boolean;
-}[] = [
-  { id: "profil", label: "Profil & Sicherheit", icon: "user", group: "Konto" },
-  { id: "praeferenzen", label: "Präferenzen", icon: "sliders", group: "System" },
-  { id: "branding", label: "Branding", icon: "image", group: "Vorlagen", adminOnly: true },
-  { id: "vorlagen", label: "Vorlagen", icon: "file-text", group: "Vorlagen", adminOnly: true },
-  { id: "word-export", label: "Word-Export", icon: "download", group: "Vorlagen", adminOnly: true },
-  { id: "projekt-module", label: "Projekt-Module", icon: "layers", group: "Vorlagen", adminOnly: true },
-  // Der Katalog haengt am Geld-Recht, nicht an der Rolle: er besteht aus
-  // Preisen. Ein Admin ohne Geld-Recht gibt es nicht (er ist implizit
-  // berechtigt), ein Buchhalter ohne Admin-Rechte sehr wohl.
-  { id: "positionskatalog", label: "Positionskatalog", icon: "archive", group: "Vorlagen", geldOnly: true },
-  // Was ein Sprachmodell sehen darf, ist eine Datenschutz-Entscheidung fuers
-  // Buero — nicht die Praeferenz eines Arbeitsplatzes. Deshalb adminOnly.
-  { id: "ki-freigabe", label: "KI-Zugriff", icon: "cpu", group: "System", adminOnly: true },
-  { id: "system", label: "System-Info", icon: "info", group: "System" },
-];
-
-const sichtbareNav = computed(() =>
-  SETTINGS_NAV.filter((n) => (isAdmin.value || !n.adminOnly) && (darfGeld.value || !n.geldOnly)),
-);
+const sichtbareNav = computed(() => sichtbareSektionen(isAdmin.value, darfGeld.value));
 
 // ── Positionskatalog (Migration 046) ────────────────────────────────────────
 // Wiederkehrende Leistungen, damit sie nicht bei jeder Rechnung neu getippt
@@ -1181,16 +1144,28 @@ async function katalogLoeschen(k: KatalogItem) {
   }
 }
 
-const SECTION_KEY = "patio-settings-section";
-const activeSection = ref<SettingsSection>(
-  ((): SettingsSection => {
-    const stored = localStorage.getItem(SECTION_KEY) as SettingsSection | null;
-    if (stored && SETTINGS_NAV.some((n) => n.id === stored)) return stored;
-    return "profil";
-  })(),
-);
-
-watch(activeSection, (v) => localStorage.setItem(SECTION_KEY, v));
+// ── Der Bereich steht in der Adresse, nicht im localStorage ──────────────
+//
+// Vorher merkte sich der Browser den zuletzt geoeffneten Bereich lokal. Das
+// hatte zwei Nachteile: ein Link auf „Einstellungen → Word-Export" liess sich
+// nicht weitergeben (die Hilfe verweist auf Bereiche), und wer sich einen
+// Rechner teilt, landete im Bereich des Vorgaengers.
+//
+// Jetzt traegt `?sektion=` den Zustand. Ein unbekannter oder unerlaubter Wert
+// faellt auf „profil" zurueck — dieselbe Regel wie beim Herabstufungs-
+// Waechter weiter unten, nur fuer die Adresszeile.
+const activeSection = computed<SettingsSection>({
+  get() {
+    const q = route.query.sektion;
+    return typeof q === "string" && SETTINGS_NAV.some((n) => n.id === q) ? (q as SettingsSection) : "profil";
+  },
+  set(v) {
+    // `replace`, nicht `push`: der Wechsel zwischen zwei Bereichen ist kein
+    // eigener Schritt in der Historie — sonst braucht „Zurueck" nach zehn
+    // Klicks zehn Mal.
+    void router.replace({ name: "settings", query: v === "profil" ? {} : { sektion: v } });
+  },
+});
 
 // ── Warum die KI-Freigabe erst beim Öffnen lädt ───────────────────────────
 //
@@ -1205,15 +1180,18 @@ watch(activeSection, (v) => {
   if (v === "ki-freigabe" && !kiFreigabe.value) void ladeKiFreigabe();
 });
 
-// Der zuletzt gewaehlte Bereich steht im localStorage. Wurde ein Konto
-// zwischenzeitlich herabgestuft — oder teilt sich jemand einen Rechner —,
-// landet es sonst auf einer Seite, die es nicht mehr sehen darf. `isAdmin`
-// kommt asynchron aus /auth/me, deshalb ein Watcher statt einer Pruefung
-// beim Aufbau.
+// Wurde ein Konto zwischenzeitlich herabgestuft — oder steht in der Adresse
+// ein Bereich, den es nie oeffnen durfte —, gehoert es auf „profil".
+//
+// `geladen` ist hier keine Feinheit, sondern der Kern: bis `/auth/me`
+// antwortet, ist `isAdmin` `false`, und ohne diese Abfrage haette der
+// Waechter jeden Verwalter beim Aufruf von `?sektion=branding` sofort
+// hinausgeworfen — samt Adresse, sodass ein „Zurueck" nichts half.
 watch(
-  [isAdmin, darfGeld],
+  [isAdmin, darfGeld, geladen, activeSection],
   () => {
-    if (!sichtbareNav.value.some((n) => n.id === activeSection.value)) activeSection.value = "profil";
+    const ersatz = bereichNachRechten(activeSection.value, geladen.value, isAdmin.value, darfGeld.value);
+    if (ersatz) activeSection.value = ersatz;
   },
   { immediate: true },
 );
@@ -1227,15 +1205,6 @@ const WIDE_SECTIONS = new Set([
   "ki-freigabe",
 ]);
 const isWideSection = computed(() => WIDE_SECTIONS.has(activeSection.value));
-
-const settingsNavGroups = computed(() => {
-  const map = new Map<string, typeof SETTINGS_NAV>();
-  for (const item of sichtbareNav.value) {
-    if (!map.has(item.group)) map.set(item.group, []);
-    map.get(item.group)!.push(item);
-  }
-  return Array.from(map.entries()).map(([group, items]) => ({ group, items }));
-});
 
 onMounted(() => {
   void loadAll();
@@ -1257,29 +1226,8 @@ onMounted(() => {
 
 <template>
   <div class="settings-layout">
-    <!-- Sidebar-Navigation (Phase 6a) — links, scrollt unabhaengig vom Content -->
-    <aside class="settings-sidebar">
-      <div style="padding: 24px 20px 12px">
-        <div class="eyebrow" style="margin-bottom: 6px">System</div>
-        <h1 style="font-size: 18px; font-weight: 600; margin: 0; letter-spacing: -0.01em">Einstellungen</h1>
-      </div>
-      <nav class="settings-nav">
-        <div v-for="grp in settingsNavGroups" :key="grp.group" class="settings-nav-group">
-          <div class="settings-nav-group-title">{{ grp.group }}</div>
-          <button
-            v-for="item in grp.items"
-            :key="item.id"
-            type="button"
-            :class="['settings-nav-item', activeSection === item.id ? 'settings-nav-item-active' : '']"
-            @click="activeSection = item.id"
-          >
-            <span class="settings-nav-dot" aria-hidden="true"></span>
-            <span>{{ item.label }}</span>
-          </button>
-        </div>
-      </nav>
-    </aside>
-
+    <!-- Die Bereichsliste steht in der ContextSidebar (Fokus-Modus), nicht
+         mehr hier: zwei Navigationen nebeneinander waren eine zu viel. -->
     <!-- Content-Pane: aktive Sektion -->
     <div :class="['settings-content', isWideSection ? 'settings-content-wide' : '']">
       <!-- Flash-Meldung — global, sektion-uebergreifend -->
@@ -2693,22 +2641,15 @@ onMounted(() => {
   color: var(--color-danger-text, #b91c1c);
 }
 
-/* ── Sidebar-Layout (Phase 6a) ─────────────────────────────────────── */
+/* ── Layout ────────────────────────────────────────────────────────────
+   Eine Spalte: die Bereichsliste traegt die ContextSidebar des Fokus-Modus.
+   Das frueher hier stehende zweispaltige Raster samt eigenem Menue
+   (`.settings-sidebar`, `.settings-nav*`) ist mit ihr entfallen. */
 .settings-layout {
-  display: grid;
-  grid-template-columns: 240px 1fr;
+  display: block;
   min-height: 100%;
   color: var(--fg-body, var(--color-text));
   font-family: var(--font-sans, "Inter", system-ui, sans-serif);
-}
-.settings-sidebar {
-  border-right: 1px solid var(--border, var(--color-border));
-  background: var(--surface-subtle, var(--color-bg-subtle));
-  position: sticky;
-  top: 0;
-  align-self: start;
-  height: 100vh;
-  overflow-y: auto;
 }
 .settings-content {
   padding: 28px 32px 48px;
@@ -2722,89 +2663,7 @@ onMounted(() => {
   margin-top: 32px;
 }
 
-.settings-nav {
-  display: flex;
-  flex-direction: column;
-  padding: 0 12px 24px;
-}
-.settings-nav-group {
-  display: flex;
-  flex-direction: column;
-  margin-top: 16px;
-}
-.settings-nav-group-title {
-  font-size: var(--fs-11, 10px);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-label, 0.08em);
-  color: var(--fg-subtle, var(--color-text-tertiary));
-  font-weight: var(--fw-semibold, 600);
-  padding: 0 8px 6px;
-}
-.settings-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  border-radius: var(--radius-md, 6px);
-  border-left: 2px solid transparent;
-  font-size: var(--fs-13, 13px);
-  font-weight: var(--fw-medium, 500);
-  color: var(--fg-muted, var(--color-text-secondary));
-  background: transparent;
-  border-top: 0;
-  border-right: 0;
-  border-bottom: 0;
-  cursor: pointer;
-  text-align: left;
-  transition:
-    background-color var(--t-fast, 120ms) var(--ease, ease),
-    color var(--t-fast, 120ms) var(--ease, ease);
-}
-.settings-nav-item:hover {
-  background: var(--surface-muted, var(--color-border-subtle));
-  color: var(--fg-body, var(--color-text));
-}
-.settings-nav-item-active {
-  background: var(--surface, var(--color-bg));
-  color: var(--fg, var(--color-text));
-  font-weight: var(--fw-semibold, 600);
-  border-left-color: var(--fg, var(--color-primary));
-  box-shadow: var(--shadow-sm, 0 1px 2px rgba(10, 10, 10, 0.04));
-}
-.settings-nav-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: var(--radius-full, 50%);
-  background: var(--fg-subtle, var(--color-text-faint));
-  flex-shrink: 0;
-}
-.settings-nav-item-active .settings-nav-dot {
-  background: var(--accent, var(--color-primary, #111827));
-}
-
-/* Mobile: Sidebar wird zur Top-Bar (horizontale Tabs). */
 @media (max-width: 767.98px) {
-  .settings-layout {
-    grid-template-columns: 1fr;
-  }
-  .settings-sidebar {
-    position: static;
-    height: auto;
-    border-right: 0;
-    border-bottom: 1px solid var(--color-border);
-  }
-  .settings-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
-    overflow-x: auto;
-    padding: 0 12px 12px;
-  }
-  .settings-nav-group {
-    margin-top: 0;
-  }
-  .settings-nav-group-title {
-    display: none;
-  }
   .settings-content {
     padding: 20px 16px 40px;
   }

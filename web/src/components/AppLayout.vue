@@ -43,6 +43,15 @@ watch(
 const hasListPane = computed(() => {
   return route.matched.some((r) => r.components && Object.prototype.hasOwnProperty.call(r.components, "listpane"));
 });
+
+/** Fokus-Modus: Navigationsleiste auf 60px (nur Symbole), die 238px breite
+ *  ContextSidebar traegt die Modul-Navigation. Gesetzt ueber `meta.focus` an
+ *  der Route (Projektakte, Einstellungen) — nicht ueber den Routennamen,
+ *  damit eine weitere Fokus-Ansicht nur eine Zeile im Router kostet.
+ *
+ *  Nur wirksam, wenn die Route auch eine `listpane` mitbringt: sonst
+ *  schrumpfte die Leiste auf 60px und die 238px-Spalte bliebe leer. */
+const isFocus = computed(() => route.meta.focus === true && hasListPane.value);
 </script>
 
 <template>
@@ -53,6 +62,7 @@ const hasListPane = computed(() => {
     :data-rail-collapsed="state.railCollapsed"
     :data-list-collapsed="state.listCollapsed"
     :data-no-list="!hasListPane"
+    :data-focus="isFocus"
     :data-rail-mobile-open="railMobileOpen"
     :data-list-mobile-open="listMobileOpen"
   >

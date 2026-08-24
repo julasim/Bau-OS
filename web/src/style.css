@@ -1080,6 +1080,30 @@ html.dark .text-red-700 {
     transform: translateX(0);
   }
 
+  /* ── Kein Mini-Rail auf dem Handy ─────────────────────────────────────
+     Der Fokus-Modus schrumpft die Leiste am Schreibtisch auf 60px, weil
+     daneben die 238px breite Kontext-Leiste steht. Auf dem Handy stehen
+     beide als Overlay uebereinander — dort waere eine 60px-Spalte mit
+     ausgeblendeten Beschriftungen nur eine Reihe unbeschrifteter Symbole
+     ueber der halben Bildschirmhoehe. Die Regel aus
+     patio-components.css hat mehr Gewicht (0,3,0) als die allgemeine
+     Overlay-Regel darueber, muss also ausdruecklich zurueckgenommen
+     werden. */
+  .app-v2[data-focus="true"] .pt-sidebar {
+    width: var(--sidebar-width);
+    padding: var(--space-3);
+  }
+  .app-v2[data-focus="true"] .pt-sidebar .pt-nav-text,
+  .app-v2[data-focus="true"] .pt-sidebar .pt-brand-word {
+    display: inline;
+  }
+  .app-v2[data-focus="true"] .pt-sidebar .pt-nav-item,
+  .app-v2[data-focus="true"] .pt-sidebar .pt-sidebar-brand {
+    justify-content: flex-start;
+    gap: var(--space-3);
+    padding: 0 var(--space-2);
+  }
+
   /* ListPane: ebenfalls fixed Overlay (sonst belegt sie eine Grid-Spalte
      und quetscht den Detail-Bereich). Standard versteckt, offen via
      data-list-mobile-open. */

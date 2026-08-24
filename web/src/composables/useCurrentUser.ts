@@ -57,6 +57,14 @@ export function useCurrentUser() {
   const username = computed(() => user.value?.username ?? "");
   const userId = computed(() => user.value?.id ?? null);
   const isAdmin = computed(() => user.value?.role === "admin");
+  // ── Warum es diesen Schalter braucht ──────────────────────────────────
+  //
+  // `/auth/me` kommt asynchron. Bis die Antwort da ist, sind `isAdmin` und
+  // `darfGeld` beide `false` — und das ist von „darf wirklich nicht" nicht
+  // zu unterscheiden. Wer daraus schon eine Entscheidung ableitet, wirft
+  // einen Verwalter aus einem Bereich, den er sehr wohl oeffnen darf.
+  // Genau das ist beim Bereichs-Waechter der Einstellungen passiert.
+  const geladen = computed(() => user.value !== null);
   const isProtected = computed(() => user.value?.isProtected ?? false);
   // Ohne dieses Recht entfernt der Server die Geldfelder aus den Antworten.
   // Die Oberfläche blendet die zugehörigen Spalten aus, statt leere Zellen zu
@@ -71,6 +79,7 @@ export function useCurrentUser() {
     username,
     userId,
     isAdmin,
+    geladen,
     isProtected,
     darfGeld,
     reload: () => {

@@ -78,12 +78,21 @@ const router = createRouter({
           component: () => import("./views/projects-v2/ProjectsOverviewView.vue"),
         },
         { path: "portfolio", name: "portfolio", component: () => import("./views/portfolio/PortfolioView.vue") },
-        // Projekt-Detail: vollbreit (Referenz-Design) — keine ListPane,
-        // Navigation über Breadcrumb "Projekte › Name".
+        // ── Projektakte: Fokus-Modus ──────────────────────────────────────
+        //
+        // `meta.focus` schaltet in `AppLayout.vue` das Spaltenraster um: die
+        // Navigationsleiste schrumpft auf 60px (nur Symbole), die
+        // ContextSidebar traegt mit 238px die Reiter der Akte, der Rest
+        // gehoert dem Inhalt. Die Leiste ist eine `listpane`-Named-View —
+        // damit kollabiert das Raster ohne sie nicht.
         {
           path: "projects/:name",
           name: "project-detail",
-          component: () => import("./views/projects-v2/ProjectDetailHost.vue"),
+          meta: { focus: true },
+          components: {
+            listpane: () => import("./components/shell/ContextSidebar.vue"),
+            default: () => import("./views/projects-v2/ProjectDetailHost.vue"),
+          },
         },
         // Workspace v2: Team Master/Detail. ListPane mit Filter nach
         // Kategorie (Intern/Planer/...). Detail wrappt TeamDetailView.
@@ -97,7 +106,19 @@ const router = createRouter({
         },
         { path: "search", name: "search", component: () => import("./views/SearchView.vue") },
         { path: "files", name: "files", component: () => import("./views/FileBrowserView.vue") },
-        { path: "settings", name: "settings", component: () => import("./views/SettingsView.vue") },
+        // Einstellungen: ebenfalls Fokus-Modus. Die Bereichsliste sass
+        // frueher IN der Ansicht; jetzt traegt sie die ContextSidebar, und
+        // der Bereich steht als `?sektion=` in der Adresse — verlinkbar und
+        // nach einem Neuladen noch da.
+        {
+          path: "settings",
+          name: "settings",
+          meta: { focus: true },
+          components: {
+            listpane: () => import("./components/shell/ContextSidebar.vue"),
+            default: () => import("./views/SettingsView.vue"),
+          },
+        },
         { path: "admin/users", name: "admin-users", component: () => import("./views/AdminUsersView.vue") },
         { path: "firmen", name: "firmen", component: () => import("./views/FirmenView.vue") },
         { path: "neuigkeiten", name: "neuigkeiten", component: () => import("./views/NeuigkeitenView.vue") },
