@@ -173,7 +173,7 @@ chmod +x /opt/patio/health-check.sh
 
 Stündlich per Cron:
 
-```cron
+```text
 0 * * * * /opt/patio/health-check.sh >> /opt/patio/logs/health.log 2>&1
 ```
 

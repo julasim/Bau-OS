@@ -144,7 +144,7 @@ dann muss er `X-Forwarded-For` korrekt setzen.
 Ursache ist fast immer der Reverse-Proxy: er puffert die SSE-Verbindung
 `/api/events`. Bei Caddy:
 
-```caddyfile
+```text
 @stream path /api/events*
 reverse_proxy @stream app:3000 {
     flush_interval -1
