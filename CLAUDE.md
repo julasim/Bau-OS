@@ -37,6 +37,54 @@
 
 > ## ⇥ Woran gerade gearbeitet wird
 >
+> ### Stand 24.08.2026 — 733 Tests, Migrationen bis 059
+>
+> **AP9 ist fertig.** Der Fokus-Modus (Schritt 3) steht: `ContextSidebar.vue`
+> trägt in der Projektakte die Reiter, in den Einstellungen die Bereiche; die
+> Navigationsleiste schrumpft dafür auf 60 px. Ausgelöst über `meta.focus` an
+> der Route, nicht über den Routennamen.
+>
+> - Die Projekt-Navigation ist **aus der NavRail ausgezogen** — sie wechselte
+>   dort ihren Inhalt, und wer im Projekt arbeitete, kam ohne Umweg nicht mehr
+>   zu den Aufgaben.
+> - Die Einstellungen haben ihr **eigenes Menü verloren** und merken sich den
+>   Bereich als `?sektion=` statt im localStorage.
+> - **Die Listen stehen nur noch einmal:** `views/projekt-tabs.ts` und
+>   `views/settings-nav.ts`. Vorher standen die Reiter doppelt (`VALID_TABS`
+>   in der Ansicht, `PROJECT_NAV` in der Leiste) — liefen sie auseinander,
+>   setzte die Leiste ein `?tab=`, das intern auf „uebersicht" zurückfiel und
+>   trotzdem aktiv markiert blieb.
+> - **Rechtefilter**, den die Desktop-Vorlage nicht hat: dort gibt es keine
+>   Rollen. Ungefiltert böte die Leiste jedem Konto „Rechnungen" und „Zugriff"
+>   an, die der Server dann mit 403 abweist.
+>
+> ⚠ **Der größte Fund des Tages hat nichts mit AP9 zu tun:** `<style scoped>`
+> gilt nur in der eigenen Komponente. **44 Klassen** waren in einer Ansicht
+> definiert und in einer anderen benutzt — dort ohne jede Wirkung, ohne
+> Fehler, ohne Warnung. Die Aufgaben-Ansichten „Matrix" und „Mein Tag" liefen
+> seit ihrem Bau vollständig ungestaltet, ebenso die Stammdaten-Felder der
+> Team-Seite und die roten Lösch-Schaltflächen. Jetzt `web/src/patio-fach.css`
+> plus `tests/web/geteilte-klassen.test.ts` als Wächter.
+>
+> Weitere Funde: `.mehr-laden` war **nirgends** definiert; „heute" wurde an
+> sieben Stellen nach UTC bestimmt (drei davon füllten das Datum eines neuen
+> Datensatzes vor — ein Bautagebuch-Eintrag um 00:30 bekam den Vortag, jetzt
+> `heuteIso()`); und der Bereichs-Wächter der Einstellungen warf jeden
+> Verwalter aus einem per Lesezeichen geöffneten `?sektion=branding`, weil er
+> entschied, bevor `/auth/me` geantwortet hatte.
+>
+> **Die Projektakte ist von 6128 auf 3760 Zeilen** — sieben von dreizehn
+> Reitern sind eigene Komponenten unter `projects-v2/` (Phasen, Rechnungen,
+> Entscheidungen, Bautagebuch, Besprechungen, Stunden, Zugriff). Jeder lädt
+> selbst. **Die übrigen sechs bleiben bewusst drin:** Übersicht, Notizen,
+> Aufgaben, Termine, Dateien und Team lesen denselben Zustand, den der
+> Projektkopf darüber rendert und der in einem Aufruf geholt wird — sie
+> herauszulösen wäre eine Verdopplung mit Synchronisierung, keine Aufteilung.
+>
+> **Frontend-Tests gibt es jetzt** (`tests/web/`, 32 Prüfungen). Vorher hatte
+> `web/` **null** Testdateien; geprüft wurde über `vue-tsc` und von Hand im
+> Browser, und beides fängt keine Logik.
+>
 > ### Stand 23.08.2026 — 582 Tests, Migrationen bis 054
 >
 > Seit AP12 kamen drei Runden dazu (HEAD `ad9dde8`, gepusht):
@@ -174,10 +222,8 @@
 > Server mit interner CA und einen echten Windows-Arbeitsplatz — hier **nicht**
 > geprüft.
 >
-> **Was als Nächstes ansteht:** **AP9** Oberfläche aus PATIO Desktop
-> übernehmen · **AP10** MCP-Dossiers · **AP11** Datenübernahme · **AP13**
-> Export/PDF · **AP14** Benachrichtigungen (bringt auch die Erinnerungen
-> zurück, die die Hülle bewusst nicht hat) · **AP15** Board · **AP17** VPN.
+> **Was als Nächstes ansteht:** **AP17** VPN (bringt den zweiten Faktor
+> zurück). AP9 bis AP15 sind abgearbeitet.
 >
 > **Bewusst offen geblieben**, mit Begründung im jeweiligen Commit:
 > - Ein **Papierkorb für einzelne Datensätze** (Notizen, Aufgaben, Termine).
@@ -290,7 +336,7 @@ npm run build:electron   # Arbeitsplatz-Huelle nach dist-electron/
 npm run electron:dev     # Huelle lokal starten
 npm run dist             # portable .exe bauen (signiert, braucht das Zertifikat)
 
-npm test             # vitest run (603 Tests — nur MIT Datenbank vollstaendig, siehe unten)
+npm test             # vitest run (733 Tests — nur MIT Datenbank vollstaendig, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -310,11 +356,11 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
 > Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 444 von 603 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 527 von 733 Tests** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
 > 34 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
-> Gemessen am 2026-08-23: `15 passed | 44 skipped (59)` Dateien,
-> `159 passed | 444 skipped (603)` Prüfungen; mit Datenbank `601 passed | 2 skipped`. **Diese Zahlen wandern mit jedem
+> Gemessen am 2026-08-24: `24 passed | 56 skipped (80)` Dateien,
+> `206 passed | 527 skipped (733)` Prüfungen; mit Datenbank `731 passed | 2 skipped`. **Diese Zahlen wandern mit jedem
 > neuen Test** — wer sie hier liest, prüft sie besser einmal nach, statt sich
 > auf sie zu verlassen. Der Punkt bleibt derselbe: die Farbe sagt nichts.
 >
@@ -385,20 +431,37 @@ Das gesamte Frontend wurde auf das **PATIO Design System v2** umgestellt
 - **Design-Tokens sind die einzige Quelle der Wahrheit:**
   `web/src/patio-tokens.css` (Brand/Produkt — identisch mit der Mainpage, kein
   zweites Brand-System), `patio-components.css` (Komponenten-Styles wie
-  `ap-panel`/`ap-grid`/`pt-tabs`), `patio-shell.css` (App-Shell-Layout). Keine
+  `ap-panel`/`ap-grid`/`pt-tabs`), `patio-shell.css` (App-Shell-Layout),
+  `patio-fach.css` (Klassen, die mehrere Fach-Ansichten teilen). Keine
   Hardcode-Farben/-Abstände — Tokens (`var(--…)`) verwenden. Niveau-Referenz:
   Linear/Vercel/Stripe; Prinzip: monochrom, flach, präzise, viel Ruhe.
   Schrift: **Inter / Inter Tight / JetBrains Mono**.
-- **Shell-Bausteine** in `web/src/components/shell/`: `NavRail`, `ListPane`,
-  `DetailPane`, `IconBtn`, `Avatar`, `StatusDot`. Die NavRail ist
-  **kontext-wechselnd** — im Projekt zeigt sie die Projekt-Module (statt einer
-  Tab-Leiste).
+- **Shell-Bausteine** in `web/src/components/shell/`: `NavRail`,
+  `ContextSidebar`, `AppTopbar`, `ListPane`, `DetailPane`, `IconBtn`,
+  `Avatar`, `StatusDot`. Die NavRail ist **nicht** mehr kontext-wechselnd —
+  im Fokus-Modus (Projektakte, Einstellungen) schrumpft sie auf 60 px, und die
+  `ContextSidebar` (238 px) trägt die Modul-Navigation. Ausgelöst über
+  `meta: { focus: true }` an der Route; `AppLayout.vue` leitet `data-focus`
+  daraus ab.
+- ⚠ **`<style scoped>` gilt NUR in der eigenen Komponente.** Wird eine dort
+  definierte Klasse in einer zweiten Ansicht benutzt, greift sie nicht — ohne
+  Fehler, ohne Warnung, ohne Bau-Problem. Am 24.08.2026 traf das 44 Klassen in
+  zehn Ansichten. Was geteilt wird, gehört nach `patio-fach.css`;
+  `tests/web/geteilte-klassen.test.ts` meldet jeden neuen Fall.
 - **v2-Views** liegen in `web/src/views/<bereich>-v2/` (`notes-v2`,
   `projects-v2`, `tasks-v2`, `team-v2`) im ListPane/DetailPane-Muster. Daneben
   existieren noch ältere Top-Level-Views (`NotesView.vue`, …) — beim Weiterbauen
   die **v2-Variante** bevorzugen.
-- **Projekt-Detail** (`ProjectDetailView.vue`) läuft **vollbreit** (keine
-  ListPane), Module über die kontext-wechselnde Sidebar.
+- **Projekt-Detail** (`ProjectDetailView.vue`) läuft im Fokus-Modus; die
+  Reiter stehen in der `ContextSidebar`. **Welche Reiter es gibt, steht in
+  `views/projekt-tabs.ts`** — dieselbe Quelle, aus der `VALID_TABS` abgeleitet
+  wird. Für die Einstellungen leistet `views/settings-nav.ts` dasselbe.
+  Sieben Reiter sind eigene Komponenten unter `projects-v2/`; die übrigen
+  sechs teilen ihren Zustand mit dem Projektkopf und bleiben bewusst drin.
+- **Neue Ansichten brauchen einen Test unter `tests/web/`.** `vue-tsc` prüft
+  Typen, nicht ob ein `v-if` das Richtige trifft oder ein Feld im Template
+  anders heißt — genau diese Klasse Fehler ist hier mehrfach durch alle
+  Prüfungen gekommen.
 - **Keine Emojis in der UI.** Stattdessen Line-Icons über `BIcon.vue` (Glyph in
   `BIcon.vue` ergänzen) oder schlichten Text.
 

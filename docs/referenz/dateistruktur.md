@@ -568,18 +568,19 @@ web/src/
 ├── patio-tokens.css      — Design-Tokens (einzige Quelle für Farben/Abstände)
 ├── patio-components.css  — Komponenten-Styles
 ├── patio-shell.css       — App-Shell-Layout
+├── patio-fach.css        — Klassen, die mehrere Fach-Ansichten teilen
 ├── components/
 │   ├── AppLayout.vue     — 3-Spalten-Shell: NavRail, ListPane, Detail
 │   ├── BIcon.vue         — Line-Icons (keine Emojis in der Oberfläche)
 │   ├── ProjektBezug.vue  — Projektnummer und -name, überall gleich
 │   ├── ConfirmDialog.vue, MarkdownRenderer.vue, FileGlyph.vue,
 │   │   TeamPicker.vue, SystemStatusBanner.vue
-│   └── shell/            — NavRail, AppTopbar, ListPane, DetailPane,
-│                           IconBtn, Avatar, StatusDot
+│   └── shell/            — NavRail, ContextSidebar, AppTopbar, ListPane,
+│                           DetailPane, IconBtn, Avatar, StatusDot
 ├── composables/          — useEvents (Live-Updates), useAufgabensystem,
 │                           useBranding, useTheme, useConfirm,
-│                           useCurrentUser, useWorkspaceShell
-├── utils/                — format.ts (Datum, Zahlen, EUR),
+│                           useCurrentUser, useWorkspaceShell, useWordExport
+├── utils/                — format.ts (Datum, Zahlen, EUR — inkl. heuteIso),
 │                           projektnummer.ts (Anzeige und Platzhalter)
 ├── constants.ts, style.css
 └── views/
@@ -588,9 +589,33 @@ web/src/
     │   AdminUsersView.vue, AdminAuditView.vue, AdminSicherungView.vue,
     │   AktivitaetView.vue, PapierkorbView.vue, FirmenView.vue,
     │   TeamDetailView.vue, ProjectDetailView.vue
+    ├── projekt-tabs.ts   — die Reiter der Projektakte, einzige Quelle
+    ├── settings-nav.ts   — die Bereiche der Einstellungen, einzige Quelle
     ├── aufgaben/         — Eingang, Matrix, Mein Tag + Umschalter
     └── notes-v2/, tasks-v2/, team-v2/, projects-v2/, portfolio/
 ```
+
+::: info Warum `patio-fach.css` eigens existiert
+`<style scoped>` in einer Vue-Datei gilt **nur in dieser Datei**. Wird eine
+dort definierte Klasse in einer zweiten Ansicht benutzt, greift sie nicht —
+ohne Fehler, ohne Warnung, ohne Bau-Problem. Genau das war bei 44 Klassen
+über zehn Ansichten der Fall. Was mehrere Ansichten teilen, gehört deshalb in
+eine echte Stylesheet-Datei; `tests/web/geteilte-klassen.test.ts` meldet
+jeden neuen Fall.
+:::
+
+::: info Die Projektakte in Reitern
+`ProjectDetailView.vue` trug einmal alle dreizehn Reiter (6128 Zeilen). Sieben
+sind heute eigene Komponenten unter `projects-v2/` — Phasen, Rechnungen,
+Entscheidungen, Bautagebuch, Besprechungen, Stunden, Zugriff. Jeder lädt seine
+eigenen Daten und teilt mit der Akte nichts ausser dem Projektnamen.
+
+Die übrigen sechs (Übersicht, Notizen, Aufgaben, Termine, Dateien, Team) lesen
+denselben Zustand, den auch der Projektkopf darüber rendert, und der wird in
+einem Aufruf geholt. Sie herauszulösen hiesse, jede Liste zweimal zu laden und
+jede Änderung zurückzumelden — eine Verdopplung mit Synchronisierung statt
+einer Aufteilung.
+:::
 
 ::: info Der Aufgabenreiter hat vier Arbeitsweisen
 `views/aufgaben/` ist kein eigener Bereich, sondern die drei zusätzlichen

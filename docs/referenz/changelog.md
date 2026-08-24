@@ -643,3 +643,53 @@ Ausführlich: [Die Projektnummer](/konzepte/projektnummer).
   kein Fehler, die Stelle bleibt einfach leer. Weder Typprüfung noch Linter
   noch Bau noch die Testsuite haben es bemerkt — jetzt prüft ein eigener Test
   jede `.vue`-Datei, und er fand sofort einen zweiten, älteren Fall
+
+---
+
+## Der Fokus-Modus — und Gestaltung, die zehn Ansichten nie erreicht hat
+**24.08.2026**
+
+Der Fokus-Modus aus PATIO Desktop steht jetzt auch hier. In der Projektakte
+und in den Einstellungen schrumpft die Navigationsleiste auf 60 Pixel (nur
+Symbole), und daneben trägt eine zweite, 238 Pixel breite Leiste die Reiter
+des Projekts beziehungsweise die Bereiche der Einstellungen.
+
+- **Die Projekt-Navigation ist aus der Hauptleiste ausgezogen.** Sie wechselte
+  dort ihren Inhalt: wer in einem Projekt arbeitete, kam ohne Umweg nicht mehr
+  zu den Aufgaben oder zum Kalender
+- **Die Einstellungen haben ihr eigenes Menü verloren** — zwei Navigationen
+  nebeneinander waren eine zu viel. Der geöffnete Bereich steht jetzt in der
+  Adresse (`?sektion=word-export`): ein Link darauf lässt sich weitergeben,
+  und wer sich einen Rechner teilt, landet nicht mehr im Bereich des
+  Vorgängers
+- **Auf dem Handy** bleibt die Hauptleiste breit und beschriftet; dort liegen
+  beide Leisten ohnehin als Überblendung übereinander
+
+Die Kontext-Leiste zeigt nur, was das eigene Konto auch öffnen darf.
+„Rechnungen" braucht das Geld-Recht, „Zugriff" die Verwaltung — ein Eintrag,
+der beim Klick eine Fehlermeldung öffnet, gehört nicht in die Navigation.
+
+### Beim Bauen gefunden
+
+- **Zehn Ansichten benutzten Gestaltungsregeln, die dort keine Wirkung
+  hatten.** Vue begrenzt die Regeln einer Ansicht auf ihre eigenen Elemente;
+  wird eine Klasse in einer zweiten Ansicht benutzt, greift sie dort nicht.
+  Es gibt dafür keine Meldung: die Stelle rendert einfach ohne Gestaltung.
+  Betroffen waren unter anderem die Aufgaben-Ansichten „Matrix" und „Mein
+  Tag" (vollständig ohne eigene Gestaltung, seit sie gebaut wurden), die
+  Stammdaten-Felder und das Zeilen-Menü der Team-Seite, die roten
+  Lösch-Schaltflächen, die Eingabefelder in „Firmen" und in den
+  Einstellungen. 44 Klassen insgesamt, jetzt an einer Stelle
+- **Der Knopf „Ältere laden"** hatte überhaupt keine Regel — an drei Stellen
+  der Projektakte stand ein nackter Browser-Knopf
+- **„Heute" wurde nach Weltzeit bestimmt.** In Österreich liefert das zwischen
+  Mitternacht und ein bzw. zwei Uhr früh den Vortag. Drei dieser Stellen
+  füllten das Datum eines neuen Datensatzes vor — ein Bautagebuch-Eintrag um
+  00:30 bekam damit den gestrigen Tag
+- **Ein Verwalter, der einen Einstellungs-Bereich über ein Lesezeichen
+  öffnete, wurde hinausgeworfen.** Die Prüfung „darf dieses Konto das?" lief,
+  bevor die Antwort auf „wer bin ich?" da war — und „noch unbekannt" sah aus
+  wie „darf nicht"
+- **Die Beschriftungen der Navigationsleiste** trugen nicht die Kennzeichnung,
+  auf die der Fokus-Modus zielt: die Leiste schrumpfte auf 60 Pixel, die Texte
+  blieben stehen und liefen über

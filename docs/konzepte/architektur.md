@@ -160,6 +160,20 @@ docs/              diese Dokumentation (VitePress) — der Server liefert sie un
 
 Detaillierte Auflistung: [Dateistruktur](/referenz/dateistruktur).
 
+::: info Die Oberfläche hat zwei Seitenleisten
+Links die Navigationsleiste durch das Programm. In der Projektakte und in den
+Einstellungen kommt eine zweite, 238 Pixel breite dazu — sie trägt die Reiter
+des Projekts beziehungsweise die Bereiche der Einstellungen, und die erste
+schrumpft dafür auf Symbolbreite („Fokus-Modus"). Ausgelöst wird das über
+`meta.focus` an der Route, nicht über den Routennamen: eine weitere
+Fokus-Ansicht kostet damit eine Zeile im Router.
+
+Was in der zweiten Leiste steht, kommt aus `views/projekt-tabs.ts` und
+`views/settings-nav.ts` — denselben Listen, aus denen die Ansichten rendern.
+Der Rechtefilter sitzt dort ebenfalls: „Rechnungen" braucht das Geld-Recht,
+„Zugriff" die Verwaltung.
+:::
+
 ::: info Pinia ist eingebunden, aber leer
 `web/src/main.ts` registriert Pinia; einen Store gibt es nicht. Geteilter
 Zustand liegt in Composables (`useAufgabensystem`, `useEvents`, `useTheme`) —
