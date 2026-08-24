@@ -116,3 +116,23 @@ export function formatWeekdayShort(input: DateInput): string {
 export function formatEUR(n: number): string {
   return _int.format(n) + " €";
 }
+
+/**
+ * Das heutige Datum als `YYYY-MM-DD` — nach ÖRTLICHER Zeit.
+ *
+ * ── Warum nicht `toISOString().slice(0, 10)` ──────────────────────────────
+ *
+ * Weil das die UTC-Zeit nimmt. In Österreich (UTC+1, im Sommer UTC+2) liefert
+ * es zwischen Mitternacht und ein bzw. zwei Uhr früh noch das Datum des
+ * VORTAGS. An sieben Stellen stand genau dieser Ausdruck; drei davon
+ * bestimmten das vorausgefüllte Datum eines neuen Datensatzes — ein
+ * Bautagebuch-Eintrag um 00:30 bekam den gestrigen Tag eingetragen. Bei einem
+ * Dokument, das im Streitfall zählt, ist das kein Schönheitsfehler.
+ *
+ * Der Parameter dient der Prüfbarkeit: nur wer die örtlichen Anteile liest,
+ * besteht `tests/web/datum-heute.test.ts`.
+ */
+export function heuteIso(d: Date = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}

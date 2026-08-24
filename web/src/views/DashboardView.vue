@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatWeekdayFull, formatWeekdayShort } from "../utils/format";
+import { formatWeekdayFull, formatWeekdayShort, heuteIso } from "../utils/format";
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
@@ -102,7 +102,7 @@ const stats = computed(() => ({
 
 // Reaktive Zeit-Werte: werden bei visibilitychange aktualisiert, damit
 // Begrüßung und Datumsfilter nach langem Inaktiv-Tab korrekt bleiben.
-const today = ref(new Date().toISOString().slice(0, 10));
+const today = ref(heuteIso());
 const todayDE = ref(formatWeekdayFull(new Date()));
 const hour = ref(new Date().getHours());
 const greeting = computed(() =>
@@ -177,7 +177,7 @@ function openPalette() {
 
 function refreshTime() {
   const now = new Date();
-  today.value = now.toISOString().slice(0, 10);
+  today.value = heuteIso(now);
   todayDE.value = formatWeekdayFull(now);
   hour.value = now.getHours();
 }

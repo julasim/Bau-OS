@@ -14,7 +14,7 @@ import BIcon from "../../components/BIcon.vue";
 import TeamPicker from "../../components/TeamPicker.vue";
 import { useConfirm } from "../../composables/useConfirm";
 import { useEvents } from "../../composables/useEvents";
-import { formatDate } from "../../utils/format";
+import { formatDate, heuteIso } from "../../utils/format";
 
 const props = defineProps<{ projectName: string }>();
 const { confirm } = useConfirm();
@@ -61,7 +61,7 @@ const entwurf = ref(leererEntwurf());
 
 function leererEntwurf() {
   return {
-    datum: new Date().toISOString().slice(0, 10),
+    datum: heuteIso(),
     titel: "",
     begruendung: "",
     alternativen: [] as Alternative[],

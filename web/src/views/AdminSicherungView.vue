@@ -17,7 +17,7 @@ import { api } from "../api";
 import BIcon from "../components/BIcon.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { dateiHolen } from "../utils/download";
-import { formatDate } from "../utils/format";
+import { formatDate, heuteIso } from "../utils/format";
 
 interface Stand {
   stufe: "taeglich" | "woechentlich" | "monatlich";
@@ -93,7 +93,7 @@ async function volldumpHolen() {
   dumpLaeuft.value = true;
   fehler.value = null;
   try {
-    const f = await dateiHolen("/api/exports/volldump", `PATIO Volldump ${new Date().toISOString().slice(0, 10)}.zip`);
+    const f = await dateiHolen("/api/exports/volldump", `PATIO Volldump ${heuteIso()}.zip`);
     if (f) fehler.value = f;
   } finally {
     dumpLaeuft.value = false;
