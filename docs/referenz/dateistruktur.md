@@ -40,12 +40,15 @@ src/
 │   ├── client.ts         — postgres.js-Verbindungspool
 │   ├── migrate.ts        — SQL-Migrations-Runner
 │   ├── index.ts          — Barrel-Export
-│   └── migrations/       — 60 SQL-Dateien, Nummern bis 058
+│   └── migrations/       — 61 SQL-Dateien, Nummern bis 059
 ├── workspace/            — LESENDER Dateizugriff auf WORKSPACE_PATH
 │   ├── index.ts          — Re-Export (nur `readFile`)
 │   ├── helpers.ts        — `safePath` (Traversal-Schutz)
 │   ├── files.ts          — `readFile`, sonst nichts mehr
 │   └── extractor.ts      — Text aus PDF und DOCX ziehen (nur aus Buffern)
+├── mcp/                  — die KI-Akten
+│   ├── dossier.ts        — baut je Projekt eine Markdown-Akte (Positivliste)
+│   └── redact.ts         — entfernt Personendaten je Stufe
 ├── export/
 │   ├── docx-render.ts    — DOCX-Erzeugung aus Word-Vorlagen (fünf Arten)
 │   ├── pdf.ts            — PDF über LibreOffice, aus derselben Word-Datei
@@ -225,6 +228,7 @@ unten steht.
 | `aufgabensystem.ts` | Eingang, Matrix und Tagesplan — die drei Arbeitsweisen des Aufgabenreiters |
 | `benachrichtigungen.ts` | Neuigkeiten je Person, mit Lesestatus |
 | `board.ts` | Vier Aggregate für den [Bildschirm im Besprechungsraum](/betrieb/board) |
+| `ki-freigabe.ts` | Freigabe und Abruf der [KI-Akten](/konzepte/ki-zugriff) (nur Verwaltung) |
 | `termine.ts` | Termine |
 | `projects.ts` | Projekte und Stammdaten |
 | `search.ts` | Volltextsuche |
@@ -452,7 +456,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 
 ### `src/db/migrations/`
 
-60 Dateien, `001` bis `058` (zwei Nummern sind doppelt vergeben: `005` und
+61 Dateien, `001` bis `059` (zwei Nummern sind doppelt vergeben: `005` und
 `006`). Die inhaltlich wichtigsten:
 
 | Migration | Inhalt |
@@ -494,6 +498,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 | `056_altbestand_spalten.sql` | Die sieben Outlook-Spalten an `termine` und die drei Bot-Spalten an `users` |
 | `057_import_zuordnung.sql` | Zuordnung Quell-ID → UUID für die [Datenübernahme](/betrieb/datenuebernahme) |
 | `058_benachrichtigungen.sql` | [Neuigkeiten](/konzepte/benachrichtigungen) mit Lesestatus je Person |
+| `059_ki_freigabe.sql` | Was ein Sprachmodell sehen darf — Hauptschalter, Stufe, Kategorien je Projekt |
 
 ::: tip Die Projektnummer ist die Kennung des Hauses
 `052` bis `054` machen aus einem optionalen Stammdatenfeld die Kennung, unter

@@ -897,6 +897,89 @@ const customModules = ref<CustomProjectModule[]>([]);
 const customModulesBusy = ref(false);
 const customModuleDraft = ref({ key: "", label: "", description: "", enabledByDefault: true });
 
+// ── KI-Freigabe ────────────────────────────────────────────────────────────
+//
+// Deny by default: kein Häkchen heisst nicht freigegeben, und der
+// Hauptschalter steht anfangs aus. Ein neu angelegtes Projekt ist damit
+// automatisch gesperrt.
+const KI_KATEGORIEN = [
+  { key: "stammdaten", label: "Stammdaten" },
+  { key: "phasen", label: "Leistungsphasen" },
+  { key: "aufgaben", label: "Aufgaben" },
+  { key: "termine", label: "Termine" },
+  { key: "notizen", label: "Notizen" },
+  { key: "meetings", label: "Besprechungen" },
+  { key: "bautagebuch", label: "Bautagebuch" },
+  { key: "entscheidungen", label: "Entscheidungen" },
+  { key: "rechnungen", label: "Rechnungen" },
+  { key: "beteiligte", label: "Beteiligte" },
+] as const;
+
+interface KiFreigabe {
+  aktiv: boolean;
+  personendaten: "keine" | "namen-ohne-kontakt" | "alle";
+  projekte: Record<string, string[]>;
+}
+
+const kiFreigabe = ref<KiFreigabe | null>(null);
+const kiProjekte = ref<{ id: string; name: string; projektnummer: string | null }[]>([]);
+const kiBusy = ref(false);
+const kiVorschau = ref<{ projekt: string; text: string } | null>(null);
+
+async function ladeKiFreigabe() {
+  try {
+    kiFreigabe.value = await api.get<KiFreigabe>("/ki/freigabe");
+    kiProjekte.value = await api.get<{ id: string; name: string; projektnummer: string | null }[]>("/projects");
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "KI-Freigabe nicht ladbar");
+  }
+}
+
+async function kiKopf(patch: Partial<Pick<KiFreigabe, "aktiv" | "personendaten">>) {
+  kiBusy.value = true;
+  try {
+    kiFreigabe.value = await api.patch<KiFreigabe>("/ki/freigabe", patch);
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  } finally {
+    kiBusy.value = false;
+  }
+}
+
+function kiHat(projectId: string, kategorie: string): boolean {
+  return (kiFreigabe.value?.projekte[projectId] ?? []).includes(kategorie);
+}
+
+async function kiUmschalten(projectId: string, kategorie: string) {
+  const jetzt = kiFreigabe.value?.projekte[projectId] ?? [];
+  const neu = jetzt.includes(kategorie) ? jetzt.filter((k) => k !== kategorie) : [...jetzt, kategorie];
+  kiBusy.value = true;
+  try {
+    kiFreigabe.value = await api.put<KiFreigabe>(`/ki/freigabe/${projectId}`, { kategorien: neu });
+  } catch (e) {
+    flash("error", e instanceof Error ? e.message : "Speichern fehlgeschlagen");
+  } finally {
+    kiBusy.value = false;
+  }
+}
+
+/** Zeigt, was die KI von diesem Projekt tatsächlich zu sehen bekommt.
+ *
+ *  Das ist der eigentliche Zweck der Akte: nicht glauben, sondern nachlesen. */
+async function kiVorschauZeigen(projectId: string, name: string) {
+  try {
+    const res = await fetch(`/api/ki/dossier/${projectId}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem("patio-token") ?? ""}` },
+    });
+    kiVorschau.value = {
+      projekt: name,
+      text: res.ok ? await res.text() : "Für dieses Projekt entsteht keine Akte (nicht freigegeben).",
+    };
+  } catch {
+    kiVorschau.value = { projekt: name, text: "Die Vorschau ist nicht erreichbar." };
+  }
+}
+
 async function loadCustomModules() {
   try {
     customModules.value = await api.get<CustomProjectModule[]>("/project-modules/custom");
@@ -985,6 +1068,7 @@ type SettingsSection =
   | "word-export"
   | "projekt-module"
   | "positionskatalog"
+  | "ki-freigabe"
   | "system";
 
 const { isAdmin, darfGeld } = useCurrentUser();
@@ -1012,6 +1096,9 @@ const SETTINGS_NAV: {
   // Preisen. Ein Admin ohne Geld-Recht gibt es nicht (er ist implizit
   // berechtigt), ein Buchhalter ohne Admin-Rechte sehr wohl.
   { id: "positionskatalog", label: "Positionskatalog", icon: "archive", group: "Vorlagen", geldOnly: true },
+  // Was ein Sprachmodell sehen darf, ist eine Datenschutz-Entscheidung fuers
+  // Buero — nicht die Praeferenz eines Arbeitsplatzes. Deshalb adminOnly.
+  { id: "ki-freigabe", label: "KI-Zugriff", icon: "cpu", group: "System", adminOnly: true },
   { id: "system", label: "System-Info", icon: "info", group: "System" },
 ];
 
@@ -1105,6 +1192,19 @@ const activeSection = ref<SettingsSection>(
 
 watch(activeSection, (v) => localStorage.setItem(SECTION_KEY, v));
 
+// ── Warum die KI-Freigabe erst beim Öffnen lädt ───────────────────────────
+//
+// Im ersten Bau stand der Aufruf in `onMounted` hinter `if (isAdmin.value)`.
+// `isAdmin` kommt aber asynchron aus `/auth/me` und ist beim Einhängen noch
+// `false` — die Sektion blieb dauerhaft auf „Lade…" stehen. Genau dieselbe
+// Falle wie beim Herabstufungs-Wächter weiter unten.
+//
+// Beim Öffnen zu laden ist ohnehin richtig: wer die Sektion nie aufmacht,
+// braucht die Anfrage nicht.
+watch(activeSection, (v) => {
+  if (v === "ki-freigabe" && !kiFreigabe.value) void ladeKiFreigabe();
+});
+
 // Der zuletzt gewaehlte Bereich steht im localStorage. Wurde ein Konto
 // zwischenzeitlich herabgestuft — oder teilt sich jemand einen Rechner —,
 // landet es sonst auf einer Seite, die es nicht mehr sehen darf. `isAdmin`
@@ -1118,7 +1218,14 @@ watch(
   { immediate: true },
 );
 
-const WIDE_SECTIONS = new Set(["vorlagen", "word-export", "branding", "projekt-module", "positionskatalog"]);
+const WIDE_SECTIONS = new Set([
+  "vorlagen",
+  "word-export",
+  "branding",
+  "projekt-module",
+  "positionskatalog",
+  "ki-freigabe",
+]);
 const isWideSection = computed(() => WIDE_SECTIONS.has(activeSection.value));
 
 const settingsNavGroups = computed(() => {
@@ -1142,6 +1249,9 @@ onMounted(() => {
   void loadCustomVars();
   void loadCustomModules();
   void loadKatalog();
+  // Die KI-Freigabe lädt erst beim Öffnen der Sektion — siehe den `watch`
+  // weiter oben.
+  if (activeSection.value === "ki-freigabe") void ladeKiFreigabe();
 });
 </script>
 
@@ -2268,6 +2378,106 @@ onMounted(() => {
         </template>
 
         <!-- ── System-Info ───────────────────────────────────────────── -->
+        <template v-if="activeSection === 'ki-freigabe'">
+          <section>
+            <h3 class="settings-h3 mb-3">KI-Zugriff</h3>
+            <p class="text-sm" style="color: var(--color-text-muted); margin: 0 0 14px; max-width: 70ch">
+              PATIO kann je Projekt eine <strong>Akte</strong> erzeugen, die ein Sprachmodell lesen darf. Nichts davon
+              geschieht von selbst: ohne Hauptschalter und ohne Häkchen entsteht keine Zeile.
+            </p>
+
+            <div v-if="!kiFreigabe" class="empty-hint">Lade…</div>
+            <template v-else>
+              <div class="settings-card p-4" style="margin-bottom: 14px">
+                <label class="flex items-center gap-3" style="cursor: pointer">
+                  <input
+                    type="checkbox"
+                    :checked="kiFreigabe.aktiv"
+                    :disabled="kiBusy"
+                    @change="kiKopf({ aktiv: ($event.target as HTMLInputElement).checked })"
+                  />
+                  <span>
+                    <span class="text-sm" style="display: block; font-weight: 600">KI-Zugriff eingeschaltet</span>
+                    <span class="text-xs" style="color: var(--color-text-tertiary)">
+                      Aus heisst: es entsteht keine Akte, egal was unten steht.
+                    </span>
+                  </span>
+                </label>
+              </div>
+
+              <div class="settings-card p-4" style="margin-bottom: 14px">
+                <div class="text-sm" style="font-weight: 600; margin-bottom: 8px">Personenbezogene Daten</div>
+                <div class="flex" style="gap: 8px; flex-wrap: wrap">
+                  <button
+                    v-for="o in [
+                      { id: 'keine', label: 'Keine Namen', desc: 'Personen nur als Kennung' },
+                      {
+                        id: 'namen-ohne-kontakt',
+                        label: 'Namen, keine Kontaktdaten',
+                        desc: 'Protokolle bleiben lesbar',
+                      },
+                      { id: 'alle', label: 'Alle', desc: 'auch E-Mail und Telefon' },
+                    ] as const"
+                    :key="o.id"
+                    :class="['settings-chip', kiFreigabe.personendaten === o.id ? 'settings-chip-active' : '']"
+                    style="padding: 6px 14px; border-radius: 6px; font-size: 12px"
+                    :disabled="kiBusy"
+                    :title="o.desc"
+                    @click="kiKopf({ personendaten: o.id })"
+                  >
+                    {{ o.label }}
+                  </button>
+                </div>
+                <div class="text-xs" style="color: var(--color-text-tertiary); margin-top: 8px; max-width: 70ch">
+                  Wirkt über alle freigegebenen Bereiche. <strong>Freitexte werden nicht durchsucht</strong> — steht in
+                  einem Protokoll „Hr. Müller wünscht Sichtbeton", bleibt das stehen. Wer das nicht will, gibt Notizen
+                  und Besprechungen nicht frei.
+                </div>
+              </div>
+
+              <div class="text-sm" style="font-weight: 600; margin-bottom: 8px">Projekte und Bereiche</div>
+              <div class="ki-tabelle-wrap">
+                <table class="ki-tabelle">
+                  <thead>
+                    <tr>
+                      <th style="text-align: left">Projekt</th>
+                      <th v-for="k in KI_KATEGORIEN" :key="k.key">{{ k.label }}</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="p in kiProjekte" :key="p.id">
+                      <td style="text-align: left; white-space: nowrap">{{ p.name }}</td>
+                      <td v-for="k in KI_KATEGORIEN" :key="k.key">
+                        <input
+                          type="checkbox"
+                          :checked="kiHat(p.id, k.key)"
+                          :disabled="kiBusy"
+                          @change="kiUmschalten(p.id, k.key)"
+                        />
+                      </td>
+                      <td>
+                        <button class="patio-btn sm" @click="kiVorschauZeigen(p.id, p.name)">Vorschau</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div v-if="kiVorschau" class="settings-card p-4" style="margin-top: 16px">
+                <div class="flex items-center" style="gap: 8px; margin-bottom: 8px">
+                  <span class="text-sm" style="font-weight: 600">Vorschau: {{ kiVorschau.projekt }}</span>
+                  <button class="patio-btn sm" style="margin-left: auto" @click="kiVorschau = null">Schliessen</button>
+                </div>
+                <p class="text-xs" style="color: var(--color-text-tertiary); margin: 0 0 8px">
+                  Genau das — und nichts anderes — bekommt die KI zu sehen.
+                </p>
+                <pre class="ki-vorschau">{{ kiVorschau.text }}</pre>
+              </div>
+            </template>
+          </section>
+        </template>
+
         <template v-if="activeSection === 'system'">
           <section>
             <h3 class="settings-h3 mb-3">System</h3>
@@ -2299,6 +2509,43 @@ onMounted(() => {
 </template>
 
 <style scoped>
+/* ── KI-Freigabe ───────────────────────────────────────────── */
+.ki-tabelle-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+.ki-tabelle {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.ki-tabelle th {
+  padding: 8px 6px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+  white-space: nowrap;
+  font-size: 11px;
+}
+.ki-tabelle td {
+  padding: 6px;
+  text-align: center;
+  border-bottom: 1px solid var(--color-border-subtle);
+}
+.ki-vorschau {
+  max-height: 420px;
+  overflow: auto;
+  font-size: 11px;
+  line-height: 1.5;
+  background: var(--color-bg-subtle);
+  border-radius: 6px;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+  margin: 0;
+}
+
 .primary-btn {
   background: var(--accent, var(--color-primary));
   color: var(--accent-fg, var(--color-bg));

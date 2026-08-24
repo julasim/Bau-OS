@@ -89,6 +89,7 @@ Stundenerfassung, im Bautagebuch), bedienen es aber nicht.
 | **Aktivität** | Was zuletzt im Büro passiert ist, über alle Datenarten |
 | **[Neuigkeiten](/konzepte/benachrichtigungen)** | Was an **Sie** gerichtet ist: Zuweisungen, Termine, Besprechungen, fällige Aufgaben — mit Lesestatus |
 | **[Board](/betrieb/board)** | Bildschirm für den Besprechungsraum: heute, Aufgaben, Projekte, Woche — ohne Beträge und Kontaktdaten |
+| **[KI-Zugriff](/konzepte/ki-zugriff)** | Je Projekt eine Akte für ein Sprachmodell — freigegeben bis auf die Kategorie genau, mit Vorschau |
 | **Papierkorb** | Gelöschtes ist wiederherstellbar, statt sofort weg zu sein |
 | **[Exporte](/konzepte/export)** | Fünf Dokumentarten aus eigenen Word-Vorlagen — Protokoll, Bautagebuch, Stundenzettel, Projektübersicht, **Rechnung** — wahlweise als PDF |
 | **Volldump** | Der ganze Bestand als Markdown-Ordnerbaum: lesbar ohne PATIO |

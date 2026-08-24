@@ -41,6 +41,7 @@ export default defineConfig({
           { text: "Das Aufgabensystem", link: "/konzepte/aufgabensystem" },
           { text: "Export und Volldump", link: "/konzepte/export" },
           { text: "Neuigkeiten", link: "/konzepte/benachrichtigungen" },
+          { text: "KI-Zugriff", link: "/konzepte/ki-zugriff" },
         ],
       },
       {

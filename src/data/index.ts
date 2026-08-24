@@ -64,6 +64,8 @@ export type { AktivitaetsEintrag } from "./db-aktivitaet.js";
  *  Aufgaben — Matrix, Tagesbudget, Tageswechsel. */
 export const aufgabensystemRepo = dbAufgabensystem;
 export const benachrichtigungenRepo = dbBenachrichtigungen;
+export { dbKiFreigabe as kiFreigabeRepo, KI_KATEGORIEN } from "./db-ki-freigabe.js";
+export type { KiFreigabe, KiKategorie, PersonendatenStufe } from "./db-ki-freigabe.js";
 export type { Benachrichtigung, NeueBenachrichtigung, Anlass } from "./db-benachrichtigungen.js";
 export type { Matrix, MatrixSpalte, TagesplanBudget, Sichtbarkeit } from "./db-aufgabensystem.js";
 export const portfolioRepo: PortfolioRepository = dbPortfolio;
