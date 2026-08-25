@@ -14,6 +14,34 @@ export default defineConfig({
   description: "Büro-Software für Architektur- und Planungsbüros — im eigenen Netz betrieben",
   lang: "de-DE",
 
+  // ── Warum hier ausdrücklich `false` steht ────────────────────────────────
+  //
+  // VitePress ermittelt das Änderungsdatum je Seite über `git log`. Eingeschaltet
+  // wird das nicht nur durch diese Option, sondern AUCH durch einen Eintrag
+  // `themeConfig.lastUpdated` — der wie eine blosse Beschriftung aussieht:
+  //
+  //     lastUpdated: userConfig.lastUpdated ?? !!userConfig.themeConfig?.lastUpdated
+  //     (vitepress/dist/node/chunk-*.js)
+  //
+  // Im Container gibt es weder das Programm `git` noch ein Repository
+  // (`.dockerignore` schliesst `.git/` aus). VitePress 1.6.4 faengt den
+  // fehlgeschlagenen Aufruf NICHT ab, sondern lehnt die Zusage ab — und damit
+  // scheitert der GESAMTE Bau:
+  //
+  //     [vitepress] spawn git ENOENT
+  //     file: /opt/patio/docs/betrieb/arbeitsplatz.md
+  //
+  // Das ist am 06.08.2026 mit `23d4f9a` passiert, als `docs:build` in
+  // `build:all` wanderte, und blieb 45 Commits lang unbemerkt: Die CI ruft
+  // denselben Befehl, aber auf einem Runner MIT git und MIT `.git`.
+  //
+  // `false` gewinnt gegen die Ableitung, der Aufruf unterbleibt vollständig.
+  // Der Preis ist die Zeile „Zuletzt aktualisiert" im Seitenfuss. Sie mit
+  // `apt-get install git` zurückzuholen, wäre eine Täuschung: ohne Repository
+  // liefert `git log` nichts, das Datum bliebe leer — gemessen — und man hätte
+  // ein Paket mehr im Bau-Image für dasselbe sichtbare Ergebnis.
+  lastUpdated: false,
+
   themeConfig: {
     logo: "/logo.svg",
     nav: [
@@ -104,9 +132,12 @@ export default defineConfig({
       next: "Nächste Seite",
     },
 
-    lastUpdated: {
-      text: "Zuletzt aktualisiert",
-    },
+    // Hier stand `lastUpdated: { text: "Zuletzt aktualisiert" }`. Der Eintrag
+    // sieht wie eine reine Beschriftung aus, schaltet die Datumsermittlung
+    // aber selbst scharf (siehe Kommentar bei `lastUpdated: false` oben) — und
+    // genau das hat den Docker-Bau 45 Commits lang lahmgelegt. Ohne die
+    // Funktion ist die Beschriftung ohnehin wirkungslos; stehen zu bleiben
+    // hiesse nur, die Falle für den Nächsten aufzustellen.
 
     returnToTopLabel: "Nach oben",
     sidebarMenuLabel: "Menu",

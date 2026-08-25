@@ -23,12 +23,24 @@
 
 set -e
 
-# WICHTIG: build:all benutzt — das ist exakt der gleiche Befehl wie im
-# Docker-Build (Dockerfile Zeile ~30). `npx tsc --noEmit` verwendet eine
-# leicht andere TS-Auflösung und hat in der Vergangenheit Type-Errors
+# WICHTIG: build:all benutzt, nicht `npx tsc --noEmit`. Letzteres verwendet
+# eine leicht andere TS-Auflösung und hat in der Vergangenheit Type-Errors
 # durchgehen lassen die im Docker-Build dann doch knallen (z.B. strict
 # JSONValue-Constraints von postgres.js). build:all ist langsamer
 # (~10s vs. 3s) — wir nehmen die Zeit mit, das ist's wert.
+#
+# ABER: derselbe Befehl ist nicht dieselbe Pruefung. Im Dockerfile laeuft
+# `npm run build:all` im builder-Stage — ohne `git`, ohne `.git`
+# (`.dockerignore` schliesst es aus), gefolgt von `npm prune --omit=dev` und
+# einer zweiten Stufe, die nur dist/ und node_modules/ uebernimmt. Hier laeuft
+# er im vollen Arbeitsverzeichnis einer Entwicklermaschine.
+#
+# Am 06.08.2026 (`23d4f9a`) hat genau dieser Unterschied zugeschlagen:
+# `docs:build` kam zu `build:all` dazu, VitePress ruft je Doku-Seite `git log`
+# — hier vorhanden, im Container nicht („spawn git ENOENT"). Der Hook blieb 45
+# Commits lang gruen, waehrend kein Image mehr baute. Ein gruener Push sagt
+# also nichts darueber, ob das Auslieferungspaket entsteht; das zeigt erst
+# `bash scripts/release-offline.sh`.
 echo "▸ Pre-Push: Backend + Frontend Production-Build (npm run build:all)..."
 npm run build:all > /tmp/patio-pre-push.log 2>&1 || {
     echo "✗ Build-Fehler:"

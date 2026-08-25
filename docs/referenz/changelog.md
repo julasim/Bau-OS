@@ -693,3 +693,75 @@ der beim Klick eine Fehlermeldung öffnet, gehört nicht in die Navigation.
 - **Die Beschriftungen der Navigationsleiste** trugen nicht die Kennzeichnung,
   auf die der Fokus-Modus zielt: die Leiste schrumpfte auf 60 Pixel, die Texte
   blieben stehen und liefen über
+
+---
+
+## Der Docker-Bau war 45 Commits lang kaputt
+**25.08.2026**
+
+Seit dem 6. August liess sich **kein Auslieferungspaket mehr schnüren**. Der
+Firmenserver war damit von allem abgeschnitten, was seither gebaut wurde —
+Export und PDF, Board, Neuigkeiten, Datenübernahme, KI-Zugriff, die
+Oberflächen-Runde.
+
+### Was passiert war
+
+Mit `23d4f9a` („Der Server liefert die Dokumentation aus") wanderte der
+Doku-Bau in `build:all`. VitePress holt für jede Seite ein Änderungsdatum, und
+zwar über `git log`. Im Bau-Container gibt es weder das Programm `git` noch ein
+Repository — und VitePress bricht bei einem fehlgeschlagenen Aufruf den
+**gesamten** Bau ab:
+
+```
+[vitepress] spawn git ENOENT
+file: /opt/patio/docs/betrieb/arbeitsplatz.md
+```
+
+Scharf geschaltet hatte die Funktion niemand bewusst. In der Konfiguration
+stand `themeConfig.lastUpdated: { text: "Zuletzt aktualisiert" }` — dem Anschein
+nach eine reine Beschriftung. VitePress leitet daraus die Datumsermittlung ab.
+
+**Warum es 45 Commits lang niemand sah:** Drei Kommentare im Repo behaupteten,
+die CI prüfe „identisch zu Docker" und der Pre-Push-Hook laufe „exakt den
+gleichen Befehl". Der Befehl stimmt — die Umgebung nicht. Der Runner hat `git`
+und ein `.git`; der Container hat beides nicht.
+
+### Behoben
+
+- `lastUpdated: false` in der Doku-Konfiguration, ausdrücklich und begründet.
+  Die Zeile „Zuletzt aktualisiert" entfällt damit im Seitenfuss. Sie mit einem
+  nachinstallierten `git` zurückzuholen wäre eine Täuschung gewesen: ohne
+  Repository liefert `git log` nichts, das Datum bliebe leer — nachgemessen.
+- Der irreführende Beschriftungs-Eintrag ist entfernt. Ohne die Funktion war er
+  wirkungslos, und stehen zu bleiben hiesse nur, die Falle für den Nächsten
+  wieder aufzustellen.
+- Die drei falschen Kommentare sagen jetzt, was wirklich gilt.
+- **Ein CI-Job baut die Builder-Stufe wirklich** — ohne LibreOffice, damit er
+  schnell bleibt, und parallel zum Testlauf, damit er nichts kostet. Nur ein
+  echter `docker build` beweist, dass ein Paket entstehen kann.
+
+### Beim Prüfen dahinter gefunden
+
+Der Bau war nur der erste Riegel. Der Auslieferungsweg trug auch danach nicht:
+
+- **Die Basis-Images lagen nie im Paket.** `postgres:16`, `caddy:2-alpine` und
+  `alpine:latest` fehlten. Auf einem Rechner ohne Internet scheiterte damit
+  jede Erstinstallation. Bei einer bestehenden fiel es nur deshalb nicht auf,
+  weil Postgres und Caddy ohnehin laufen — `alpine` hängt an keinem Container
+  und wird von der Sicherung gebraucht: fehlte es, scheiterte die nächtliche
+  Sicherung **ohne Meldung**, und jedes Update brach danach ab.
+- **Ein gescheiterter Start umging den Rückweg.** Liess sich der Stack nicht
+  hochfahren, endete das Update-Skript sofort — nach dem Laden des neuen
+  Images und nach dem Ersetzen aller Dateien, aber vor der Gesundheitsprüfung
+  und vor dem Rücksetzen. Genau der halb aktualisierte Rechner, den die
+  Vorprüfung verhindern soll.
+- **Jedes Paket hiess gleich.** Ohne Argument kommt die Version aus
+  `package.json`, und die steht seit dem ersten Commit auf `0.1.0` — ein neues
+  Paket überschrieb das vorige stillschweigend. Das vorige ist der Rückweg.
+- **`logs/`, `data/` und `tools/` gehörten root**, der Dienst schreibt als
+  uid 1000, und der Fehler wird im Protokoll-Baustein verschluckt. Folge:
+  `patio.log` bleibt dauerhaft leer, während Monitoring und Troubleshooting
+  genau dorthin verweisen.
+- **Der dokumentierte Weg zum kleineren Paket wirkte nicht.** `MIT_PDF=nein`
+  wurde beim Paketbau nicht durchgereicht; die 350 MB LibreOffice waren wieder
+  drin.

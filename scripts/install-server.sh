@@ -79,6 +79,21 @@ mkdir -p "$BACKUP_DIR"
 # anderer Stelle.
 chown -R 1000:1000 "$WORKSPACE_DIR"
 ok "$WORKSPACE_DIR gehört uid 1000 (die Kennung des Dienstes)"
+
+# Dasselbe gilt für die drei Bind-Mounts aus docker-compose.yml. Hier legt sie
+# root an, der Container schreibt als uid 1000 — und `src/logger.ts` schluckt
+# den EACCES in einem leeren `catch`. Ohne diese Zeile bleiben
+# `logs/patio.log` und `logs/patio.jsonl` DAUERHAFT LEER, während der Dienst
+# selbst normal läuft: stdout geht weiter an `docker compose logs`.
+#
+# Das ist heimtückisch, weil docs/betrieb/monitoring.md und die
+# Schnelldiagnose in troubleshooting.md genau auf diese Dateien zeigen. Der
+# Fehlerzähler meldet dort 0 auf einer Maschine, die Fehler hat.
+#
+# Das `chown -R node:node` im Dockerfile hilft nicht: das gilt fürs Image,
+# nicht für den daruntergehängten Ordner vom Host.
+chown -R 1000:1000 "$INSTALL_DIR"/{logs,data,tools}
+ok "logs/, data/ und tools/ gehören uid 1000 (sonst bleibt das Protokoll leer)"
 ok "$INSTALL_DIR angelegt"
 
 # ── 3. Konfiguration ─────────────────────────────────────────────────────────

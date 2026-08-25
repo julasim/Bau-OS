@@ -5,7 +5,8 @@
 # der Pre-Push-Hook lokal nicht gefangen hat (--no-verify, fremde Maschine,
 # Race-Condition).
 #
-# Was geprueft wird (gleiche Checks wie .husky/pre-push):
+# Was geprueft wird (dieselben Befehle wie .husky/pre-push, plus Gitleaks und
+# den Docker-Bau — der Hook laesst beides aus):
 #   - Backend-TypeScript (tsc --noEmit)
 #   - Frontend-TypeScript (vue-tsc --noEmit)
 #   - Vite-Production-Build der SPA — faengt SFC-Parse-Errors,
@@ -14,6 +15,9 @@
 #     ueberspringen sich rund 70 Prozent der Pruefungen still und der Lauf
 #     meldet trotzdem gruen; genau die ACL-, Auth- und Datenbanktests waeren
 #     dann nicht gelaufen. Deshalb der `services`-Block unten.
+#   - Docker-Bau der builder-Stufe — gleicher Befehl, andere Umgebung. Das
+#     Bau-Image hat weder `git` noch ein Repository; ein Doku-Bau, der
+#     `git log` ruft, faellt nur dort auf, nicht auf dem Runner.
 #
 # Wenn was rot wird: GitHub markiert den Commit mit X, du siehst es sofort
 # auf der PR-Seite oder am main-Branch-Status. Der Bug-Workflow wird damit
@@ -102,13 +106,33 @@ jobs:
           ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
         run: npm ci
 
-      - name: Production-Build (build:all = tsc + vite, identisch zu Docker)
-        # Identische Kommando-Kette wie der Dockerfile-Build-Step.
+      - name: Production-Build (build:all = tsc + vite + VitePress)
+        # Gleicher Befehl wie im Dockerfile — aber NICHT dieselbe Pruefung.
+        # Der Runner hat `git` und ein ausgechecktes `.git`; der builder-Stage
+        # hat beides nicht: `.dockerignore` schliesst `.git/` aus, und
+        # `node:24-bookworm-slim` bringt kein git mit (die apt-Schicht im
+        # Dockerfile installiert nur python3/make/g++).
+        #
+        # Genau daran ist der Docker-Bau am 06.08.2026 mit `23d4f9a`
+        # gescheitert: `docs:build` wanderte in `build:all`, VitePress ruft je
+        # Doku-Seite `git log` fuers Aenderungsdatum, und der Bau brach mit
+        # „spawn git ENOENT" ab. Hier blieb es 45 Commits lang gruen, waehrend
+        # kein Image mehr baute und `scripts/release-offline.sh` kein Paket
+        # schnueren konnte. Behoben ueber `lastUpdated: false` in
+        # docs/.vitepress/config.ts — und abgesichert durch den Job
+        # `docker-build` unten.
+        #
+        # Was dieser Schritt also leistet: Fehler im CODE faengt er. Alles, was
+        # nur der Container hat — fehlende apt-Pakete, `npm prune --omit=dev`,
+        # die Laufzeit-Stufe mit ihren COPY-Pfaden — kann hier grundsaetzlich
+        # nicht auffallen. Dafuer gibt es nur einen echten `docker build`.
+        #
         # Faengt:
         #   - Backend-TypeScript-Fehler (incl. strict JSONValue-Constraints)
         #   - Vue-SFC-Parse-Errors, kaputte Mustaches
         #   - fehlende Imports
         #   - Asset-Resolution-Probleme
+        #   - Fehler in der VitePress-Doku (docs:build ist Teil von build:all)
         run: npm run build:all
 
       - name: Frontend TypeScript (vue-tsc)
@@ -150,3 +174,57 @@ jobs:
         run: |
           mkdir -p /tmp/patio-workspace
           npm test
+
+  # ── Warum dieser Job zusaetzlich zum Job oben steht ───────────────────────
+  #
+  # Der Schritt „Production-Build" oben ruft denselben Befehl wie das
+  # Dockerfile. Der BEFEHL ist identisch, die UMGEBUNG nicht: Der Runner hat
+  # das Programm `git` und ein Repository, das Bau-Image hat weder noch
+  # (`.dockerignore` schliesst `.git/` aus). Genau in dieser Luecke ist der
+  # Docker-Bau am 06.08.2026 gebrochen — VitePress ruft je Doku-Seite
+  # `git log`, der Aufruf scheitert mit `spawn git ENOENT`, und damit kippt
+  # der GESAMTE Bau. Gemerkt hat es 45 Commits lang niemand: die CI blieb
+  # gruen, und auf dem Server wird nie gebaut. Aufgefallen ist es erst, als
+  # scripts/release-offline.sh kein Paket mehr schnueren konnte.
+  #
+  # Ein eigener Job und kein Schritt im Job oben: Er laeuft parallel, braucht
+  # weder Node noch Postgres auf dem Runner, und solange der Testlauf oben
+  # laenger dauert, verlaengert er den CI-Lauf um null Minuten.
+  docker-build:
+    name: docker build --target builder
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        # Bewusst flach (kein `fetch-depth: 0` wie oben — das ist dort nur
+        # fuer Gitleaks noetig). Die History braucht hier niemand, und `.git/`
+        # erreicht den Bau-Kontext ohnehin nicht. Dass sie im Image fehlt, ist
+        # der Sinn dieses Jobs: nur so faellt ein wieder eingeschalteter
+        # `git log` im Doku-Bau auf, bevor das Auslieferungspaket dran ist.
+        uses: actions/checkout@v4
+
+      - name: Buildx einrichten
+        # Noetig fuer den Schichten-Zwischenspeicher unten: der Standard-
+        # Treiber von `docker build` kann `type=gha` nicht.
+        uses: docker/setup-buildx-action@v3
+
+      - name: Builder-Stufe bauen (ohne LibreOffice)
+        # `target: builder` haelt vor Stufe 2 an. Stufe 2 installiert rund
+        # 350 MB libreoffice-writer und kopiert danach nur noch fertige Ordner
+        # aus Stufe 1 herein — kaputtgehen kann an einem Commit die Stufe 1:
+        # npm ci (bcrypt wird nativ uebersetzt), tsc, vite, vitepress,
+        # npm prune. Die 350 MB bei jedem Push zu ziehen kauft nichts; das
+        # vollstaendige Image baut scripts/release-offline.sh vor jedem Paket.
+        #
+        # `push`/`load` bleiben aus: Gebraucht wird nicht das Image, sondern
+        # die Antwort auf „laeuft der Bau durch". Das spart den Export des
+        # rund 1 GB grossen Zwischenimages in den Docker-Daemon.
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: builder
+          push: false
+          load: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

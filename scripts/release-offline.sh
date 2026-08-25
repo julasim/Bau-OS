@@ -33,6 +33,24 @@ fehl() { echo "FEHLER: $*" >&2; exit 1; }
 
 command -v docker >/dev/null || fehl "docker nicht gefunden."
 
+# ── Kein stilles Ueberschreiben ──────────────────────────────────────────────
+#
+# Ohne Argument kommt die Version aus package.json — und die steht seit dem
+# ersten Commit auf 0.1.0. Jedes Paket hiess damit `patio-0.1.0.tar.gz` und
+# ueberschrieb das vorige ohne Rueckfrage. Das vorige Paket ist aber der
+# Rueckweg, wenn ein Update auf dem Server nicht traegt.
+if [ -e "$PAKET" ] && [ "${UEBERSCHREIBEN:-false}" != "true" ]; then
+  fehl "Es gibt bereits $PAKET (vom $(date -r "$PAKET" '+%d.%m.%Y %H:%M')).
+
+       Ein zweites Paket derselben Version wuerde es ersetzen — und damit den
+       Rueckweg, falls das Update auf dem Server nicht traegt.
+
+       Entweder eine eigene Version vergeben:
+         bash scripts/release-offline.sh 0.2.0
+       oder bewusst ueberschreiben:
+         UEBERSCHREIBEN=true bash scripts/release-offline.sh"
+fi
+
 # ── 1. Pruefkette ────────────────────────────────────────────────────────────
 #
 # Bewusst VOR dem Bau. Ein Paket, das der Server nicht starten kann, kostet
@@ -62,8 +80,16 @@ fi
 #
 # Zwei Marken: die Version (der Rueckweg auf dem Server haengt daran) und
 # `latest` (worauf docker-compose.yml zeigt).
-log "Image bauen: patio-app:${VERSION}"
-docker build -t "patio-app:${VERSION}" -t "patio-app:latest" . \
+# `MIT_PDF=nein` spart rund 350 MB LibreOffice im Image — der PDF-Weg
+# antwortet dann mit 503 und einem Satz in Klartext, der Word-Export bleibt
+# vollstaendig. docs/betrieb/updates.md empfiehlt das fuer kleinere Pakete,
+# aber der Bau hier reichte den Wert nicht durch: wer vorher
+# `docker compose build --build-arg MIT_PDF=nein app` lief, bekam von diesem
+# Skript trotzdem wieder das volle Image.
+log "Image bauen: patio-app:${VERSION} (MIT_PDF=${MIT_PDF:-ja})"
+docker build \
+  --build-arg "MIT_PDF=${MIT_PDF:-ja}" \
+  -t "patio-app:${VERSION}" -t "patio-app:latest" . \
   || fehl "docker build fehlgeschlagen."
 
 # ── 3. Paket schnueren ───────────────────────────────────────────────────────
@@ -73,6 +99,40 @@ trap 'rm -rf "$ARBEIT"' EXIT
 
 log "Image speichern (dauert einen Moment)..."
 docker save "patio-app:${VERSION}" "patio-app:latest" | gzip > "$ARBEIT/image.tar.gz"
+
+# ── Die Basis-Images gehoeren mit ins Paket ──────────────────────────────────
+#
+# Bis hierher enthielt das Paket NUR patio-app. Der Stack braucht aber drei
+# fremde Images, und der Server hat kein Internet:
+#
+#   postgres:16      docker-compose.yml (Dienst `postgres`)
+#   caddy:2-alpine   docker-compose.yml (Dienst `caddy`)
+#   alpine:latest    scripts/backup.sh sichert damit den CA-Schluessel,
+#                    scripts/restore.sh spielt ihn damit zurueck
+#
+# Auf einer BESTEHENDEN Installation faellt das nicht auf: postgres und caddy
+# laufen ja und sind dadurch vorhanden. `alpine` haengt an keinem laufenden
+# Container — fehlt es, scheitert die naechtliche Sicherung unter
+# `set -euo pipefail`, und weil dort `2>/dev/null` steht, ohne jede Meldung.
+# `update-offline.sh` bricht daraufhin JEDES Update ab, ohne dass die Ursache
+# irgendwo steht.
+#
+# Bei einer ERSTINSTALLATION scheitert `docker compose up -d` sofort: es
+# versucht zu ziehen und kommt nicht ins Netz.
+#
+# Vorher ziehen, damit das Paket auch dann vollstaendig ist, wenn auf diesem
+# Rechner gerade nichts davon liegt.
+log "Basis-Images beschaffen und speichern..."
+BASIS_IMAGES="postgres:16 caddy:2-alpine alpine:latest"
+for bild in $BASIS_IMAGES; do
+  docker image inspect "$bild" >/dev/null 2>&1 || {
+    log "  $bild fehlt lokal — ziehen..."
+    docker pull "$bild" || fehl "$bild liess sich nicht beschaffen. Ohne die
+       Basis-Images ist das Paket auf einem Rechner ohne Internet wertlos."
+  }
+done
+# shellcheck disable=SC2086  # absichtlich in Woerter zerlegt
+docker save $BASIS_IMAGES | gzip > "$ARBEIT/basis-images.tar.gz"
 
 # Dazu alles, was der Server neben dem Image braucht. Compose-Datei und
 # Skripte aendern sich mit — sie muessen zum Image passen.

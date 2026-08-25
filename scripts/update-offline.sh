@@ -90,6 +90,18 @@ fi
 log "Image laden..."
 gunzip -c "$ARBEIT/image.tar.gz" | docker load
 
+# Basis-Images (postgres, caddy, alpine). Seit sie im Paket liegen, kommt eine
+# Erstinstallation ohne Internet aus — vorher scheiterte `docker compose up`
+# beim Versuch, sie zu ziehen. Aeltere Pakete haben die Datei nicht; das ist
+# kein Fehler, dort waren sie schon auf dem Rechner.
+if [ -f "$ARBEIT/basis-images.tar.gz" ]; then
+  log "Basis-Images laden..."
+  gunzip -c "$ARBEIT/basis-images.tar.gz" | docker load
+else
+  log "HINWEIS: Paket ohne Basis-Images (aeltere Fassung) — es wird das
+       genommen, was auf diesem Rechner liegt."
+fi
+
 log "Konfiguration und Skripte aktualisieren..."
 # .env wird NICHT angefasst — dort stehen die Geheimnisse dieser Installation.
 cp "$ARBEIT/dabei/docker-compose.yml" "$INSTALL_DIR/"
@@ -119,7 +131,23 @@ done
 
 log "Stack neu starten..."
 cd "$INSTALL_DIR"
-docker compose up -d
+
+# ── Warum hier kein nacktes `docker compose up -d` steht ─────────────────────
+#
+# Das Skript laeuft unter `set -euo pipefail`. Scheitert der Start — fehlendes
+# Basis-Image, belegter Port 80/443, volle Platte, kaputte .env —, bricht das
+# Skript SOFORT ab. Abschnitt 5 (Gesundheitspruefung) und Abschnitt 6
+# (Rueckweg auf das vorige Image) liefen dann nie.
+#
+# Und zwar nachdem `docker load` bereits gelaufen ist und Compose-Datei,
+# docker/, deploy/ sowie alle Skripte ersetzt sind: genau der halb
+# aktualisierte Rechner, den die Vorpruefung oben verhindern soll.
+#
+# Deshalb den Fehlschlag auffangen und in den Rueckweg laufen lassen. Die
+# Ausgabe von Compose bleibt sichtbar, sie steht meist schon in der Meldung.
+if ! docker compose up -d; then
+  log "Der Stack liess sich nicht starten — weiter zum Rueckweg."
+fi
 
 # ── 5. Gesundheit pruefen ────────────────────────────────────────────────────
 log "Auf den Dienst warten..."

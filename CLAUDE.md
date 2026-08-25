@@ -37,6 +37,58 @@
 
 > ## ⇥ Woran gerade gearbeitet wird
 >
+> ### Stand 25.08.2026 — der Docker-Bau war 45 Commits lang kaputt
+>
+> ⚠ **Seit dem 06.08.2026 (`23d4f9a`) liess sich kein Auslieferungspaket mehr
+> schnueren.** VitePress holt je Doku-Seite ein Aenderungsdatum ueber
+> `git log`; im Bau-Container gibt es weder `git` noch ein Repository, und
+> VitePress bricht dabei den GESAMTEN Bau ab (`spawn git ENOENT`).
+> Scharfgeschaltet hatte das niemand bewusst — der Eintrag
+> `themeConfig.lastUpdated: { text: … }` sieht wie eine Beschriftung aus und
+> leitet die Funktion ab.
+>
+> **Warum es niemand sah:** Drei Kommentare behaupteten Gleichheit zwischen CI
+> und Docker (`build.yml` zweimal, `.husky/pre-push` einmal). Der Befehl ist
+> gleich, die Umgebung nicht — der Runner hat `git` UND ein `.git`.
+>
+> Behoben: `lastUpdated: false` in `docs/.vitepress/config.ts`, der
+> irrefuehrende Eintrag entfernt, die drei Kommentare korrigiert, und ein
+> **eigener CI-Job baut die builder-Stufe wirklich** (`--target builder`, ohne
+> LibreOffice, parallel zum Testlauf).
+>
+> **Dahinter lag mehr — der Auslieferungsweg trug auch nach dem Bau-Fix
+> nicht:**
+>
+> - **Die Basis-Images lagen nie im Paket** (`postgres:16`, `caddy:2-alpine`,
+>   `alpine:latest`). Erstinstallation ohne Internet: unmoeglich. Auf einer
+>   bestehenden fiel es nicht auf, weil Postgres und Caddy laufen — `alpine`
+>   haengt an keinem Container und wird von `backup.sh` gebraucht: fehlte es,
+>   scheiterte die naechtliche Sicherung **ohne Meldung**, und jedes Update
+>   brach danach ab.
+> - **Ein gescheiterter Start umging den Rueckweg.** `docker compose up -d`
+>   unter `set -euo pipefail` beendete das Update-Skript sofort — nach
+>   `docker load` und nach dem Ersetzen aller Dateien, aber vor
+>   Gesundheitspruefung und Ruecksetzen.
+> - **Jedes Paket hiess `patio-0.1.0.tar.gz`** und ueberschrieb das vorige
+>   still. `package.json` steht seit dem ersten Commit auf 0.1.0.
+> - **`logs/`, `data/`, `tools/` gehoerten root**, der Dienst schreibt als
+>   uid 1000, der EACCES wird im Logger verschluckt → `patio.log` blieb
+>   dauerhaft leer, waehrend Monitoring und Troubleshooting dorthin zeigen.
+> - **`MIT_PDF=nein` wurde nicht durchgereicht** — die 350 MB LibreOffice waren
+>   im Paket trotzdem drin.
+>
+> **Verifiziert, nicht behauptet:** voller `docker compose build` aus dem echten
+> Repo (EXIT=0), danach ein echtes Paket ueber `release-offline.sh` — 497 MB,
+> mit allen drei Basis-Images nachgewiesen im Archiv.
+>
+> **Noch offen** (gefunden, nicht behoben): fehlende Pruefsumme im Update warnt
+> nur statt abzubrechen; `troubleshooting.md` empfiehlt `docker image prune -a`
+> und loescht damit den Rueckweg; die AP11-Datenuebernahme hat keinen Ort, an
+> dem sie laufen koennte (`scripts/` fehlt im Laufzeit-Image, Postgres hat kein
+> `ports:`); `update-offline.sh` mischt Verzeichnisse per `cp -r` statt sie zu
+> ersetzen; das Paket schleppt `docker/docker-compose.vps.yml` aus der
+> VPS-Aera mit.
+>
 > ### Stand 24.08.2026 — 733 Tests, Migrationen bis 059
 >
 > **AP9 ist fertig.** Der Fokus-Modus (Schritt 3) steht: `ContextSidebar.vue`
