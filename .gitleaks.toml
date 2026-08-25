@@ -50,3 +50,34 @@ description = "Erfundene Testpasswoerter in der Testsuite (kein echtes Secret)"
 regexes = [
   '''(json|db|test|pruef)-passwort-\d+''',
 ]
+
+# Der Test-Schluessel der CI aus .github/workflows/build.yml.
+#
+# Er heisst woertlich `ci-nur-fuer-tests-mindestens-32-zeichen-lang` — der Name
+# IST die Beschreibung. Er steht absichtlich im Klartext in der Workflow-Datei,
+# damit die Testsuite ohne jede Repo-Einstellung laeuft; `src/config.ts`
+# verlangt mindestens 32 Zeichen, daher die Laenge, und die bringt ihm eine
+# Entropie von 3,86 ein. Genau daran haengt gitleaks 8.30.1 ihn als
+# "generic-api-key" auf.
+#
+# Seit Commit 942486a9 (23.08.2026, „Sicherheitsnetz: Datenbank in die CI")
+# war damit JEDER Lauf rot — und weil der Scan ueber die ganze History geht
+# (fetch-depth: 0), blieb er es unabhaengig davon, was danach kam. Aufgefallen
+# ist es zwei Tage spaeter, weil ein roter Haken am Commit aussieht wie ein
+# fehlgeschlagener Push.
+#
+# **Warum nicht in ein GitHub-Secret auslagern:** Der Wert schuetzt nichts. Er
+# signiert Token fuer eine Datenbank, die nach dem Lauf verschwindet. Ihn zu
+# einem Secret zu machen wuerde die CI von einer Repo-Einstellung abhaengig
+# machen, die in einem Fork oder einer frischen Kopie fehlt — der Lauf waere
+# dann rot, ohne dass jemand den Grund saehe. Sichtbarkeit ist hier die
+# bessere Eigenschaft.
+#
+# **Nur ueber das Muster, nicht ueber den Pfad** — aus demselben Grund wie
+# oben: ein Pfad-Eintrag naehme die ganze Datei von der Pruefung aus, und dann
+# ginge ein echtes Secret in derselben Datei unbemerkt durch.
+[[allowlists]]
+description = "Test-JWT-Schluessel der CI (kein echtes Secret, schuetzt nichts)"
+regexes = [
+  '''ci-nur-fuer-tests-mindestens-32-zeichen-lang''',
+]
