@@ -765,3 +765,37 @@ Der Bau war nur der erste Riegel. Der Auslieferungsweg trug auch danach nicht:
 - **Der dokumentierte Weg zum kleineren Paket wirkte nicht.** `MIT_PDF=nein`
   wurde beim Paketbau nicht durchgereicht; die 350 MB LibreOffice waren wieder
   drin.
+
+### Und noch ein roter Lauf, der nichts mit dem Bau zu tun hatte
+
+Nach der Reparatur meldete GitHub weiterhin einen Fehlschlag — diesmal im
+bestehenden Job, nach 37 Sekunden. Das ist zu früh für die Tests, und der
+Grund lag im **Gitleaks-Schritt**:
+
+```
+Regel:    generic-api-key
+Datei:    .github/workflows/build.yml, Zeile 148
+Treffer:  JWT_SECRET: ci-nur-fuer-tests-mindestens-32-zeichen-lang
+```
+
+Der Test-Schlüssel der CI. Er heisst wörtlich „ci-nur-fuer-tests" und steht
+absichtlich im Klartext, damit die Testsuite ohne jede Repo-Einstellung läuft;
+`config.ts` verlangt mindestens 32 Zeichen, und diese Länge bringt ihm die
+Entropie ein, an der Gitleaks ihn als API-Schlüssel aufhängt.
+
+Eingebaut wurde er am **23.08.2026**. Seitdem war **jeder** Lauf rot — und
+weil der Scan über die ganze Historie geht, blieb er es unabhängig davon, was
+danach kam. Aufgefallen ist es zwei Tage später, weil ein roter Haken am
+Commit aussieht wie ein fehlgeschlagener Push. Die Pushes selbst gingen jedes
+Mal durch.
+
+Behoben über eine Allowlist in `.gitleaks.toml`, wie schon für das
+Dummy-TOTP-Seed und die Testpasswörter. Nicht über ein GitHub-Secret: der Wert
+schützt nichts — er signiert Token für eine Datenbank, die nach dem Lauf
+verschwindet. Als Secret hinge die CI an einer Repo-Einstellung, die in einem
+Fork fehlt; der Lauf wäre dann rot, ohne dass jemand den Grund sähe.
+
+Gegengeprüft mit drei Läufen über dieselbe Historie: ohne Allowlist ein Fund,
+mit Allowlist keiner — und ein testweise eingeschmuggeltes Zufallstoken in
+derselben Datei wird weiterhin gefunden. Die Ausnahme deckt also genau diesen
+einen Wert ab und nimmt nicht die Datei von der Prüfung aus.

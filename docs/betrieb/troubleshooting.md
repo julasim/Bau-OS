@@ -316,9 +316,35 @@ find /mnt/patio-backup/taeglich -maxdepth 1 -type d -name '*.UNVOLLSTAENDIG' -ex
 # Journal begrenzen
 sudo journalctl --vacuum-size=200M
 
-# Ungenutzte Docker-Images
+# Ungenutzte Docker-Images — NICHT ohne den Hinweis unten
 docker image prune -a
 ```
+
+::: danger `docker image prune -a` löscht hier den Rückweg
+Auf diesem Rechner hängen zwei Dinge daran, die **ohne Internet nicht
+wiederzubeschaffen** sind:
+
+- **Das vorige PATIO-Image.** `update-offline.sh` merkt sich vor einem Update
+  dessen Image-ID und setzt darauf zurück, wenn der Dienst danach nicht
+  antwortet. Nach dem Update trägt es keine Marke mehr — `prune -a` räumt es
+  damit als „ungenutzt" weg. Der automatische Rückweg ist dann fort.
+- **`alpine:latest`.** `backup.sh` sichert damit den privaten Schlüssel der
+  internen CA, `restore.sh` spielt ihn damit zurück. Der Container läuft nur
+  für Sekunden, hängt also an keinem laufenden Dienst.
+
+Wenn wirklich Platz fehlt, gezielt aufräumen statt pauschal:
+
+```bash
+# Was liegt überhaupt herum?
+docker images
+
+# Einzelnes altes PATIO-Image, dessen Version Sie nicht mehr brauchen
+docker rmi patio-app:0.1.0
+```
+
+Beides kommt mit dem nächsten Auslieferungspaket zurück — seit dem
+25.08.2026 liegen die Basis-Images mit im Paket.
+:::
 
 ---
 
@@ -334,3 +360,25 @@ echo "Disk:      $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
 echo "Sicherung: $(find /mnt/patio-backup/taeglich -maxdepth 2 -name VOLLSTAENDIG -mtime -1 2>/dev/null | wc -l) vollstaendige Staende aus 24 h"
 echo "Fehler:    $(grep -c '\"level\":\"error\"' /opt/patio/logs/patio.jsonl 2>/dev/null || echo '?') im JSONL-Log"
 ```
+
+::: warning Meldet die Fehlerzeile dauerhaft `0` oder `?`, prüfen Sie die Rechte
+`/opt/patio/logs/` wird in den Container gehängt, und der Dienst läuft dort
+als Kennung **1000**. Gehört das Verzeichnis `root`, darf er nicht
+hineinschreiben — und der Fehler wird im Programm verschluckt, statt
+aufzufallen. `patio.log` und `patio.jsonl` bleiben dann **dauerhaft leer**,
+während der Dienst selbst völlig normal läuft: die Ausgabe geht weiterhin an
+`docker compose logs`.
+
+Die Zeile oben meldet dann `0` auf einer Maschine, die sehr wohl Fehler hat.
+
+`install-server.sh` setzt die Rechte seit dem 25.08.2026 selbst. Bei einer
+**vorher aufgesetzten** Installation einmalig nachholen:
+
+```bash
+sudo chown -R 1000:1000 /opt/patio/logs /opt/patio/data /opt/patio/tools
+cd /opt/patio && sudo docker compose restart app
+```
+
+Danach zur Probe eine Anmeldung mit falschem Passwort versuchen und sehen, ob
+etwas in `/opt/patio/logs/patio.jsonl` ankommt.
+:::

@@ -160,6 +160,29 @@ journalctl -u patio-backup -n 50         # was ist zuletzt passiert?
 ls -la /mnt/patio-backup/taeglich/       # sind Stände da?
 ```
 
+::: warning Bricht die Sicherung ohne erkennbaren Grund ab: fehlt `alpine`?
+Für den privaten Schlüssel der internen CA startet `backup.sh` kurz einen
+Container aus dem Image **`alpine:latest`** — der Schlüssel liegt in einem
+Docker-Volume und ist vom Wirtssystem aus nicht direkt lesbar.
+
+Dieses Image hängt an keinem laufenden Dienst. Fehlt es, scheitert der Schritt,
+und weil die Fehlerausgabe an dieser Stelle unterdrückt wird, **ohne jede
+Meldung** — direkt nach der Zeile „CA-Schluessel sichern". Das Update-Skript
+bricht danach jedes Update mit „Die Sicherung ist fehlgeschlagen" ab, ohne dass
+die Ursache irgendwo steht.
+
+Nachsehen:
+
+```bash
+docker images alpine
+```
+
+Kommt nichts zurück, liegt es daran. Seit dem 25.08.2026 bringt jedes
+Auslieferungspaket die Basis-Images mit — einmal ein aktuelles Paket
+einspielen genügt. Ohne Paket zur Hand und mit Internet auf dem Rechner:
+`docker pull alpine:latest`.
+:::
+
 ## Rücksicherung
 
 ```bash

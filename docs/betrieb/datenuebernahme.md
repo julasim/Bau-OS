@@ -8,6 +8,57 @@
 npm run db:import -- "\\NAS\PATIO-Vault" --trocken
 ```
 
+::: warning Wo dieser Befehl laeuft — und warum das nicht selbstverstaendlich ist
+**Auf dem Entwicklungsrechner**, nicht auf dem Server. Dort ginge es naemlich
+nicht:
+
+- Im **App-Container** gibt es das Skript nicht. Das Laufzeit-Image enthaelt nur
+  `node_modules`, `dist` und `package.json` — `scripts/` wird bewusst nicht
+  mitkopiert.
+- Auf dem **Server** selbst gibt es kein Node. `install-server.sh` installiert
+  Docker und Samba, sonst nichts.
+
+Der Entwicklungsrechner wiederum kommt nicht ohne Weiteres an die Datenbank:
+`postgres` hat in `docker-compose.yml` **kein `ports:`** und ist nur im
+internen Docker-Netz erreichbar — das ist Absicht.
+
+Fuer die Dauer der Uebernahme deshalb einen Weg oeffnen und danach wieder
+schliessen. Auf dem Server:
+
+```bash
+cd /opt/patio
+cat > docker-compose.override.yml <<'ENDE'
+services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"
+ENDE
+sudo docker compose up -d postgres
+```
+
+Die Bindung an `127.0.0.1` ist der wichtige Teil: die Datenbank wird dadurch
+**nicht** im Netz erreichbar, sondern nur auf dem Server selbst. Den Rest
+erledigt ein SSH-Tunnel vom Entwicklungsrechner aus:
+
+```bash
+ssh -L 5432:127.0.0.1:5432 BENUTZER@SERVER
+```
+
+Solange der Tunnel steht, im Repo auf dem Entwicklungsrechner arbeiten und
+`DATABASE_URL` auf `localhost:5432` zeigen lassen.
+
+Danach den Weg wieder schliessen — sonst bleibt ein offener Port zurueck, den
+niemand mehr auf dem Zettel hat:
+
+```bash
+cd /opt/patio && sudo rm docker-compose.override.yml
+sudo docker compose up -d postgres
+```
+
+Dieser Weg ergibt sich aus dem Aufbau, ist aber **noch nicht an einer echten
+Uebernahme erprobt** — die stand bis jetzt aus.
+:::
+
 Zuerst **immer** mit `--trocken`. Der Trockenlauf liest alles, schreibt nichts
 und meldet genau dieselben Probleme, die der echte Lauf hätte.
 

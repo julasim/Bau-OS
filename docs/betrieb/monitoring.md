@@ -72,6 +72,33 @@ PATIO schreibt zusätzlich in `logs/`:
 Die Dateinamen sind ein Überbleibsel aus der Bot-Zeit und in `src/config.ts`
 fest hinterlegt.
 
+::: danger Sind beide Dateien leer, liegt es an den Rechten — nicht daran, dass alles gutgeht
+`/opt/patio/logs/` wird in den Container gehängt, und der Dienst läuft dort
+unter der Kennung **1000**. Gehört das Verzeichnis `root`, darf er nicht
+hineinschreiben. Der Fehler wird im Programm verschluckt statt gemeldet: die
+Dateien bleiben **dauerhaft leer**, während der Dienst völlig normal
+weiterläuft — seine Ausgabe geht ja zusätzlich an `docker compose logs`.
+
+Das ist die unangenehme Sorte Fehler: Alles auf dieser Seite funktioniert
+scheinbar, nur zählt jede Auswertung 0 Fehler auf einer Maschine, die welche
+hat.
+
+Nachsehen:
+
+```bash
+ls -ld /opt/patio/logs        # sollte 1000 gehören, nicht root
+ls -la /opt/patio/logs        # liegen dort Dateien, und wachsen sie?
+```
+
+`install-server.sh` setzt die Rechte seit dem 25.08.2026 selbst. Bei einer
+**vorher aufgesetzten** Installation einmalig nachholen:
+
+```bash
+sudo chown -R 1000:1000 /opt/patio/logs /opt/patio/data /opt/patio/tools
+cd /opt/patio && sudo docker compose restart app
+```
+:::
+
 Auswerten:
 
 ```bash

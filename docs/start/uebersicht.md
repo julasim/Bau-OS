@@ -94,6 +94,48 @@ Stundenerfassung, im Bautagebuch), bedienen es aber nicht.
 | **[Exporte](/konzepte/export)** | Fünf Dokumentarten aus eigenen Word-Vorlagen — Protokoll, Bautagebuch, Stundenzettel, Projektübersicht, **Rechnung** — wahlweise als PDF |
 | **Volldump** | Der ganze Bestand als Markdown-Ordnerbaum: lesbar ohne PATIO |
 
+## So ist die Oberfläche aufgebaut
+
+Links steht die **Navigationsleiste** — der Weg durch das Programm: Dashboard,
+Aufgaben, Kalender, Projekte, Portfolio, Notizen, Dateien, Team, Firmen.
+
+In der **Projektakte** und in den **Einstellungen** kommt eine zweite Leiste
+dazu. Sie trägt dort die Reiter des Projekts (Übersicht, Phasen, Termine,
+Aufgaben, Rechnungen, Stunden, Notizen, Bautagebuch, Meetings, Entscheidungen,
+Dateien, Team, Zugriff) beziehungsweise die Bereiche der Einstellungen. Die
+erste Leiste schrumpft dafür auf Symbolbreite:
+
+```
+┌────┬──────────────┬──────────────────────────────────┐
+│ ▣  │  Projekt     │                                  │
+│ ☑  │  ─────────   │   Der Reiter, den Sie gewählt    │
+│ 📅 │  Übersicht   │   haben                          │
+│ ▤  │  Phasen      │                                  │
+│ ▦  │  Termine     │                                  │
+│ ✎  │  Aufgaben    │                                  │
+│    │              │                                  │
+│60px│    238px     │            der Rest              │
+└────┴──────────────┴──────────────────────────────────┘
+```
+
+Die zweite Leiste zeigt **nur, was Ihr Konto auch öffnen darf**. „Rechnungen"
+setzt das Recht voraus, Beträge zu sehen; „Zugriff" ist Sache der Verwaltung.
+Ein Eintrag, der beim Klick nur eine Fehlermeldung öffnet, gehört nicht in die
+Navigation.
+
+::: tip Bereiche sind verlinkbar
+Der geöffnete Einstellungs-Bereich steht in der Adresse — etwa
+`…/settings?sektion=word-export`. So lässt sich ein Link auf eine bestimmte
+Stelle weitergeben. Dasselbe gilt in der Projektakte über `?tab=`.
+
+Vorher merkte sich der Browser den zuletzt geöffneten Bereich lokal. Das hatte
+zwei Nachteile: ein Link darauf ließ sich nicht weitergeben, und wer sich einen
+Rechner teilt, landete im Bereich des Vorgängers.
+:::
+
+Auf **Handy und Tablet** liegen beide Leisten als Überblendung über dem Inhalt
+und werden über die zwei Schaltflächen oben links geöffnet.
+
 ## Datenhaltung
 
 Alles liegt in PostgreSQL: Projekte, Notizen, Aufgaben, Termine, Team,
