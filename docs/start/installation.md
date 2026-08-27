@@ -35,8 +35,9 @@ Maßgeblich ist die Tabelle unter
 ## Für den Betrieb im Büro
 
 Auf dem Firmenserver wird **nicht** aus dem Git-Repository installiert und
-**nicht** auf der Maschine gebaut — sie hat kein Internet. Das fertige Image
-kommt als Paket vom Entwicklungsrechner:
+**nicht** auf der Maschine gebaut — sie hat kein Internet. Die fertigen Images
+kommen als Paket vom Entwicklungsrechner: `patio-app` und dazu die drei
+Basis-Images `postgres:16`, `caddy:2-alpine` und `alpine:latest`.
 
 ```bash
 cd /opt/patio
@@ -48,6 +49,15 @@ sudo bash dabei/scripts/install-server.sh patio-<version>.tar.gz
 ::: tip Die erste Zeile gehört dazu
 Hier stand nur der zweite Befehl. Der bricht mit „No such file or directory"
 ab, weil `dabei/scripts/install-server.sh` vor dem Auspacken nicht existiert.
+:::
+
+::: info Warum die Basis-Images mit ins Paket gehören
+Lange enthielt das Paket nur `patio-app`. Damit war eine **Erstinstallation
+ohne Internet unmöglich**: `docker compose up -d` versucht Postgres und Caddy
+zu ziehen und kommt nicht ins Netz. Auf einer bestehenden Installation fiel das
+nicht auf, weil beide dort laufen — `alpine` dagegen hängt an keinem Container
+und wird von der nächtlichen Sicherung gebraucht. Fehlte es, scheiterte die
+Sicherung ohne Meldung, und jedes Update brach danach ab.
 :::
 
 Vollständige Anleitung mit Sicherungsplatte, Zertifikat und Netzfreigabe:
@@ -108,7 +118,7 @@ Benutzer legt der Administrator in der Oberfläche unter `/admin/users` an.
 
 ---
 
-## Weg 3 — Manuell
+## Von Hand, ohne Docker
 
 ### Node.js
 
@@ -176,8 +186,10 @@ Die Migrationen laufen beim ersten Start mit.
 
 ## Nach der Installation
 
-Beim ersten Aufruf zeigt PATIO den Setup-Assistenten und legt das
-erste Admin-Konto an — sofern der Installer das nicht schon getan hat.
+Beim ersten Aufruf zeigt PATIO den Setup-Assistenten und legt das erste
+Admin-Konto an. **Kein Installationsweg nimmt Ihnen das ab** —
+`install-server.sh` verweist am Ende ausdrücklich auf diesen Assistenten, und
+`npm run setup` schreibt nur die `.env`.
 
 ::: tip Kein Mailserver nötig
 Die Anmeldung braucht Benutzername und Passwort — kein Code, keine E-Mail,

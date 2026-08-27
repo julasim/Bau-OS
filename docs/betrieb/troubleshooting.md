@@ -235,8 +235,21 @@ docker compose exec postgres \
 ## Migrationen
 
 ```bash
-docker compose exec app npm run db:status
+docker compose exec postgres psql -U patio -d patio   -c "SELECT name, applied_at FROM _migrations ORDER BY name DESC LIMIT 5;"
 ```
+
+::: warning `npm run db:status` läuft auf dem Server NICHT
+Hier stand bis zum 27.08.2026 `docker compose exec app npm run db:status`. Der
+Befehl kann dort nicht funktionieren: Er ruft `tsx scripts/db-migrate.ts`, und
+`scripts/` liegt gar nicht im Laufzeit-Image — `tsconfig.json` baut nur
+`src/**`, und das Dockerfile kopiert aus der Bau-Stufe nur `node_modules`,
+`dist` und `package.json`.
+
+Dasselbe gilt für `db:migrate`, `db:import` und `db:reencrypt`: alles
+Werkzeuge für den Entwicklungsrechner. Auf dem Server laufen die Migrationen
+beim Start des Dienstes von selbst (`DB_AUTO_MIGRATE`), und was angewendet
+wurde, steht in der Tabelle `_migrations` — daher die Abfrage oben.
+:::
 
 Zu beachten:
 

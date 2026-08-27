@@ -97,7 +97,10 @@ Stundenerfassung, im Bautagebuch), bedienen es aber nicht.
 ## So ist die Oberfläche aufgebaut
 
 Links steht die **Navigationsleiste** — der Weg durch das Programm: Dashboard,
-Aufgaben, Kalender, Projekte, Portfolio, Notizen, Dateien, Team, Firmen.
+Neuigkeiten, Aufgaben, Kalender, Projekte, Portfolio, Notizen, Dateien, Team,
+Firmen, Aktivität, Papierkorb. Darunter ein zweiter Block, den nur die
+Verwaltung sieht: Nutzer, Audit-Log, Sicherung. Ganz unten Einstellungen und
+Abmelden.
 
 In der **Projektakte** und in den **Einstellungen** kommt eine zweite Leiste
 dazu. Sie trägt dort die Reiter des Projekts (Übersicht, Phasen, Termine,
@@ -118,10 +121,12 @@ erste Leiste schrumpft dafür auf Symbolbreite:
 └────┴──────────────┴──────────────────────────────────┘
 ```
 
-Die zweite Leiste zeigt **nur, was Ihr Konto auch öffnen darf**. „Rechnungen"
-setzt das Recht voraus, Beträge zu sehen; „Zugriff" ist Sache der Verwaltung.
-Ein Eintrag, der beim Klick nur eine Fehlermeldung öffnet, gehört nicht in die
-Navigation.
+Die zweite Leiste zeigt **nur, was Ihr Konto auch öffnen darf**. In der
+Projektakte setzt „Rechnungen" das Recht voraus, Beträge zu sehen, und
+„Zugriff" ist Sache der Verwaltung. In den Einstellungen gilt dasselbe:
+Branding, Vorlagen, Word-Export, Projekt-Module und KI-Zugriff sieht nur die
+Verwaltung, den Positionskatalog nur, wer Beträge sehen darf. Ein Eintrag, der
+beim Klick nur eine Fehlermeldung öffnet, gehört nicht in die Navigation.
 
 ::: tip Bereiche sind verlinkbar
 Der geöffnete Einstellungs-Bereich steht in der Adresse — etwa
@@ -165,10 +170,13 @@ Details: [Netzfreigabe](/betrieb/freigabe).
 
 ## Benutzer und Rechte
 
-Anmeldung mit Benutzername und Passwort, zwei Rollen: **Admin** sieht alles,
-**Benutzer** sieht die Projekte, die ihm zugewiesen sind. Aufgaben, Termine und
-Notizen ohne Projektbezug sind persönlich — sie gehören dem, der sie angelegt
-hat.
+Anmeldung mit Benutzername und Passwort. **Admin** sieht alles, **Benutzer**
+sieht die Projekte, die ihm zugewiesen sind. Aufgaben, Termine und Notizen ohne
+Projektbezug sind persönlich — sie gehören dem, der sie angelegt hat.
+
+Dazu kommt eine dritte Rolle **Präsentation** — für den Bildschirm im
+Besprechungsraum. Sie ist eine Beschränkung, kein Zugangsschlüssel: nur lesen,
+nie Beträge, keine Kontaktdaten. Details: [Board](/betrieb/board).
 
 Daneben gibt es ein eigenes Recht für **Geldbeträge** (Stundensätze, Honorare,
 Rechnungssummen, Deckungsbeiträge). Es ist standardmäßig **zu** und wird je

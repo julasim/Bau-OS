@@ -91,7 +91,10 @@ per E-Mail verschickte. Das ist entfallen: die Anmeldung läuft über
   aus einer eigenen Zertifizierungsstelle auf dem Server
   ([Zertifikat](/betrieb/zertifikat))
 - **Kein Internet im Betrieb** — Updates kommen als Datei über einen
-  USB-Stick ([Updates](/betrieb/updates))
+  USB-Stick ([Updates](/betrieb/updates)). Auch die **Erstinstallation**
+  kommt ohne aus: seit dem 25.08.2026 liegen die Basis-Images
+  (`postgres:16`, `caddy:2-alpine`, `alpine:latest`) mit im Paket. Vorher
+  fehlten sie, und der erste Start des Stacks wollte sie ziehen.
 - **Kein zweiter Faktor / keine Authenticator-App** — im geschlossenen
   Büronetz trägt Passwort plus Ratebremse. Das ändert sich, sobald es einen
   Zugang von außen gibt.
@@ -104,7 +107,8 @@ per E-Mail verschickte. Das ist entfallen: die Anmeldung läuft über
 - [ ] USV angeschlossen und mit dem Server verbunden
 - [ ] Feste IP vergeben, Kabelnetzwerk
 - [ ] Rechnername im Router-DNS eingetragen
-- [ ] Auslieferungspaket vom Entwicklungsrechner auf einem USB-Stick
+- [ ] Auslieferungspaket vom Entwicklungsrechner auf einem USB-Stick — es ist
+      **rund 500 MB** groß, seit die Basis-Images mit darin liegen
 
 ## Nächster Schritt
 

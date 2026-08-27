@@ -188,8 +188,24 @@ sudo chown -R 1000:1000 /opt/patio-workspace
 | Verzeichnis | Inhalt | Eigentümer |
 |---|---|---|
 | `/opt/patio` | Anwendung, `.env`, Compose-Datei | `patio` |
+| darin `logs/`, `data/`, `tools/` | in den Container gehängt — Protokoll und Ablagen des Dienstes | **UID 1000** (setzt der Installer) |
 | `/opt/patio-workspace` | Netzfreigabe „Dokumente" (`WORKSPACE_PATH`) — Pläne, CAD, große Scans | **UID 1000** |
 | `/mnt/patio-backup` | externe Sicherungsplatte | `root` (systemd hängt ein) |
+
+::: danger `chown -R patio:patio /opt/patio` gilt nur bis zur Installation
+Drei Unterordner darin werden in den Container gehängt (`docker-compose.yml`:
+`./logs`, `./data`, `./tools`), und der Dienst schreibt sie als UID 1000.
+`scripts/install-server.sh` setzt sie deshalb beim Einspielen wieder auf
+`1000:1000`. Wer später erneut pauschal über `/opt/patio` chownt, nimmt sie dem
+Dienst weg — **und merkt nichts davon**: der Protokoll-Baustein verschluckt den
+Schreibfehler in einem leeren `catch` (`src/logger.ts`), der Dienst läuft
+normal weiter, seine Ausgabe geht weiter an `docker compose logs`, und nur
+`logs/patio.log` und `logs/patio.jsonl` bleiben **dauerhaft leer**.
+
+Genau dorthin zeigen [Monitoring](/betrieb/monitoring) und die Schnelldiagnose
+im [Troubleshooting](/betrieb/troubleshooting). Der Fehlerzähler meldet dann 0
+auf einer Maschine, die Fehler hat.
+:::
 
 ::: tip Die Anwendung legt hier nichts ab
 Was in PATIO hochgeladen wird, landet in der **Datenbank**, nicht in diesem
@@ -223,9 +239,11 @@ Nach diesen Schritten steht:
 - [x] Ubuntu 24.04 LTS, aktuell gehalten
 - [x] Feste Adresse und DNS-Name im internen Netz
 - [x] Dienst-Benutzer `patio` mit SSH-Schlüssel, Root-Login gesperrt
-- [x] Firewall: nur SSH und HTTPS aus dem eigenen Netz
+- [x] Firewall: SSH, HTTP (nur die Weiterleitung), HTTPS und SMB — jeweils
+      ausschließlich aus dem eigenen Netz
 - [x] Zeitzone `Europe/Vienna`
-- [x] Verzeichnisse angelegt — Dokumente gehören **UID 1000**, nicht `patio`
+- [x] Verzeichnisse angelegt — Dokumente gehören **UID 1000**, nicht `patio`;
+      dasselbe gilt nach der Installation für `logs/`, `data/` und `tools/`
 
 ## Nächster Schritt
 

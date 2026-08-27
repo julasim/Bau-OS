@@ -14,7 +14,7 @@ scripts/release-offline.sh
   └─ docker save + Prüfsumme
         │
         └──▶ patio-<version>.tar.gz ──USB──▶ scripts/update-offline.sh
-             (rund 170 MB)                     ├─ Prüfsumme kontrollieren
+             (rund 500 MB)                     ├─ Prüfsumme kontrollieren
                                                ├─ Sicherung auslösen
                                                ├─ docker load
                                                ├─ Stack neu starten
@@ -54,7 +54,7 @@ Schlüssel der internen CA zu sichern. Fehlte es, scheiterte die nächtliche
 Sicherung **ohne jede Meldung**, und jedes Update brach danach mit „Die
 Sicherung ist fehlgeschlagen" ab, ohne dass die Ursache irgendwo stand.
 
-Das Paket wächst dadurch um rund 250 MB. Ein Paket älterer Fassung ohne die
+Das Paket wächst dadurch um rund 180 MB (gemessen: `basis-images.tar.gz` = 179 MB, Gesamtpaket 497 MB statt 318 MB). Ein Paket älterer Fassung ohne die
 Datei lässt sich weiterhin einspielen; `update-offline.sh` sagt dann, dass es
 das nimmt, was auf dem Rechner liegt.
 :::

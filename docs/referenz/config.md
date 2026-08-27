@@ -54,7 +54,6 @@ explizit auf.
 | `JWT_SECRET` | — (Pflicht) | `JWT_SECRET` | Secret für die Token-Signatur |
 | `API_ENABLED` | — | — | Abgeleitet: `true`, wenn `JWT_SECRET` gesetzt ist |
 | `JWT_SECRET_OK` | — | — | Abgeleitet: `true` ab 32 Zeichen Secret-Länge |
-| `APP_URL` | leer | `APP_URL` | Öffentliche Basis-URL für Links in E-Mails |
 | `USERS_FILE` | `<cwd>/data/users.json` | — | Datei der Alt-Konten (Rückfallpfad) |
 | `NODE_ENV` | `development` | `NODE_ENV` | Betriebsmodus |
 | `IS_PRODUCTION` | — | — | Abgeleitet: `NODE_ENV === "production"` |
@@ -113,14 +112,13 @@ Neu dafür:
 
 | Konstante | Standardwert | `.env`-Variable | Beschreibung |
 |---|---|---|---|
-| `WORKSPACE_PATH` | — (Pflicht) | `WORKSPACE_PATH` / `VAULT_PATH` | Verzeichnis für abgelegte Dokumente |
-| `WORKSPACE_AGENTS_DIR` | `"Agents"` | — | Altbestand: wird im Dateibrowser ausgeblendet |
-| `WORKSPACE_LOGS_DIR` | `"MEMORY_LOGS"` | — | Altbestand: wird im Dateibrowser ausgeblendet |
+| `WORKSPACE_PATH` | — (Pflicht) | `WORKSPACE_PATH` / `VAULT_PATH` | Netzfreigabe „Dokumente"; die Anwendung liest nur daraus |
 
-::: tip Die beiden Altbestand-Ordner
-`Agents/` und `MEMORY_LOGS/` stammen aus der Bot-Zeit. PATIO legt sie nicht
-mehr an. Die beiden Konstanten sorgen nur dafür, dass sie in gewachsenen
-Verzeichnissen nicht im Dateibrowser auftauchen.
+::: tip Die beiden Altbestand-Ordner sind weg
+`WORKSPACE_AGENTS_DIR` (`"Agents"`) und `WORKSPACE_LOGS_DIR`
+(`"MEMORY_LOGS"`) standen hier: zwei Ordnernamen aus der Bot-Zeit, die der
+Dateibrowser ausblendete. Ihr einziger Leser war `listFolder()`, und der ist
+mit den pfadbasierten Routen entfallen — damit auch die beiden Konstanten.
 :::
 
 ## Protokollierung
@@ -133,8 +131,10 @@ Verzeichnissen nicht im Dateibrowser auftauchen.
 | `LOG_JSONL_KEEP_FILES` | `5` | `LOG_JSONL_KEEP_FILES` | Anzahl aufbewahrter rotierter Dateien |
 
 Das JSONL-Log ist vollständig und maschinenlesbar, das Textlog gekürzt und
-für den schnellen Blick gedacht. Der Dateiname `patio.log` ist ein Überbleibsel
-aus der Bot-Zeit und in `src/config.ts` fest verdrahtet.
+für den schnellen Blick gedacht. Der Dateiname ist in `src/config.ts` fest
+verdrahtet; er hiess bis zum Umbau zum Firmenserver `bot.log` und wurde beim
+Rebrand auf `patio.log` gezogen — den Bot gab es da schon nicht mehr, und der
+alte Name führte beim Suchen im Betrieb in die Irre.
 
 ## System
 

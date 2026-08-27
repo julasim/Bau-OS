@@ -1,10 +1,10 @@
 # DSGVO & Datenschutz
 
-PATIO läuft auf einem Rechner im eigenen Netz. Es gibt **keine
-Auftragsverarbeitung durch Dritte**: kein Cloud-Dienst, kein Sprachmodell,
-keine Analytik, keine Telemetrie. Die Anwendung spricht im Betrieb
-ausschließlich mit ihrer eigenen Datenbank, mit den Arbeitsplätzen im Netz und —
-Es gibt keine ausgehenden Verbindungen mehr.
+PATIO läuft auf einem Rechner im eigenen Netz. Die Anwendung baut im Betrieb
+**keine einzige ausgehende Verbindung** auf: keine Cloud, kein Mailversand,
+keine Analytik, keine Telemetrie, keine externen Schriften. Sie spricht
+ausschließlich mit ihrer eigenen Datenbank, mit dem Dateisystem desselben
+Rechners und mit den Arbeitsplätzen im Netz.
 
 ::: tip Was sich geändert hat
 Die frühere Fassung von PATIO verarbeitete Inhalte über ein Sprachmodell
@@ -12,6 +12,17 @@ Die frühere Fassung von PATIO verarbeitete Inhalte über ein Sprachmodell
 Transportweg. Beides ist mit dem Umbau zum Firmenserver **ersatzlos
 entfallen** — nicht abgeschaltet, sondern aus dem Code entfernt. Damit
 fallen OpenAI und Telegram als Empfänger personenbezogener Daten weg.
+:::
+
+::: warning Eine Schnittstelle für ein Sprachmodell gibt es wieder — ab Werk gesperrt
+Seit dem 24.08.2026 kann PATIO je Projekt eine **Akte** erzeugen, die ein
+Sprachmodell lesen darf. Sie ist die einzige Stelle, an der Inhalte planmäßig
+aus dem Haus gehen können. Ohne sie zu nennen, wäre die frühere Zusage „kein
+Sprachmodell" auf dieser Seite eine falsche Zusicherung.
+
+PATIO ruft dafür niemanden an — die Akte wird abgeholt, nicht verschickt. Was
+das für ein Verarbeitungsverzeichnis bedeutet, steht unter
+[KI-Zugriff](#ki-zugriff).
 :::
 
 ## Datenfluss
@@ -28,7 +39,10 @@ PATIO auf dem Bürorechner
 **Ausgehende Verbindungen gibt es keine** — auch keinen Mailversand. Der
 frühere Halbsatz „steht der Mailserver im Haus" ist gegenstandslos: PATIO
 verschickt überhaupt keine E-Mail mehr, weder für die Anmeldung noch sonst.
-Kein Datum verlässt das Gebäude.
+
+**Von sich aus verlässt damit kein Datum das Gebäude.** Hinaus geht nur, was
+ein Mensch holt: ein Download, ein Word- oder PDF-Export, der Volldump — oder
+eine freigegebene KI-Akte.
 
 ## Welche Daten gespeichert werden
 
@@ -41,6 +55,7 @@ Alles Strukturierte liegt in PostgreSQL:
 | Konten | `users`, `user_projects` | Benutzername, Anzeigename, E-Mail, Passwort-Hash, Rolle, Projektzuordnung |
 | Dateien | `files`, `file_shares`, `file_stars` | Hochgeladene Dokumente samt Inhalt |
 | Protokoll | `audit_log` | Anmeldungen und Kontenänderungen |
+| Steuerung | `ki_freigabe`, `ki_freigabe_projekt` | Welche Projekte und Bereiche für ein Sprachmodell freigegeben sind, und mit welcher Personendaten-Stufe |
 
 ::: info `email_otp_tokens` steht leer im Schema
 Die Tabelle wurde von Migration `020` angelegt und hielt die kurzlebigen Codes
@@ -77,9 +92,70 @@ hochgeladenen Dokument landet, verantwortet die erfassende Person.
   an den Hersteller.
 - **Keine Nutzungsprofile**, kein Scoring, keine automatisierte
   Entscheidungsfindung im Sinne von Art. 22 DSGVO.
-- **Keine Übermittlung an Dritte.** Es gibt keine Schnittstelle, über die
-  Inhalte das System verlassen — außer den Exporten, die eine Person selbst
-  auslöst.
+- **Keine Übermittlung an Dritte von sich aus.** PATIO ruft niemanden an.
+  Inhalte verlassen das System nur, wenn ein Mensch sie holt: über einen
+  Export, einen Download — oder über eine freigegebene KI-Akte (siehe
+  [KI-Zugriff](#ki-zugriff)).
+
+## KI-Zugriff
+
+Seit dem 24.08.2026 kann PATIO je Projekt eine **Akte** erzeugen — eine
+Zusammenfassung in lesbarem Text, ausdrücklich dafür gedacht, von einem
+Sprachmodell gelesen zu werden (Migration `059`). Für den Datenschutz ist das
+der wichtigste Punkt dieser Seite, deshalb hier ungeschminkt.
+
+**Was PATIO tut:** es stellt die Akte im eigenen Netz bereit
+(`GET /api/ki/dossier/:projectId`), abrufbar nur für Konten der Verwaltung.
+Mehr nicht.
+
+**Was PATIO nicht tut:** es schickt nichts. Es gibt keinen hinterlegten
+Anbieter, keinen API-Schlüssel und keine ausgehende Verbindung. Wer die Akte
+holt, holt sie.
+
+**Was daraus folgt:** ob personenbezogene Daten an einen Dritten gehen,
+entscheidet allein, an welches Sprachmodell die Akte gereicht wird. Läuft es
+auf einem Rechner im Haus, bleibt alles im Haus. Ist es ein Cloud-Dienst, ist
+das eine Übermittlung an einen Dritten — mit allem, was dazugehört:
+Auftragsverarbeitungsvertrag, Eintrag im Verarbeitungsverzeichnis,
+Rechtsgrundlage, gegebenenfalls Drittlandtransfer. **Diese Entscheidung nimmt
+PATIO niemandem ab.**
+
+::: tip Ab Werk gesperrt
+Zwei Schalter müssen stehen, sonst entsteht keine Zeile: der Hauptschalter
+unter **Einstellungen → KI-Zugriff** und mindestens ein Häkchen in der
+Kreuztabelle Projekt × Bereich. Kein Eintrag heißt nicht freigegeben — ein neu
+angelegtes Projekt ist damit automatisch gesperrt. Beides darf nur die
+Verwaltung setzen: es ist eine Entscheidung fürs Büro, nicht die Präferenz
+eines Arbeitsplatzes.
+
+Der Stand liegt in der Datenbank und nicht in einer Datei am Arbeitsplatz. Er
+ist damit für alle nachvollziehbar und überlebt eine Neuinstallation.
+:::
+
+Welche personenbezogenen Felder in der Akte landen, regelt eine von drei
+Stufen, quer über alle freigegebenen Bereiche. Die genaue Feldliste steht unter
+[Zugriffskontrolle](/sicherheit/zugriff#die-drei-personendaten-stufen):
+
+| Stufe | |
+|---|---|
+| Keine Namen | Personen erscheinen nur als Kennung — dieselbe über alle Bereiche hinweg |
+| Namen, keine Kontaktdaten *(Vorgabe)* | Namen bleiben; E-Mail, Telefon, Kontakt-Log, Stundensätze und Personal-Stunden im Bautagebuch fallen weg |
+| Alle | auch die Kontaktdaten |
+
+::: danger Freitexte werden nicht redigiert
+Die Stufe wirkt auf **Felder**, nicht auf Prosa. Notiz-Inhalte, Protokolltext
+und Bautagebuch-Tätigkeiten gehen unverändert in die Akte — steht dort
+„Hr. Müller wünscht Sichtbeton", steht es auch bei „Keine Namen" darin.
+
+Für ein Verarbeitungsverzeichnis heißt das: die Stufe ist eine
+**Datenminimierung, keine Anonymisierung**. Wer das nicht will, gibt Notizen,
+Besprechungen und Bautagebuch nicht frei.
+:::
+
+**Nachlesen statt glauben:** neben jedem Projekt steht ein Knopf **Vorschau**.
+Er zeigt genau den Text, den ein Sprachmodell zu sehen bekäme — nicht mehr und
+nicht weniger. Wer belegen muss, was hinausgeht, liest es dort ab. Aufbau der
+Akte und die zehn Bereiche: [KI-Zugriff](/konzepte/ki-zugriff).
 
 ## Auskunft und Löschung
 
@@ -161,7 +237,10 @@ Dritte am System arbeiten:
 |---|---|
 | Externe IT-Betreuung | Wenn sie den Rechner administriert und damit Zugriff auf die Daten hat |
 | Hersteller / Support | Nur wenn er zu Wartungszwecken Zugriff erhält — im Regelbetrieb nicht der Fall |
-| *(keine)* | PATIO überträgt keine Daten an Dritte — kein Mailversand, kein Sprachmodell, keine externen Schriften |
+| Anbieter eines Sprachmodells | Nur wenn der KI-Zugriff freigegeben **und** die Akte an einen Cloud-Dienst gereicht wird. PATIO stellt die Akte lediglich bereit; die Wahl des Modells trifft das Büro, und mit ihr steht oder fällt die Übermittlung |
+
+Im Auslieferungszustand ist keiner dieser Fälle gegeben: es gibt keinen
+Mailversand, kein hinterlegtes Sprachmodell und keine externen Schriften.
 
 ## Technische und organisatorische Maßnahmen
 
@@ -169,7 +248,7 @@ Dritte am System arbeiten:
 |---|---|
 | Zutrittskontrolle | Der Rechner steht im Büro; physischer Zugang ist zu regeln |
 | Zugangskontrolle | Anmeldung mit Benutzername und Passwort (bcrypt, Kostenfaktor 12, mindestens 12 Zeichen), Ratebremse gegen Durchprobieren |
-| Zugriffskontrolle | Rollen Admin/Benutzer, Sichtbarkeit projektweise über `user_projects` |
+| Zugriffskontrolle | Drei Rollen (Verwaltung, Benutzer, Anzeige), Sichtbarkeit projektweise über `user_projects`. Die Anzeigerolle für den Besprechungsraum kann nichts schreiben und bekommt in den Antworten weder Beträge noch Kontaktdaten — zur offenen Ausnahme beim Volldump siehe [Zugriffskontrolle](/sicherheit/zugriff) |
 | Trennungskontrolle | Je Büro eine eigene Installation auf eigener Hardware |
 | Übertragung | HTTPS über den Reverse-Proxy; keine unverschlüsselte Verbindung im Netz |
 | Verschlüsselung | AES-GCM für einzelne Datenbankfelder |
@@ -177,6 +256,7 @@ Dritte am System arbeiten:
 | Brute-Force-Schutz | 5 Anmeldeversuche je IP in 15 Minuten (der frühere Zusatz „5 Fehlversuche je Code" betraf die entfallene E-Mail-Anmeldung) |
 | Upload-Prüfung | Endungs-Whitelist plus Magic-Byte-Prüfung |
 | Zweckbindung | Geldbeträge nur für Konten mit ausdrücklichem Recht — serverseitig aus der Antwort entfernt, nicht nur ausgeblendet |
+| Datenminimierung (KI) | KI-Zugriff ab Werk gesperrt, je Projekt und Bereich einzeln freizugeben, nur durch die Verwaltung; drei Stufen für personenbezogene Felder, Vorschau vor der Freigabe |
 | Verfügbarkeit | Nächtliche Sicherung auf eine externe Platte, gestaffelt 7/4/12, mit Selbstprüfung. **Einen zweiten Ablageort gibt es nicht** — die Auslagerung ist nicht umgesetzt |
 | Belastbarkeit | Automatischer Neustart nach Absturz, sauberes Herunterfahren bei SIGTERM |
 

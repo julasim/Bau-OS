@@ -51,8 +51,10 @@ Arbeitsplatz-Programm keine Zeile der Oberfläche angefasst werden. Siehe
 
 Es gibt **keine ausgehende Verbindung** im Betrieb: kein Mailserver, kein
 Sprachmodell, kein Cloud-Dienst, keine Telemetrie. Auch die Oberfläche lädt
-nichts nach — der frühere Aufruf zu Google Fonts ist entfallen; gesetzt werden
-Systemschriften mit Inter als erster Wahl, falls vorhanden.
+nichts nach — der frühere Aufruf zu Google Fonts ist entfallen, samt dem
+`preconnect` im Seitenkopf. Gesetzt werden ausschließlich Schriften, die auf
+dem Arbeitsplatz ohnehin liegen: `"Helvetica Neue", Helvetica, Arial`
+(`--font-sans` in `web/src/patio-tokens.css`).
 
 ### Ablauf einer Anfrage
 
@@ -99,16 +101,17 @@ Ausführlich: [Die Projektnummer](/konzepte/projektnummer).
 ::: warning Der Filter wird in den Routen ERMITTELT, nicht in den Repositories
 Die Aufteilung ist wichtig, weil sie erklärt, wo Lücken entstehen:
 
-- **17 Routen** rufen `getVisibleProjectIds()` auf und reichen das Ergebnis
-  weiter; **15** prüfen einzeln über `canSeeProject()` bzw.
+- **19 Route-Dateien** rufen `getVisibleProjectIds()` auf und reichen das
+  Ergebnis weiter; **16** prüfen einzeln über `canSeeProject()` bzw.
   `canSeeProjectByName()`.
-- **6 Repositories** (`db-search`, `db-files`, `db-portfolio`, `db-meetings`,
-  `db-bautagebuch`, `db-entscheidungen`) wenden eine übergebene Liste an —
-  **keines ermittelt sie selbst.**
+- **13 Repositories** wenden eine übergebene Liste an (`db-search`, `db-files`,
+  `db-portfolio`, `db-projects`, `db-meetings`, `db-bautagebuch`,
+  `db-entscheidungen`, `db-notes`, `db-tasks`, `db-termine`, `db-team`,
+  `db-aktivitaet`, `db-aufgabensystem`) — **keines ermittelt sie selbst.**
 
 Das heißt: ein Repository filtert zwar, aber nur mit dem, was die Route ihm
 gibt. Eine neue Route, die den Aufruf vergisst, liefert ungefiltert aus. Genau
-so sind in diesem Projekt **dreizehn** Lücken entstanden — die vollständige
+so sind in diesem Projekt **siebzehn** Lücken entstanden — die vollständige
 Liste mit dem, was jeweils offen lag, steht unter
 [Zugriffsrechte](/sicherheit/zugriff).
 
@@ -124,7 +127,7 @@ src/
 ├── index.ts       Boot: .env → Datenbank → API → Wartungs-Cron
 ├── config.ts      alle Konstanten und Umgebungsvariablen
 ├── logger.ts      Konsole + Textlog + JSONL, nicht blockierend
-├── maintenance.ts täglicher Cron (Audit-Retention, abgelaufene Tokens)
+├── maintenance.ts Cron 03:15 (Audit, Meldungen, Rang-4-Verfall) + 00:00 (Tageswechsel)
 ├── api/
 │   ├── server.ts        Hono-App, Anmeldung, Middleware, statische Auslieferung
 │   ├── auth.ts          JWT, Benutzerkonten, Passwörter (bcrypt)
@@ -135,8 +138,10 @@ src/
 │   ├── crypto.ts        Feld-Verschlüsselung (AES-GCM)
 │   ├── events.ts        Event-Bus mit Rechtefilter
 │   ├── sse-tickets.ts   Einmal-Tickets für den SSE-Aufbau
+│   ├── personendaten.ts Kontaktdaten-Filter + Schreibschutz (Präsentation)
+│   ├── dateiname.ts     Dateiname im Content-Disposition-Header (RFC 5987)
 │   ├── file-validation.ts  Endung + Magic Bytes bei Uploads
-│   └── routes/          30 Route-Dateien je Domäne
+│   └── routes/          33 Route-Dateien je Domäne
 ├── data/
 │   ├── index.ts   einzige Import-Fläche für alle Repositories
 │   ├── access.ts  Sichtbarkeit und ACL
@@ -144,14 +149,15 @@ src/
 │   ├── konflikt.ts      Konflikt-Zähler `rev`
 │   ├── projektnummer.ts Regeln der Projektnummer
 │   ├── zeitstempel.ts   jedes Datum verlässt den Server als ISO 8601
-│   └── db-*.ts    25 Postgres-Repositories
+│   └── db-*.ts    27 Postgres-Repositories
 ├── db/
 │   ├── client.ts  Verbindungspool (postgres.js)
 │   ├── migrate.ts Migrations-Runner mit Advisory-Lock
 │   └── migrations/ 61 SQL-Dateien, forward-only (bis `059`)
 ├── workspace/     NUR Lesezugriff auf die Netzfreigabe (Rueckfall fuer alte
 │                  Datei-Datensaetze) + Text aus PDF und DOCX ziehen
-└── export/        DOCX-Erzeugung aus Word-Vorlagen
+├── mcp/           die KI-Akten je Projekt (Positivliste + Redaktion)
+└── export/        DOCX aus Word-Vorlagen, PDF darüber, Volldump als ZIP
 
 web/               Vue 3 + Vue Router (eigenes Vite-Projekt)
 electron/          Hülle des Arbeitsplatz-Programms (lädt die Oberfläche vom Server)
@@ -174,11 +180,15 @@ Der Rechtefilter sitzt dort ebenfalls: „Rechnungen" braucht das Geld-Recht,
 „Zugriff" die Verwaltung.
 :::
 
-::: info Pinia ist eingebunden, aber leer
-`web/src/main.ts` registriert Pinia; einen Store gibt es nicht. Geteilter
-Zustand liegt in Composables (`useAufgabensystem`, `useEvents`, `useTheme`) —
-das reicht für eine Oberfläche dieser Größe und spart eine zweite Schicht,
-in der derselbe Zustand ein zweites Mal steht.
+::: info Kein Pinia
+`web/src/main.ts` registrierte einmal Pinia, ohne dass es je einen Store gab.
+Beides ist entfallen — das Paket ist nicht mehr installiert. Geteilter Zustand
+liegt in Composables (`useAufgabensystem`, `useEvents`, `useTheme`,
+`useBranding`); das reicht für eine Oberfläche dieser Größe und spart eine
+zweite Schicht, in der derselbe Zustand ein zweites Mal steht.
+
+Registriert, aber leer, hatte nur einen Effekt: die Doku nannte Pinia im Stack,
+und wer den Store suchte, fand keinen.
 :::
 
 ## Stack
@@ -191,6 +201,7 @@ in der derselbe Zustand ein zweites Mal steht.
 | Frontend | Vue 3 + Vue Router + Vite + Tailwind v4 |
 | Live-Updates | Server-Sent Events |
 | Dokumenten-Export | `docxtemplater` auf Basis eigener Word-Vorlagen |
+| PDF-Ausgabe | LibreOffice (`soffice --convert-to pdf`) — **optional**, siehe [Export](/konzepte/export) |
 | Zeitplanung | `node-cron` (Europe/Vienna) |
 | Arbeitsplatz | Electron-Hülle, lädt die Oberfläche vom Server |
 | Betrieb | Docker Compose, **drei Container** (`postgres`, `app`, `caddy`) |
@@ -269,7 +280,7 @@ Dateiname in `_migrations`, fährt jede Migration in einer eigenen
 Transaktion und hält einen Advisory-Lock gegen parallel startende Instanzen.
 Rückwärts-Migrationen gibt es nicht.
 
-Derzeit 51 Dateien mit Nummern bis `049`. Die Nummern `005` und `006` sind
+Derzeit 61 Dateien mit Nummern bis `059`. Die Nummern `005` und `006` sind
 historisch **je zweimal** vergeben — das ist kein Fehler: der Runner
 unterscheidet nach vollem Dateinamen, nicht nach Nummer.
 

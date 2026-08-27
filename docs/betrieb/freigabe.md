@@ -19,21 +19,29 @@ führt:
 | In der Sicherung | ja (Dateien) | ja (Datenbank) |
 | Obergrenze je Datei | keine | 50 MB (`MAX_UPLOAD_MB`) |
 
-**Die Anwendung schreibt in diesem Ordner nichts** und zeigt ihn nicht an. Wer
+**Die Anwendung legt in diesem Ordner nichts ab** und zeigt ihn nicht an. Wer
 eine Datei in PATIO hochlädt, legt sie in die Datenbank; wer sie in den Ordner
 kopiert, legt sie in die Freigabe. Beides ist richtig — nur eben für
 verschiedene Dinge.
 
-::: info Eine Ausnahme: Lesen aus dem Altbestand
-Hier stand „liest und schreibt nichts". Die Hälfte davon stimmt nicht: für
-**alte Datei-Datensätze**, deren Inhalt noch nicht in der Datenbank liegt,
-greift ein Rückfall auf die Platte (`src/api/routes/files.ts`, Zeilen 144 und
-387). Er springt nur an, wenn der Datensatz keinen Inhalt mitbringt, und er
-prüft vorher die Rechte und den Pfad.
+::: info Eine Ausnahme: der Altbestand
+Hier stand „liest und schreibt nichts". Das stimmt so nicht: für **alte
+Datei-Datensätze**, deren Inhalt noch nicht in der Datenbank liegt, greift ein
+Rückfall auf die Platte — beim Anzeigen (`src/api/routes/files.ts`, Zeile 148)
+und beim Herunterladen (Zeile 451). Er springt nur an, wenn der Datensatz
+keinen Inhalt mitbringt, und er prüft vorher die Rechte und den Pfad.
 
-Geschrieben wird nichts: die Funktion dafür (`createFile` in
-`src/workspace/files.ts`) hat **keinen einzigen Aufrufer** mehr. Für Ablagen,
-die neu aufgesetzt werden, ist der Ordner damit ausschließlich Netzfreigabe.
+Dasselbe beim **Löschen**: hat ein Datensatz keinen Inhalt in der Datenbank,
+wird die zugehörige Datei im Ordner mitgelöscht (Zeile 181). Die Bedingung
+davor ist das Entscheidende — ohne sie hätte „Grundriss.pdf in PATIO
+entfernen" die gleichnamige Datei erwischt, die jemand im Explorer dort liegen
+hat. Bei einem heutigen Upload liegt der Inhalt in der Datenbank, der Ordner
+bleibt unberührt.
+
+**Neu angelegt wird dort nichts.** Die Funktion dafür — `createFile` in
+`src/workspace/files.ts` — ist entfernt; übrig ist in dieser Datei nur noch
+`readFile`. Für Ablagen, die neu aufgesetzt werden, ist der Ordner damit
+ausschließlich Netzfreigabe.
 :::
 
 ::: tip Warum nicht alles in einer Ablage
@@ -64,16 +72,14 @@ directory mask = 0770
 ```
 
 Ohne `force user` legte jede Person Dateien unter ihrer eigenen Kennung an —
-und der Dienst könnte sie später nicht mehr anfassen. Der Fehler zeigt sich
-dann als „Speichern fehlgeschlagen" an einer ganz anderen Stelle.
-
-Ohne `force user` legte jede Person Dateien unter ihrer eigenen Kennung an —
-und die Kollegin könnte sie danach nicht mehr ändern.
+und die Kollegin könnte sie danach nicht mehr ändern. Der Fehler zeigt sich
+erst Tage später, an einer Datei, die niemand mehr speichern kann.
 
 ::: tip UID 1000 bleibt, ist aber kein Muss mehr
 Frühere Fassungen des Dienstes schrieben selbst in diesen Ordner; deshalb
 musste er der Container-Kennung (`node` = UID 1000) gehören. Das tut er nicht
-mehr — die Anwendung fasst den Ordner nicht an. Die Einrichtung unten behält
+mehr — die Anwendung legt hier nichts an (die Ausnahmen für den Altbestand
+stehen oben). Die Einrichtung unten behält
 UID 1000 trotzdem bei: sie ist erprobt, und ein Alt-Bestand aus der Zeit davor
 bleibt damit lesbar.
 :::

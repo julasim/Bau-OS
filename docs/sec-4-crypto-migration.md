@@ -49,40 +49,80 @@ standen dort noch, obwohl ihre Tabellen und Spalten mit den Migrationen 047 und
 
 ::: info Drei der vier Felder sind Altbestand
 Der Telegram-Bot und der Outlook-Abgleich sind entfallen. Migration `047`
-entfernt `user_microsoft_accounts` — **aber nur, wenn die Tabelle leer ist**;
-sonst bleibt sie mit einem Hinweis im Protokoll stehen. Ist sie weg, überspringt
-`reencrypt.ts` die beiden Felder mit einer Meldung und läuft weiter
-(`scripts/reencrypt.ts`, Zeile 62–70). Das ist kein Fehler.
+entfernt `user_microsoft_accounts`, Migration `056` die Spalte
+`users.telegram_bot_token` — beide **nur, wenn nichts drinsteht**; sonst
+bleiben sie mit einem Hinweis im Migrationsprotokoll stehen.
+
+Die drei Einträge sind aus dem Skript verschwunden: `FIELDS` führt heute genau
+eine Zeile (`scripts/reencrypt.ts`, Zeile 47–49). Übersprungene Meldungen zu
+Tabellen, die es nicht mehr gibt, sind damit kein Thema mehr.
 
 Praktisch relevant ist heute nur `users.totp_secret_encrypted`.
 :::
 
-## Migration auf dem Firmenserver (zweistufig)
+## Den Schlüssel auf einem bestehenden Server einführen
 
-### Stufe 1 — Schlüssel einführen + umschlüsseln
+::: danger Seit Stufe 2 ist der Wechsel ein Einbahnweg
+`src/api/crypto.ts` kennt **genau einen** Schlüssel. Sobald `ENCRYPTION_KEY`
+gesetzt ist, ist alles, was vorher unter `JWT_SECRET` verschlüsselt wurde, nicht
+mehr lesbar — und `npm run db:reencrypt` holt es auch nicht zurück: das Skript
+entschlüsselt mit demselben einen Schlüssel, bekommt `null` und schreibt nichts
+(`scripts/reencrypt.ts`, Zeile 96–100). Dasselbe gilt für Klartext-Altbestände.
+
+Hier stand, das Skript schlüssele Bestandsdaten um. Das galt für Stufe 1 und
+gilt seit dem 23.08.2026 nicht mehr.
+
+Folgenlos ist das nur, weil es nichts umzuschlüsseln gibt: nachgemessen am
+23.08.2026 trägt keine Zeile ein verschlüsseltes Feld, und der einzige
+Schreiber — der zweite Faktor — ist nicht eingehängt. **Genau deshalb gehört
+der Schlüssel jetzt gesetzt und nicht erst, wenn AP17 den zweiten Faktor
+zurückbringt.**
+:::
 
 1. Starken Key erzeugen: `openssl rand -hex 32`
 2. In `/opt/patio/.env` setzen: `ENCRYPTION_KEY=<hex>`
-   **Wichtig:** den Key sicher sichern (Passwortmanager/Backup). Ohne ihn sind
-   die Felder nach dem Umschlüsseln nicht mehr lesbar.
+   **Wichtig:** den Key sicher sichern (Passwortmanager/Backup). Ohne ihn ist
+   alles, was ab jetzt verschlüsselt wird, verloren.
 3. Stack die neue `.env` einlesen lassen (ein `restart` reicht **nicht**):
    ```bash
    cd /opt/patio && docker compose up -d --force-recreate app
    ```
-4. Trockenlauf (schreibt nichts):
+4. Prüfen, ob überhaupt ein verschlüsselter Wert in der Datenbank steht:
    ```bash
-   docker compose exec app npm run db:reencrypt -- --dry
+   cd /opt/patio && docker compose exec postgres \
+     psql -U patio -d patio -tAc \
+     "SELECT count(*) FROM users WHERE totp_secret_encrypted IS NOT NULL"
    ```
-5. Echt umschlüsseln:
-   ```bash
-   docker compose exec app npm run db:reencrypt
-   ```
-   Erwartung: alle Felder auf `ENCRYPTION_KEY` umgeschlüsselt, `fehlgeschlagen=0`.
+   Erwartung auf einer Anlage ohne zweiten Faktor: `0`. Dann ist nichts weiter
+   zu tun — der neue Schlüssel gilt für alles, was künftig geschrieben wird.
+5. Kommt dort eine Zahl **größer als 0** heraus, stammt der Wert von vor der
+   Umstellung und ist mit dem neuen Schlüssel nicht mehr lesbar. Dann:
+   `ENCRYPTION_KEY` wieder aus der `.env` nehmen, Stack mit `--force-recreate`
+   hochziehen — und den Fall einzeln entscheiden. Bei einem TOTP-Geheimnis
+   heißt das, den zweiten Faktor für dieses Konto neu einzurichten.
+
+   ::: danger `npm run db:reencrypt` läuft auf dem Server nicht
+   Hier stand `docker compose exec app npm run db:reencrypt -- --dry`. **Dieser
+   Befehl scheitert**, und zwar auf jedem Firmenserver:
+
+   - Das Laufzeit-Image enthält nur `node_modules`, `dist/` und
+     `package.json` (`Dockerfile`, Stufe 2) — `scripts/` ist nicht dabei.
+   - `scripts/` wird auch nie nach `dist/` gebaut: `tsconfig.json` führt
+     `include: ["src/**/*"]`. Denselben Irrtum hatte `scripts/patio-cli.sh`
+     schon einmal, dort steht die Begründung im Kommentar.
+   - Das Auslieferungspaket bringt nur Compose, `docker/`, `deploy/` und fünf
+     Shell-Skripte mit (`scripts/release-offline.sh`, Zeilen 141–153) — das
+     Umschlüssel-Skript ist keines davon.
+
+   `npm run db:reencrypt` ist damit ein Werkzeug für den
+   Entwicklungsrechner mit Quellbaum und eigener `DATABASE_URL`. Auf dem
+   Server bleibt die Abfrage oben.
+   :::
 6. **Prüfen — aber anders als früher.**
 
    ::: warning Es gibt derzeit keinen laufenden Verbraucher zum Gegenprüfen
    Hier stand, der 2FA-/OTP-Login sei die Funktionsprobe. **Das geht nicht
-   mehr:** die 2FA-Routen sind nicht eingehängt (`src/api/server.ts:486` ist
+   mehr:** die 2FA-Routen sind nicht eingehängt (`src/api/server.ts:575` ist
    auskommentiert), der zweite Faktor kommt erst mit dem VPN zurück. Telegram
    und Outlook gibt es ohnehin nicht mehr.
 
@@ -90,31 +130,31 @@ Praktisch relevant ist heute nur `users.totp_secret_encrypted`.
    eine „funktioniert noch"-Probe ist schlicht nicht möglich.
    :::
 
-   Was stattdessen zählt, ist die Ausgabe des Laufs selbst:
-
-   - `fehlgeschlagen=0`
-   - Die Zahl umgeschlüsselter Felder entspricht dem, was der Trockenlauf
-     angekündigt hat.
-   - Übersprungene Felder sind erklärt (Tabelle durch Migration `047`
-     entfernt), nicht stumm ausgeblieben.
+   Was stattdessen zählt, ist die Abfrage aus Schritt 4: sie liefert `0` — auf
+   einer Anlage, in der nie ein zweiter Faktor eingerichtet war, ist das der
+   Normalfall und kein Hinweis auf einen Fehler.
 
    Der Dienst muss danach normal starten und darf die SEC-4-Warnung nicht mehr
-   protokollieren — sie erscheint nur, solange `ENCRYPTION_KEY` leer ist.
+   protokollieren — sie erscheint nur, solange `ENCRYPTION_KEY` leer ist
+   (`src/index.ts`, Zeile 106–113).
 
-### Stufe 2 — Rückfälle entfernen (später, eigener Commit)
+## Was noch offen ist
 
-Erst **nachdem** Stufe 1 gelaufen ist und der Betrieb stabil läuft:
-
-- In `src/api/crypto.ts` den `JWT_SECRET`-Fallback in `decryptString` sowie den
-  Legacy-Plaintext-Durchgriff (`return stored`) entfernen. Danach müssen alle
-  Werte `enc:v1:` + Primärschlüssel sein.
-- Optional `ENCRYPTION_KEY` in Produktion hart erzwingen (analog `JWT_SECRET_OK`
-  in `startApi`).
+Der Start **warnt** nur, wenn `ENCRYPTION_KEY` fehlt oder kürzer als 32 Zeichen
+ist; er bricht nicht ab (`src/index.ts`, Zeile 106–120). Ihn in Produktion hart
+zu erzwingen — so, wie `JWT_SECRET_OK` es für das Anmelde-Secret tut — ist
+bewusst offen geblieben, damit ein Update den Dienst nicht stehen lässt. Solange
+kein Feld verschlüsselt wird, ist das vertretbar; mit dem zweiten Faktor (AP17)
+gehört es entschieden.
 
 ## Rollback
 
-Solange Stufe 2 nicht gelaufen ist, entschlüsselt der `JWT_SECRET`-Fallback alte
-Werte weiter. **Achtung:** Nach `db:reencrypt` sind die Werte mit
-`ENCRYPTION_KEY` verschlüsselt — ohne diesen Key sind sie dann nicht mehr lesbar.
-Deshalb den Key aufbewahren; ein Rollback bedeutet, den `ENCRYPTION_KEY` in der
-`.env` zu belassen, nicht ihn zu entfernen.
+Einen Rückweg gibt es nicht mehr. Wurde ein Feld unter `ENCRYPTION_KEY`
+verschlüsselt, ist es ohne diesen Schlüssel verloren — den `ENCRYPTION_KEY`
+aus der `.env` zu nehmen, macht die Werte unlesbar, statt sie freizugeben.
+
+Deshalb gilt für den Schlüssel dasselbe wie für den privaten Schlüssel der
+internen CA: **er gehört in die Sicherung.** `scripts/backup.sh` nimmt die
+`.env` mit auf (siehe [Sicherung](/betrieb/sicherung)); wer ihn zusätzlich im
+Passwortmanager hat, kommt auch dann noch heran, wenn die Sicherung selbst
+das Problem ist.

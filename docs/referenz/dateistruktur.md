@@ -25,7 +25,7 @@ src/
 │   ├── persoenlich.ts    — gehört dieser projektlose Datensatz mir?
 │   ├── projekt-bezug.ts  — löst ?projectId=, ?projektnummer= und ?project= auf
 │   ├── dateiname.ts     — Dateiname im Content-Disposition-Header (RFC 5987)
-│   └── routes/           — 30 Route-Dateien, siehe unten
+│   └── routes/           — 33 Route-Dateien, siehe unten
 ├── data/                 — Repository-Schicht (ausschließlich PostgreSQL)
 │   ├── index.ts          — einzige Import-Fläche für alle Repositories
 │   ├── types.ts          — Entity- und Repository-Interfaces
@@ -35,7 +35,7 @@ src/
 │   ├── zeitstempel.ts    — jedes Datum verlässt den Server als ISO 8601
 │   ├── sql-like.ts       — Maskierung für LIKE-Muster
 │   ├── termin-validation.ts — Validierung von Termin-Eingaben
-│   └── db-*.ts           — 25 Repositories, siehe unten
+│   └── db-*.ts           — 27 Repositories, siehe unten
 ├── db/                   — Datenbankschicht
 │   ├── client.ts         — postgres.js-Verbindungspool
 │   ├── migrate.ts        — SQL-Migrations-Runner
@@ -126,8 +126,20 @@ Dateischreibvorgänge laufen über eine serialisierte Async-Queue, damit kein
 
 ### `src/maintenance.ts`
 
-Ein täglicher Cron-Job um 03:15 Uhr (`TIMEZONE`): löscht Audit-Einträge, die
-älter sind als `AUDIT_RETENTION_DAYS`, und räumt abgelaufene Tokens weg.
+Zwei Cron-Jobs, beide in `TIMEZONE`:
+
+- **03:15** — löscht Audit-Einträge, die älter sind als
+  `AUDIT_RETENTION_DAYS`, meldet die heute fälligen Aufgaben, räumt gelesene
+  Benachrichtigungen nach `MELDUNGEN_AUFBEWAHREN_TAGE` weg und lässt
+  Rang-4-Aufgaben nach `RANG4_VERFALL_TAGE` in den Papierkorb verfallen.
+  Jeder Schritt ist einzeln abgesichert: scheitert einer, laufen die übrigen
+  trotzdem.
+- **00:00** — der Tageswechsel des Aufgabensystems: `im_tagesplan` wird für
+  alle zurückgesetzt.
+
+Das Aufräumen abgelaufener Telegram-Pair-Tokens stand hier bis zuletzt als
+dritter Punkt. Es ist entfallen, weil die Tabelle selbst entfallen ist
+(Migration `055`).
 
 ---
 
@@ -154,18 +166,24 @@ Die Hono-Anwendung. Enthält neben der Route-Registrierung:
   Setup-Assistent für das erste Admin-Konto. Die frühere Kette aus
   E-Mail-Code, Anmelde-Link und Passwort-Reset ist ersatzlos entfallen — sie
   brauchte einen erreichbaren Mailserver, den es hier nicht gibt.
-- **Statische Auslieferung**: die Vue-Oberfläche aus `dist/web`, davor die
-  Dokumentation unter `/docs/` aus `dist/docs`.
-- **Statische Auslieferung** der gebauten Vue-Anwendung aus `dist/web`
-  inklusive SPA-Fallback auf `index.html`.
+- **Statische Auslieferung**: zuerst die Dokumentation unter `/docs/` aus
+  `dist/docs`, danach die gebaute Vue-Oberfläche aus `dist/web` mit
+  SPA-Rückfall auf `index.html`. Ein `/docs/`-Pfad, den es nicht gibt, endet
+  mit einem 404 in Klartext und **nicht** im SPA-Rückfall — sonst bekäme man
+  auf eine falsch getippte Doku-Adresse die Anwendung zu sehen.
 
 ### `src/api/auth.ts`
 
 JWT-Erstellung und -Prüfung, Auth-Middleware (setzt `userId`, `userRole` und
-`dbUser` in den Hono-Kontext), Benutzerverwaltung, E-Mail-Einmalcodes,
-Anmelde-Link-Tokens und Passwort-Reset-Tickets. Enthält außerdem noch den
-Rückfallpfad auf `data/users.json` für Konten aus der Zeit vor der
-Datenbank-Benutzerverwaltung.
+`dbUser` in den Hono-Kontext), Benutzerverwaltung und Passwörter (bcrypt).
+Dazu die TOTP-Helfer und die Zweitfaktor-Tickets, die mit `routes/auth-2fa.ts`
+für den späteren Zugang von außen liegen bleiben.
+
+E-Mail-Einmalcodes, Anmelde-Link-Tokens und Passwort-Reset-Tickets standen
+hier, solange die Anmeldung Mails verschickte — sie sind mit dem Umbau zum
+Firmenserver ersatzlos entfallen. Geblieben ist der Rückfallpfad auf
+`data/users.json` für Konten aus der Zeit vor der Datenbank-Benutzerverwaltung;
+er zieht sie beim Start nach und ist kein Anmeldeweg mehr.
 
 ### `src/api/crypto.ts`
 
@@ -217,7 +235,7 @@ bleibt als Wiederherstellungspfad im Code.
 
 ### `src/api/routes/`
 
-**30 Route-Dateien.** Alle unter `/api` eingehängt — mit einer Ausnahme, die
+**33 Route-Dateien.** Alle unter `/api` eingehängt — mit einer Ausnahme, die
 unten steht.
 
 | Datei | Beschreibung |
@@ -254,7 +272,7 @@ unten steht.
 | `export-templates.ts` | Word-Exportvorlagen und die Export-Endpunkte |
 | `project-modules.ts` | Aktivierbare Module je Projekt |
 | `ui-preferences.ts` | Oberflächen-Einstellungen je Benutzer |
-| `auth-2fa.ts` | TOTP-Routen — **nicht eingebunden** (`server.ts:509` auskommentiert) |
+| `auth-2fa.ts` | TOTP-Routen — **nicht eingebunden** (`server.ts:575` auskommentiert) |
 
 ### `src/api/dateiname.ts`
 
@@ -298,11 +316,12 @@ Route es gar nicht falsch machen.
 
 ### `src/api/projekt-bezug.ts`
 
-Löst `?projectId=<uuid>` an einer einzigen Stelle auf einen Projektnamen auf.
-Damit verstehen die Routen eine umbenennungsfeste Alternative zu
-`?project=<Name>`, ohne dass alle zwölf Repositories auf IDs umgebaut werden
-mussten. Unterscheidet ausdrücklich „ID zeigt ins Leere" (404) von „kein
-Projekt angegeben".
+Löst `?projectId=<uuid>` und `?projektnummer=<Nummer>` an einer einzigen Stelle
+auf einen Projektnamen auf. Damit verstehen die Routen zwei umbenennungsfeste
+Alternativen zu `?project=<Name>`, ohne dass alle zwölf Repositories auf IDs
+umgebaut werden mussten. Vorrang bei mehreren Angaben: `projectId` >
+`projektnummer` > `project`. Unterscheidet ausdrücklich „Angabe zeigt ins
+Leere" (404) von „kein Projekt angegeben".
 
 ---
 
@@ -327,10 +346,11 @@ Interfaces aller persistierten Entitäten und aller Repository-Verträge:
 Die zentrale Stelle für „wer darf was sehen" — niemand setzt sich die Logik
 selbst aus `user_projects` zusammen.
 
-**Ermittelt wird die Sichtbarkeit in den Routen** (16 rufen
-`getVisibleProjectIds()` auf), **angewandt** in sechs Repositories, die eine
-übergebene Liste entgegennehmen. Kein Repository ermittelt sie selbst — eine
-Route, die den Aufruf vergisst, liefert deshalb ungefiltert aus.
+**Ermittelt wird die Sichtbarkeit in den Routen** (19 Route-Dateien rufen
+`getVisibleProjectIds()` auf, 16 prüfen einzeln über `canSeeProject()` bzw.
+`canSeeProjectByName()`), **angewandt** in 13 Repositories, die eine übergebene
+Liste entgegennehmen. Kein Repository ermittelt sie selbst — eine Route, die
+den Aufruf vergisst, liefert deshalb ungefiltert aus.
 
 | Funktion | Bedeutung |
 |---|---|
@@ -415,6 +435,7 @@ Nicht-Admins, weil Admins gar nicht gefiltert werden.
 | `db-aktivitaet.ts` | Was zuletzt passiert ist — abgeleitet, ohne eigene Tabelle |
 | `db-aufgabensystem.ts` | Rang, Aufwand und Tagesplan der Aufgaben |
 | `db-benachrichtigungen.ts` | Neuigkeiten je Person |
+| `db-ki-freigabe.ts` | Was ein Sprachmodell sehen darf — Hauptschalter, Stufe, Kategorien je Projekt |
 | `db-portfolio.ts` | Portfolio-Kennzahlen über alle Projekte |
 | `db-search.ts` | Volltextsuche |
 | `db-audit.ts` | Audit-Log |
@@ -485,8 +506,8 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 | `043_geld_recht.sql` | `users.can_see_money` — das Geld-Recht |
 | `044_papierkorb.sql` | Projekte werden weich gelöscht (`deleted_at`) |
 | `045_entscheidungen.sql` | Entscheidungslog |
-| `046_rechnungspositionen.sql` | Rechnungspositionen und Positionskatalog |
-| `047_drop_bot_tabellen.sql` | Sechs Tabellen der Bot- und Outlook-Ära entfernt |
+| `046_positionen.sql` | Rechnungspositionen und Positionskatalog |
+| `047_altbestand_tabellen.sql` | Sechs Tabellen der Bot- und Outlook-Ära entfernt — **nur, wenn sie leer sind** |
 | `048_volltextsuche.sql` | `tsvector` mit deutschen Wortstämmen |
 | `049_papierkorb_datensaetze.sql` | Papierkorb auch für Notizen, Aufgaben, Termine |
 | `050_aufgabensystem.sql` | Rang, geschätzter Aufwand, Tagesplan |
@@ -519,25 +540,46 @@ Vektor-Spalte daran, bleibt die Extension stehen, statt die Migration und
 damit den Start scheitern zu lassen.
 :::
 
-Die Migrationen `022`–`024` (Microsoft-Tabellen und die `ms_*`-Spalten an
-`termine`) stehen bewusst noch da: forward-only, und ein `DROP` wäre
-unumkehrbar.
+Die Migrationen `022`–`024` stehen weiterhin im Ordner — forward-only heißt,
+dass nichts zurückgenommen wird. Was sie damals angelegt haben, ist inzwischen
+aber abgeräumt: `047` nimmt die Microsoft-Tabellen, `056` die sieben
+`ms_*`-Spalten an `termine` und die drei Telegram-Spalten an `users`.
+
+Beide räumen **vorsichtig**: eine Tabelle fällt nur, wenn sie leer ist, eine
+Spalte nur, wenn nichts darin steht. Alles andere bleibt stehen und meldet sich
+im Migrationsprotokoll — dann entscheidet ein Mensch, nicht ein Skript, das um
+drei Uhr nachts durchläuft. Einzige Ausnahme ist `users.telegram_bot_enabled`:
+ein boolescher Schalter ohne Bot ist auch dann bedeutungslos, wenn er auf
+`true` steht, und fällt darum ungeprüft.
+
+`users.telegram_bot_token` bekommt eigens die deutlichere Meldung: steht dort
+noch ein Wert, bleibt die Spalte stehen, und das Protokoll sagt, dass ein
+Geheimnis im Klartext **widerrufen** gehört und nicht bloß gelöscht.
 
 ---
 
 ## Dateizugriff (`src/workspace/`)
 
-Was hier liegt, betrifft echte Dateien. Notizen, Aufgaben, Termine,
-Projekte und Team liegen in der Datenbank; Dokumente werden weiterhin im
-Dateisystem abgelegt.
+Der letzte Rest der Vault-Zeit — und **nur lesend**. Was in PATIO hochgeladen
+wird, liegt seit dem Umbau in der Datenbank (Tabelle `files`), nicht auf der
+Platte; `WORKSPACE_PATH` ist heute die Netzfreigabe „Dokumente", in die die
+Anwendung nichts schreibt.
 
 | Datei | Inhalt |
 |---|---|
-| `helpers.ts` | `safePath()` löst relative Pfade gegen `WORKSPACE_PATH` auf und weist alles außerhalb ab (Path-Traversal-Schutz); dazu `ensureDir` und `workspacePath` |
-| `files.ts` | `readFile`, `createFile`, `listFolder` — Letzteres blendet auf Wurzelebene die Systemordner `Agents`, `MEMORY_LOGS`, `Daily` und `Templates` aus |
-| `extractor.ts` | Text aus PDF (`pdf-parse`) und DOCX (`mammoth`), begrenzt auf `EXTRACT_MAX_CHARS` |
+| `helpers.ts` | `safePath()` löst relative Pfade gegen `WORKSPACE_PATH` auf und weist alles außerhalb ab (Path-Traversal-Schutz); dazu `workspacePath` |
+| `files.ts` | `readFile` — sonst nichts |
+| `extractor.ts` | Text aus PDF (`pdf-parse`) und DOCX (`mammoth`), aus Buffern, begrenzt auf `EXTRACT_MAX_CHARS` |
 
-Der Umfang ist mit dem Umbau von rund 1.770 auf 245 Zeilen geschrumpft.
+`readFile` bedient genau einen Fall: Alt-Einträge, deren Datei damals wirklich
+im Ordner lag und deren Datenbankzeile keinen Inhalt hat (der Download-Rückfall
+in `routes/files.ts`). Der Zugriff ist damit immer über eine Datenbankzeile
+gedeckt und von der Rechteprüfung erfasst.
+
+`createFile` und `listFolder` sind mit den pfadbasierten Routen entfallen: sie
+boten einen Weg in den geteilten Ordner, den niemand mehr braucht und den keine
+Rechteprüfung deckte. Der Umfang ist mit dem Umbau von rund 1.770 auf 152
+Zeilen geschrumpft.
 
 ---
 
@@ -551,8 +593,30 @@ Erzeugt DOCX-Dateien aus hochgeladenen Word-Vorlagen (`docxtemplater` +
 `docxtemplater` den Punkt als Teil eines flachen Namens lesen.
 
 Die Endpunkte liegen in `routes/export-templates.ts`:
-`/exports/meeting/:id`, `/exports/bautagebuch/:id`, `/exports/time-entries`
-und `/exports/project/:name/summary`.
+`/exports/meeting/:id`, `/exports/bautagebuch/:id`, `/exports/time-entries`,
+`/exports/project/:name/summary` und `/exports/invoice/:id` — Letzterer
+braucht zusätzlich das Geld-Recht. Dazu `/exports/faehigkeiten`, das der
+Oberfläche sagt, ob dieser Server PDF kann.
+
+### `src/export/pdf.ts`
+
+`docxNachPdf()` schickt die fertige Word-Datei durch `soffice --convert-to pdf`
+— dieselbe Vorlage, dasselbe Ergebnis, nur ein anderes Format. Jede Umwandlung
+bekommt über `-env:UserInstallation` ihr eigenes LibreOffice-Profil: zwei
+Prozesse auf demselben Profil enden wortlos ohne Ausgabedatei, und an einem
+Server mit acht Arbeitsplätzen ist das der Normalfall.
+
+LibreOffice ist **optional** (`--build-arg MIT_PDF=nein`, rund 350 MB). Fehlt
+es, antwortet die Route mit **503** und einem Satz in Klartext statt eines
+500ers; der Word-Export bleibt vollständig. Hintergrund:
+[Was PATIO herausgeben kann](/konzepte/export).
+
+### `src/export/volldump.ts`
+
+`volldumpAlsZip()` schreibt den ganzen sichtbaren Bestand als
+Markdown-Ordnerbaum in ein ZIP — die Lock-in-Versicherung. Er enthält genau
+das, was der Fragende auch einzeln abrufen dürfte; Beträge hängen zusätzlich am
+Geld-Recht, weil ein ZIP kein JSON ist und der Antwort-Filter es nicht sieht.
 
 ---
 
@@ -576,18 +640,21 @@ web/src/
 │   ├── ConfirmDialog.vue, MarkdownRenderer.vue, FileGlyph.vue,
 │   │   TeamPicker.vue, SystemStatusBanner.vue
 │   └── shell/            — NavRail, ContextSidebar, AppTopbar, ListPane,
-│                           DetailPane, IconBtn, Avatar, StatusDot
+│                           DetailPane, Avatar, StatusDot
 ├── composables/          — useEvents (Live-Updates), useAufgabensystem,
-│                           useBranding, useTheme, useConfirm,
-│                           useCurrentUser, useWorkspaceShell, useWordExport
+│                           useBenachrichtigungen, useBranding, useTheme,
+│                           useConfirm, useCurrentUser, useWorkspaceShell,
+│                           useWordExport
 ├── utils/                — format.ts (Datum, Zahlen, EUR — inkl. heuteIso),
-│                           projektnummer.ts (Anzeige und Platzhalter)
+│                           projektnummer.ts (Anzeige und Platzhalter),
+│                           dateiname.ts, download.ts, clipboard.ts
 ├── constants.ts, style.css
 └── views/
     ├── DashboardView.vue, CalendarView.vue, SearchView.vue,
     │   FileBrowserView.vue, SettingsView.vue, LoginView.vue, SetupView.vue,
     │   AdminUsersView.vue, AdminAuditView.vue, AdminSicherungView.vue,
     │   AktivitaetView.vue, PapierkorbView.vue, FirmenView.vue,
+    │   NeuigkeitenView.vue, BoardView.vue,
     │   TeamDetailView.vue, ProjectDetailView.vue
     ├── projekt-tabs.ts   — die Reiter der Projektakte, einzige Quelle
     ├── settings-nav.ts   — die Bereiche der Einstellungen, einzige Quelle
@@ -645,7 +712,7 @@ vorzuziehen.
 
 | Verzeichnis | Inhalt |
 |---|---|
-| `tests/` | Vitest-Suite. Ohne `DATABASE_URL` überspringen sich die ACL-, Auth- und Datenbanktests **still** — gemessen am 23.08.2026 laufen 159 von 603, die übrigen 444 werden übersprungen, und der Lauf meldet trotzdem grün — **in der CI** verhindert das ein Wächter |
+| `tests/` | Vitest-Suite: **733 Tests in 80 Dateien**, darunter `tests/web/` für die Oberfläche. Ohne `DATABASE_URL` überspringen sich die ACL-, Auth- und Datenbanktests **still** — gemessen am 26.08.2026 laufen dann 206, die übrigen 527 werden übersprungen, und der Lauf meldet trotzdem grün. **In der CI** verhindert das ein Wächter (`tests/waechter.test.ts`); mit Datenbank bestehen 731, zwei bleiben übersprungen |
 | `scripts/` | Installation, Sicherung, Rücksicherung, Offline-Pakete, Neuverschlüsselung, Prüfstand des Arbeitsplatz-Programms |
 | `electron/` | Hülle des Arbeitsplatz-Programms |
 | `docker/` | Caddyfile, Init-SQL für den Postgres-Container, alte VPS-Compose-Datei. **Der Firmenserver-Stack liegt im Repo-Root** (`docker-compose.yml`) |

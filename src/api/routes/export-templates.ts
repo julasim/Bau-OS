@@ -87,7 +87,21 @@ const MAX_DOCX_BYTES = 10 * 1024 * 1024; // 10 MB
 async function ausliefern(c: Context<AppEnv>, result: { buffer: Buffer; filename: string }) {
   const alsPdf = c.req.query("format") === "pdf";
   if (!alsPdf) {
-    return ausliefern(c, result);
+    // ── Der Word-Weg, und warum er hier lange gefehlt hat ──────────────────
+    //
+    // Hier stand `return ausliefern(c, result)` — die Funktion rief sich mit
+    // unveraenderten Argumenten selbst auf. Ohne `?format=pdf` also eine
+    // Endlosrekursion, und das betraf alle sechs Export-Wege im Normalfall:
+    // Wer ein Word-Dokument wollte (der haeufigere Fall), bekam keines.
+    //
+    // Der Fehler steckte seit `275ee77` drin, dem Commit, der den PDF-Schalter
+    // eingebaut hat — und blieb unbemerkt, weil KEIN Test bis hierher kommt:
+    // in der Testdatenbank liegt keine Word-Vorlage, deshalb enden alle
+    // Export-Tests vorher mit 400, 403 oder 404. Genau diese Luecke schliesst
+    // `tests/api-export-word.test.ts`.
+    c.header("Content-Type", DOCX_MIME);
+    c.header("Content-Disposition", contentDisposition(result.filename));
+    return c.body(new Uint8Array(result.buffer));
   }
   try {
     const pdf = await docxNachPdf(result.buffer, result.filename);

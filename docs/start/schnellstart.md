@@ -81,9 +81,10 @@ npm run dev        # API auf Port 3000, wendet die Migrationen mit an
 npm run dev:web    # Vite-Dev-Server fürs Frontend
 ```
 
-Der Vite-Dev-Server öffnet die Oberfläche; die API liefert die Daten. Im
-Produktionsbau (`npm run build:all`) liefert die API das gebaute Frontend
-selbst aus, dann genügt Port 3000.
+Die Oberfläche steht dann auf `http://localhost:5173`; Aufrufe auf `/api`
+reicht der Dev-Server an Port 3000 weiter. Im Produktionsbau
+(`npm run build:all`) liefert die API das gebaute Frontend selbst aus, dann
+genügt Port 3000.
 
 ## 5. Erstes Konto anlegen
 
@@ -126,12 +127,15 @@ npm run dist             # portable .exe bauen (signiert)
 
 ::: danger Tests ohne Datenbank melden grün, obwohl der größere Teil fehlt
 Ohne gesetzte `DATABASE_URL` überspringen sich die ACL-, Auth- und
-Datenbanktests **still** — gemessen am 23.08.2026: `159 passed | 444 skipped
-(603)`, kein einziger Fehlschlag.
+Datenbanktests **still** — gemessen am 26.08.2026: `206 passed | 527 skipped
+(733)`, kein einziger Fehlschlag. Mit Datenbank sind es `731 passed |
+2 skipped`. Die Zahlen wandern mit jedem neuen Test; das Verhältnis ist der
+Punkt, nicht der genaue Wert.
 
 In der **CI** kann das nicht mehr passieren: dort läuft ein Postgres-Dienst
 mit, und `tests/waechter.test.ts` schlägt fehl, wenn `DATABASE_URL` in der CI
-fehlt. Lokal ohne Datenbank zu arbeiten bleibt erlaubt. Ein halber Lauf sieht damit aus wie ein voller.
+fehlt. Lokal ohne Datenbank zu arbeiten bleibt erlaubt. Ein halber Lauf sieht
+damit aus wie ein voller.
 
 **Auf die Zahl der übersprungenen Prüfungen sehen, nicht auf die Farbe.**
 

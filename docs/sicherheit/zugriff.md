@@ -75,13 +75,57 @@ antwortet der Endpunkt mit 410.
 |---|---|---|---|---|
 | **admin** | Alles (`getVisibleProjectIds()` liefert `"all"`) | ja | ja | ja |
 | **user** | Nur die Projekte aus `user_projects` | ja | nur mit Geld-Recht | ja |
-| **praesentation** | Alle Projekte | **nein** | **nie** | **nie** |
+| **praesentation** | Alle Projekte in den Listen; die Projektakte selbst bleibt zu (siehe unten) | **nein** | **nie** | **nie** — mit einer Ausnahme, siehe unten |
 
 Die dritte Rolle ist das [Board für den Besprechungsraum](/betrieb/board). Sie
-ist eine Beschränkung, kein Zugangsschlüssel: der Schreibschutz ist **eine**
-Middleware vor allen Routen, und das Geld-Recht wird für sie hart auf „nein"
-gesetzt — sonst genügte ein versehentlich gesetzter Schalter im
-Benutzerdialog, um Honorare an die Wand zu werfen.
+ist eine Beschränkung, kein Zugangsschlüssel — und zwar an drei Stellen
+serverseitig, nicht in der Oberfläche:
+
+| Schranke | Umsetzung |
+|---|---|
+| Alles außer `GET` und `HEAD` endet mit 403 | `schreibschutz()` in `src/api/personendaten.ts`, als Middleware vor allen Routen |
+| Beträge: hart „nein", noch vor dem Recht am Konto | `darfGeldSehen()` in `src/api/geld.ts` |
+| Kontaktdaten fallen aus jeder JSON-Antwort | `personendatenFilter()` in `src/api/personendaten.ts` |
+
+Der Personendaten-Filter arbeitet wie der Geld-Filter auf dem Rückweg und
+entfernt `email`, `phone`, `mobile`, `telefon`, `handy`, `adresse`/`address`,
+`privatAdresse`, `contactLog` und `vcard`. Der **Name** bleibt stehen — ein
+Board ohne Namen wäre leer, und wer im Besprechungsraum sitzt, ist ohnehin
+bekannt; seine Privatnummer nicht.
+
+::: danger Offener Befund: der Volldump geht am Personendaten-Filter vorbei
+`GET /exports/volldump` liefert ein ZIP, kein JSON — der Filter sieht es
+nicht. Darin liegt `Team.md` mit **Name, Rolle, E-Mail, Telefon und Firma
+aller Mitglieder** (`src/export/volldump.ts`, Zeile 354). Die Projektauswahl
+holt sich die Route aus `getVisibleProjectIds()`, und das liefert der
+Präsentationsrolle `"all"`.
+
+Die Route ist ein `GET`, der Schreibschutz greift also nicht, und einen
+Rollen-Wächter hat sie nicht (`src/api/routes/export-templates.ts`, Zeile
+264). Ein Anzeigekonto kann das Archiv damit herunterladen. Beträge fehlen
+darin — `darfGeldSehen(c)` wird in den ZIP-Bau durchgereicht —, Kontaktdaten
+nicht.
+
+**Das ist ein Befund, keine Entwurfsentscheidung**, und keine Prüfung deckt
+ihn ab: `tests/api-board.test.ts` ist der einzige Test, der die
+Präsentationsrolle überhaupt kennt, und er fasst die Export-Wege nicht an.
+Bis das behoben ist, gilt: ein Anzeigekonto gehört auf ein Gerät, an dem
+niemand einen Download auslösen kann.
+:::
+
+Warum das Geld-Recht hart gesetzt ist, statt am Schalter zu hängen: sonst
+genügte ein versehentlich gesetzter Haken im Benutzerdialog, um Honorare an
+die Wand eines Raums zu werfen, in dem auch Bauherren sitzen.
+
+::: info „Alle Projekte" heißt: in den Listen, nicht in der Akte
+`getVisibleProjectIds()` liefert der Präsentationsrolle `"all"` — das Board
+soll das ganze Haus zeigen, ein Ausschnitt wäre irreführend.
+`canSeeProject()` und `canSeeProjectByName()` kennen diese Ausnahme **nicht**;
+sie fragen `user_projects`. Ein Anzeigekonto bekommt `GET /projects` deshalb
+vollständig, auf `GET /projects/:name` aber 403 — und damit auch auf jede
+Unterroute der Projektakte. Für das Board reicht das: es liest ausschließlich
+`/api/board/*`.
+:::
 
 Datensätze **ohne** Projektbezug sind persönlich:
 
@@ -102,8 +146,11 @@ Ergebnis weiter; die Repositories wenden eine übergebene Liste an, **ermitteln
 sie aber nie selbst**. Eine neue Route, die den Aufruf vergisst, liefert damit
 ungefiltert aus.
 
-Projekt-Zugriff vergeben und entziehen: `POST` und `DELETE` auf
-`/api/projects/:name/access`.
+Projekt-Zugriff lesen, vergeben und entziehen: `GET` und `POST` auf
+`/api/projects/:name/access`, `DELETE` auf
+`/api/projects/:name/access/:userId`. Alle drei sind der Verwaltung
+vorbehalten und antworten sonst mit 403. In der Oberfläche ist das der Reiter
+**Zugriff** der Projektakte, der ebenfalls nur ihr angezeigt wird.
 
 ::: danger Genau so sind hier Lücken entstanden — siebzehn Stück
 Das Verfahren ist richtig, aber es vergisst sich leicht. Am 23.08.2026 haben
@@ -187,23 +234,41 @@ nicht alle die Sätze der Kollegen kennen.
 | Admins | haben es immer |
 | Vergabe | Verwaltung → Benutzer, eigener Schalter |
 
-::: tip Eine Filterstelle statt acht
-Das Recht müsste an acht Stellen greifen: Rechnungen, Portfolio,
-Projekt-Cockpit, Positionskatalog, Volltextsuche, Live-Kanal, Word-Export und
-Sicherungs-Status. Statt es achtmal einzeln zu prüfen — und beim neunten Mal zu
-vergessen — sitzt **eine Middleware hinter allen Routen**:
+::: tip Eine Filterstelle statt neun
+Beträge kommen an neun Stellen heraus: Rechnungen, Portfolio, Projekt-Cockpit,
+Stundenliste, Team, Leistungsphasen, Volltextsuche, Live-Kanal und Export.
+Statt es neunmal einzeln zu prüfen — und beim zehnten Mal zu vergessen — sitzt
+**eine Middleware hinter allen Routen**:
 
 ```
-app.use("/api/*", geldFilter);      // src/api/server.ts:431
+app.use("/api/*", geldFilter);      // src/api/server.ts:503
 ```
 
 `src/api/geld.ts` geht die fertige JSON-Antwort rekursiv durch und entfernt die
-Geldfelder, wenn das Konto das Recht nicht hat. Eine neue Route kann das nicht
-vergessen, weil sie nichts dafür tun muss.
+Geldfelder, wenn das Konto das Recht nicht hat. Eine neue Route, die JSON
+liefert, kann das nicht vergessen, weil sie nichts dafür tun muss.
 
 Die Beträge werden also **nicht in der Oberfläche ausgeblendet**, sondern
 verlassen den Server gar nicht erst. Ein Mitschnitt der Netzwerkantworten
 enthält sie nicht.
+:::
+
+::: warning Der Filter fasst nur JSON an
+Dateidownloads, der Word-Export und der Live-Kanal (`text/event-stream`) laufen
+unverändert durch — ein ZIP ist kein JSON, der Antwort-Filter sieht es nicht.
+Für den Live-Kanal ist das kein Loch: seine Ereignisse tragen keine Nutzdaten
+(siehe unten). Die übrigen Wege prüfen deshalb **selbst**:
+
+| Weg | Prüfung |
+|---|---|
+| `GET /exports/volldump` | reicht `darfGeldSehen(c)` in den ZIP-Bau durch |
+| Word-Export einer Rechnung | 403 ohne Geld-Recht |
+| `GET /projects/:name/finance` | 403 — die Route ist von vorne bis hinten Geld, eine leergeräumte Hülle wäre die unehrlichere Antwort |
+| Rechnungen schreiben (`POST`/`PUT`/`DELETE`) | 403 — sonst setzte jemand Beträge, die er selbst nicht sieht |
+| Positionskatalog | 403, lesend wie schreibend |
+
+**Wer einen neuen Weg baut, der etwas anderes als JSON ausliefert, prüft
+selbst.** Das ist die zweite Stelle, die dieses Verfahren nicht abnimmt.
 :::
 
 ::: danger Die Grenze des Verfahrens — bitte beim Weiterbauen beachten
@@ -219,6 +284,46 @@ Wer ein neues Geldfeld einführt, muss es also an **zwei** Stellen eintragen:
 in `GELD_FELDER` und in die Endpunktliste des Tests. Das ist der eine Handgriff,
 den dieses Verfahren nicht abnimmt.
 :::
+
+## KI-Zugriff
+
+PATIO kann je Projekt eine **Akte** erzeugen, die ein Sprachmodell lesen darf
+(Migration `059`). Sicherheitsrelevant sind daran drei Dinge:
+
+| | |
+|---|---|
+| Routen | `GET`/`PATCH` `/api/ki/freigabe` · `PUT /api/ki/freigabe/:projectId` · `GET /api/ki/dossier[/:projectId]` |
+| Wer darf | **nur die Verwaltung** — `kiFreigabeRoutes.use("/ki/*", adminMiddleware)` |
+| Voreinstellung | aus. Kein Eintrag heißt nicht freigegeben; ein neu angelegtes Projekt ist damit gesperrt |
+
+Auch das **Lesen** der Akten ist Verwaltungssache. Die Freigabe ist ausdrücklich
+unabhängig von der Projektzuordnung — ohne diese Einschränkung wäre der
+Akten-Abruf der Weg, auf dem jedes Konto an jedes freigegebene Projekt käme.
+
+### Die drei Personendaten-Stufen
+
+`src/mcp/redact.ts` redigiert jeden Datensatz, bevor er in die Akte geht. Die
+Stufe gilt quer über **alle** freigegebenen Bereiche — eine Freigabe nur für
+„Besprechungen" gäbe sonst über die Teilnehmerlisten das halbe Adressbuch mit
+heraus.
+
+| Stufe | Was wegfällt |
+|---|---|
+| `alle` | nichts |
+| `namen-ohne-kontakt` *(Vorgabe)* | am Team-Mitglied `email`, `phone`, `contactLog` und `hourlyRate`; im Bautagebuch die geleisteten Stunden je Person |
+| `keine` | zusätzlich jeder Klarname: `createdByUsername`, `updatedByUsername`, `assigneeName`, `memberName`, die Aufgaben-Zuweisung, die Teilnehmer an Terminen, Besprechungen und Entscheidungen, der Bauherr am Projekt und die Firma am Mitglied. Eine Person erscheint nur noch als ihre Mitglieds-ID — dasselbe Pseudonym in jedem Abschnitt. Externe ohne Mitglieds-ID entfallen ersatzlos |
+
+::: warning Die Stufe wirkt auf Felder, nicht auf Prosa
+Notiz-Inhalte, Protokoll-Text und Bautagebuch-Tätigkeiten werden **nicht**
+durchsucht. Steht in einem Protokoll „Hr. Müller wünscht Sichtbeton", bleibt
+das stehen — auch bei `keine`. Eine automatische Namenserkennung in Freitext
+wäre entweder löchrig oder zerstörerisch; wer das nicht will, gibt diese
+Bereiche nicht frei.
+:::
+
+Der Aufbau der Akte, die zehn Bereiche und die Vorschau stehen unter
+[KI-Zugriff](/konzepte/ki-zugriff). Wohin die Akte gehen kann und was das
+datenschutzrechtlich bedeutet, unter [DSGVO](/sicherheit/dsgvo).
 
 ## Live-Updates
 
@@ -269,13 +374,25 @@ Größenlimit: `MAX_UPLOAD_MB`, Standard 50.
 
 ## Dateizugriff
 
-`safePath()` in `src/workspace/helpers.ts` löst jeden relativen Pfad gegen
-`WORKSPACE_PATH` auf und weist alles außerhalb ab. Die Prüfung arbeitet mit
-Separator-Suffix — `startsWith("/workspace")` allein würde auch
-`/workspace-backup` durchlassen.
+**Es gibt keinen Weg mehr, der einen Pfad entgegennimmt.** `GET /files/read`
+verlangt eine Datei-ID (`?id=`), `DELETE /files` ebenfalls; `POST /files/mkdir`
+und das Löschen über einen Pfad sind entfallen — letzteres rief
+`rmSync(recursive)` und konnte damit von jedem angemeldeten Konto aus einen
+ganzen Ordner der Freigabe „Dokumente" entfernen. Damit ist heute jeder Zugriff
+über eine Datenbankzeile gedeckt, und die trägt Projekt und Eigentümer, also
+die Rechteprüfung.
 
-Der Dateibrowser blendet auf Wurzelebene die Systemordner `Agents`,
-`MEMORY_LOGS`, `Daily` und `Templates` sowie alles mit führendem Punkt aus.
+Der Dateibrowser listet auch keine Ordner des Dateisystems mehr: er baut seine
+Struktur logisch aus den Projekten. Hier stand bis zuletzt, er blende auf
+Wurzelebene Systemordner aus — `listFolder()` samt dieser Ausblendliste ist mit
+den pfadbasierten Routen entfallen.
+
+Übrig bleibt ein einziger Dateisystem-Zugriff: der Download-Rückfall für
+Alt-Einträge aus der Vault-Zeit, deren Datenbankzeile keinen Inhalt trägt
+(`readFile()` in `src/workspace/files.ts`). Er läuft durch `safePath()` in
+`src/workspace/helpers.ts` — löst gegen `WORKSPACE_PATH` auf, weist alles
+außerhalb ab und lehnt Symlinks ab. Die Prüfung arbeitet mit Separator-Suffix;
+`startsWith("/workspace")` allein würde auch `/workspace-backup` durchlassen.
 
 ## HTTP-Absicherung
 
@@ -308,8 +425,17 @@ auch dort bleiben `default-src 'self'` und `connect-src 'self'` bestehen.
 Einzelne Datenbankfelder werden mit AES-GCM verschlüsselt
 (`src/api/crypto.ts`). Schlüssel ist `ENCRYPTION_KEY`, getrennt vom
 `JWT_SECRET` — so reißt eine Rotation des Anmelde-Secrets die
-verschlüsselten Felder nicht mit. Ohne eigenen Schlüssel greift der Rückfall
-auf `JWT_SECRET`, und der Start warnt.
+verschlüsselten Felder nicht mit. Ist kein eigener Schlüssel gesetzt, wird mit
+`JWT_SECRET` verschlüsselt, und der Start warnt.
+
+Beim **Entschlüsseln** gibt es seit dem 23.08.2026 nur noch diesen einen
+Schlüssel: ein Wert, der damit nicht lesbar ist, ergibt `null` — nicht mehr
+Klartext, nicht mehr einen zweiten Versuch mit `JWT_SECRET`. Das macht das
+Setzen des Schlüssels zu einem Einbahnweg; was dabei zu beachten ist, steht
+unter [Verschlüsselung umstellen](/sec-4-crypto-migration).
+
+Betroffen ist genau ein Feld, `users.totp_secret_encrypted`, und das schreibt
+derzeit niemand: der zweite Faktor ist nicht eingehängt.
 
 ## Audit-Log
 
@@ -329,11 +455,14 @@ nur, wenn sich tatsächlich die Rolle ändert.
 `src/data/db-audit.ts` führt weitere Typen, die **nicht mehr entstehen können**:
 
 - `login.magic_link.*`, `login.email.*`, `login.email_setup_required`,
-  `email_setup.*` — die E-Mail-Anmeldung ist ersatzlos entfallen, es gibt
-  keinen Codepfad mehr, der sie schreibt.
+  `login.2fa.*`, `email_setup.*` — die E-Mail-Anmeldung ist ersatzlos
+  entfallen, es gibt keinen Codepfad mehr, der sie schreibt.
 - `ms.*` — der Outlook-Abgleich ist entfallen.
+- `bot.token.*` und `pair.*` — Telegram-Altbestand. Die Tabelle
+  `telegram_pair_tokens` ist mit Migration `055` gefallen, die Spalte
+  `users.telegram_bot_token` mit `056`.
 - `2fa.*` — hier steht der Code noch (`src/api/routes/auth-2fa.ts`), aber die
-  Routen sind **nicht eingehängt** (`src/api/server.ts:486` ist
+  Routen sind **nicht eingehängt** (`src/api/server.ts:575` ist
   auskommentiert). Unerreichbar, nicht gelöscht — der zweite Faktor kommt mit
   dem VPN zurück.
 
@@ -352,3 +481,17 @@ Auto-Owner), die Whitelist für Agenten-Dateien, die Shell-Allowlist und der
 SSRF-Schutz für den Webabruf sind ersatzlos entfallen — mit dem Code, den
 sie abgesichert haben. PATIO ruft im Betrieb keine externen Adressen mehr
 auf und führt keine Shell-Befehle aus.
+
+::: info Ein fremder Prozess bleibt: LibreOffice
+Die PDF-Umwandlung ruft `soffice` auf (`src/export/pdf.ts`) — über `execFile`
+mit einer Argumentliste, also **ohne Shell**: am Dateinamen wird nichts
+interpretiert, und er wird zuvor von Pfadanteilen und Sonderzeichen befreit.
+Jeder Lauf bekommt einen eigenen Temp-Ordner mit eigenem LibreOffice-Profil
+und ein Zeitlimit von 60 Sekunden; der Ordner wird auch im Fehlerfall
+gelöscht, weil das Dokument darin im Klartext liegt — auf dem Firmenserver
+stehen darin Honorare.
+
+Fehlt `soffice`, antwortet die Route mit einem erklärenden Satz statt mit
+einem 500er. Die PDF-Umwandlung ist optional, der Word-Export bleibt in jedem
+Fall vollständig.
+:::

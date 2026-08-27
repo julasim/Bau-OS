@@ -17,7 +17,8 @@ Vorlage: `.env.example`. Was hier nicht steht, wird nirgends ausgewertet.
 | `API_PORT` | Nein | `3000` | Port der Web-Oberfläche |
 | `PATIO_HOSTNAME` | Nein | `patio.sima.intern` | Rechnername für das Zertifikat |
 | `WORKSPACE_HOST_DIR` | Nein | `./workspace` | Dokumentenordner auf dem Host (Compose) |
-| `BACKUP_DIR` | Nein | `/mnt/patio-backup` | Ziel der nächtlichen Sicherung |
+| `BACKUP_DIR` | Nein | `/mnt/patio-backup` | Ziel der nächtlichen Sicherung (Host) |
+| `SICHERUNG_DIR` | Nein | `/opt/patio/backup` | Wo der Dienst die Sicherungsstände **liest** (Container) |
 | `CORS_ORIGINS` | Nein | `http://localhost:<API_PORT>` | Erlaubte Origins, komma-getrennt |
 | `DB_AUTO_MIGRATE` | Nein | `true` | Migrationen beim Start automatisch anwenden |
 | `ENCRYPTION_KEY` | Nein | leer | Eigener Schlüssel für verschlüsselte Felder |
@@ -31,9 +32,12 @@ Vorlage: `.env.example`. Was hier nicht steht, wird nirgends ausgewertet.
 | `LOG_JSONL_MAX_BYTES` | Nein | `5242880` | Dateigröße, ab der das JSONL-Log rotiert |
 | `LOG_JSONL_KEEP_FILES` | Nein | `5` | Anzahl rotierter Logdateien |
 
-Zusätzlich wertet **Docker Compose** vier Variablen aus, die der
-Anwendungscode selbst nie liest: `POSTGRES_USER`, `POSTGRES_PASSWORD`,
-`POSTGRES_DB` und `WORKSPACE_HOST_DIR` (siehe unten).
+Zwei aus dieser Tabelle liest der Anwendungscode selbst nie: `PATIO_HOSTNAME`
+wertet **Docker Compose** aus und reicht es an Caddy weiter, `BACKUP_DIR`
+ebenfalls Compose (als Einhängepunkt) und dazu `scripts/backup.sh`. Nur im
+Compose-Betrieb gibt es außerdem `POSTGRES_USER`, `POSTGRES_PASSWORD`,
+`POSTGRES_DB` und `WORKSPACE_HOST_DIR` (siehe unten), und allein
+`scripts/backup.sh` liest die sieben Stellschrauben der Sicherung.
 
 ## Pflicht-Variablen
 
@@ -222,17 +226,60 @@ Ohne diese Prüfung schriebe die Sicherung in das leere Verzeichnis auf der
 Systemplatte, meldete Erfolg und liefe still auf. Details:
 [Sicherung](/betrieb/sicherung).
 
+Dieselbe Zeile hängt das Verzeichnis **schreibgeschützt** in den
+App-Container, damit unter „Verwaltung → Sicherung" sichtbar ist, ob die
+Sicherung läuft. Geschrieben wird dort nichts: die Sicherung selbst ist ein
+systemd-Timer auf dem Host.
+
+### SICHERUNG_DIR
+
+Wo der Dienst die Sicherungsstände **liest**. Das ist der Pfad **im
+Container**, nicht auf dem Host — Compose hängt `BACKUP_DIR` genau dorthin.
+Vorgabe `/opt/patio/backup`; im Compose-Betrieb ist also nichts zu setzen.
+
+Gebraucht wird die Variable auf dem Entwicklungsrechner, wo es das Verzeichnis
+nicht gibt: ohne sie meldet die Route schlicht „nicht eingerichtet".
+`src/api/routes/sicherung.ts` liest sie bei **jedem** Aufruf neu — sonst
+bräuchte eine Änderung an der Umgebung einen Neustart, und die Auskunft hätte
+sich still auf einen Pfad festgelegt, den es nicht mehr gibt.
+
+### Die Stellschrauben von `scripts/backup.sh`
+
+Sie stehen in derselben `.env`, werden aber nur vom Sicherungsskript gelesen.
+Die Vorgaben passen für den Regelbetrieb; wer nichts setzt, bekommt genau sie.
+
+| Variable | Vorgabe | Bedeutung |
+|---|---|---|
+| `REQUIRE_MOUNT` | `true` | Abbruch, wenn unter `BACKUP_DIR` keine Platte eingehängt ist |
+| `KEEP_DAILY` | `7` | Aufbewahrung der täglichen Stände |
+| `KEEP_WEEKLY` | `4` | Aufbewahrung der wöchentlichen Stände |
+| `KEEP_MONTHLY` | `12` | Aufbewahrung der monatlichen Stände |
+| `DISK_WARN_PERCENT` | `80` | Ab dieser Belegung warnt der Lauf |
+| `DB_CONTAINER` | `patio-postgres` | Name des Postgres-Containers für den Dump |
+| `CADDY_VOLUME` | `patio_caddy_data` | Volume mit dem **privaten Schlüssel der lokalen CA** |
+
+::: warning `REQUIRE_MOUNT` nicht abschalten
+Sonst schreibt die Sicherung in das leere Verzeichnis auf der **Systemplatte**,
+meldet Erfolg und füllt über Wochen das Wurzel-Dateisystem. Auffallen würde das
+in genau dem Moment, in dem man die Sicherung braucht.
+
+Stimmt der Name in `CADDY_VOLUME` nicht, warnt der Lauf und sichert den
+CA-Schlüssel **nicht** — ein Wiederaufbau kostet dann den Gang zu jedem
+Arbeitsplatz.
+:::
+
 ### BACKUP_REMOTE
 
 ::: danger Diese Variable tut derzeit nichts
 Die `.env.example` beschrieb sie als zweites Ziel, auf das jede Sicherung
 zusätzlich abgeworfen wird — eine Wechselplatte außer Haus. **Das ist nicht
 umgesetzt.** Weder `scripts/backup.sh` noch `scripts/restore.sh` lesen die
-Variable; im ganzen Repo kommt sie nur in der `.env.example` vor:
+Variable; im ganzen Repo kommt sie nur in der `.env.example` und in dieser
+Dokumentation vor — in keiner Zeile Code:
 
 ```bash
 grep -rl BACKUP_REMOTE --exclude-dir=node_modules .
-# → nur .env.example
+# → .env.example, docs/konfiguration/env.md, docs/betrieb/sicherung.md
 ```
 
 Wer sie gesetzt hat, hat **keine** Auslagerung. Die Zeile bleibt als Warnung
@@ -329,6 +376,8 @@ anschließenden Neubau:
 | `LANGUAGE` | `Deutsch` | Sprache der Oberfläche |
 | `RATE_LIMIT_ATTEMPTS` | `5` | Login-Versuche je IP |
 | `RATE_LIMIT_WINDOW_MS` | `900000` | Sperrfenster nach zu vielen Versuchen (15 Minuten) |
+| `PASSWORD_MIN_LENGTH` | `12` | Mindestlänge; das Passwort ist der einzige Faktor |
+| `BCRYPT_ROUNDS` | `12` | Kostenfaktor. Bestehende Hashes tragen ihren eigenen und bleiben gültig |
 | `MAX_LOG_LINES` | `500` | Zeilenlimit im lesbaren Textlog |
 | `EXTRACT_MAX_CHARS` | `50000` | Zeichenlimit bei der Text-Extraktion aus Dokumenten |
 

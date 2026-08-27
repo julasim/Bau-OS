@@ -147,8 +147,8 @@ bei 80 Prozent ist die lohnendste einzelne Überwachungsmaßnahme.
 # Antwortet sie?
 docker compose exec postgres psql -U patio -d patio -c "SELECT 1;"
 
-# Migrationsstand
-docker compose exec app npm run db:status
+# Migrationsstand — direkt aus der Datenbank
+docker compose exec postgres psql -U patio -d patio   -c "SELECT name, applied_at FROM _migrations ORDER BY name DESC LIMIT 5;"
 
 # Aktive Verbindungen
 docker compose exec postgres \

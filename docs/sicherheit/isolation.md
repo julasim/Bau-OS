@@ -56,16 +56,29 @@ Innerhalb einer Installation trennt PATIO über Rollen und Projektzuordnung.
 |---|---|
 | **admin** | Alle Projekte, dazu die Benutzerverwaltung und das Audit-Log |
 | **user** | Nur zugewiesene Projekte, plus die eigenen Aufgaben, Termine und Notizen ohne Projektbezug |
+| **praesentation** | Alle Projekte in den Listen und im Board — sie kann nichts schreiben und bekommt in den Antworten weder Beträge noch Kontaktdaten (eine Ausnahme nennt die [Zugriffskontrolle](/sicherheit/zugriff)) |
+
+Die dritte Rolle trägt das [Board für den Besprechungsraum](/betrieb/board):
+ein Gerät, an dem niemand angemeldet ist und in dessen Raum auch Bauherren
+sitzen. Sie ist eine Beschränkung, kein Zugangsschlüssel — was sie nicht sehen
+darf, verlässt den Server gar nicht erst. Einzelheiten unter
+[Zugriffskontrolle](/sicherheit/zugriff).
 
 Die Zuordnung steht in der Tabelle `user_projects` und wird über
-**Projekt → Zugriff** gepflegt. Ein Projekt ohne Zuweisung existiert für den
-Benutzer nicht — es taucht weder in der Liste noch in der Suche noch im
-Portfolio auf.
+**Projekt → Zugriff** gepflegt — den Reiter sieht nur die Verwaltung. Ein
+Projekt ohne Zuweisung existiert für den Benutzer nicht: es taucht weder in
+der Liste noch in der Suche noch im Portfolio auf.
 
-Durchgesetzt wird das an **einer** Stelle: `src/data/access.ts`. Die
-Repositories bauen ihre WHERE-Klauseln daraus, die Suche filtert darüber,
-und auch der Kanal für Live-Updates stellt nur zu, was der
-Sichtbarkeits-Kontext des Abonnenten abdeckt.
+**Berechnet** wird die Sichtbarkeit an **einer** Stelle: `src/data/access.ts`.
+**Durchgesetzt** wird sie in den Routen — sie holen die Liste und reichen sie
+weiter; die Repositories wenden eine übergebene Liste an, ermitteln sie aber
+nie selbst. Der Unterschied ist wichtig: eine neue Route, die den Aufruf
+vergisst, liefert ungefiltert aus. Genau so sind im August siebzehn Lücken
+entstanden — alle geschlossen, vollständige Liste unter
+[Zugriffskontrolle](/sicherheit/zugriff).
+
+Die Suche filtert über dieselbe Liste, und auch der Kanal für Live-Updates
+stellt nur zu, was der Sichtbarkeits-Kontext des Abonnenten abdeckt.
 
 ::: warning Der Admin sieht alles
 Es gibt keine Ebene über dem Admin und keine Möglichkeit, ein Projekt vor
@@ -99,7 +112,8 @@ organisatorische Entscheidung, keine technische.
 - Der Rechner selbst ist aus dem Internet nicht erreichbar und soll es nicht
   sein.
 - **Ausgehend spricht die Anwendung mit niemandem.** Kein Mailversand,
-  kein Sprachmodell, keine externen Schriften.
+  keine externen Schriften, kein Aufruf an ein Sprachmodell: eine KI-Akte
+  (siehe unten) wird **bei** PATIO abgeholt, nicht von ihm verschickt.
 
 ::: info Es gibt nur noch den Compose-Weg
 Hier stand ein Hinweis für eine Bare-Metal-Installation. Die wird **nicht mehr
@@ -125,3 +139,9 @@ nur SSH und HTTPS aus dem eigenen Netz zulässt.
 - **Ein Export verlässt die Rechteprüfung.** Wer ein Protokoll als DOCX
   herunterlädt, hat die Datei danach in der Hand — was damit passiert,
   kontrolliert PATIO nicht mehr.
+- **Eine KI-Akte ist ein Export.** Gibt die Verwaltung ein Projekt für den
+  KI-Zugriff frei, entsteht daraus eine lesbare Akte, die ausdrücklich dafür
+  gedacht ist, von einem Sprachmodell gelesen zu werden. Sie ist ab Werk
+  gesperrt und nur für die Verwaltung abrufbar; wohin sie danach geht,
+  entscheidet allein, wo dieses Sprachmodell läuft. Siehe
+  [KI-Zugriff](/konzepte/ki-zugriff) und [DSGVO](/sicherheit/dsgvo).

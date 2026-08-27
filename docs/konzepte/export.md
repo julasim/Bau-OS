@@ -60,9 +60,10 @@ sich unterscheiden, sind schlimmer als eine.
 
 **PDF ist optional.** LibreOffice wiegt rund 350 MB im Server-Abbild, und jedes
 Offline-Update trägt die Last mit. Ist es nicht installiert, erscheint der
-PDF-Knopf gar nicht erst, und ein direkter Aufruf antwortet mit einem Satz in
-Klartext statt eines Serverfehlers. Der Word-Export bleibt in jedem Fall
-vollständig.
+PDF-Knopf gar nicht erst — die Oberfläche fragt beim Öffnen einmal nach, was
+dieser Server kann. Ein direkter Aufruf antwortet mit **503** und einem Satz in
+Klartext: die Anfrage war richtig, dem Server fehlt ein Werkzeug. Der
+Word-Export bleibt in jedem Fall vollständig.
 
 Abschalten beim Bauen:
 

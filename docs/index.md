@@ -26,7 +26,7 @@ features:
   - title: Web-Oberfläche
     details: Vue-3-Anwendung — Dashboard, Listen, Kalender und Projektakten. Am Arbeitsplatz in einem eigenen Programmfenster, im Besprechungsraum im Browser. Änderungen erscheinen ohne Neuladen an allen Arbeitsplätzen.
   - title: Rechte je Projekt
-    details: Anmeldung mit Benutzerkonto, Rollen Admin und Benutzer. Wer kein Projekt zugewiesen bekommt, sieht es auch nicht.
+    details: Anmeldung mit Benutzerkonto, Rollen Admin und Benutzer, dazu eine Präsentationsrolle für den Besprechungsraum. Geldbeträge hängen an einem eigenen Recht. Wer kein Projekt zugewiesen bekommt, sieht es auch nicht.
   - title: Exporte im eigenen Layout
-    details: Meeting-Protokolle, Bautagebuch, Stundenlisten und Projektübersichten als DOCX — auf Basis eigener Word-Vorlagen mit Firmen-Branding.
+    details: Meeting-Protokolle, Bautagebuch, Stundenlisten, Projektübersichten und Rechnungen als DOCX — auf Basis eigener Word-Vorlagen mit Firmen-Branding, wahlweise als PDF.
 ---

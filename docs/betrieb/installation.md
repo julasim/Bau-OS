@@ -7,12 +7,19 @@ Von der leeren Maschine bis zum laufenden Dienst. Zum Abhaken.
 ([Server aufsetzen](/betrieb/server)).
 
 **Mitzubringen:** der USB-Stick mit dem Auslieferungspaket
-`patio-<version>.tar.gz` und der Prüfsummen-Datei daneben. Das Paket entsteht
-auf dem Entwicklungsrechner ([Updates](/betrieb/updates)).
+`patio-<version>.tar.gz` (rund 500 MB) und der Prüfsummen-Datei daneben. Das
+Paket entsteht auf dem Entwicklungsrechner ([Updates](/betrieb/updates)).
 
 ::: tip Einmal Internet, dann nie wieder
 Ubuntu und Docker zu installieren braucht einmalig eine Internetverbindung.
 Danach läuft der Server ohne — und soll es auch.
+
+Alles Weitere steckt im Paket: seit dem 25.08.2026 liegen die **Basis-Images**
+(`postgres:16`, `caddy:2-alpine`, `alpine:latest`) mit darin. Vorher enthielt
+es nur PATIO selbst, und der erste `docker compose up -d` versuchte die
+fehlenden Images zu ziehen. Der Satz oben stimmte damit nicht: wer den Rechner
+nach Schritt 1 vom Netz nahm — oder ihn gleich im Büro ohne Internet
+aufsetzte —, kam über Schritt 2 nicht hinaus.
 :::
 
 ---
@@ -43,8 +50,14 @@ sudo bash dabei/scripts/install-server.sh patio-*.tar.gz
 ```
 
 Das Skript legt die Verzeichnisse an, erzeugt eine `.env` mit zufälligen
-Geheimnissen, spielt das Image ein, startet den Stack, richtet den
-Sicherungs-Zeitplan ein und macht den Befehl `patio` verfügbar.
+Geheimnissen, spielt PATIO **und die Basis-Images** aus dem Paket ein, startet
+den Stack, richtet den Sicherungs-Zeitplan ein und macht den Befehl `patio`
+verfügbar.
+
+Dabei gibt es den Dokumentenordner sowie `logs/`, `data/` und `tools/` der
+**UID 1000** — der Kennung, unter der der Dienst im Container läuft. Ohne das
+bliebe `logs/patio.log` dauerhaft leer, während der Dienst normal weiterläuft
+(Begründung: [Server aufsetzen](/betrieb/server), Abschnitt 8).
 
 Danach:
 
