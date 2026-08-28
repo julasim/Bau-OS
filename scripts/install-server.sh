@@ -126,7 +126,11 @@ else
   # also nicht am Installationsverzeichnis — das Volume heisst immer gleich,
   # egal wohin installiert wird. Die Compose-Datei selbst liegt hier noch
   # nicht: sie kommt erst mit dem Paket, einen Schritt spaeter.
-  PROJEKT=patio
+  #
+  # `COMPOSE_PROJECT_NAME` hat Vorrang vor dem `name:` in der Datei. Wer damit
+  # bewusst einen zweiten, getrennten Stand faehrt, bekommt eigene Volumes —
+  # und die Pruefung muss dann auf DIESE sehen, nicht auf die fremden.
+  PROJEKT="${COMPOSE_PROJECT_NAME:-patio}"
   if docker volume inspect "${PROJEKT}_postgres_data" >/dev/null 2>&1; then
     fehl "Es gibt schon ein Datenbank-Volume: ${PROJEKT}_postgres_data
 
