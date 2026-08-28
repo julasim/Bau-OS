@@ -185,7 +185,17 @@ EOF
 
 log "Paket schnueren..."
 tar -czf "$PAKET" -C "$ARBEIT" .
-sha256sum "$PAKET" > "${PAKET}.sha256"
+
+# Pruefsumme mit reinem DATEINAMEN, nicht mit dem Pfad von hier.
+#
+# `sha256sum "$PAKET"` schreibt "release/patio-1.0.0.tar.gz" hinein — ein
+# Pfad, den es auf dem Server nicht gibt. Dort liegt die Datei in /opt/patio.
+# Wer nach dem Transport von Hand prueft (`sha256sum -c …`), bekommt dann
+# "FAILED open or read" und haelt das Paket fuer beschaedigt.
+#
+# `update-offline.sh` faellt darauf nicht herein — es vergleicht nur den Hash.
+# Aber die Handprobe ist der naheliegende erste Griff nach dem USB-Stick.
+(cd "$AUSGABE" && sha256sum "$(basename "$PAKET")" > "$(basename "$PAKET").sha256")
 
 GROESSE=$(du -h "$PAKET" | cut -f1)
 echo

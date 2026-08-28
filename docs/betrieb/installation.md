@@ -160,6 +160,8 @@ die im Ernstfall gestellt wird: „Wie lange stehen wir?"
 ## Abnahme
 
 - [ ] `patio status` zeigt alle drei Dienste und „Der Dienst antwortet."
+- [ ] Dieselbe Anzeige nennt unter **Stand** die eingespielte Version — steht
+      dort `unbekannt`, ist das Paket älter als der 28.08.2026
 - [ ] Neustart der Maschine — der Stack kommt **ohne Handgriff** hoch
 - [ ] Die Oberfläche zeigt ein **Schloss ohne Warnung** (Browser; später auch im Programmfenster)
 - [ ] Anmeldung mit Benutzername und Passwort

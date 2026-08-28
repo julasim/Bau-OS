@@ -41,6 +41,21 @@ Ergebnis in `release/`:
 | `patio-<version>.tar.gz` | PATIO-Image, **Basis-Images**, Compose-Datei, `docker/`, `deploy/`, Skripte |
 | `patio-<version>.tar.gz.sha256` | Prüfsumme |
 
+Von Hand prüfen lässt sie sich nach dem Transport im selben Verzeichnis:
+
+```bash
+cd /opt/patio && sha256sum -c patio-<version>.tar.gz.sha256
+```
+
+::: tip Warum dort der reine Dateiname steht
+Die Datei entstand früher mit `sha256sum release/patio-1.0.0.tar.gz` und trug
+damit den **Pfad vom Baurechner**. Auf dem Server gibt es kein `release/` —
+die Handprobe meldete „FAILED open or read", und das liest sich wie ein
+beschädigtes Paket. `patio update` fiel nie darauf herein (es vergleicht nur
+den Hash), aber die Handprobe ist der naheliegende erste Griff nach dem
+USB-Stick.
+:::
+
 ::: tip Die Basis-Images liegen seit dem 25.08.2026 mit im Paket
 `postgres:16`, `caddy:2-alpine` und `alpine:latest`. Vorher enthielt das Paket
 nur PATIO selbst — auf einem Rechner ohne Internet scheiterte damit jede
