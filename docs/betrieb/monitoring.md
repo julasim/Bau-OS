@@ -4,13 +4,26 @@ PATIO überwachen: Health-Check, Logs, Systemzustand.
 
 ## Health-Check
 
+Auf dem Server:
+
 ```bash
-curl -s http://localhost:3000/api/health
+docker exec patio-app curl -s localhost:3000/api/health
 ```
 
 ```json
 { "ok": true, "uptime": 86400, "db": true }
 ```
+
+::: warning Nicht vom Server aus auf Port 3000
+`curl http://localhost:3000/api/health` **auf dem Server** antwortet nicht.
+Der Dienst hört zwar auf 3000, aber `docker-compose.yml` legt den Port nicht
+auf den Host — von außen führt der Weg ausschließlich über Caddy. Das ist
+Absicht: nur ein einziger Eingang.
+
+Der Befehl oben fragt deshalb von innen. Wer den Weg der Arbeitsplätze prüfen
+will, nimmt `curl -sk https://patio.sima.intern/` (`-k`, weil das Zertifikat
+aus der eigenen CA stammt).
+:::
 
 Der Endpunkt liegt **vor** der Anmeldung und vor dem Rate-Limit und liefert
 bewusst wenig: keine Versionen, keine Build-Hashes, keine Zugangsdaten — er
@@ -23,10 +36,10 @@ Datenbank gerade antwortet. Eine ausgefallene Datenbank zeigt sich hier
 nicht; sie zeigt sich als 503 auf den fachlichen Routen.
 :::
 
-Aus dem Container heraus:
+Dasselbe über Compose, wenn man ohnehin in `/opt/patio` steht:
 
 ```bash
-docker compose exec app curl -s localhost:3000/api/health
+cd /opt/patio && docker compose exec app curl -s localhost:3000/api/health
 ```
 
 ## Logs
@@ -155,7 +168,24 @@ docker compose exec postgres \
   psql -U patio -d patio -c "SELECT count(*) FROM pg_stat_activity;"
 ```
 
-## Einfacher Prüfskript
+## Ein einfaches Prüfskript
+
+::: warning Zwei Fallen, die hier lange drinsteckten
+Das Skript stand hier mit `curl http://localhost:3000/api/health` — **so
+meldet es auf einem gesunden Server „FEHLER"**. Port 3000 ist in
+`docker-compose.yml` nur `expose`d und liegt bewusst **nicht** auf dem Host;
+von außen führt der Weg ausschließlich über Caddy. Nachgesehen am laufenden
+Container: `PORTS=[3000/tcp]`, kein `0.0.0.0`-Mapping. Als stündlicher
+Cron-Job hätte das dauerhaft falschen Alarm ins Protokoll geschrieben.
+
+Die zweite Falle war `docker compose -f /opt/patio/docker-compose.yml …` ohne
+vorheriges `cd`: Compose liest die `.env` aus dem **aktuellen** Verzeichnis,
+nicht aus dem der Compose-Datei. Aus dem Heimatverzeichnis aufgerufen fehlen
+damit `POSTGRES_USER` und die übrigen Werte.
+
+Beides ist unten korrigiert — der Dienst wird von innen gefragt, so wie es
+`patio status` und `update-offline.sh` auch tun.
+:::
 
 `/opt/patio/health-check.sh`:
 
@@ -163,16 +193,29 @@ docker compose exec postgres \
 #!/bin/bash
 echo "=== PATIO Health Check — $(date) ==="
 
+# Compose braucht das Projektverzeichnis, sonst findet es die .env nicht.
+cd /opt/patio || exit 1
+
 echo -n "Anwendung:   "
-if curl -sf http://localhost:3000/api/health > /dev/null; then
+# Von INNEN fragen: Port 3000 liegt nicht auf dem Host.
+if docker exec patio-app curl -sf http://localhost:3000/api/health > /dev/null 2>&1; then
   echo "OK"
 else
   echo "FEHLER (antwortet nicht)"
 fi
 
+echo -n "Zugang:      "
+# Der Weg, den die Arbeitsplätze wirklich nehmen. `-k`, weil das Zertifikat
+# aus der eigenen CA stammt — geprüft wird die Erreichbarkeit, nicht die
+# Vertrauenskette.
+if curl -sk -o /dev/null https://localhost/ 2>/dev/null; then
+  echo "OK"
+else
+  echo "FEHLER (Caddy antwortet nicht)"
+fi
+
 echo -n "Datenbank:   "
-if docker compose -f /opt/patio/docker-compose.yml exec -T postgres \
-     pg_isready -U patio > /dev/null 2>&1; then
+if docker compose exec -T postgres pg_isready -U "${POSTGRES_USER:-patio}" > /dev/null 2>&1; then
   echo "OK"
 else
   echo "FEHLER (nicht erreichbar)"
@@ -215,9 +258,9 @@ eine Datei unter `/opt/patio/logs/` und als Nachricht an alle angemeldeten
 Terminals. So macht es der Sicherungslauf über `OnFailure=`
 (siehe `deploy/patio-backup-fehler@.service`).
 
-Die erste Bildschirmseite von `patio status` zeigt außerdem, wann die
-Sicherung zuletzt vollständig durchlief — und warnt, wenn das über 30 Stunden
-her ist.
+Die erste Bildschirmseite von `patio status` nennt den eingespielten Stand
+(aus `/opt/patio/VERSION`) und zeigt außerdem, wann die Sicherung zuletzt
+vollständig durchlief — und warnt, wenn das über 30 Stunden her ist.
 
 Externe Überwachungsdienste scheiden aus: der Rechner ist von außen nicht
 erreichbar, und das soll er auch nicht sein.

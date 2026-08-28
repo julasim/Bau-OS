@@ -57,6 +57,18 @@ befehl_status() {
   zustandszeile "$PROXY" "Zugang (HTTPS)"
   echo
 
+  # Welcher Stand laeuft hier? Die Datei schreibt `update-offline.sh` nach
+  # jedem erfolgreichen Einspielen und nimmt sie beim Rueckweg zurueck.
+  # Ohne sie war das auf dem Server nicht feststellbar: docker-compose.yml
+  # zeigt auf `patio-app:latest`, und diese Marke sieht vor und nach einem
+  # Rueckweg gleich aus.
+  if [ -f "$INSTALL_DIR/VERSION" ]; then
+    echo -e "  ${MATT}Stand: $(cat "$INSTALL_DIR/VERSION")${AUS}"
+  else
+    echo -e "  ${MATT}Stand: unbekannt (vor dem 28.08.2026 eingespielt)${AUS}"
+  fi
+  echo
+
   if laeuft "$APP"; then
     if docker exec "$APP" curl -fsS -o /dev/null http://localhost:3000/api/health 2>/dev/null; then
       echo -e "  ${GRUEN}✓${AUS} Der Dienst antwortet."

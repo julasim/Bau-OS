@@ -140,7 +140,20 @@ log "Konfiguration und Skripte beilegen..."
 mkdir -p "$ARBEIT/dabei"
 cp docker-compose.yml "$ARBEIT/dabei/"
 cp .env.example "$ARBEIT/dabei/"
-cp -r docker "$ARBEIT/dabei/"
+
+# Aus docker/ nur, was der Stack wirklich einhaengt — nachgesehen in
+# docker-compose.yml: `./docker/Caddyfile` und `./docker/init`.
+#
+# `cp -r docker` nahm frueher alles mit, also auch `docker-compose.vps.yml`
+# (die abgeloeste VPS-Fassung) und `docker/.env.example` (dieselbe Rolle wie
+# die Vorlage im Wurzelverzeichnis, nur aelter). Auf dem Server standen damit
+# zwei Compose-Dateien und zwei .env-Vorlagen; wer im Stoerfall nachsieht,
+# welche gilt, findet die falsche zuerst — sie liegt im Unterordner und sieht
+# dadurch spezifischer aus.
+mkdir -p "$ARBEIT/dabei/docker"
+cp docker/Caddyfile "$ARBEIT/dabei/docker/"
+cp -r docker/init   "$ARBEIT/dabei/docker/"
+
 cp -r deploy "$ARBEIT/dabei/"
 mkdir -p "$ARBEIT/dabei/scripts"
 # Alles, was auf dem Server gebraucht wird. `release-offline.sh` gehoert

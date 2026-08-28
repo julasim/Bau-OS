@@ -40,15 +40,26 @@ kommen als Paket vom Entwicklungsrechner: `patio-app` und dazu die drei
 Basis-Images `postgres:16`, `caddy:2-alpine` und `alpine:latest`.
 
 ```bash
+# Bei einer Erstinstallation gibt es /opt/patio noch nicht — anlegen und das
+# Paket vom Stick dorthin kopieren:
+sudo mkdir -p /opt/patio
+sudo cp /media/usb/patio-<version>.tar.gz* /opt/patio/
 cd /opt/patio
+
 # Das Installationsskript liegt IM Paket — erst herausholen, dann starten:
 sudo tar -xzf patio-<version>.tar.gz ./dabei/scripts/install-server.sh
 sudo bash dabei/scripts/install-server.sh patio-<version>.tar.gz
 ```
 
-::: tip Die erste Zeile gehört dazu
+::: tip Die ersten Zeilen gehören dazu
 Hier stand nur der zweite Befehl. Der bricht mit „No such file or directory"
 ab, weil `dabei/scripts/install-server.sh` vor dem Auspacken nicht existiert.
+
+Danach stand `cd /opt/patio` davor — und **auch das scheitert bei einer
+Erstinstallation**, denn das Verzeichnis legt erst `install-server.sh` an, und
+das Paket liegt zu diesem Zeitpunkt noch auf dem Stick. Dieselbe Reihenfolge
+steht ausführlich unter [PATIO installieren](/betrieb/installation),
+Abschnitt 2.
 :::
 
 ::: info Warum die Basis-Images mit ins Paket gehören

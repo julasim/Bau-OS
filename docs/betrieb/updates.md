@@ -114,12 +114,18 @@ Verzeichnis gesucht. Aus dem Heimatverzeichnis aufgerufen meldet das Skript
 Der Ablauf:
 
 1. **Prüfsumme** — ein auf dem Weg beschädigtes Paket fällt hier auf.
+   **Fehlt die `.sha256`-Datei, bricht das Skript ab.** Sie entsteht beim
+   Bauen automatisch und gehört mit auf den Stick; bewusst ohne Kontrolle
+   einspielen geht mit `OHNE_PRUEFSUMME=true`.
 2. **Zielverzeichnis prüfen** — vor dem ersten Handgriff, damit kein halb
    aktualisierter Rechner zurückbleibt.
 3. **Sicherung auslösen.** Schlägt sie fehl, bricht das Update ab.
 4. `docker load`, Konfiguration und Skripte ersetzen, Stack neu starten.
 5. **Gesundheitsprüfung** gegen `/api/health`. Antwortet der Dienst nicht,
    setzt das Skript auf das vorige Image zurück.
+6. **Stand vermerken** — erst nach bestandener Gesundheitsprüfung, in
+   `/opt/patio/VERSION`. Beim Rückweg wird der vorige Eintrag
+   wiederhergestellt.
 
 ::: danger Migrationen laufen nur vorwärts
 Der Rückweg auf das alte Image holt das **Schema nicht** zurück. Ein Update,
@@ -136,10 +142,23 @@ sudo bash /opt/patio/scripts/restore.sh
 ## Wenn etwas schiefgeht
 
 ```bash
-patio status              # Zustand aller Dienste
+patio status              # Zustand aller Dienste — zeigt auch den Stand
 patio logs 100            # letzte Protokollzeilen
 docker images patio-app   # welche Stände liegen noch da?
 ```
+
+::: tip Welcher Stand läuft hier gerade?
+Die erste Bildschirmseite von `patio status` beantwortet das seit dem
+28.08.2026. Vorher war es **auf dem Server nicht feststellbar**: die API kennt
+keine Version, die Oberfläche zeigt keine, und `docker-compose.yml` zeigt auf
+`patio-app:latest` — diese Marke sieht vor und nach einem Rückweg gleich aus.
+
+Wer wissen wollte, ob ein Update angekommen ist, hatte keine Antwort. Nach
+einem halb durchgelaufenen Update, also genau dann, wenn man sie braucht, erst
+recht nicht.
+
+Steht dort `unbekannt`, wurde zuletzt vor diesem Datum eingespielt.
+:::
 
 Der Rückweg von Hand, falls die automatische Rücksetzung nicht greift:
 
@@ -148,11 +167,28 @@ docker tag patio-app:<alte-version> patio-app:latest
 cd /opt/patio && docker compose up -d app
 ```
 
-## Was das Update nicht anfasst
+## Was das Update anfasst — und was nicht
 
 `.env` bleibt unberührt — dort stehen die Geheimnisse dieser Installation.
 Kommen neue Schlüssel dazu, stehen sie in der mitgelieferten `.env.example`
-und müssen von Hand übernommen werden.
+und müssen von Hand übernommen werden. `logs/`, `data/` und der
+Dokumentenordner bleiben ebenfalls, wie sie sind.
+
+`docker/` und `deploy/` dagegen werden **vollständig ersetzt**, nicht
+ergänzt. Beide kommen restlos aus dem Paket und tragen nichts, was auf dem
+Server entsteht.
+
+::: info Warum das Ersetzen wichtig ist
+Vorher legte `cp -r` nur obendrauf. Was eine neue Fassung nicht mehr
+mitlieferte, blieb liegen — auf unbestimmte Zeit, weil dort nie jemand
+aufräumt. So standen auf dem Server zuletzt `docker/docker-compose.vps.yml`
+(die abgelöste VPS-Fassung) und eine zweite `.env.example` aus derselben Zeit.
+
+Wer im Störfall nachsieht, welche Compose-Datei gilt, findet die falsche
+zuerst: sie liegt im Unterordner und sieht dadurch spezifischer aus. Beide
+liefert das Paket seit dem 28.08.2026 nicht mehr mit — und dank des Ersetzens
+verschwinden sie beim nächsten Update auch von bestehenden Installationen.
+:::
 
 ## Arbeitsplätze
 

@@ -45,7 +45,9 @@ command -v docker >/dev/null || fehl "docker nicht gefunden."
 [ -w "$INSTALL_DIR" ]         || fehl "Keine Schreibrechte auf $INSTALL_DIR — mit sudo aufrufen."
 
 # ── 1. Pruefsumme ────────────────────────────────────────────────────────────
-if [ -f "${PAKET}.sha256" ]; then
+if [ "${OHNE_PRUEFSUMME:-false}" = "true" ]; then
+  log "WARNUNG: Pruefsumme uebersprungen (OHNE_PRUEFSUMME=true)."
+elif [ -f "${PAKET}.sha256" ]; then
   log "Pruefsumme kontrollieren..."
   # Nur den Dateinamen vergleichen, nicht den Pfad vom Baurechner.
   ERWARTET=$(awk '{print $1}' "${PAKET}.sha256")
@@ -54,7 +56,22 @@ if [ -f "${PAKET}.sha256" ]; then
     || fehl "Pruefsumme stimmt nicht — das Paket ist auf dem Weg beschaedigt worden."
   log "Pruefsumme in Ordnung."
 else
-  log "WARNUNG: keine Pruefsummen-Datei neben dem Paket."
+  # Frueher stand hier nur eine Warnung. Das Paket kommt auf einem USB-Stick
+  # ueber den Flur; die Pruefsumme ist die EINZIGE Kontrolle, die einen
+  # beschaedigten Transport bemerkt. Sie optional zu halten schaltete sie
+  # genau dann ab, wenn jemand die Datei vergessen hat.
+  #
+  # Der Schaden faellt sonst erst spaeter auf — `docker load` bricht ab,
+  # nachdem die Sicherung gelaufen ist und Dateien schon ersetzt sind.
+  fehl "Keine Pruefsummen-Datei neben dem Paket: ${PAKET}.sha256
+
+       Sie entsteht beim Bauen automatisch und gehoert mit auf den Stick.
+       Ohne sie laesst sich nicht feststellen, ob das Paket den Transport
+       unbeschaedigt ueberstanden hat.
+
+       Nachtraeglich pruefen laesst sie sich nicht — sie muss vom Baurechner
+       kommen. Bewusst ohne Kontrolle einspielen:
+         OHNE_PRUEFSUMME=true $0 $PAKET"
 fi
 
 # ── 2. Auspacken ─────────────────────────────────────────────────────────────
@@ -72,6 +89,22 @@ echo
 # Image um, die Marke zeigte danach ins Falsche.
 VORHER_ID=$(docker images --no-trunc --format '{{.ID}}' patio-app:latest 2>/dev/null | head -1)
 [ -n "$VORHER_ID" ] && log "Voriges Image gemerkt: ${VORHER_ID:0:19}"
+
+# ── Welcher Stand laeuft hier eigentlich? ────────────────────────────────────
+#
+# Bis hierher liess sich das auf dem Server nicht beantworten: `patio status`
+# zeigt die Dienste, die API kennt keine Version, und docker-compose.yml zeigt
+# auf `patio-app:latest` — nach einem Rueckweg zeigt diese Marke wieder aufs
+# alte Image und sieht dabei genauso aus.
+#
+# Deshalb eine Datei, die den eingespielten Stand festhaelt. Die vorige wird
+# vorher weggelegt: traegt das Update nicht und Abschnitt 6 setzt zurueck,
+# muss auch die Datei zurueck, sonst behauptet sie eine Version, die nicht
+# laeuft.
+PAKET_VERSION=$(awk '/^Version:/ {print $2; exit}' "$ARBEIT/PAKET.txt" 2>/dev/null || true)
+VERSION_DATEI="$INSTALL_DIR/VERSION"
+VORHER_VERSION=""
+[ -f "$VERSION_DATEI" ] && VORHER_VERSION=$(cat "$VERSION_DATEI")
 
 # ── 3. Sicherung ─────────────────────────────────────────────────────────────
 if [ "$SKIP_BACKUP" != "true" ]; then
@@ -105,9 +138,27 @@ fi
 log "Konfiguration und Skripte aktualisieren..."
 # .env wird NICHT angefasst — dort stehen die Geheimnisse dieser Installation.
 cp "$ARBEIT/dabei/docker-compose.yml" "$INSTALL_DIR/"
-cp -r "$ARBEIT/dabei/docker" "$INSTALL_DIR/"
-cp -r "$ARBEIT/dabei/deploy" "$INSTALL_DIR/"
 cp "$ARBEIT/dabei/.env.example" "$INSTALL_DIR/"
+
+# `docker/` und `deploy/` ERSETZEN, nicht mischen.
+#
+# `cp -r` legt nur obendrauf: was eine neue Fassung nicht mehr mitliefert,
+# bleibt auf dem Server liegen — auf unbestimmte Zeit, weil dort nie jemand
+# aufraeumt. So standen dort zuletzt `docker-compose.vps.yml` und eine zweite
+# `.env.example` aus der VPS-Aera. Wer im Stoerfall nachsieht, welche
+# Compose-Datei gilt, findet die falsche zuerst.
+#
+# Beide Verzeichnisse kommen vollstaendig aus dem Paket und tragen nichts,
+# was auf dem Server entsteht — anders als `.env`, `logs/` oder `data/`, die
+# hier bewusst nicht angefasst werden.
+for verzeichnis in docker deploy; do
+  # ${…:?} statt $…: waere INSTALL_DIR leer, hiesse die Zeile sonst
+  # `rm -rf /docker` — und das Skript laeuft mit sudo. Die Zuweisung oben
+  # setzt zwar einen Vorgabewert, aber ein ausdrueckliches INSTALL_DIR=""
+  # kaeme daran vorbei.
+  rm -rf "${INSTALL_DIR:?}/$verzeichnis"
+  cp -r "$ARBEIT/dabei/$verzeichnis" "$INSTALL_DIR/"
+done
 
 # Die Skripte per `mv` ersetzen, NICHT per `cp` — dieses Skript ist selbst
 # eines davon.
@@ -161,6 +212,12 @@ for _ in $(seq 1 60); do
 done
 
 if [ "$GESUND" = "true" ]; then
+  # Erst jetzt festschreiben — vor der Gesundheitspruefung waere es eine
+  # Behauptung ueber einen Dienst, der vielleicht gar nicht laeuft.
+  if [ -n "$PAKET_VERSION" ]; then
+    printf '%s\n' "$PAKET_VERSION" > "$VERSION_DATEI"
+    log "Stand vermerkt: $PAKET_VERSION (in $VERSION_DATEI)"
+  fi
   echo
   echo "════════════════════════════════════════════════════════"
   echo "Update erfolgreich — der Dienst antwortet."
@@ -179,6 +236,13 @@ docker compose logs --tail 30 app || true
 if [ -n "$VORHER_ID" ]; then
   log "Zurueck auf das vorige Image..."
   docker tag "$VORHER_ID" patio-app:latest
+  # Die Versionsdatei mit zuruecknehmen — sonst weist sie auf einen Stand,
+  # der hier gerade NICHT laeuft, und das ist schlimmer als keine Angabe.
+  if [ -n "$VORHER_VERSION" ]; then
+    printf '%s\n' "$VORHER_VERSION" > "$VERSION_DATEI"
+  else
+    rm -f "$VERSION_DATEI"
+  fi
   docker compose up -d app
   for _ in $(seq 1 30); do
     docker exec "$APP_CONTAINER" curl -fsS -o /dev/null http://localhost:3000/api/health 2>/dev/null && {

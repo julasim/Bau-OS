@@ -364,15 +364,38 @@ Beides kommt mit dem nächsten Auslieferungspaket zurück — seit dem
 ## Schnelldiagnose
 
 ```bash
+cd /opt/patio || exit 1        # Compose braucht das Projektverzeichnis (.env)
+
 echo "=== PATIO Schnelldiagnose ==="
-echo "Container: $(docker compose -f /opt/patio/docker-compose.yml ps --format '{{.Name}} {{.State}}' | tr '\n' ' ')"
-echo "Health:    $(curl -s localhost:3000/api/health || echo 'keine Antwort')"
-echo "Node:      $(node --version 2>/dev/null || echo 'nicht installiert')"
+echo "Stand:     $(cat /opt/patio/VERSION 2>/dev/null || echo 'unbekannt')"
+echo "Container: $(docker compose ps --format '{{.Name}} {{.State}}' | tr '\n' ' ')"
+# Von innen fragen — Port 3000 liegt nicht auf dem Host.
+echo "Health:    $(docker exec patio-app curl -s localhost:3000/api/health 2>/dev/null || echo 'keine Antwort')"
+# Der Weg, den die Arbeitsplaetze nehmen. -k wegen der eigenen CA.
+echo "Zugang:    $(curl -sk -o /dev/null -w '%{http_code}' https://localhost/ 2>/dev/null || echo 'keine Antwort')"
 echo "RAM:       $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
 echo "Disk:      $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
 echo "Sicherung: $(find /mnt/patio-backup/taeglich -maxdepth 2 -name VOLLSTAENDIG -mtime -1 2>/dev/null | wc -l) vollstaendige Staende aus 24 h"
 echo "Fehler:    $(grep -c '\"level\":\"error\"' /opt/patio/logs/patio.jsonl 2>/dev/null || echo '?') im JSONL-Log"
 ```
+
+::: warning Was hier lange falsch stand
+Auf einem **gesunden** Server meldete diese Diagnose zwei Fehler von sechs
+Zeilen:
+
+- `curl -s localhost:3000/…` → „keine Antwort". Port 3000 liegt nicht auf dem
+  Host, der Dienst wird von innen gefragt.
+- `node --version` → „nicht installiert". Richtig so: auf dem Server läuft
+  alles in Containern, `install-server.sh` bringt Docker und Samba mit, sonst
+  nichts. Die Zeile ist ersatzlos entfallen.
+
+Dazu lief `docker compose -f /opt/patio/docker-compose.yml ps` ohne `cd` —
+Compose liest die `.env` aus dem **aktuellen** Verzeichnis. Aus dem
+Heimatverzeichnis aufgerufen fehlen damit die Datenbank-Zugangsdaten.
+
+Eine Diagnose, die auf einer gesunden Maschine Fehler meldet, ist im Störfall
+wertlos: man sucht dann an der falschen Stelle.
+:::
 
 ::: warning Meldet die Fehlerzeile dauerhaft `0` oder `?`, prüfen Sie die Rechte
 `/opt/patio/logs/` wird in den Container gehängt, und der Dienst läuft dort
