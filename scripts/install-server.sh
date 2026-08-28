@@ -103,6 +103,48 @@ if [ -f "$INSTALL_DIR/.env" ]; then
   ok ".env vorhanden — bleibt unberührt"
 else
   command -v openssl >/dev/null || fehl "openssl fehlt (für die Geheimnisse)."
+
+  # ── Liegt schon ein Datenbank-Volume herum? ────────────────────────────────
+  #
+  # Gleich wird eine .env mit einem ZUFAELLIGEN POSTGRES_PASSWORD erzeugt.
+  # Postgres uebernimmt das aber nur bei LEEREM Datenverzeichnis. Liegt das
+  # Volume noch von einem frueheren Versuch da, behaelt es sein altes Passwort,
+  # und der Dienst kommt nicht hinein:
+  #
+  #     password authentication failed for user "patio"
+  #
+  # Die Meldung, die der Dienst dazu ausgibt, zeigt in die falsche Richtung —
+  # sie rät, Postgres zu starten und die Zugangsdaten zu pruefen. Postgres
+  # LAEUFT aber, und die .env ist in sich richtig; sie passt nur nicht zum
+  # Volume. Wer der Meldung folgt, sucht ueberall ausser an der Stelle.
+  #
+  # Das trifft jeden zweiten Anlauf: abgebrochene Installation, ein
+  # `rm -rf /opt/patio` mit Neuversuch, oder ein Ersatzgeraet, auf dem schon
+  # einmal etwas getestet wurde.
+  #
+  # Der Projektname steht FEST in docker-compose.yml (`name: patio`), haengt
+  # also nicht am Installationsverzeichnis — das Volume heisst immer gleich,
+  # egal wohin installiert wird. Die Compose-Datei selbst liegt hier noch
+  # nicht: sie kommt erst mit dem Paket, einen Schritt spaeter.
+  PROJEKT=patio
+  if docker volume inspect "${PROJEKT}_postgres_data" >/dev/null 2>&1; then
+    fehl "Es gibt schon ein Datenbank-Volume: ${PROJEKT}_postgres_data
+
+       Gleich entstuende eine neue .env mit einem neuen Zufallspasswort — das
+       Volume behaelt aber sein altes. Der Dienst kaeme dann nicht an die
+       Datenbank, und die Fehlermeldung wuerde auf Netz und Zugangsdaten
+       zeigen statt hierher.
+
+       Steckt in dem Volume noch etwas Wertvolles?
+         NEIN, weg damit (loescht die Datenbank unwiderruflich):
+           docker volume rm ${PROJEKT}_postgres_data
+           danach dieses Skript erneut aufrufen
+
+         JA, es gehoert zu einer bestehenden Installation:
+           dann fehlt nur die .env dazu. Sie aus der Sicherung
+           zurueckholen — ohne sie ist das Volume nicht mehr lesbar, denn
+           der ENCRYPTION_KEY steht darin."
+  fi
   cat > "$INSTALL_DIR/.env" <<ENVE
 # PATIO — erzeugt von install-server.sh am $(date '+%d.%m.%Y %H:%M')
 # Erklärungen zu allen Werten: .env.example

@@ -61,8 +61,47 @@ Häufige Ursachen:
 - Passwort in der `.env` geändert, aber das Datenbank-Volume ist alt.
   `POSTGRES_PASSWORD` wirkt **nur beim allerersten Anlegen** des Volumes.
   Danach muss das Passwort in der Datenbank selbst geändert werden.
+- **Zweiter Installationsversuch über einem alten Volume** — siehe den Kasten
+  unten. Der häufigste Fall, und der mit der irreführendsten Meldung.
 - Migrationen hängen. Der Runner nimmt einen Advisory-Lock; ein hart
   abgeschossener Prozess kann ihn kurzzeitig halten. Neustart.
+
+::: warning `password authentication failed for user "patio"` nach einer Neuinstallation
+Der zweite Installationsversuch auf derselben Maschine läuft hier hinein, und
+die Meldung des Dienstes zeigt in die falsche Richtung:
+
+```
+password authentication failed for user "patio"
+DATABASE_URL ist gesetzt, aber die Datenbank antwortet nicht.
+Postgres starten bzw. Host/Port/Zugangsdaten in DATABASE_URL pruefen.
+```
+
+Postgres **läuft** aber (der Container ist `healthy`), und die `.env` ist in
+sich richtig. Sie passt nur nicht zu dem, was im Volume steht:
+`install-server.sh` erzeugt bei jedem Lauf ein neues Zufallspasswort, und
+Postgres übernimmt eines **nur bei leerem Datenverzeichnis**. Das Volume
+`patio_postgres_data` überlebt ein `rm -rf /opt/patio` — es liegt in Docker,
+nicht im Installationsverzeichnis.
+
+Wer der Meldung folgt, sucht am Netz, an den Ports und an der `.env`, also
+überall außer an der Stelle. Der App-Container läuft dabei in einer
+Neustartschleife.
+
+`install-server.sh` bricht seit dem 28.08.2026 vorher ab und sagt, was zu tun
+ist. Für den Fall, dass man doch davorsteht:
+
+```bash
+docker volume ls | grep patio      # ist es wirklich da?
+# Nichts Wertvolles darin — löscht die Datenbank unwiderruflich:
+cd /opt/patio && docker compose down
+docker volume rm patio_postgres_data
+sudo bash dabei/scripts/install-server.sh patio-<version>.tar.gz
+```
+
+Gehört das Volume dagegen zu einer **bestehenden** Installation, fehlt nur die
+passende `.env`. Die muss aus der Sicherung zurück — ohne sie ist das Volume
+ohnehin nicht mehr vollständig lesbar, denn der `ENCRYPTION_KEY` steht darin.
+:::
 
 ---
 
