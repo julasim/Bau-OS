@@ -81,13 +81,59 @@
 > Repo (EXIT=0), danach ein echtes Paket ueber `release-offline.sh` — 497 MB,
 > mit allen drei Basis-Images nachgewiesen im Archiv.
 >
-> **Noch offen** (gefunden, nicht behoben): fehlende Pruefsumme im Update warnt
-> nur statt abzubrechen; `troubleshooting.md` empfiehlt `docker image prune -a`
-> und loescht damit den Rueckweg; die AP11-Datenuebernahme hat keinen Ort, an
-> dem sie laufen koennte (`scripts/` fehlt im Laufzeit-Image, Postgres hat kein
-> `ports:`); `update-offline.sh` mischt Verzeichnisse per `cp -r` statt sie zu
-> ersetzen; das Paket schleppt `docker/docker-compose.vps.yml` aus der
-> VPS-Aera mit.
+> **Diese Liste ist am 28.08. abgearbeitet** — siehe den Eintrag direkt
+> darunter.
+> Offen bleibt nur der Hinweis in `troubleshooting.md` auf
+> `docker image prune -a`; der steht dort seit dem 25.08. mit einem
+> Danger-Kasten, der genau erklaert, warum er hier den Rueckweg loescht.
+>
+> ### Stand 28.08.2026 — Version 1.0.0, Erstinstallation durchgespielt
+>
+> **Das Paket ist gebaut und der Weg zum ersten Mal wirklich gegangen** — in
+> WSL Ubuntu-24.04 mit leeren Volumes, vom `mkdir /opt/patio` bis zum
+> Einrichtungsassistenten. `release/patio-1.0.0.tar.gz`, 497 MB, mit allen
+> drei Basis-Images.
+>
+> Belegt am laufenden Stand: `{"ok":true,"db":true}`, `HTTP 200` auf
+> `https://patio.sima.intern/` und `/docs/`, `{"needsSetup":true}` vom
+> Einrichtungsassistenten, 61 Migrationen auf frischer Datenbank, Zertifikat
+> aus der eigenen CA, HTTP→HTTPS-Umleitung (308), `logs/` und
+> `patio-workspace` gehoeren uid 1000, **und `patio.log` wird wirklich
+> beschrieben** (9821 Bytes) — der Punkt, der laut dem Eintrag vom 25.08.
+> dauerhaft leer blieb.
+>
+> **Was der Durchlauf zutage gefoerdert hat:**
+>
+> - **Der zweite Installationsversuch scheitert** — und die Meldung zeigt in
+>   die falsche Richtung. `install-server.sh` erzeugt jedes Mal ein neues
+>   Zufallspasswort, Postgres uebernimmt eines aber nur bei LEEREM
+>   Datenverzeichnis. Das Volume `patio_postgres_data` ueberlebt ein
+>   `rm -rf /opt/patio` (es liegt in Docker), und der Projektname steht FEST
+>   in `docker-compose.yml` (`name: patio`) — das Volume heisst also immer
+>   gleich. Ergebnis: `password authentication failed`, waehrend Postgres
+>   `healthy` ist und die `.env` in sich stimmt. Das Skript bricht jetzt
+>   vorher ab und nennt beide Wege.
+> - **Drei Diagnosewege meldeten auf einem GESUNDEN Server Fehler.** Der
+>   Health-Check und die Schnelldiagnose riefen `localhost:3000` (Port 3000
+>   liegt nicht auf dem Host) und `node --version` (auf dem Server laeuft
+>   alles in Containern). Die Fehlerzeile brach zusaetzlich in zwei, weil
+>   `grep -c` bei null Treffern die 0 ausgibt **und** mit Exit 1 endet.
+> - **`https://localhost/` antwortet auch auf einem gesunden Server nicht.**
+>   Caddys Site-Block gilt nur fuer `PATIO_HOSTNAME`; ein Aufruf an
+>   `localhost` bricht im TLS-Handshake ab. Das war zwischenzeitlich die
+>   eigene „Korrektur" der Zeile darueber — gefunden, weil die Diagnose gegen
+>   die laufende Anlage nachgefahren wurde.
+> - **Die Pruefsumme trug den Pfad vom Baurechner** (`release/patio-…`). Die
+>   Handprobe auf dem Server meldete `FAILED open or read` — es liest sich wie
+>   ein beschaedigtes Paket, obwohl nur der Pfad nicht passt.
+> - **Auf dem Server war nicht feststellbar, welcher Stand laeuft.**
+>   `/opt/patio/VERSION` haelt ihn jetzt fest (erst nach bestandener
+>   Gesundheitspruefung, beim Rueckweg zurueckgenommen), `patio status` zeigt
+>   ihn.
+>
+> **Nicht in WSL pruefbar und damit weiterhin offen:** Samba-Freigabe,
+> Sicherungsplatte samt Ruecksicherung, USV, und ob Electron dem
+> CA-Zertifikat am echten Arbeitsplatz traut (AP12 Teil A).
 >
 > ### Stand 24.08.2026 — 733 Tests, Migrationen bis 059
 >

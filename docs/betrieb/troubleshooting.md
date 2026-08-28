@@ -410,12 +410,21 @@ echo "Stand:     $(cat /opt/patio/VERSION 2>/dev/null || echo 'unbekannt')"
 echo "Container: $(docker compose ps --format '{{.Name}} {{.State}}' | tr '\n' ' ')"
 # Von innen fragen — Port 3000 liegt nicht auf dem Host.
 echo "Health:    $(docker exec patio-app curl -s localhost:3000/api/health 2>/dev/null || echo 'keine Antwort')"
-# Der Weg, den die Arbeitsplaetze nehmen. -k wegen der eigenen CA.
-echo "Zugang:    $(curl -sk -o /dev/null -w '%{http_code}' https://localhost/ 2>/dev/null || echo 'keine Antwort')"
+# Der Weg, den die Arbeitsplaetze nehmen. Der HOSTNAME zaehlt, nicht
+# localhost: Caddys Site-Block gilt nur fuer PATIO_HOSTNAME, ein Aufruf an
+# localhost bricht im TLS-Handshake ab. -k wegen der eigenen CA.
+HOST=$(grep '^PATIO_HOSTNAME=' /opt/patio/.env | cut -d= -f2)
+echo "Zugang:    $(curl -sk -o /dev/null -w '%{http_code}' --resolve "$HOST:443:127.0.0.1" "https://$HOST/" 2>/dev/null || echo 'keine Antwort')"
 echo "RAM:       $(free -h | awk '/Mem:/ {print $3 "/" $2}')"
 echo "Disk:      $(df -h / | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')"
 echo "Sicherung: $(find /mnt/patio-backup/taeglich -maxdepth 2 -name VOLLSTAENDIG -mtime -1 2>/dev/null | wc -l) vollstaendige Staende aus 24 h"
-echo "Fehler:    $(grep -c '\"level\":\"error\"' /opt/patio/logs/patio.jsonl 2>/dev/null || echo '?') im JSONL-Log"
+# `grep -c` gibt bei NULL Treffern die 0 aus UND endet mit Exit 1. Ein
+# `|| echo '?'` haengte deshalb auf jedem gesunden Server zusaetzlich ein
+# Fragezeichen an — die Zeile brach in zwei. Erst zuweisen, dann den
+# Fehlschlag auffangen: so bleibt 0 eine 0, und ? heisst wirklich
+# "Datei nicht lesbar".
+FEHLER=$(grep -c '"level":"error"' /opt/patio/logs/patio.jsonl 2>/dev/null) || FEHLER=${FEHLER:-?}
+echo "Fehler:    ${FEHLER:-?} im JSONL-Log"
 ```
 
 ::: warning Was hier lange falsch stand

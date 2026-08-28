@@ -21,8 +21,20 @@ auf den Host — von außen führt der Weg ausschließlich über Caddy. Das ist
 Absicht: nur ein einziger Eingang.
 
 Der Befehl oben fragt deshalb von innen. Wer den Weg der Arbeitsplätze prüfen
-will, nimmt `curl -sk https://patio.sima.intern/` (`-k`, weil das Zertifikat
-aus der eigenen CA stammt).
+will, nimmt den **Hostnamen**, nicht `localhost`:
+
+```bash
+curl -sk https://patio.sima.intern/          # vom Arbeitsplatz aus
+curl -sk --resolve patio.sima.intern:443:127.0.0.1 \
+     https://patio.sima.intern/              # auf dem Server selbst
+```
+
+`https://localhost/` antwortet auch auf einem gesunden Server **nicht**: Caddy
+stellt das Zertifikat für `PATIO_HOSTNAME` aus, und der Site-Block gilt nur für
+diesen Namen. Ein Aufruf an `localhost` trifft keinen Block, der TLS-Handshake
+bricht mit `tlsv1 alert internal error` ab. `-k` steht dort, weil das
+Zertifikat aus der eigenen CA stammt — geprüft wird die Erreichbarkeit, nicht
+die Vertrauenskette.
 :::
 
 Der Endpunkt liegt **vor** der Anmeldung und vor dem Rate-Limit und liefert
@@ -205,10 +217,17 @@ else
 fi
 
 echo -n "Zugang:      "
-# Der Weg, den die Arbeitsplätze wirklich nehmen. `-k`, weil das Zertifikat
-# aus der eigenen CA stammt — geprüft wird die Erreichbarkeit, nicht die
-# Vertrauenskette.
-if curl -sk -o /dev/null https://localhost/ 2>/dev/null; then
+# Der Weg, den die Arbeitsplätze wirklich nehmen.
+#
+# Der HOSTNAME zählt, nicht localhost: Caddy stellt das Zertifikat für
+# PATIO_HOSTNAME aus, und der Caddyfile-Block gilt nur für diesen Namen. Ein
+# Aufruf an https://localhost/ trifft keinen Site-Block, der TLS-Handshake
+# bricht ab — auf einem völlig gesunden Server.
+#
+# `-k`, weil das Zertifikat aus der eigenen CA stammt: geprüft wird die
+# Erreichbarkeit, nicht die Vertrauenskette.
+HOST=$(grep '^PATIO_HOSTNAME=' /opt/patio/.env | cut -d= -f2)
+if curl -sk -o /dev/null --resolve "$HOST:443:127.0.0.1" "https://$HOST/" 2>/dev/null; then
   echo "OK"
 else
   echo "FEHLER (Caddy antwortet nicht)"
