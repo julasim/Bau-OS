@@ -227,8 +227,18 @@ let alsBenutzerId: string | null = null;
 if (ALS) {
   const [u] = await db`SELECT id FROM users WHERE username = ${ALS}`;
   if (!u) {
+    // Die Konten WIRKLICH auflisten. Hier stand bis zum 29.08.2026 der Satz
+    // "Vorhandene Konten: SELECT username FROM users;" — also die Abfrage als
+    // Text statt ihres Ergebnisses. Wer den Fehler sieht, bekommt damit genau
+    // die Auskunft nicht, die er braucht, und eine Datenuebernahme laeuft im
+    // Ernstfall einmal, unter Zeitdruck, auf fremden Daten.
+    const konten = await db`SELECT username FROM users ORDER BY username`;
+    const liste =
+      konten.length > 0
+        ? konten.map((k) => `     · ${String(k.username)}`).join("\n")
+        : "     (keine — die Datenbank hat noch gar kein Konto)";
     await closeDb();
-    abbruch(`❌ Benutzer "${ALS}" gibt es nicht.`, "   Vorhandene Konten: SELECT username FROM users;");
+    abbruch(`❌ Benutzer "${ALS}" gibt es nicht.`, "   Vorhandene Konten:", liste);
   }
   alsBenutzerId = String(u.id);
   console.log(`   Als:    ${ALS}`);

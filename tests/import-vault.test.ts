@@ -66,15 +66,47 @@ describe.skipIf(!HAS_DB)("Datenübernahme aus einem Vault", () => {
     await db`DELETE FROM import_zuordnung WHERE quelle = ${QUELLE}`;
   }
 
+  // ── Das Konto, mit dem der Import laeuft ──────────────────────────────
+  //
+  // Der Test ruft das Skript mit `--als admin` und prueft danach
+  // `WHERE u.username = 'admin'`. Bis zum 29.08.2026 legte er dieses Konto
+  // nie an — er verliess sich darauf, dass eines da ist.
+  //
+  // Lokal stimmte das: die Entwicklungsdatenbank ist gewachsen und enthaelt
+  // laengst einen `admin`. In der CI nicht: dort startet ein leerer
+  // Postgres-Dienst, und die Migrationen legen keine Konten an. Ergebnis war
+  // ein Fehlschlag bei JEDEM CI-Lauf seit dem 23.08. — neun rote Pruefungen,
+  // die lokal gruen aussahen.
+  //
+  // Angelegt wird nur, was fehlt, und weggeraeumt nur, was dieser Lauf selbst
+  // angelegt hat: auf einer Entwicklungsdatenbank mit echtem `admin` waere
+  // ein Loeschen am Ende ein Datenverlust.
+  let adminSelbstAngelegt = false;
+
   beforeAll(async () => {
     if (!HAS_DB) return;
     ({ getDb } = await import("../src/db/client.js"));
+
+    const [vorhanden] = await getDb()`SELECT id FROM users WHERE username = 'admin'`;
+    if (!vorhanden) {
+      const { createDbUser } = await import("../src/api/auth.js");
+      await createDbUser({
+        username: "admin",
+        password: "import-test-passwort-lang-genug",
+        role: "admin",
+      });
+      adminSelbstAngelegt = true;
+    }
+
     await aufraeumen();
   });
 
   afterAll(async () => {
     if (!HAS_DB) return;
     await aufraeumen();
+    if (adminSelbstAngelegt) {
+      await getDb()`DELETE FROM users WHERE username = 'admin'`;
+    }
   });
 
   it("der Trockenlauf liest alles und schreibt nichts", () => {
