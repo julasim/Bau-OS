@@ -16,7 +16,14 @@
 #
 # ── Was dieses Skript NICHT tut ─────────────────────────────────────────────
 #
-# Vier Schritte bleiben Handarbeit, weil sie Entscheidungen brauchen:
+# Es INSTALLIERT NICHTS. Weder Docker noch Samba — es prueft nur, ob sie da
+# sind. Das ist Absicht (der Server hat kein Internet), wurde aber zweimal
+# falsch dokumentiert: „install-server.sh installiert Docker und Samba".
+# Beides muss im einmaligen Internet-Fenster von Hand kommen:
+#   sudo apt install -y docker.io docker-compose-v2 samba
+# Wer Samba dort vergisst, kann es spaeter NICHT nachholen.
+#
+# Dazu bleiben vier Schritte Handarbeit, weil sie Entscheidungen brauchen:
 #   1. die Sicherungsplatte einrichten (formatieren löscht Daten)
 #   2. das CA-Wurzelzertifikat auf die Arbeitsplätze bringen
 #   3. den Rechnernamen im Router-DNS eintragen

@@ -434,8 +434,8 @@ Zeilen:
 - `curl -s localhost:3000/…` → „keine Antwort". Port 3000 liegt nicht auf dem
   Host, der Dienst wird von innen gefragt.
 - `node --version` → „nicht installiert". Richtig so: auf dem Server läuft
-  alles in Containern, `install-server.sh` bringt Docker und Samba mit, sonst
-  nichts. Die Zeile ist ersatzlos entfallen.
+  alles in Containern, Node gehört dort nicht hin. Die Zeile ist ersatzlos
+  entfallen.
 
 Dazu lief `docker compose -f /opt/patio/docker-compose.yml ps` ohne `cd` —
 Compose liest die `.env` aus dem **aktuellen** Verzeichnis. Aus dem
