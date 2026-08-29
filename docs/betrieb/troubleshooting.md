@@ -204,28 +204,36 @@ docker compose logs app | grep -i -E "sse|events"
 
 ## Upload schlägt fehl
 
+Hochgeladene Dateien landen als `bytea` in der Datenbank; auf der Platte des
+Servers wird dabei nichts angelegt. Die Rechte am Dokumentenordner spielen
+beim Upload deshalb keine Rolle.
+
 | Symptom | Ursache |
 |---|---|
-| „Kein Zugriff auf die Datei bzw. den Ordner" (403) | Dateirechte am Workspace-Verzeichnis |
-| „Kein Speicherplatz mehr auf dem Server" (507) | Platte voll |
-| Datei wird abgelehnt | Endung nicht erlaubt oder Inhalt passt nicht zur Endung |
-| Datei zu groß | über `MAX_UPLOAD_MB` (Standard 50) |
+| „Kein Zugriff auf dieses Projekt" (403) | Das Konto ist dem Projekt nicht zugewiesen |
+| „Kein Speicherplatz mehr auf dem Server" (507) | Platte voll — die Datei liegt in der Datenbank, die Datenbank auf der Platte |
+| Datei wird abgelehnt (415) | Endung nicht erlaubt oder Inhalt passt nicht zur Endung |
+| Datei zu groß (413) | über `MAX_UPLOAD_MB` (Standard 50) |
 
-Rechte prüfen und richten:
+Erlaubte Endungen: `pdf`, `docx`, `doc`, `xlsx`, `xls`, `csv`, `txt`, `md`,
+`png`, `jpg`, `jpeg`, `gif`, `webp`, `zip`, `json`, `xml`. Zusätzlich prüft
+PATIO die Magic Bytes: eine als `.png` getarnte HTML-Datei wird abgelehnt.
+
+::: warning Scheitert ein HERUNTERLADEN, sind es doch die Dateirechte
+Einträge aus der Vault-Zeit haben keinen Inhalt in der Datenbank; für sie
+liest die Anwendung die Datei aus `/opt/patio-workspace`. Gehört dieser Ordner
+nicht der Kennung 1000, unter der der Dienst im Container läuft, endet der
+Download mit „Kein Zugriff auf die Datei bzw. den Ordner" (403):
 
 ```bash
 ls -la /opt/patio-workspace
 sudo chown -R 1000:1000 /opt/patio-workspace    # Container läuft als UID 1000
 ```
 
-Der Eigentümer ist die häufigste Ursache: der Container läuft als uid 1000,
-und wer das Verzeichnis dem Dienstbenutzer eines Systemkontos zuweist
-(`useradd -r` vergibt eine uid **unter** 1000), macht den Dienst
-schreibunfähig. Der Fehler zeigt sich dann an ganz anderer Stelle.
-
-Erlaubte Endungen: `pdf`, `docx`, `doc`, `xlsx`, `xls`, `csv`, `txt`, `md`,
-`png`, `jpg`, `jpeg`, `gif`, `webp`, `zip`, `json`, `xml`. Zusätzlich prüft
-PATIO die Magic Bytes: eine als `.png` getarnte HTML-Datei wird abgelehnt.
+Wer das Verzeichnis stattdessen dem Dienstbenutzer eines Systemkontos zuweist
+(`useradd -r` vergibt eine uid **unter** 1000), nimmt dem Dienst den Zugriff —
+und der Fehler zeigt sich an ganz anderer Stelle.
+:::
 
 ---
 

@@ -98,10 +98,17 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      # WORKSPACE_HOST_DIR ist zugleich die Samba-Freigabe "Dokumente".
-      # Das Verzeichnis muss uid 1000 gehoeren — der Container laeuft als
-      # `node` (Dockerfile: USER node). Gehoert es root, kann der Dienst nicht
-      # schreiben, und der Fehler zeigt sich an ganz anderer Stelle:
+      # Der Dokumentenordner. Die Anwendung schreibt hier nichts hinein —
+      # Hochgeladenes liegt in der Datenbank; gelesen wird nur fuer
+      # Alt-Datensaetze aus der Vault-Zeit.
+      #
+      # Bis zum 29.08.2026 war dieses Verzeichnis zugleich die Samba-Freigabe
+      # „Dokumente". Die ist entfallen; von aussen erreichbar ist der Ordner
+      # nicht mehr.
+      #
+      # Es muss uid 1000 gehoeren — der Container laeuft als `node`
+      # (Dockerfile: USER node). Gehoert es root, kann der Dienst die alten
+      # Datensaetze nicht mehr lesen:
       #   sudo chown -R 1000:1000 /opt/patio-workspace
       - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
       - ./logs:/opt/patio/logs

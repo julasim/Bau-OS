@@ -1,7 +1,7 @@
 // Lesender Zugriff auf den Dokumentenordner — der letzte Rest der Vault-Zeit.
 //
 // Hochgeladene Dateien liegen seit dem Umbau als `bytea` in der Datenbank;
-// `WORKSPACE_PATH` ist heute die Samba-Freigabe „Dokumente" und wird von der
+// `WORKSPACE_PATH` haelt heute nur noch den Altbestand und wird von der
 // Anwendung NICHT beschrieben. `readFile` bedient nur noch einen einzigen
 // Fall: Alt-Eintraege, deren Datei damals wirklich im Ordner lag und deren
 // Datenbankzeile keinen Inhalt hat (siehe den Download-Rueckfall in

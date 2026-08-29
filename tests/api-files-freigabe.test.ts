@@ -3,7 +3,8 @@ import fs from "fs";
 import path from "path";
 import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from "./helpers/acl-fixture.js";
 
-// Die Anwendung fasst die Netzfreigabe nicht an.
+// Die Anwendung greift beim Löschen nicht auf fremde Dateien im
+// Dokumentenordner durch.
 //
 // ── Der Befund ──────────────────────────────────────────────────────────────
 //
@@ -15,16 +16,24 @@ import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from
 // Gedacht war das für Einträge aus der Vault-Zeit, bei denen die Datei
 // tatsächlich im Ordner lag. Nur: bei einem HEUTIGEN Upload ist `filepath`
 // schlicht der Dateiname — die Datei selbst liegt als `bytea` in der
-// Datenbank. Und `/opt/patio-workspace` ist die Samba-Freigabe „Dokumente".
-//
-// Wer also „Grundriss.pdf" in PATIO hochlädt und später wieder löscht,
-// löschte damit eine gleichnamige Datei, die eine Kollegin im Explorer in der
-// Freigabe liegen hatte. Ohne Rückfrage, ohne Spur.
+// Datenbank. Ein Löschen in PATIO traf damit jede gleichnamige Datei im
+// Ordner, ohne Rückfrage und ohne Spur.
 //
 // Die Reparatur: der Aufräumschritt greift nur noch bei Einträgen, die
 // wirklich keinen Inhalt in der Datenbank haben — das sind genau die
 // Alt-Einträge, für die er gedacht war.
-describe.skipIf(!HAS_DB)("Die Anwendung fasst die Netzfreigabe nicht an", () => {
+//
+// ── Was sich am 29.08.2026 geändert hat ─────────────────────────────────────
+//
+// Bis dahin war `/opt/patio-workspace` zugleich die Samba-Freigabe
+// „Dokumente": der Schaden bestand darin, dass eine Kollegin ihre Datei im
+// Explorer verlor. Die Freigabe ist entfallen, der Ordner nicht — dort liegt
+// weiterhin der Altbestand aus der Vault-Zeit, und für den gilt dasselbe.
+//
+// Diese Prüfung bleibt deshalb unverändert bestehen: sie hält fest, dass ein
+// Upload mit Inhalt in der Datenbank NIE eine Datei im Ordner anfasst, und
+// dass der Aufräumschritt für echte Alt-Einträge trotzdem greift.
+describe.skipIf(!HAS_DB)("Die Anwendung greift beim Löschen nicht auf den Dokumentenordner durch", () => {
   let fx: AclFixture;
   let workspace = "";
   const name = `Grundriss-${Date.now()}.txt`;
@@ -36,8 +45,8 @@ describe.skipIf(!HAS_DB)("Die Anwendung fasst die Netzfreigabe nicht an", () => 
     workspace = WORKSPACE_PATH;
     fremdeDatei = path.resolve(workspace, name);
     fs.mkdirSync(path.dirname(fremdeDatei), { recursive: true });
-    // Was eine Kollegin über den Explorer in die Freigabe gelegt hat.
-    fs.writeFileSync(fremdeDatei, "Plan aus dem Explorer — gehört nicht PATIO");
+    // Eine fremde Datei im Ordner — Altbestand, der nicht zu diesem Upload gehört.
+    fs.writeFileSync(fremdeDatei, "Plan aus dem Altbestand — gehört nicht zu diesem Upload");
   });
 
   afterAll(async () => {
@@ -45,7 +54,7 @@ describe.skipIf(!HAS_DB)("Die Anwendung fasst die Netzfreigabe nicht an", () => 
     if (fremdeDatei && fs.existsSync(fremdeDatei)) fs.unlinkSync(fremdeDatei);
   });
 
-  it("eine gelöschte Datei nimmt die gleichnamige Datei in der Freigabe NICHT mit", async () => {
+  it("eine gelöschte Datei nimmt die gleichnamige Datei im Ordner NICHT mit", async () => {
     const { fileRepo } = await import("../src/data/index.js");
     // Ein ganz normaler Upload: Inhalt in der Datenbank, `filepath` = Name.
     const eintrag = await fileRepo.save({
@@ -67,9 +76,9 @@ describe.skipIf(!HAS_DB)("Die Anwendung fasst die Netzfreigabe nicht an", () => 
 
     // Der Datenbankeintrag ist weg …
     expect(await fileRepo.get(eintrag.id)).toBeNull();
-    // … die Datei in der Freigabe steht unangetastet da.
+    // … die fremde Datei im Ordner steht unangetastet da.
     expect(fs.existsSync(fremdeDatei)).toBe(true);
-    expect(fs.readFileSync(fremdeDatei, "utf-8")).toContain("Explorer");
+    expect(fs.readFileSync(fremdeDatei, "utf-8")).toContain("Altbestand");
   });
 
   it("ein echter Alt-Eintrag ohne Inhalt in der Datenbank wird weiterhin aufgeräumt", async () => {
@@ -100,7 +109,7 @@ describe.skipIf(!HAS_DB)("Die Anwendung fasst die Netzfreigabe nicht an", () => 
   });
 
   it("die Datei in der Freigabe taucht nicht in der Dateiliste auf", async () => {
-    // Die beiden Ablagen sind getrennt: was im Explorer liegt, kennt die
+    // Die beiden Ablagen sind getrennt: was im Ordner liegt, kennt die
     // Anwendung nicht — und umgekehrt.
     const res = await fx.app.request("/api/files", { headers: authHeader(fx.admin.token) });
     const namen = ((await res.json()) as { filename: string }[]).map((f) => f.filename);

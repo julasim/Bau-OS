@@ -13,7 +13,7 @@
 # Windows wären sie es ohne diese Datei nicht mehr.
 #
 # Betroffen ist alles, was auf dem Server ausgeführt oder gelesen wird:
-# Skripte, systemd-Einheiten, Caddyfile, Samba-Konfiguration, Dockerfile.
+# Skripte, systemd-Einheiten, Caddyfile, Dockerfile.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Vorgabe: Git entscheidet, im Repo immer LF.

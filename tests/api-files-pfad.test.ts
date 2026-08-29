@@ -19,7 +19,8 @@ import { HAS_DB, setupAclFixture, authHeader, jsonHeader, type AclFixture } from
 // einzigen Projektzugriff kam damit an jedes Dokument des Büros, und ein
 // einziger Aufruf konnte einen ganzen Projektordner entfernen.
 //
-// Das wiegt schwer, weil dieser Ordner die Samba-Freigabe „Dokumente" ist:
+// Das wiegt schwer, weil in diesem Ordner der Altbestand aus der Vault-Zeit
+// liegt:
 // dort liegen Verträge, Pläne und Honorarvereinbarungen.
 //
 // Die drei Wege stammen aus der Vault-Zeit und waren von der Oberfläche nie

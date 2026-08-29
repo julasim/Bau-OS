@@ -101,14 +101,18 @@ dem jedes Konto an jedes freigegebene Projekt käme.
 
 Die Akten entstehen und sind über den Server abrufbar
 (`GET /api/ki/dossier/:projectId`, Verwaltung). **Wie** ein Sprachmodell sie
-liest, hängt daran, auf welchem Gerät es läuft — dafür gibt es drei Wege:
+liest, hängt daran, auf welchem Gerät es läuft — dafür gibt es zwei Wege:
 
 | Weg | |
 |---|---|
-| **Dateien in die Freigabe** | Der Server legt die Akten in den Netzordner; Claude Desktop liest sie mit seinem Datei-Zugang. Kein neues Programm, die Rechte macht NTFS |
 | **Kleiner Zubringer am Arbeitsplatz** | Ein MCP-Programm auf dem PC holt die Akten über HTTP mit einem widerrufbaren Token |
-| **MCP direkt am Server** | Der Server spricht MCP selbst; braucht eine Freigabe im Netz |
+| **MCP direkt am Server** | Der Server spricht MCP selbst; braucht einen eigenen Zugang im Büronetz |
 
-Welcher davon der richtige ist, entscheidet sich daran, wo Claude Desktop
+Beide gehen über HTTP, und das ist kein Zufall: PATIO hat keinen Netzordner
+mehr, in den der Server die Akten legen könnte. Dateien kommen ausschließlich
+durch die Anwendung herein und gehen ausschließlich durch sie wieder hinaus —
+damit bleibt auch für die Akten die Rechteprüfung der einzige Weg.
+
+Welcher der beiden der richtige ist, entscheidet sich daran, wo Claude Desktop
 läuft und wer darauf zugreifen darf. Bis dahin ist der Abruf über die
 Oberfläche und die Vorschau vollständig nutzbar.

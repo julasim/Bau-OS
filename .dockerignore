@@ -38,7 +38,7 @@ release/
 # Archiv (abgeloeste Skripte und Ansichten) — nur Nachschlagewerk.
 _archive/
 
-# Betriebs-Vorlagen (systemd, Samba). Kommen ueber das Auslieferungspaket auf
+# Betriebs-Vorlagen (systemd). Kommen ueber das Auslieferungspaket auf
 # den Server, nicht ueber das Image.
 deploy/
 

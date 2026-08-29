@@ -11,12 +11,12 @@ Vorlage: `.env.example`. Was hier nicht steht, wird nirgends ausgewertet.
 
 | Variable | Pflicht | Standardwert | Beschreibung |
 |---|---|---|---|
-| `WORKSPACE_PATH` | Ja | — | Absoluter Pfad zum Dokumenten-Verzeichnis (Alias: `VAULT_PATH`) |
+| `WORKSPACE_PATH` | Ja | — | Absoluter Pfad zum internen Ablageordner (Alias: `VAULT_PATH`) |
 | `DATABASE_URL` | Ja | — | PostgreSQL-Verbindungsstring |
 | `JWT_SECRET` | Ja | — | Secret für die Login-Token, mind. 32 Zeichen |
 | `API_PORT` | Nein | `3000` | Port der Web-Oberfläche |
 | `PATIO_HOSTNAME` | Nein | `patio.sima.intern` | Rechnername für das Zertifikat |
-| `WORKSPACE_HOST_DIR` | Nein | `./workspace` | Dokumentenordner auf dem Host (Compose) |
+| `WORKSPACE_HOST_DIR` | Nein | `./workspace` | Ablageordner auf dem Host, den Compose einhängt |
 | `BACKUP_DIR` | Nein | `/mnt/patio-backup` | Ziel der nächtlichen Sicherung (Host) |
 | `SICHERUNG_DIR` | Nein | `/opt/patio/backup` | Wo der Dienst die Sicherungsstände **liest** (Container) |
 | `CORS_ORIGINS` | Nein | `http://localhost:<API_PORT>` | Erlaubte Origins, komma-getrennt |
@@ -47,17 +47,28 @@ sieht für Docker und systemd gesund aus und ist trotzdem tot.
 
 ### WORKSPACE_PATH
 
-Absoluter Pfad zur **Netzfreigabe „Dokumente"** — dem Ordner für Pläne, CAD und
-große Scans. `VAULT_PATH` wird als Alias weiterhin akzeptiert.
+Absoluter Pfad zu einem **rein internen Ablageordner**. Im Compose-Betrieb ist
+das `/workspace` im Container; auf dem Host liegt er unter
+`WORKSPACE_HOST_DIR`. `VAULT_PATH` wird als Alias weiterhin akzeptiert.
 
 ::: warning Nicht der Ablageort für Uploads
 Hier stand „Verzeichnis, in dem PATIO Dokumente als Dateien ablegt". Das
 stimmt nicht: was in PATIO hochgeladen wird, landet in der **Datenbank**
 (Tabelle `files`), nicht auf der Platte. In diesen Ordner **schreibt die
-Anwendung nichts**; sie liest nur für alte Datei-Datensätze daraus nach.
+Anwendung nichts**.
 
-Pflichtangabe ist die Variable trotzdem — ohne sie startet der Dienst nicht.
-Zur Abgrenzung der beiden Ablagen: [Netzfreigabe](/betrieb/freigabe).
+Geblieben ist ein einziger Lesefall: Datei-Datensätze aus der Vault-Zeit,
+deren Inhalt damals wirklich im Ordner lag und nie in die Datenbank gewandert
+ist. Beim Download fällt `routes/files.ts` dafür auf `readFile()` aus
+`src/workspace/` zurück; neu geschrieben wird dort nichts mehr.
+
+Von außen ist der Ordner nicht erreichbar — es gibt keine Freigabe darauf,
+und niemand bindet ihn am Arbeitsplatz ein. Zu sehen bekommt ihn nur der
+Dienst selbst; deshalb gehört er auf dem Host dem Benutzer mit `uid 1000`,
+unter dem der App-Container läuft.
+
+Pflichtangabe bleibt die Variable trotzdem: ohne sie bricht `src/index.ts` den
+Start mit Exit-Code 1 ab.
 :::
 
 ```bash

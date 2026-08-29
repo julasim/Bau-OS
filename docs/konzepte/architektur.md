@@ -4,8 +4,12 @@ PATIO besteht aus drei Schichten: der **Vue-Oberfläche**, der **Hono-API** als
 einzigem Dienst und **PostgreSQL** als Speicher — und zwar als einzigem: auch
 hochgeladene Dokumente liegen dort (Tabelle `files`), nicht auf der Platte.
 
-Der Ordner hinter `WORKSPACE_PATH` ist etwas anderes: die Netzfreigabe
-„Dokumente", in die die Anwendung nichts schreibt.
+Dateien kommen ausschließlich über PATIO selbst herein — Upload in der
+Oberfläche, Ablage in der Datenbank. Einen zweiten Weg gibt es nicht: der
+Ordner hinter `WORKSPACE_PATH` ist keine Netzfreigabe, sondern ein interner
+Ordner, den nur der Dienst sieht (im Container als `/workspace` eingehängt).
+Die Anwendung schreibt nichts hinein; gelesen wird daraus nur noch der
+Altbestand aus der Vault-Zeit.
 
 Die Oberfläche läuft am Arbeitsplatz in einem eigenen Programmfenster
 (`PATIO.exe`) und im Besprechungsraum im Browser. Für die Architektur macht das
@@ -45,8 +49,8 @@ Arbeitsplatz-Programm keine Zeile der Oberfläche angefasst werden. Siehe
       Projekte, Notizen, Aufgaben, Termine, Team
       UND die hochgeladenen Dokumente (Tabelle `files`)
 
-   daneben, ohne Zutun der Anwendung:
-      Netzfreigabe "Dokumente" (WORKSPACE_PATH) — Plaene, CAD, Scans
+   daneben, nur lesend und nur fuer Alt-Datensaetze:
+      interner Ordner /workspace (WORKSPACE_PATH) — Altbestand der Vault-Zeit
 ```
 
 Es gibt **keine ausgehende Verbindung** im Betrieb: kein Mailserver, kein
@@ -154,7 +158,7 @@ src/
 │   ├── client.ts  Verbindungspool (postgres.js)
 │   ├── migrate.ts Migrations-Runner mit Advisory-Lock
 │   └── migrations/ 61 SQL-Dateien, forward-only (bis `059`)
-├── workspace/     NUR Lesezugriff auf die Netzfreigabe (Rueckfall fuer alte
+├── workspace/     NUR Lesezugriff auf den internen Ordner (Rueckfall fuer alte
 │                  Datei-Datensaetze) + Text aus PDF und DOCX ziehen
 ├── mcp/           die KI-Akten je Projekt (Positivliste + Redaktion)
 └── export/        DOCX aus Word-Vorlagen, PDF darüber, Volldump als ZIP

@@ -16,19 +16,29 @@
 #
 # ── Was dieses Skript NICHT tut ─────────────────────────────────────────────
 #
-# Es INSTALLIERT NICHTS. Weder Docker noch Samba — es prueft nur, ob sie da
-# sind. Das ist Absicht (der Server hat kein Internet), wurde aber zweimal
-# falsch dokumentiert: „install-server.sh installiert Docker und Samba".
-# Beides muss im einmaligen Internet-Fenster von Hand kommen:
-#   sudo apt install -y docker.io docker-compose-v2 samba
-# Wer Samba dort vergisst, kann es spaeter NICHT nachholen.
+# Es INSTALLIERT NICHTS — es prueft nur, ob Docker da ist. Das ist Absicht
+# (der Server hat kein Internet), wurde aber zweimal falsch dokumentiert:
+# „install-server.sh installiert Docker und Samba". Docker muss im einmaligen
+# Internet-Fenster von Hand kommen:
+#   sudo apt install -y docker.io docker-compose-v2
 #
-# Dazu bleiben vier Schritte Handarbeit, weil sie Entscheidungen brauchen:
+# Dazu bleiben drei Schritte Handarbeit, weil sie Entscheidungen brauchen:
 #   1. die Sicherungsplatte einrichten (formatieren löscht Daten)
 #   2. das CA-Wurzelzertifikat auf die Arbeitsplätze bringen
 #   3. den Rechnernamen im Router-DNS eintragen
-#   4. Samba-Konten anlegen
 # Das Skript sagt am Ende, was zu tun ist.
+#
+# ── Keine Netzfreigabe mehr ─────────────────────────────────────────────────
+#
+# Bis zum 29.08.2026 richtete dieser Abschnitt zusaetzlich eine Samba-Freigabe
+# „Dokumente" ein — ein Netzordner, den jeder im Explorer einbinden konnte.
+# Der Weg ist entfallen: Dateien kommen ausschliesslich ueber PATIO selbst
+# herein und liegen in der Datenbank, mit Projektbezug, Rechten und
+# Volltextsuche.
+#
+# Der Ordner /opt/patio-workspace bleibt bestehen — der Dienst haengt ihn
+# weiterhin ein und liest daraus Alt-Datensaetze nach, deren Inhalt nicht in
+# der Datenbank liegt. Von aussen erreichbar ist er nicht mehr.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -57,10 +67,6 @@ command -v docker >/dev/null || fehl "Docker fehlt. Einmalig mit Internet instal
 docker compose version >/dev/null 2>&1 || fehl "docker compose (v2) fehlt."
 ok "Docker vorhanden: $(docker --version | cut -d, -f1)"
 
-command -v samba >/dev/null 2>&1 || command -v smbd >/dev/null 2>&1 \
-  && ok "Samba vorhanden" \
-  || hinweis "Samba fehlt — für die Netzfreigabe: sudo apt install -y samba"
-
 # Uhrzeit: ohne Internet gibt es kein NTP nach draußen. Läuft die Uhr weg,
 # laufen die Zertifikate der internen CA ins Leere und alle Zeitstempel
 # stimmen nicht.
@@ -79,11 +85,13 @@ mkdir -p "$INSTALL_DIR"/{scripts,logs,data,tools}
 mkdir -p "$WORKSPACE_DIR"
 mkdir -p "$BACKUP_DIR"
 
-# DIE Stelle, an der es üblicherweise schiefgeht: der Container läuft als
-# `node` = uid 1000. Gehört das Dokumentenverzeichnis jemand anderem — etwa
-# einem mit `useradd -r` angelegten Systemkonto, dessen uid UNTER 1000 liegt —
-# kann der Dienst keine Datei ablegen, und der Fehler zeigt sich an ganz
-# anderer Stelle.
+# Der Container läuft als `node` = uid 1000 und liest aus diesem Verzeichnis
+# Alt-Datensaetze nach. Gehört es jemand anderem, bekommt der Dienst EACCES —
+# und der Fehler zeigt sich an ganz anderer Stelle.
+#
+# Bis zum 29.08.2026 stand hier noch ein zweiter Grund: die Samba-Freigabe
+# schrieb mit derselben Kennung hinein, damit sich Dienst und Kolleginnen
+# nicht gegenseitig aussperren. Diesen zweiten Schreiber gibt es nicht mehr.
 chown -R 1000:1000 "$WORKSPACE_DIR"
 ok "$WORKSPACE_DIR gehört uid 1000 (die Kennung des Dienstes)"
 
@@ -234,7 +242,7 @@ PATIO ist installiert.
   Zustand ansehen:   patio status
   Protokoll:         patio logs
 
-Vier Schritte fehlen noch — sie brauchen Entscheidungen und stehen
+Drei Schritte fehlen noch — sie brauchen Entscheidungen und stehen
 deshalb nicht im Skript:
 
   1. SICHERUNGSPLATTE
@@ -254,13 +262,6 @@ deshalb nicht im Skript:
      und einmalig auf jedem Arbeitsplatz installieren. Firefox hat einen
      eigenen Zertifikatspeicher.
      Anleitung: docs/betrieb/zertifikat.md
-
-  4. NETZFREIGABE
-     sudo groupadd -g 1000 patio-buero
-     echo 'include = $INSTALL_DIR/deploy/smb-patio.conf' >> /etc/samba/smb.conf
-     sudo testparm && sudo systemctl reload smbd
-     Je Person: usermod -aG patio-buero <name> && smbpasswd -a <name>
-     Anleitung: docs/betrieb/freigabe.md
 
 Danach im Browser https://$HOSTNAME_VORGABE/ öffnen — beim ersten
 Aufruf führt der Einrichtungsassistent durch das Anlegen des

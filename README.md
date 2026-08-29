@@ -93,7 +93,7 @@ npm run docs:build       # statische Site bauen
 
 Pre-Launch. Der Umbau vom Internet-Stack zum Firmenserver im eigenen Netz ist
 weit fortgeschritten: Anmeldung, Compose-Stack, Zertifikat aus eigener CA,
-Sicherung, Netzfreigabe, Offline-Updates und das Arbeitsplatz-Programm stehen.
+Sicherung, Offline-Updates und das Arbeitsplatz-Programm stehen.
 
 Die **Anmeldung ist einstufig** (Benutzername + Passwort, bcrypt). Der frühere
 E-Mail-Code über SMTP ist ersatzlos entfallen — er war auf einem Rechner ohne

@@ -562,8 +562,10 @@ Geheimnis im Klartext **widerrufen** gehört und nicht bloß gelöscht.
 
 Der letzte Rest der Vault-Zeit — und **nur lesend**. Was in PATIO hochgeladen
 wird, liegt seit dem Umbau in der Datenbank (Tabelle `files`), nicht auf der
-Platte; `WORKSPACE_PATH` ist heute die Netzfreigabe „Dokumente", in die die
-Anwendung nichts schreibt.
+Platte. `WORKSPACE_PATH` zeigt heute auf einen rein internen Ordner, den nur
+der Dienst selbst sieht: keine Freigabe darauf, kein Zugriff vom Arbeitsplatz
+aus. Was darin liegt, ist Altbestand aus der Vault-Zeit — die Anwendung
+schreibt nichts hinein.
 
 | Datei | Inhalt |
 |---|---|
@@ -577,7 +579,7 @@ in `routes/files.ts`). Der Zugriff ist damit immer über eine Datenbankzeile
 gedeckt und von der Rechteprüfung erfasst.
 
 `createFile` und `listFolder` sind mit den pfadbasierten Routen entfallen: sie
-boten einen Weg in den geteilten Ordner, den niemand mehr braucht und den keine
+boten einen Weg in diesen Ordner, den niemand mehr braucht und den keine
 Rechteprüfung deckte. Der Umfang ist mit dem Umbau von rund 1.770 auf 152
 Zeilen geschrumpft.
 
@@ -716,7 +718,7 @@ vorzuziehen.
 | `scripts/` | Installation, Sicherung, Rücksicherung, Offline-Pakete, Neuverschlüsselung, Prüfstand des Arbeitsplatz-Programms |
 | `electron/` | Hülle des Arbeitsplatz-Programms |
 | `docker/` | Caddyfile, Init-SQL für den Postgres-Container, alte VPS-Compose-Datei. **Der Firmenserver-Stack liegt im Repo-Root** (`docker-compose.yml`) |
-| `deploy/` | systemd-Einheiten der Sicherung, Samba-Abschnitt |
+| `deploy/` | systemd-Einheiten der Sicherung |
 | `docs/` | Diese Dokumentation (VitePress) — gebaut nach `dist/docs`, ausgeliefert unter `/docs/` |
 | `build/` | Programmsymbol für den Bau der `.exe` |
 | `data/` | Alt-Konten (`users.json`) — gitignored, **kein Anmeldeweg mehr**, nur Übernahme beim Start |

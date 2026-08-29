@@ -28,7 +28,7 @@ aufsetzte —, kam über Schritt 2 nicht hinaus.
 
 ```bash
 sudo apt update
-sudo apt install -y docker.io docker-compose-v2 samba
+sudo apt install -y docker.io docker-compose-v2
 sudo systemctl enable --now docker
 ```
 
@@ -68,8 +68,8 @@ patio status
 Erwartet: alle drei Dienste laufen, „Der Dienst antwortet."
 
 ::: warning Was das Skript bewusst NICHT tut
-Vier Schritte brauchen Entscheidungen und bleiben Handarbeit — sie folgen
-jetzt: Sicherungsplatte, Rechnername, Zertifikat, Netzfreigabe.
+Drei Schritte brauchen Entscheidungen und bleiben Handarbeit — sie folgen
+jetzt: Sicherungsplatte, Rechnername, Zertifikat.
 :::
 
 ## 3. Sicherungsplatte einrichten
@@ -114,27 +114,7 @@ Diesen Namen im Router-DNS auf die Server-IP zeigen lassen, dann das
 Wurzelzertifikat auf die Arbeitsplätze bringen:
 [Zertifikat](/betrieb/zertifikat).
 
-## 5. Netzfreigabe
-
-```bash
-sudo groupadd -g 1000 patio-buero
-sudo useradd -u 1000 -g patio-buero -M -s /usr/sbin/nologin patio-dateien
-sudo chown -R 1000:1000 /opt/patio-workspace
-
-echo 'include = /opt/patio/deploy/smb-patio.conf' | sudo tee -a /etc/samba/smb.conf
-sudo testparm && sudo systemctl reload smbd
-```
-
-Je Person:
-
-```bash
-sudo usermod -aG patio-buero anna
-sudo smbpasswd -a anna
-```
-
-Details: [Netzfreigabe](/betrieb/freigabe).
-
-## 6. Erstes Konto
+## 5. Erstes Konto
 
 Am Arbeitsplatz `https://patio.sima.intern/` öffnen. Beim ersten Aufruf führt
 der Einrichtungsassistent durch das Anlegen des Administrator-Kontos.
@@ -143,7 +123,7 @@ Das Passwort braucht **mindestens 12 Zeichen** — es ist der einzige Faktor.
 
 Weitere Konten danach unter `/admin/users`.
 
-## 7. Die Probe, ohne die es nicht fertig ist
+## 6. Die Probe, ohne die es nicht fertig ist
 
 ::: danger Eine ungeprüfte Sicherung ist keine
 Bevor echte Daten auf den Server gehen, **einmal vollständig
@@ -165,8 +145,7 @@ die im Ernstfall gestellt wird: „Wie lange stehen wir?"
 - [ ] Neustart der Maschine — der Stack kommt **ohne Handgriff** hoch
 - [ ] Die Oberfläche zeigt ein **Schloss ohne Warnung** (Browser; später auch im Programmfenster)
 - [ ] Anmeldung mit Benutzername und Passwort
-- [ ] Netzfreigabe im Explorer erreichbar, Datei anlegen und löschen
-- [ ] Gelöschte Datei liegt im Papierkorb der Freigabe
+- [ ] Datei in einem Projekt hochladen, öffnen und wieder löschen
 - [ ] `sudo patio sicherung` läuft durch, Selbstprüfung bestanden
 - [ ] **Rücksicherung geprobt, Dauer notiert:** ______ Minuten
 - [ ] USV zieht den Stecker-Test durch: Rechner fährt selbst herunter

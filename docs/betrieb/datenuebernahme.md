@@ -17,8 +17,8 @@ nicht:
   mitkopiert.
 - Auf dem **Server** selbst gibt es kein Node — und es kommt auch keines
   dazu: `install-server.sh` **installiert überhaupt nichts**. Es prüft nur, ob
-  Docker da ist (und bricht sonst ab) und weist auf fehlendes Samba hin.
-  Beides muss im einmaligen Internet-Fenster von Hand kommen, siehe
+  Docker da ist, und bricht sonst ab. Docker muss im einmaligen
+  Internet-Fenster von Hand kommen, siehe
   [Installation](/betrieb/installation), Schritt 1.
 
 Der Entwicklungsrechner wiederum kommt nicht ohne Weiteres an die Datenbank:

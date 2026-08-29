@@ -18,7 +18,7 @@ Prozess mit Exit-Code 1, wenn einer fehlt.
 
 | Konstante | `.env`-Variable | Beschreibung |
 |---|---|---|
-| `WORKSPACE_PATH` | `WORKSPACE_PATH` / `VAULT_PATH` | Absoluter Pfad zum Dokumenten-Verzeichnis |
+| `WORKSPACE_PATH` | `WORKSPACE_PATH` / `VAULT_PATH` | Absoluter Pfad zum internen Ablageordner |
 | `DATABASE_URL` | `DATABASE_URL` | PostgreSQL-Verbindungsstring |
 | `JWT_SECRET` | `JWT_SECRET` | Secret für die Anmelde-Token |
 
@@ -112,7 +112,13 @@ Neu dafür:
 
 | Konstante | Standardwert | `.env`-Variable | Beschreibung |
 |---|---|---|---|
-| `WORKSPACE_PATH` | — (Pflicht) | `WORKSPACE_PATH` / `VAULT_PATH` | Netzfreigabe „Dokumente"; die Anwendung liest nur daraus |
+| `WORKSPACE_PATH` | — (Pflicht) | `WORKSPACE_PATH` / `VAULT_PATH` | Interner Ablageordner; die Anwendung liest nur daraus |
+
+Der Ordner ist von außen nicht erreichbar — es gibt keine Freigabe darauf.
+Geschrieben wird dort nichts: Hochgeladenes liegt als `bytea` in der Tabelle
+`files`. Gelesen wird nur für Datei-Datensätze aus der Vault-Zeit, deren
+Inhalt nie in die Datenbank gewandert ist — Näheres unter
+[Dateistruktur](/referenz/dateistruktur).
 
 ::: tip Die beiden Altbestand-Ordner sind weg
 `WORKSPACE_AGENTS_DIR` (`"Agents"`) und `WORKSPACE_LOGS_DIR`

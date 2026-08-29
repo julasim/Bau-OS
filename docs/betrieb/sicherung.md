@@ -1,15 +1,17 @@
 # Sicherung und Rücksicherung
 
-> **Der Server ist der einzige Ausfallpunkt.** Vor dem Umbau konnte man bei
-> einer Störung im Explorer weiterarbeiten — das ist vorbei. Die Sicherung ist
-> deshalb kein Nebenschauplatz, sondern Teil der Grundeinrichtung.
+> **Der Server ist der einzige Ausfallpunkt.** Solange die Dateien noch in
+> einem Netzordner lagen, konnte man bei einer Störung daneben weiterarbeiten —
+> das ist vorbei: Datensätze und Dokumente liegen in der Datenbank, und ohne
+> den Server kommt niemand an sie heran. Die Sicherung ist deshalb kein
+> Nebenschauplatz, sondern Teil der Grundeinrichtung.
 
 ## Was gesichert wird
 
 | Was | Wo es liegt | Warum es dazugehört |
 |---|---|---|
-| Datensätze | Container `patio-postgres` | Projekte, Notizen, Aufgaben, Termine, Rechnungen |
-| Dokumente | `/opt/patio-workspace` | die echten Dateien, auch über Samba erreichbar |
+| Datensätze | Container `patio-postgres` | Projekte, Notizen, Aufgaben, Termine, Rechnungen — **und die hochgeladenen Dateien**, sie liegen in der Datenbank |
+| Dokumentenordner | `/opt/patio-workspace` | Altbestand aus der Vault-Zeit; die Anwendung liest nur noch daraus |
 | `.env` | `/opt/patio` | enthält `JWT_SECRET` **und** `ENCRYPTION_KEY` |
 | `data/`, `tools/` | `/opt/patio` | Konten-Altbestand und Werkzeuge |
 | **CA-Schlüssel** | Volume `patio_caddy_data` | der private Schlüssel der internen Zertifizierungsstelle |

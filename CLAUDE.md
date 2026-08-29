@@ -131,9 +131,35 @@
 >   Gesundheitspruefung, beim Rueckweg zurueckgenommen), `patio status` zeigt
 >   ihn.
 >
-> **Nicht in WSL pruefbar und damit weiterhin offen:** Samba-Freigabe,
-> Sicherungsplatte samt Ruecksicherung, USV, und ob Electron dem
-> CA-Zertifikat am echten Arbeitsplatz traut (AP12 Teil A).
+> **Nicht in WSL pruefbar und damit weiterhin offen:** Sicherungsplatte samt
+> Ruecksicherung, USV, und ob Electron dem CA-Zertifikat am echten
+> Arbeitsplatz traut (AP12 Teil A).
+>
+> ### Stand 29.08.2026 — die Netzfreigabe ist entfallen
+>
+> **Entscheid Julius:** Es wird keine Samba-Freigabe geben. Niemand bindet den
+> Dokumentenordner mehr im Windows-Explorer ein; **Dateien kommen
+> ausschliesslich ueber PATIO selbst herein** und liegen in der Datenbank, mit
+> Projektbezug, Rechten und Volltextsuche.
+>
+> Entfallen sind `deploy/smb-patio.conf` und `docs/betrieb/freigabe.md`, dazu
+> Schritt 5 der Installation, die Samba-Pruefung im Installer, die Gruppe
+> `patio-buero`, das Konto `patio-dateien` und der Papierkorb der Freigabe in
+> `patio dokumente`.
+>
+> **Der Ordner `/opt/patio-workspace` bleibt** — ausdrueckliche Entscheidung.
+> Er haengt weiter als `/workspace` im Container, wird weiter gesichert, und
+> der Dienst liest daraus Alt-Datensaetze nach, deren Inhalt nicht in der
+> Datenbank liegt. Von aussen ist er nicht mehr erreichbar. `WORKSPACE_PATH`
+> bleibt Pflichtangabe (`src/index.ts` bricht sonst den Start ab), und
+> `uid 1000` bleibt noetig — jetzt nur noch fuer die Container-Mounts.
+>
+> **Nebeneffekt:** Damit loest sich die UID-Kollision, die die Erstinstallation
+> als erstes getroffen haette. `groupadd -g 1000 patio-buero` und
+> `useradd -u 1000 patio-dateien` scheiterten auf Ubuntu 24.04, weil der
+> Erstbenutzer diese Kennungen bereits hat — beide Befehle brauchte nur Samba
+> und sind mit ihm entfallen. Das verbliebene `chown -R 1000:1000` arbeitet
+> numerisch und kollidiert mit nichts.
 >
 > ### Stand 24.08.2026 — 733 Tests, Migrationen bis 059
 >
@@ -249,7 +275,8 @@
 > **Danach eine Aufräumrunde über alle offenen Punkte** („bitte alles
 > fixen"):
 >
-> - **Zwei Ablagen, jetzt klar getrennt.** Die Freigabe „Dokumente" ist ein
+> - **Zwei Ablagen, damals klar getrennt** (seit dem 29.08.2026 gibt es nur
+>   noch eine — die Freigabe ist entfallen). Die Freigabe „Dokumente" war ein
 >   normaler Netzordner für Pläne, CAD und große Scans; in PATIO Hochgeladenes
 >   liegt in der Datenbank, mit Projektbezug, Rechten und Volltextsuche. Die
 >   Anwendung fasst den Ordner nicht an. Dabei gefunden: das Löschen einer
@@ -348,7 +375,7 @@ Von `src/workspace/` bleibt nur der echte Dateizugriff (1.774 → 245 Zeilen) �
 Dokumente liegen weiterhin als Dateien.
 
 **AP1 abgeschlossen (2026-08-06).** Der Server kann aufgesetzt werden:
-Anmeldung, Compose-Stack, Zertifikat, Sicherung, Netzfreigabe, Offline-Updates
+Anmeldung, Compose-Stack, Zertifikat, Sicherung, Offline-Updates
 und das Einrichtungshandbuch stehen. Fünf Commits (`01a933f`…`e82c2a3`),
 **265 Tests**.
 

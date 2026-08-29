@@ -378,9 +378,9 @@ Größenlimit: `MAX_UPLOAD_MB`, Standard 50.
 verlangt eine Datei-ID (`?id=`), `DELETE /files` ebenfalls; `POST /files/mkdir`
 und das Löschen über einen Pfad sind entfallen — letzteres rief
 `rmSync(recursive)` und konnte damit von jedem angemeldeten Konto aus einen
-ganzen Ordner der Freigabe „Dokumente" entfernen. Damit ist heute jeder Zugriff
-über eine Datenbankzeile gedeckt, und die trägt Projekt und Eigentümer, also
-die Rechteprüfung.
+ganzen Ordner unterhalb von `WORKSPACE_PATH` entfernen. Damit ist heute jeder
+Zugriff über eine Datenbankzeile gedeckt, und die trägt Projekt und Eigentümer,
+also die Rechteprüfung.
 
 Der Dateibrowser listet auch keine Ordner des Dateisystems mehr: er baut seine
 Struktur logisch aus den Projekten. Hier stand bis zuletzt, er blende auf
@@ -393,6 +393,11 @@ Alt-Einträge aus der Vault-Zeit, deren Datenbankzeile keinen Inhalt trägt
 `src/workspace/helpers.ts` — löst gegen `WORKSPACE_PATH` auf, weist alles
 außerhalb ab und lehnt Symlinks ab. Die Prüfung arbeitet mit Separator-Suffix;
 `startsWith("/workspace")` allein würde auch `/workspace-backup` durchlassen.
+
+Am Dienst vorbei kommt an diesen Ordner niemand: er ist keine Netzfreigabe,
+sondern nur in den Container eingehängt. **Dateien gelangen ausschließlich über
+den Upload in PATIO herein** — damit gibt es keine Datei ohne Datenbankzeile
+und keine Datei ohne Rechteprüfung.
 
 ## HTTP-Absicherung
 

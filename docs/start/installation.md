@@ -71,7 +71,7 @@ und wird von der nächtlichen Sicherung gebraucht. Fehlte es, scheiterte die
 Sicherung ohne Meldung, und jedes Update brach danach ab.
 :::
 
-Vollständige Anleitung mit Sicherungsplatte, Zertifikat und Netzfreigabe:
+Vollständige Anleitung mit Sicherungsplatte und Zertifikat:
 **[PATIO installieren](/betrieb/installation)**.
 
 ::: warning Die früheren Wege sind entfallen

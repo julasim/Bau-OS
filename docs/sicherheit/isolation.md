@@ -69,6 +69,13 @@ Die Zuordnung steht in der Tabelle `user_projects` und wird über
 Projekt ohne Zuweisung existiert für den Benutzer nicht: es taucht weder in
 der Liste noch in der Suche noch im Portfolio auf.
 
+Das trägt auch für Dokumente, weil es **keinen Weg neben der Anwendung** gibt:
+hochgeladene Dateien liegen in der Datenbank, eine Netzfreigabe gibt es nicht,
+und der Ordner hinter `WORKSPACE_PATH` ist ausschließlich in den Dienst
+eingehängt. Wer eine Datei sehen will, geht durch PATIO — und damit durch
+`user_projects`. Ein zweiter Zugriffsweg im Dateisystem hätte die
+Projektzuordnung an genau dieser Stelle ausgehebelt.
+
 **Berechnet** wird die Sichtbarkeit an **einer** Stelle: `src/data/access.ts`.
 **Durchgesetzt** wird sie in den Routen — sie holen die Liste und reichen sie
 weiter; die Repositories wenden eine übergebene Liste an, ermitteln sie aber

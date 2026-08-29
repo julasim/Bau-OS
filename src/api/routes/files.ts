@@ -125,7 +125,8 @@ filesRoutes.get("/files", async (c) => {
 // Dokumentenordner aus — ohne jede Rechtepruefung. Geprueft wurde allein, ob
 // der Pfad den Ordner nicht verlaesst, nicht WER da liest. Ein Konto ohne
 // einen einzigen Projektzugriff kam damit an jeden Vertrag und jede
-// Honorarvereinbarung; dieser Ordner ist die Samba-Freigabe „Dokumente".
+// Honorarvereinbarung; in diesem Ordner liegt der Altbestand aus der
+// Vault-Zeit.
 //
 // Er stammt aus der Vault-Zeit und war von der Oberflaeche nie erreichbar:
 // Dateien liegen seit dem Umbau als `bytea` in der Datenbank, und der
@@ -165,7 +166,8 @@ filesRoutes.delete("/files", async (c) => {
     // ENTSCHEIDEND ist die Bedingung darauf: nur, wenn der Eintrag KEINEN
     // Inhalt in der Datenbank hat. Bei einem heutigen Upload ist `filepath`
     // schlicht der Dateiname, die Datei selbst liegt als `bytea` in der
-    // Datenbank — und `WORKSPACE_PATH` ist die Samba-Freigabe „Dokumente".
+    // Datenbank — und unter `WORKSPACE_PATH` liegt der Altbestand aus der
+    // Vault-Zeit.
     // Ohne diese Bedingung loeschte „Grundriss.pdf in PATIO entfernen" die
     // gleichnamige Datei, die eine Kollegin im Explorer dort liegen hatte.
     // Ohne Rueckfrage, ohne Spur. Nachgewiesen in

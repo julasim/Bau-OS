@@ -89,16 +89,21 @@ sudo systemctl restart ssh
 ## 6. Firewall
 
 Der Rechner steht im internen Netz, nicht am Internet. Offen sein müssen genau
-vier Ports — und nur aus dem Büronetz:
+drei Ports — und nur aus dem Büronetz:
 
 ```bash
 sudo ufw allow from 192.168.0.0/16 to any port 22 proto tcp    # SSH (Verwaltung)
 sudo ufw allow from 192.168.0.0/16 to any port 80 proto tcp    # nur die Weiterleitung auf HTTPS
 sudo ufw allow from 192.168.0.0/16 to any port 443 proto tcp   # PATIO
-sudo ufw allow from 192.168.0.0/16 to any port 445 proto tcp   # Netzfreigabe (SMB)
 sudo ufw enable
 sudo ufw status
 ```
+
+::: tip Keine Dateifreigabe, kein Port 445
+Dateien kommen ausschließlich über PATIO selbst herein — Upload in der
+Oberfläche, Ablage in der Datenbank. Es gibt keine Netzfreigabe und damit
+keinen Grund, SMB zu öffnen.
+:::
 
 ::: tip Warum Port 80 dazugehört
 Caddy bindet ihn (`docker-compose.yml`, `80:80`) und leitet auf HTTPS um.
@@ -181,7 +186,7 @@ sudo mkdir -p /opt/patio /opt/patio-workspace /mnt/patio-backup
 # Anwendungsverzeichnis: dem Dienst-Benutzer.
 sudo chown -R patio:patio /opt/patio
 
-# Dokumente: der UID 1000 — NICHT dem Benutzer `patio`. Begründung unten.
+# Dokumentenordner: der UID 1000 — NICHT dem Benutzer `patio`. Begründung unten.
 sudo chown -R 1000:1000 /opt/patio-workspace
 ```
 
@@ -189,7 +194,7 @@ sudo chown -R 1000:1000 /opt/patio-workspace
 |---|---|---|
 | `/opt/patio` | Anwendung, `.env`, Compose-Datei | `patio` |
 | darin `logs/`, `data/`, `tools/` | in den Container gehängt — Protokoll und Ablagen des Dienstes | **UID 1000** (setzt der Installer) |
-| `/opt/patio-workspace` | Netzfreigabe „Dokumente" (`WORKSPACE_PATH`) — Pläne, CAD, große Scans | **UID 1000** |
+| `/opt/patio-workspace` | Dokumentenordner (`WORKSPACE_PATH`) — als `/workspace` in den Container gehängt, nur für den Dienst | **UID 1000** |
 | `/mnt/patio-backup` | externe Sicherungsplatte | `root` (systemd hängt ein) |
 
 ::: danger `chown -R patio:patio /opt/patio` gilt nur bis zur Installation
@@ -207,16 +212,18 @@ im [Troubleshooting](/betrieb/troubleshooting). Der Fehlerzähler meldet dann 0
 auf einer Maschine, die Fehler hat.
 :::
 
-::: tip Die Anwendung legt hier nichts ab
-Was in PATIO hochgeladen wird, landet in der **Datenbank**, nicht in diesem
-Ordner. Er ist die Netzfreigabe für alles, was nicht in eine Datenbank gehört
-— Pläne, CAD, große Scans. Die Aufteilung steht in
-[Netzfreigabe „Dokumente"](/betrieb/freigabe).
+::: tip Von außen sieht niemand in diesen Ordner
+Was in PATIO hochgeladen wird, landet in der **Datenbank** — mit Projektbezug,
+Rechten und Volltextsuche. Der Ordner wird von der Anwendung nicht
+beschrieben; sie liest nur noch daraus, und zwar für Altbestand aus der
+Vault-Zeit: Dateien, deren Datenbankzeile keinen Inhalt hat
+(`src/workspace/index.ts`).
 
-Für den Ordner zählen deshalb die Rechte von **Samba**, nicht die des
-Containers. UID 1000 bleibt trotzdem die Vorgabe: die Einrichtung ist erprobt,
-und ein Bestand aus der Zeit, als der Dienst hier ablegte, bleibt damit
-lesbar.
+Der Ordner ist **keine Netzfreigabe**. Er ist ausschließlich als `/workspace`
+in den App-Container gehängt; niemand bindet ihn im Explorer ein, und ein
+Zugriff über das Netz ist nicht vorgesehen. Deshalb zählen hier die Rechte des
+**Containers**: der Dienst läuft darin als `node` (UID 1000) und käme sonst an
+den Altbestand nicht heran.
 
 ```bash
 stat -c '%u %g %n' /opt/patio-workspace     # sollte 1000 1000 zeigen
@@ -226,8 +233,8 @@ stat -c '%u %g %n' /opt/patio-workspace     # sollte 1000 1000 zeigen
 ::: danger Nicht `chown -R patio:patio`
 Der Dienst-Benutzer `patio` bekommt beim Anlegen irgendeine andere UID — bei
 `adduser` die nächste freie, bei `useradd -r` sogar eine **unter** 1000. Damit
-passt sie weder zur Container-Kennung noch zu der, unter der Samba schreibt,
-und ein Bestand aus der Vault-Zeit wäre für niemanden mehr änderbar.
+passt sie nicht zur Kennung im Container, und der Altbestand aus der Vault-Zeit
+wäre für den Dienst nicht mehr lesbar.
 
 Richtig: `sudo chown -R 1000:1000 /opt/patio-workspace`
 :::
@@ -239,11 +246,12 @@ Nach diesen Schritten steht:
 - [x] Ubuntu 24.04 LTS, aktuell gehalten
 - [x] Feste Adresse und DNS-Name im internen Netz
 - [x] Dienst-Benutzer `patio` mit SSH-Schlüssel, Root-Login gesperrt
-- [x] Firewall: SSH, HTTP (nur die Weiterleitung), HTTPS und SMB — jeweils
+- [x] Firewall: SSH, HTTP (nur die Weiterleitung) und HTTPS — jeweils
       ausschließlich aus dem eigenen Netz
 - [x] Zeitzone `Europe/Vienna`
-- [x] Verzeichnisse angelegt — Dokumente gehören **UID 1000**, nicht `patio`;
-      dasselbe gilt nach der Installation für `logs/`, `data/` und `tools/`
+- [x] Verzeichnisse angelegt — der Dokumentenordner gehört **UID 1000**, nicht
+      `patio`; dasselbe gilt nach der Installation für `logs/`, `data/` und
+      `tools/`
 
 ## Nächster Schritt
 

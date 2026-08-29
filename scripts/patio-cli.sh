@@ -190,23 +190,33 @@ befehl_env() {
   echo
 }
 
+# Der Dokumentenordner — was davon ueblich bleibt.
+#
+# Bis zum 29.08.2026 war dieser Ordner die Samba-Freigabe „Dokumente": jeder
+# konnte ihn im Explorer einbinden, und `vfs objects = recycle` legte darin
+# einen Papierkorb je Person an. Beides ist entfallen.
+#
+# Was der Ordner heute ist: ein interner Ablageort, den nur der Dienst sieht.
+# Er SCHREIBT dort nichts hinein — was in PATIO hochgeladen wird, liegt in der
+# Datenbank. Gelesen wird nur noch fuer Alt-Datensaetze aus der Vault-Zeit,
+# deren Inhalt nicht in der Datenbank steht.
+#
+# Die Eigentuemer-Pruefung bleibt trotzdem sinnvoll: gehoert der Ordner nicht
+# uid 1000, bekommt der Dienst beim Nachlesen EACCES — und der Fehler zeigt
+# sich als fehlgeschlagener Download an ganz anderer Stelle.
 befehl_dokumente() {
   echo
   echo -e "  ${FETT}Dokumente${AUS} ${MATT}($WORKSPACE_DIR)${AUS}\n"
   echo "    Belegt:   $(du -sh "$WORKSPACE_DIR" 2>/dev/null | cut -f1)"
-  echo "    Projekte: $(find "$WORKSPACE_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '.papierkorb' 2>/dev/null | wc -l)"
+  echo "    Ordner:   $(find "$WORKSPACE_DIR" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l) ${MATT}(Altbestand)${AUS}"
   echo "    Eigentümer: $(stat -c '%u:%g' "$WORKSPACE_DIR" 2>/dev/null)  ${MATT}(muss 1000:1000 sein)${AUS}"
   local besitzer
   besitzer=$(stat -c '%u' "$WORKSPACE_DIR" 2>/dev/null)
   if [ "$besitzer" != "1000" ]; then
     echo
     echo -e "  ${ROT}✗${AUS} Falscher Eigentümer. Der Dienst läuft im Container als uid 1000"
-    echo -e "     und kann so keine Datei ablegen. Beheben:"
+    echo -e "     und kann alte Datensätze so nicht mehr lesen. Beheben:"
     echo -e "       ${FETT}sudo chown -R 1000:1000 $WORKSPACE_DIR${AUS}"
-  fi
-  if [ -d "$WORKSPACE_DIR/.papierkorb" ]; then
-    echo
-    echo "    Papierkorb der Freigabe: $(du -sh "$WORKSPACE_DIR/.papierkorb" 2>/dev/null | cut -f1)"
   fi
   echo
 }

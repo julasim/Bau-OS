@@ -30,12 +30,6 @@ PATIO.exe je Arbeitsplatz       Besprechungsraum: Browser, Vollbild
                       PostgreSQL
         Projekte, Notizen, Aufgaben, Termine, Team
         — und die hochgeladenen Dokumente selbst
-
-
-   daneben, von PATIO nicht angefasst:
-
-        Netzfreigabe „Dokumente"
-        Pläne, CAD, große Scans — direkt im Explorer
 ```
 
 Drei Container auf einem Rechner: Datenbank, Anwendung und der TLS-Zugang.
@@ -148,24 +142,23 @@ Meetings, Bautagebuch, Stunden, Phasen, Rechnungen — **und die hochgeladenen
 Dokumente selbst**, als Binärinhalt in der Tabelle `files`. Auf der Platte
 landet dabei nichts.
 
-`WORKSPACE_PATH` zeigt auf die **Netzfreigabe** „Dokumente" und ist eine
-andere Sache (siehe Kasten unten).
-
 Einen Dateisystem-Modus als Alternative zur Datenbank gibt es nicht mehr —
 ohne erreichbare Datenbank startet PATIO gar nicht.
 
-::: warning Zwei Ablagen, die man nicht verwechseln darf
-Es gibt **zwei getrennte Orte** für Dateien, und die Unterscheidung ist im
-Alltag wichtig:
+::: info Eine Ablage, nicht zwei
+Dateien kommen **ausschließlich über PATIO selbst** herein: hochladen in der
+Oberfläche, danach mit Projektbezug, Rechteprüfung und Volltextsuche. Einen
+zweiten Weg — einen Netzordner, den man im Explorer öffnet und in den man
+Dateien legt — gibt es bewusst nicht. Damit gibt es auch keinen Bestand, von
+dem PATIO nichts weiß.
 
-- **Die Netzfreigabe „Dokumente"** ist ein ganz normaler Netzordner im
-  Explorer — für Pläne, CAD-Dateien und große Scans. Die Anwendung fasst ihn
-  nicht an.
-- **In PATIO Hochgeladenes** liegt in der Datenbank, mit Projektbezug,
-  Rechteprüfung und Volltextsuche.
-
-Eine Datei in PATIO zu löschen berührt die Freigabe nicht, und umgekehrt.
-Details: [Netzfreigabe](/betrieb/freigabe).
+Der Dienst braucht weiterhin ein Verzeichnis (`WORKSPACE_PATH`, im Container
+`/workspace`) und startet ohne die Angabe nicht. Das ist aber ein rein
+**interner Ordner**: Nur der Dienst sieht ihn, von den Arbeitsplätzen aus ist
+er nicht erreichbar. Darin liegt Altbestand aus der Vault-Zeit — Dateien, die
+vor der Umstellung auf die Datenbank angelegt wurden. Findet PATIO zu einem
+Eintrag keinen Inhalt in der Datenbank, liest es ihn von dort. Die nächtliche
+Sicherung nimmt den Ordner mit.
 :::
 
 ## Benutzer und Rechte

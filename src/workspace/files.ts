@@ -4,7 +4,7 @@ import { safePath } from "./helpers.js";
 // ── Was hier stand: createFile und listFolder ──────────────────────────────
 //
 // `createFile` war der letzte SCHREIBENDE Weg der Anwendung ins Dateisystem —
-// in `WORKSPACE_PATH`, also die Samba-Freigabe „Dokumente". Keine Route rief
+// in `WORKSPACE_PATH`, dem Ordner mit dem Altbestand. Keine Route rief
 // ihn mehr auf, und gedeckt war er von keiner Rechtepruefung: er nahm einen
 // Pfad und schrieb dorthin. `listFolder` war das lesende Gegenstueck samt
 // einer Ausblendliste fuer Ordner der Bot-Aera („Agents", „MEMORY_LOGS").

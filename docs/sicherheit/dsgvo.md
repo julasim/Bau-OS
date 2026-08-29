@@ -67,8 +67,11 @@ Für ein Verarbeitungsverzeichnis heißt das: die Tabelle existiert, füllt sich
 aber nicht mehr. Altbestände darin gehören in eine Löschprüfung.
 :::
 
-Dazu Dateien im Dateisystem unter `WORKSPACE_PATH` sowie technische Logs in
-`logs/`.
+Hochgeladene Dokumente liegen samt Inhalt in der Datenbank — es gibt keine
+Netzfreigabe und keinen zweiten Weg, auf dem Dateien ins System kämen. Im
+Ordner unter `WORKSPACE_PATH` liegt nur noch der Altbestand aus der Vault-Zeit,
+den die Anwendung ausschließlich liest; dazu kommen technische Logs in `logs/`.
+Beides gehört in eine Löschprüfung.
 
 ::: warning IP-Adressen werden gespeichert
 Das Audit-Log hält zu jedem Anmeldevorgang und jeder Kontenänderung
@@ -190,10 +193,10 @@ entfernen muss, löscht die betreffenden Audit-Zeilen direkt.
 **Vollständige Löschung des Bestands:**
 
 ```bash
-# Datenbank verwerfen
+# Datenbank verwerfen — darin liegen auch die hochgeladenen Dokumente
 docker compose down -v          # löscht auch das Datenvolume
 
-# Dokumente verwerfen
+# Altbestand im Dateiordner verwerfen (Vault-Zeit)
 rm -rf /opt/patio-workspace/*
 
 # Backups verwerfen

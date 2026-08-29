@@ -69,16 +69,26 @@ Vom Server holen:
 
 ```bash
 docker cp patio-caddy:/data/caddy/pki/authorities/local/root.crt \
-          /opt/patio-workspace/PATIO-Zertifikat.crt
+          ~/PATIO-Zertifikat.crt
 ```
 
-Die Datei liegt damit in der Netzfreigabe und ist von jedem Arbeitsplatz aus
-erreichbar.
+Die Datei muss von Hand an die Arbeitsplätze: auf einen USB-Stick, oder per
+`scp` auf den Rechner, von dem aus die Plätze eingerichtet werden.
 
-**Auf jedem Windows-Arbeitsplatz** (als Administrator):
+::: tip Warum nicht über PATIO selbst
+Die Anwendung liefert das Zertifikat nicht aus; eine Route dafür gibt es
+nicht. Sie wäre auch ein Umweg: Wer das Zertifikat noch nicht hat, erreicht
+die Oberfläche nur über genau die Warnung, die dieser Schritt beseitigen soll.
+Und eine Netzfreigabe, über die man die Datei sonst verteilen würde, gibt es
+auf diesem Server nicht — Dateien kommen ausschließlich über PATIO selbst
+herein.
+:::
+
+**Auf jedem Windows-Arbeitsplatz** (als Administrator; den Pfad an den
+Ablageort anpassen, hier ein USB-Stick als Laufwerk `E:`):
 
 ```powershell
-Import-Certificate -FilePath "\\patio.sima.intern\Dokumente\PATIO-Zertifikat.crt" `
+Import-Certificate -FilePath "E:\PATIO-Zertifikat.crt" `
                    -CertStoreLocation Cert:\LocalMachine\Root
 ```
 
@@ -92,8 +102,8 @@ Wer Firefox nutzt, muss dort getrennt importieren:
 Zertifizierungsstellen → Importieren`, und dabei **„Dieser CA vertrauen, um
 Websites zu identifizieren"** ankreuzen.
 
-Chrome, Edge und der Explorer nutzen den Windows-Speicher und sind mit
-Schritt 3 erledigt.
+Chrome und Edge nutzen den Windows-Speicher und sind mit Schritt 3
+erledigt.
 :::
 
 ### Gilt das auch für das Arbeitsplatz-Programm?
@@ -168,4 +178,4 @@ tar -tzf /mnt/patio-backup/taeglich/*/caddy-daten.tar.gz | grep root.key
 
 ## Nächster Schritt
 
-→ [Netzfreigabe](/betrieb/freigabe)
+→ [Arbeitsplatz-Programm](/betrieb/arbeitsplatz)
