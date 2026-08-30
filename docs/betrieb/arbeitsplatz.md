@@ -13,16 +13,28 @@ Erklärung und sonst nichts — **Offline-Arbeiten ist nicht vorgesehen.**
 
 ## Verteilung
 
-Es gibt keinen Update-Dienst und keinen Installer. Die Datei liegt im
-geteilten Ordner und wird von dort gestartet:
+Es gibt keinen Update-Dienst und keinen Installer — die Datei wird von Hand
+auf die Arbeitsplätze gebracht.
+
+::: warning Der frühere Weg über die Netzfreigabe ist entfallen
+Hier stand `\\<server>\Dokumente\_Programm\…`. Diese Freigabe gibt es seit
+dem 29.08.2026 nicht mehr: Dateien kommen ausschließlich über PATIO selbst
+herein, und einen Netzordner zum Ablegen gibt es damit nicht.
+:::
+
+In der Praxis derselbe Weg, der ohnehin schon zweimal gebraucht wird — der
+USB-Stick, auf dem das Auslieferungspaket und das Wurzelzertifikat liegen:
 
 ```
-\\<server>\Dokumente\_Programm\PATIO-Arbeitsplatz-<version>-portable.exe
+PATIO-Arbeitsplatz-<version>-portable.exe
 ```
 
-Wer das Programm dauerhaft will, kopiert die Datei einmal auf den eigenen
-Rechner und legt eine Verknüpfung an. Eine neue Fassung ersetzt schlicht die
-Datei im geteilten Ordner.
+Datei auf den Rechner kopieren, Verknüpfung anlegen, fertig. Es gibt kein
+Installationsverzeichnis und keinen Startmenü-Eintrag.
+
+Eine neue Fassung ersetzt die Datei — **an jedem Platz einzeln**. Wer eine
+Kopie auf dem eigenen Rechner hat, bekommt eine neue Fassung sonst gar nicht
+mit. Bei acht Plätzen ist das überschaubar, aber es muss jemand anstoßen.
 
 Das Programm ist mit `CN=Julius Sima` signiert. Weil es sich um ein
 selbstsigniertes Zertifikat handelt, kann Windows beim ersten Start eine
@@ -125,7 +137,7 @@ bestehen; ihre Einstellungen sind getrennt:
 |---|---|---|
 | Daten | Ordner im Netzlaufwerk | PostgreSQL auf dem Firmenserver |
 | Konfigurationsordner | `%APPDATA%\PATIO` | `%APPDATA%\PATIO-Arbeitsplatz` |
-| Installation | Installer | portable Datei aus dem geteilten Ordner |
+| Installation | Installer | portable Datei, von Hand kopiert |
 
 ::: warning Beide heißen im Task-Manager „PATIO"
 Sie tragen denselben Produktnamen. Ein pauschales Beenden über den Namen —
@@ -140,8 +152,9 @@ Get-Process PATIO | Where-Object { $_.Path -notlike '*\Programs\PATIO\*' } | Sto
 
 ## Was bewusst fehlt
 
-- **Automatische Updates.** Es gibt keinen Update-Server; verteilt wird über
-  den geteilten Ordner.
+- **Automatische Updates.** Es gibt keinen Update-Server — der Rechner hat
+  kein Internet, es gäbe keine Feed-Adresse. Eine neue Fassung wird an jedem
+  Platz von Hand ersetzt.
 - **Erinnerungen an fällige Aufgaben.** Sie brauchen einen Zugang zur API, den
   die Hülle nicht hat. Der richtige Ort dafür ist der Server — er kennt die
   Fälligkeiten ohnehin und erreicht damit alle Arbeitsplätze gleich.

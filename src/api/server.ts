@@ -47,9 +47,26 @@ import { personendatenFilter, schreibschutz } from "./personendaten.js";
 import type { Rolle } from "../data/access.js";
 
 /** Liefert die Client-IP fuer Rate-Limiting und Audit-Eintraege.
- *  Wichtig: nur die ERSTE IP aus x-forwarded-for verwenden — sonst kann
- *  ein Angreifer durch wechselnde XFF-Header pro Request einen anderen
- *  Bucket-Key erzeugen und das Rate-Limit umgehen. */
+ *
+ *  ACHTUNG — dieser Wert ist nur so vertrauenswuerdig wie der Proxy davor.
+ *  Der Dienst nimmt `x-forwarded-for` UNGEPRUEFT: setzt man den Header
+ *  direkt gegen ihn, landet der erfundene Wert in der Ratebremse und im
+ *  Pruefprotokoll (nachgemessen am 29.08.2026: ein Aufruf aus dem
+ *  App-Container mit `X-Forwarded-For: 7.7.7.7` erzeugte einen
+ *  `login.fail`-Eintrag mit genau dieser IP).
+ *
+ *  Dass eine Faelschung von aussen nicht durchkommt, leistet allein Caddy:
+ *  es ERSETZT den Header, statt die echte Adresse anzuhaengen (gemessen mit
+ *  Caddy v2.11.4 — ein Aufruf mit `X-Forwarded-For: 9.9.9.9` kam als
+ *  172.20.0.1 an, und die Login-Bremse griff beim zweiten Versuch mit 429).
+ *
+ *  Daraus folgt die Betriebsregel: Der App-Container darf NIE ein `ports:`
+ *  bekommen. `docker-compose.yml` haelt das ausdruecklich so. Wer den Dienst
+ *  direkt erreichbar macht oder einen anderen Proxy davorsetzt, verliert die
+ *  Ratebremse und die Aussagekraft des Protokolls — lautlos.
+ *
+ *  Die erste IP zu nehmen ist bei genau einem ersetzenden Proxy richtig.
+ *  Kaeme je ein zweiter dazu, waere der rechteste Eintrag der richtige. */
 function getClientIp(c: { req: { header(name: string): string | undefined } }): string {
   const xff = c.req.header("x-forwarded-for");
   if (xff) {

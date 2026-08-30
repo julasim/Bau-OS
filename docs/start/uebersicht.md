@@ -3,8 +3,9 @@
 PATIO ist eine Büro-Software für **Architektur-, Planungs- und
 Projektsteuerungsbüros**. Sie läuft zentral auf einem Rechner im eigenen Netz.
 Am Arbeitsplatz steht ein **eigenes Programm** — `PATIO.exe`, mit Symbol in
-der Taskleiste. Es wird als portable Datei aus dem geteilten Ordner gestartet;
-einen Installer und damit einen Startmenü-Eintrag gibt es bewusst noch nicht.
+der Taskleiste. Es ist eine portable Datei, die einmal auf den Rechner kopiert
+wird; einen Installer und damit einen Startmenü-Eintrag gibt es bewusst noch
+nicht.
 
 ::: warning Wichtige Abgrenzung
 PATIO ist ein **Büro-Werkzeug**, nicht für die Baustelle gedacht. Zielgruppe

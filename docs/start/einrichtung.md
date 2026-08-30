@@ -135,7 +135,7 @@ Hochladen an.
 Am Arbeitsplatz läuft kein Browser, sondern `PATIO.exe`. Zu tun ist dort
 zweierlei: das **Wurzelzertifikat** der internen Zertifizierungsstelle
 einspielen ([Anleitung](/betrieb/zertifikat)) und das **Programm** aus dem
-geteilten Ordner starten ([Anleitung](/betrieb/arbeitsplatz)).
+USB-Stick auf den Rechner kopieren ([Anleitung](/betrieb/arbeitsplatz)).
 
 Beim ersten Start fragt es nach der Serveradresse und merkt sie sich.
 
