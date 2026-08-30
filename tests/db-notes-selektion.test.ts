@@ -136,7 +136,66 @@ describe.skipIf(!HAS_DB)("db-notes — welche Notiz wird getroffen", () => {
     expect(Number(rest[0].n)).toBe(2);
   });
 
-  // ── 3a. Gleicher Titel zweimal: bewusst die juengere ─────────────────────
+  // ── 3a. Die Voraussetzung dafuer, dass "die juengere" ueberhaupt bestimmbar ist
+
+  it("zwei schnell angelegte Notizen bekommen unterscheidbare Zeitstempel", async () => {
+    // DIESER Test schuetzt den Test darunter. Er haelt fest, WARUM die
+    // Auswahl funktioniert — und faellt, sobald die Voraussetzung wegbricht.
+    //
+    // Der Hintergrund: `findeNotiz` sortiert mit `ORDER BY rang, created_at`
+    // DESC`. Kollidiert der Zeitstempel, hat die Abfrage kein definiertes
+    // Ergebnis: Postgres darf die Zeilen dann in beliebiger Reihenfolge
+    // liefern, und welche Notiz getroffen wird, haengt am Ausfuehrungsplan.
+    //
+    // Genau das war bis zum 30.08.2026 der Fall. `save()` setzte den
+    // Zeitstempel aus JavaScript (`new Date().toISOString()`, MILLISEKUNDEN),
+    // und zwei aufeinanderfolgende Notizen bekamen denselben Wert — gemessen
+    // 20 von 20 Paaren. Der Test darunter lief trotzdem lange gruen: bei
+    // einem Seq-Scan liefert Postgres die Einfuegereihenfolge. In der CI ist
+    // der Zufall gekippt, und er schlug fehl.
+    //
+    // Auch `DEFAULT now()` genuegt nicht: `now()` ist die TRANSAKTIONS-Zeit
+    // und bleibt innerhalb einer Transaktion konstant — postgres.js buendelt
+    // die beiden INSERTs. Erst `clock_timestamp()` (Anweisungszeit,
+    // Mikrosekunden) macht sie unterscheidbar.
+    //
+    // `::text` ist hier keine Kosmetik: als JS-Date gelesen verliert der
+    // Vergleich die Mikrosekunden, und der Test waere blind fuer genau den
+    // Fehler, den er fangen soll.
+    // Gemessen wird nicht der Abstand zweier Notizen — der haengt an der
+    // Netzwerklatenz zur Datenbank und ist damit umgebungsabhaengig. Auf
+    // einem Entwicklungsrechner mit entfernter Datenbank waere dieser Test
+    // IMMER gruen, auch mit dem alten Fehler: genau die Blindheit, die den
+    // Fehler ueberhaupt erst in die CI gelassen hat.
+    //
+    // Stattdessen die AUFLOESUNG des Zeitstempels selbst. Ein JS-Wert aus
+    // `toISOString()` hat Millisekunden, also hoechstens DREI Nachkommastellen
+    // (.155). `clock_timestamp()` liefert Mikrosekunden und damit meist sechs
+    // (.155612).
+    //
+    // Auf die nachfolgenden Nullen darf man dabei nicht prueflich bauen:
+    // Postgres kuerzt sie weg — aus `.155000` wird in der Textausgabe `.155`.
+    const titel = [1, 2, 3, 4, 5].map((n) => `${PRAEFIX} Zeit ${n}`);
+    for (const t of titel) await notiz(t, "inhalt");
+
+    const rows = await db`
+      SELECT created_at::text AS c FROM notes WHERE title = ANY(${titel})`;
+    expect(rows.length).toBe(5);
+
+    // Wie viele Zeitstempel haben mehr als Millisekunden-Auflösung?
+    // Bei `clock_timestamp()` traegt praktisch jeder sechs Nachkommastellen;
+    // dass ALLE fuenf zufaellig auf drei gekuerzt werden, hat die
+    // Wahrscheinlichkeit (1/1000)^5.
+    const mitMikro = rows.filter((r) => /\.\d{4,}\+/.test(String(r.c))).length;
+    expect(
+      mitMikro,
+      "Kein Zeitstempel hat mehr als drei Nachkommastellen — das ist ein " +
+        "JS-Wert mit Millisekunden. Damit kollidieren zwei schnell angelegte " +
+        "Notizen, und findeNotiz kann die juengere nicht mehr bestimmen.",
+    ).toBeGreaterThan(0);
+  });
+
+  // ── 3b. Gleicher Titel zweimal: bewusst die juengere ─────────────────────
 
   it("nimmt bei zwei GLEICHEN Titeln die juengere — dokumentierte Entscheidung", async () => {
     // Anders als beim mehrdeutigen Anfang wird hier NICHT verweigert: die

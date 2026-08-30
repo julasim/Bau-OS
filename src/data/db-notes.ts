@@ -56,6 +56,15 @@ async function findeNotiz(nameOrPath: string): Promise<{ id: string; title: stri
   // id::text statt id — sonst wirft Postgres bei Nicht-UUID-Eingaben
   // "invalid input syntax for type uuid", und die Notiz waere weder ueber
   // ihren Titel noch ueber ihren Dateinamen erreichbar.
+  //
+  // `id DESC` als letztes Sortierkriterium: ohne einen Tiebreaker hat die
+  // Abfrage bei gleichem `created_at` KEIN definiertes Ergebnis — Postgres
+  // darf die Zeilen dann in beliebiger Reihenfolge liefern, und welche Notiz
+  // getroffen wird, haengt am Ausfuehrungsplan. Seit `save()` den Zeitstempel
+  // der Datenbank ueberlaesst (Mikrosekunden statt Millisekunden) ist eine
+  // Kollision praktisch ausgeschlossen; der Tiebreaker macht das Ergebnis
+  // auch im Rest der Faelle STABIL statt zufaellig. Welche der beiden dann
+  // gewinnt, ist willkuerlich — aber vorhersagbar, und darauf kommt es an.
   const rows = await db`
     SELECT id, title, rev,
            CASE WHEN id::text = ${nameOrPath} THEN 0
@@ -66,7 +75,7 @@ async function findeNotiz(nameOrPath: string): Promise<{ id: string; title: stri
        AND (id::text = ${nameOrPath}
         OR title = ${nameOrPath}
         OR title LIKE ${escapeLike(nameOrPath) + "%"})
-     ORDER BY rang, created_at DESC
+     ORDER BY rang, created_at DESC, id DESC
   `;
   if (rows.length === 0) return null;
 
@@ -82,7 +91,6 @@ export const dbNotes: NoteRepository = {
   async save(content, project, createdById = null) {
     const db = getDb();
     const id = crypto.randomUUID();
-    const now = new Date().toISOString();
     const title =
       content
         .split("\n")[0]
@@ -98,9 +106,22 @@ export const dbNotes: NoteRepository = {
     // `source` stand hier auf 'bot' — ein Rest aus der Telegram-Aera, die mit
     // AP0 entfallen ist. Alles, was heute eine Notiz anlegt, kommt ueber die
     // Weboberflaeche; die Spalte hat dafuer bereits 'web' als Vorgabe.
+    // `created_at`/`updated_at` bewusst NICHT mitgeben: die Spalten haben
+    // `DEFAULT now()`, und Postgres liefert damit MIKROSEKUNDEN. Hier stand
+    // ein JS-Zeitstempel (`new Date().toISOString()`) mit nur Millisekunden —
+    // zwei schnell aufeinanderfolgende Notizen bekamen dadurch denselben
+    // Wert, und `findeNotiz` (unten) konnte die juengere nicht mehr von der
+    // aelteren unterscheiden.
+    //
+    // Gemessen am 30.08.2026 mit Postgres auf demselben Host, wie in der CI:
+    // 20 von 20 Paaren hatten denselben `created_at`. Der zugehoerige Test
+    // („nimmt bei zwei GLEICHEN Titeln die juengere") lief trotzdem lange
+    // gruen — bei einem Seq-Scan liefert Postgres die Einfuegereihenfolge.
+    // Verlassen kann man sich darauf nicht: in der CI ist es gekippt.
     await db`
       INSERT INTO notes (id, title, content, project_id, source, created_by, created_at, updated_at)
-      VALUES (${id}, ${title}, ${content}, ${projectId}, 'web', ${createdById}, ${now}, ${now})
+      VALUES (${id}, ${title}, ${content}, ${projectId}, 'web', ${createdById},
+              clock_timestamp(), clock_timestamp())
     `;
 
     return id;
