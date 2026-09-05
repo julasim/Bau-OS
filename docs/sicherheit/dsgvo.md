@@ -54,7 +54,7 @@ Alles Strukturierte liegt in PostgreSQL:
 | Personen | `team_members`, `companies`, `project_team_members` | Beschäftigte, Bauherren, Fachplaner, Behördenkontakte — inklusive Kontaktdaten und Kontakt-Log |
 | Konten | `users`, `user_projects` | Benutzername, Anzeigename, E-Mail, Passwort-Hash, Rolle, Projektzuordnung |
 | Dateien | `files`, `file_shares`, `file_stars` | Hochgeladene Dokumente samt Inhalt |
-| Protokoll | `audit_log` | Anmeldungen und Kontenänderungen |
+| Protokoll | `audit_log` | Anmeldungen, Kontenänderungen — und die Exporte: Volldump, Projekt-Dossier, Word-/PDF-Export, KI-Akte. Der Download einer einzelnen Datei wird nicht protokolliert |
 | Steuerung | `ki_freigabe`, `ki_freigabe_projekt` | Welche Projekte und Bereiche für ein Sprachmodell freigegeben sind, und mit welcher Personendaten-Stufe |
 
 ::: info `email_otp_tokens` steht leer im Schema
@@ -74,8 +74,10 @@ den die Anwendung ausschließlich liest; dazu kommen technische Logs in `logs/`.
 Beides gehört in eine Löschprüfung.
 
 ::: warning IP-Adressen werden gespeichert
-Das Audit-Log hält zu jedem Anmeldevorgang und jeder Kontenänderung
-**IP-Adresse und User-Agent** fest — auch bei fehlgeschlagenen Versuchen.
+Das Audit-Log hält zu jedem Anmeldevorgang, jeder Kontenänderung und jedem
+Datenabfluss (Word-/PDF-Export, Projekt-Dossier, Volldump, KI-Akte)
+**IP-Adresse und User-Agent** fest — bei Anmeldung und Passwortwechsel auch
+dann, wenn sie fehlschlagen.
 Das ist für die Sicherheitsanalyse gewollt und personenbezogen. Es gehört
 ins Verarbeitungsverzeichnis. Aufbewahrung: `AUDIT_RETENTION_DAYS`, Standard
 365 Tage; `0` schaltet die automatische Löschung ab.
@@ -177,9 +179,11 @@ zweite Schritt Pflicht:
 
 Erst dieser Schritt entfernt die Zeile wirklich und lässt die Kaskaden im
 Schema feuern (abhängige Datensätze gehen mit). Er ist der einzige
-unumkehrbare Vorgang in PATIO und deshalb Administratoren vorbehalten.
-
-Betroffen sind Projekte, Notizen, Aufgaben und Termine.
+unumkehrbare Vorgang in PATIO. Bei **Projekten** ist er der Verwaltung
+vorbehalten; **Notizen, Aufgaben und Termine** darf endgültig entfernen, wer
+den Eintrag im Papierkorb überhaupt sieht — bei Projektdaten also jeder
+Projektbeteiligte, sonst nur der Verfasser. Das Anzeigekonto ändert wie
+überall nichts.
 :::
 
 **Einzelne Person aus dem Team entfernen:** über die Oberfläche unter
@@ -208,7 +212,7 @@ Eine Löschung, die die Sicherungen auslässt, ist keine.
 
 Hier stand „bis zu 14 Tage". **Das stimmt nicht mehr.** Seit der Umstellung auf
 eine gestaffelte Aufbewahrung hält die Sicherung deutlich länger
-(`scripts/backup.sh`, Zeilen 49–51):
+(`scripts/backup.sh`, Zeilen 51–53):
 
 | Staffel | Stände | reicht zurück bis |
 |---|---|---|
@@ -251,7 +255,7 @@ Mailversand, kein hinterlegtes Sprachmodell und keine externen Schriften.
 |---|---|
 | Zutrittskontrolle | Der Rechner steht im Büro; physischer Zugang ist zu regeln |
 | Zugangskontrolle | Anmeldung mit Benutzername und Passwort (bcrypt, Kostenfaktor 12, mindestens 12 Zeichen), Ratebremse gegen Durchprobieren |
-| Zugriffskontrolle | Drei Rollen (Verwaltung, Benutzer, Anzeige), Sichtbarkeit projektweise über `user_projects`. Die Anzeigerolle für den Besprechungsraum kann nichts schreiben und bekommt in den Antworten weder Beträge noch Kontaktdaten — zur offenen Ausnahme beim Volldump siehe [Zugriffskontrolle](/sicherheit/zugriff) |
+| Zugriffskontrolle | Drei Rollen (Verwaltung, Benutzer, Anzeige), Sichtbarkeit projektweise über `user_projects`. Die Anzeigerolle für den Besprechungsraum kann nichts schreiben und bekommt in den Antworten weder Beträge noch Kontaktdaten. Word-Export, PDF und Volldump (`/api/exports/*`) sind für sie gesperrt; Dateien und Datei-Treffer in der Suche bekommt sie ebenfalls nicht — Einzelheiten: [Zugriffskontrolle](/sicherheit/zugriff) |
 | Trennungskontrolle | Je Büro eine eigene Installation auf eigener Hardware |
 | Übertragung | HTTPS über den Reverse-Proxy; keine unverschlüsselte Verbindung im Netz |
 | Verschlüsselung | AES-GCM für einzelne Datenbankfelder |

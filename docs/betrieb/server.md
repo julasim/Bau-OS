@@ -193,13 +193,13 @@ sudo chown -R 1000:1000 /opt/patio-workspace
 | Verzeichnis | Inhalt | Eigentümer |
 |---|---|---|
 | `/opt/patio` | Anwendung, `.env`, Compose-Datei | `patio` |
-| darin `logs/`, `data/`, `tools/` | in den Container gehängt — Protokoll und Ablagen des Dienstes | **UID 1000** (setzt der Installer) |
+| darin `logs/` und `data/` | in den Container gehängt — Protokoll und Ablagen des Dienstes | **UID 1000** (setzt der Installer) |
 | `/opt/patio-workspace` | Dokumentenordner (`WORKSPACE_PATH`) — als `/workspace` in den Container gehängt, nur für den Dienst | **UID 1000** |
 | `/mnt/patio-backup` | externe Sicherungsplatte | `root` (systemd hängt ein) |
 
 ::: danger `chown -R patio:patio /opt/patio` gilt nur bis zur Installation
-Drei Unterordner darin werden in den Container gehängt (`docker-compose.yml`:
-`./logs`, `./data`, `./tools`), und der Dienst schreibt sie als UID 1000.
+Zwei Unterordner darin werden in den Container gehängt (`docker-compose.yml`:
+`./logs` und `./data`), und der Dienst schreibt sie als UID 1000.
 `scripts/install-server.sh` setzt sie deshalb beim Einspielen wieder auf
 `1000:1000`. Wer später erneut pauschal über `/opt/patio` chownt, nimmt sie dem
 Dienst weg — **und merkt nichts davon**: der Protokoll-Baustein verschluckt den
@@ -250,8 +250,7 @@ Nach diesen Schritten steht:
       ausschließlich aus dem eigenen Netz
 - [x] Zeitzone `Europe/Vienna`
 - [x] Verzeichnisse angelegt — der Dokumentenordner gehört **UID 1000**, nicht
-      `patio`; dasselbe gilt nach der Installation für `logs/`, `data/` und
-      `tools/`
+      `patio`; dasselbe gilt nach der Installation für `logs/` und `data/`
 
 ## Nächster Schritt
 

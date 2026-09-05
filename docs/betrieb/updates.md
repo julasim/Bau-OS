@@ -30,8 +30,8 @@ DATABASE_URL="postgres://patio:patio@<WSL-IP>:5432/patio" \
 ```
 
 Das Skript **besteht auf `DATABASE_URL`**. Ohne Datenbank überspringt die
-Testsuite still **527 von 733** Prüfungen — genau die ACL-, Auth- und DB-Tests
-— und meldet trotzdem grün (gemessen am 25.08.2026: `206 passed | 527
+Testsuite still **599 von 852** Prüfungen — genau die ACL-, Auth- und DB-Tests
+— und meldet trotzdem grün (gemessen am 02.09.2026: `253 passed | 599
 skipped`). Ein Auslieferungspaket auf dieser Grundlage wäre fahrlässig.
 
 Ergebnis in `release/`:
@@ -64,8 +64,9 @@ wollte.
 
 Auf einer bestehenden Installation fiel es nicht auf: Postgres und Caddy laufen
 ja und sind dadurch vorhanden. `alpine:latest` hängt dagegen an keinem
-laufenden Container — es wird nur von `backup.sh` gebraucht, um den privaten
-Schlüssel der internen CA zu sichern. Fehlte es, scheiterte die nächtliche
+laufenden Container — es wird von `backup.sh` gebraucht, um den privaten
+Schlüssel der internen CA zu sichern, und von `restore.sh`, um ihn
+zurückzuspielen. Fehlte es, scheiterte die nächtliche
 Sicherung **ohne jede Meldung**, und jedes Update brach danach mit „Die
 Sicherung ist fehlgeschlagen" ab, ohne dass die Ursache irgendwo stand.
 
@@ -75,9 +76,9 @@ das nimmt, was auf dem Rechner liegt.
 :::
 
 ::: warning Eine Version, ein Paket
-Ohne Argument nimmt das Skript die Version aus `package.json` — und die steht
-seit dem ersten Commit auf `0.1.0`. Jedes Paket hiess damit gleich und
-überschrieb das vorige stillschweigend. Genau dieses vorige Paket ist aber der
+Ohne Argument nimmt das Skript die Version aus `package.json`; dort steht
+heute `1.1.0`. Bis zum 28.08.2026 stand seit dem ersten Commit `0.1.0` darin:
+jedes Paket hiess damit gleich und überschrieb das vorige stillschweigend. Genau dieses vorige Paket ist aber der
 Rückweg, wenn ein Update auf dem Server nicht trägt.
 
 Seit dem 25.08.2026 bricht der Bau ab, wenn die Datei schon existiert. Also
@@ -175,6 +176,58 @@ recht nicht.
 Steht dort `unbekannt`, wurde zuletzt vor diesem Datum eingespielt.
 :::
 
+::: tip Der Rückweg holt seit dem 30.08.2026 mehr zurück als das Image
+Vorher setzte er ausschließlich `patio-app:latest` auf das vorige Image
+zurück — Compose-Datei, `docker/` und `deploy/` waren zu diesem Zeitpunkt aber
+längst ersetzt. Setzt die neue Compose-Datei etwas voraus, das die alte Fassung
+nicht mitbringt (eine neue Pflichtangabe in der `.env`, ein neuer Mount),
+scheitert auch das zurückgesetzte Image — und übrig bleibt genau der halb
+aktualisierte Rechner, den die Vorprüfung verhindern soll.
+
+Das Update legt den vorigen Stand deshalb vorher unter `/opt/patio/.vorher`
+beiseite und spielt ihn beim Rücksetzen mit zurück.
+
+**Wird ein Update hart abgebrochen** (Strg+C in der Warteschleife,
+Stromausfall), bleibt eine Marke `/opt/patio/.update-laeuft` liegen. Ein
+zweiter Anlauf erkennt sie und lässt `.vorher` **unangetastet** — sonst würde
+er den halb aktualisierten Stand als „vorher" ablegen und beim nächsten
+Fehlschlag genau diesen zurückspielen, mit Erfolgsmeldung. Aus demselben Grund
+liegt die Kennung des vorigen Images in `.vorher/IMAGE_ID`: Nach einem
+`docker load` zeigt `patio-app:latest` bereits auf das neue.
+
+**Eine Ausnahme mit Absicht: `scripts/` wird nicht automatisch zurückgespielt**
+— `update-offline.sh` läuft selbst aus diesem Verzeichnis, und eine Datei, die
+unter der laufenden Shell ausgetauscht wird, führt Bruchstücke aus. Die
+vorigen Skripte liegen unter `/opt/patio/.vorher/scripts` und lassen sich nach
+dem Lauf von Hand zurückholen.
+:::
+
+::: warning Der Proxy zählt bei der Gesundheitsprüfung mit
+Seit dem 31.08.2026 wird der Caddyfile beim Update **sofort** wirksam (vorher
+hielt der laufende Container die alte Datei fest). Damit kann ein fehlerhafter
+Caddyfile im Paket den einzigen Zugangsweg der Arbeitsplätze lahmlegen — und
+die Gesundheitsprüfung würde es nicht merken: Sie fragt die Anwendung
+containerintern, also **am Proxy vorbei**.
+
+Das Update prüft deshalb nach dem Neuerzeugen, ob der Proxy noch läuft oder in
+der Neustartschleife kreiselt. Kreiselt er, während die Anwendung einwandfrei
+antwortet, wird **nur** die Proxy-Konfiguration zurückgenommen: `docker/` kommt
+aus `.vorher` zurück, der Proxy wird damit neu erzeugt. Das Programm-Abbild
+bleibt auf dem neuen Stand — seine Migrationen sind bereits angewendet und
+laufen nur vorwärts. Das Update endet trotzdem mit einer Fehlermeldung, die auf
+den fehlerhaften `docker/Caddyfile` aus dem Paket verweist. Kommt der Proxy auch
+mit der vorigen Konfiguration nicht hoch, greift der vollständige Rückweg.
+:::
+
+::: tip Geänderte systemd-Einheiten kommen jetzt mit
+Bis zum 30.08.2026 wurden die Einheiten der Sicherung **nur bei der
+Erstinstallation** nach `/etc/systemd/system` gelegt. Ein Update ersetzte
+`deploy/` im Installationsverzeichnis, die installierte Einheit blieb aber die
+alte — und niemand merkte es, weil sie weiterlief. Heute vergleicht das Update
+sie und spielt Unterschiede ein (mit `daemon-reload`, ohne den Timer-Zustand
+anzufassen).
+:::
+
 Der Rückweg von Hand, falls die automatische Rücksetzung nicht greift:
 
 ```bash
@@ -204,6 +257,63 @@ zuerst: sie liegt im Unterordner und sieht dadurch spezifischer aus. Beide
 liefert das Paket seit dem 28.08.2026 nicht mehr mit — und dank des Ersetzens
 verschwinden sie beim nächsten Update auch von bestehenden Installationen.
 :::
+
+## Wenn ein Update das Datenbankschema ändert
+
+Die meisten Updates tauschen nur Programm und Konfiguration aus. Bei einem
+solchen Update ist der Rückweg einfach: das vorige Paket noch einmal
+einspielen, fertig.
+
+::: danger Ein Schema-Update ist nicht durch ein Downgrade zurückzunehmen
+Migrationen laufen in eine Richtung. Sobald eine davon eine Spalte umbaut,
+passt das vorige Programm nicht mehr zum Schema — es startet zwar, aber jeder
+Zugriff auf die geänderte Stelle scheitert.
+
+**Der Rückweg ist dann `patio restore` mit der Sicherung von VOR dem Update**,
+nicht das alte Paket. Deshalb erzwingt `patio update` vorher eine Sicherung,
+und deshalb gehört ein Schema-Update auf einen Zeitpunkt, an dem jemand
+danach hinsehen kann — nicht auf Freitagabend.
+:::
+
+### Version 1.1.0: `termine.datum` wird ein echtes Datum
+
+Migration `060` hebt die Terminspalte von Text auf `date`. Ohne sie zeigte das
+Board im Besprechungsraum **keinen von Hand angelegten Termin an** — es
+verglich ein ISO-Datum gegen `TT.MM.JJJJ`, und das trifft nie zu. Nur die
+automatischen Meilensteine der Leistungsphasen erschienen: sie stehen seit
+jeher in ISO in derselben Spalte.
+
+**Vorher nachsehen, ob unlesbare Datumsangaben im Bestand stehen.** Sie können
+nur aus einer alten Datenübernahme stammen; die Oberfläche lässt sie nicht zu:
+
+```bash
+cd /opt/patio && sudo docker compose exec postgres psql -U patio -d patio -c "SELECT id, datum, left(text, 60) FROM termine WHERE datum::text !~ '^[0-9]{2}[.][0-9]{2}[.][0-9]{4}$' AND datum::text !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$';"
+```
+
+Kommt dabei etwas heraus: **diese Termine landen beim Update im Papierkorb**,
+mit ihrem ursprünglichen Wert im Text (`[Datum unlesbar bei Migration 060: …]`).
+Nichts geht verloren, aber wer sie im Kalender behalten will, korrigiert das
+Datum vorher in der Oberfläche.
+
+**Eine leere Trefferliste ist allerdings keine Garantie.** Die Abfrage findet
+nur falsche Schreibweisen. In den Papierkorb wandert auch, was richtig
+geschrieben ist, es als Datum aber nicht gibt — etwa `31.02.2026`. Die
+Migration nennt jede betroffene Zeile mit ihrer Kennung im Startprotokoll:
+`060: diese Termine wandern in den Papierkorb (Datum unlesbar): …`.
+
+Das `::text` in der Abfrage ist Absicht: So läuft sie auch NACH dem
+Update noch und liefert dann keine Zeile — ohne das Cast antwortet
+Postgres danach mit `operator does not exist: date !~ unknown`, was wie
+ein Fehler aussieht und keiner ist.
+
+Was die Migration getan hat, steht nach dem Update im Protokoll:
+
+```bash
+sudo docker logs patio-app 2>&1 | grep "060:"
+```
+
+Erwartet wird eine Zeile wie `060: 2201 Termine deutsch, 1 in ISO, 0 unlesbar.`
+und darunter `060: termine.datum ist jetzt date.`
 
 ## Arbeitsplätze
 

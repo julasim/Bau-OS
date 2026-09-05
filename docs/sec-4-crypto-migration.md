@@ -110,8 +110,9 @@ zurückbringt.**
    - `scripts/` wird auch nie nach `dist/` gebaut: `tsconfig.json` führt
      `include: ["src/**/*"]`. Denselben Irrtum hatte `scripts/patio-cli.sh`
      schon einmal, dort steht die Begründung im Kommentar.
-   - Das Auslieferungspaket bringt nur Compose, `docker/`, `deploy/` und fünf
-     Shell-Skripte mit (`scripts/release-offline.sh`, Zeilen 141–153) — das
+   - Das Auslieferungspaket bringt nur Compose, `.env.example`, aus `docker/`
+     allein `Caddyfile` und `init/`, dazu `deploy/` und fünf Shell-Skripte mit
+     (`scripts/release-offline.sh`, Zeilen 141–167) — das
      Umschlüssel-Skript ist keines davon.
 
    `npm run db:reencrypt` ist damit ein Werkzeug für den
@@ -122,7 +123,7 @@ zurückbringt.**
 
    ::: warning Es gibt derzeit keinen laufenden Verbraucher zum Gegenprüfen
    Hier stand, der 2FA-/OTP-Login sei die Funktionsprobe. **Das geht nicht
-   mehr:** die 2FA-Routen sind nicht eingehängt (`src/api/server.ts:575` ist
+   mehr:** die 2FA-Routen sind nicht eingehängt (die `auth2faRoutes`-Zeile in `src/api/server.ts` ist
    auskommentiert), der zweite Faktor kommt erst mit dem VPN zurück. Telegram
    und Outlook gibt es ohnehin nicht mehr.
 

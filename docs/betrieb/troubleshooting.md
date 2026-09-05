@@ -41,14 +41,9 @@ die Datenbank ist kaputt — der Pfad ist falsch.
 ## Datenbank nicht erreichbar
 
 ```bash
-# Docker
 docker compose ps
 docker compose logs postgres --tail 50
 docker compose exec postgres pg_isready -U patio
-
-# Bare Metal
-systemctl status postgresql
-psql "$DATABASE_URL" -c "SELECT 1;"
 ```
 
 Häufige Ursachen:
@@ -114,10 +109,15 @@ docker compose up -d --force-recreate app
 docker compose exec app sh -c 'echo $PATIO_HOSTNAME'
 ```
 
-::: tip `restart` reicht nicht
+::: tip `docker compose restart` reicht nicht — `patio restart` schon
 Ein `docker compose restart app` liest die `.env` **nicht** neu. Nötig ist
 `docker compose up -d --force-recreate app`. Das ist die häufigste Ursache
 dafür, dass eine geänderte Einstellung „nicht greift".
+
+**`patio restart` erzeugt die Container seit dem 30.08.2026 neu** und liest die
+`.env` damit mit. Vorher rief der Befehl schlicht `docker compose restart`
+durch — wer nach einer Änderung den naheliegenden Befehl nahm, arbeitete also
+weiter mit den alten Werten, ohne jeden Hinweis.
 :::
 
 ::: warning Zwei Werte lassen sich nicht per .env ändern
@@ -143,7 +143,7 @@ docker exec patio-postgres psql -U patio -d patio -c   "SELECT username, role FR
 | „Benutzername oder Passwort falsch" | genau das — die Meldung ist absichtlich gleich für beide Fälle, damit sie keine Konten verrät |
 | HTTP 429 | Ratebremse: 5 Fehlversuche je IP in 15 Minuten |
 | Seite lädt nicht, Zertifikatswarnung | kein Anmeldeproblem — siehe [Zertifikat](/betrieb/zertifikat) |
-| Der Einrichtungsassistent erscheint, obwohl Konten existieren | die Anwendung sieht die Datenbank nicht; `patio status` prüfen |
+| Der Einrichtungsassistent erscheint, obwohl Konten existieren | die Datenbank antwortet, enthält aber keine Konten — meist ein frisch angelegtes Volume statt dem mit den Daten. Antwortet sie gar nicht, erscheint der Assistent **nicht**; dann bleibt die Anmeldeseite stehen |
 
 ::: tip Passwort zurücksetzen
 Über einen anderen Admin unter `/admin/users`. Gibt es keinen zweiten Admin
@@ -194,11 +194,23 @@ reverse_proxy @stream app:3000 {
 Bei nginx entsprechend `proxy_buffering off;` und ein großzügiges
 `proxy_read_timeout`.
 
-Prüfen, ob überhaupt jemand verbunden ist:
+Prüfen, ob überhaupt jemand verbunden ist. Im Anwendungsprotokoll steht das
+**nicht** — PATIO schreibt beim Auf- und Abbau einer Live-Verbindung nichts
+hinein. Die Zahl der offenen Verbindungen liefert ein eigener Endpunkt hinter
+der Anmeldung:
 
 ```bash
-docker compose logs app | grep -i -E "sse|events"
+# 1. Anmelden — die Antwort enthält {"token": "…"}
+docker exec patio-app curl -s -X POST localhost:3000/api/auth/login      -H "Content-Type: application/json"      -d '{"username":"admin","password":"<Passwort>"}'
+
+# 2. Verbindungen zählen
+docker exec patio-app curl -s "localhost:3000/api/events/status?token=<TOKEN>"
+# → {"connectedClients":3}
 ```
+
+Steht dort eine Zahl, während die Arbeitsplätze nichts sehen, liegt es an der
+Pufferung weiter oben. Steht dort `0`, während mehrere Arbeitsplätze geöffnet
+sind, kommt die Verbindung gar nicht bis zur Anwendung.
 
 ---
 
@@ -257,8 +269,10 @@ Die Anfrage hat zu lange gedauert. Bitte den Umfang eingrenzen.
 ```
 
 Eine Abfrage lief in das `statement_timeout` von PostgreSQL (SQLSTATE
-57014). Meist eine sehr breite Suche oder eine Portfolio-Auswertung über
-viele Projekte. Kurzfristig: Suchbegriff eingrenzen.
+57014). Ein solches Zeitlimit setzt allein die Volltextsuche — fünf Sekunden,
+und nur für ihre eigene Abfrage. Auswertungen wie das Portfolio laufen ohne
+Limit; sie werden langsam, brechen aber nicht mit dieser Meldung ab.
+Kurzfristig: Suchbegriff eingrenzen.
 
 Die Suche läuft bereits über `tsvector` mit GIN-Index (Migration `048`) — die
 früher hier genannte Umstellung ist erledigt. Tritt der Fehler weiterhin auf,
@@ -342,14 +356,17 @@ Dieselbe Behandlung: nachtragen, neu starten. Hintergrund:
 
 ## Fehler nach dem Bauen
 
+Gebaut wird ausschließlich auf dem Entwicklungsrechner. Auf dem Server liegen
+nur Konfiguration, Skripte und das fertige Abbild — kein Quellcode, kein
+`node_modules`, kein Node.
+
 ```bash
-# Abhängigkeiten sauber neu holen
-cd /opt/patio
+# Entwicklungsrechner, im Wurzelverzeichnis des Repositorys
 rm -rf node_modules
 npm ci
 
 # Node-Version prüfen
-node --version    # 24.x erwartet
+node --version    # 24.x erwartet — dieselbe Hauptversion wie im Container
 ```
 
 Nach einem Wechsel der Node-Hauptversion muss `npm ci` durchlaufen: `bcrypt`
@@ -467,7 +484,7 @@ Die Zeile oben meldet dann `0` auf einer Maschine, die sehr wohl Fehler hat.
 **vorher aufgesetzten** Installation einmalig nachholen:
 
 ```bash
-sudo chown -R 1000:1000 /opt/patio/logs /opt/patio/data /opt/patio/tools
+sudo chown -R 1000:1000 /opt/patio/logs /opt/patio/data
 cd /opt/patio && sudo docker compose restart app
 ```
 

@@ -13,8 +13,12 @@ will, was in die `.env` gehört, ist bei den
 
 ## Pflicht beim Start
 
-`src/index.ts` prüft diese drei Werte vor allem anderen und beendet den
-Prozess mit Exit-Code 1, wenn einer fehlt.
+`src/index.ts` beendet den Prozess mit Exit-Code 1, sobald einer dieser Werte
+fehlt — geprüft wird aber nicht alles vorab: zuerst `WORKSPACE_PATH`, dann
+`DATABASE_URL`. Danach verbindet sich der Dienst mit der Datenbank und spielt
+bei aktivem `DB_AUTO_MIGRATE` die Migrationen ein; `JWT_SECRET` kommt erst im
+Anschluss. Fehlt nur das Secret, ist die Datenbank also schon migriert, wenn
+der Start abbricht.
 
 | Konstante | `.env`-Variable | Beschreibung |
 |---|---|---|
@@ -54,7 +58,7 @@ explizit auf.
 | `JWT_SECRET` | — (Pflicht) | `JWT_SECRET` | Secret für die Token-Signatur |
 | `API_ENABLED` | — | — | Abgeleitet: `true`, wenn `JWT_SECRET` gesetzt ist |
 | `JWT_SECRET_OK` | — | — | Abgeleitet: `true` ab 32 Zeichen Secret-Länge |
-| `USERS_FILE` | `<cwd>/data/users.json` | — | Datei der Alt-Konten (Rückfallpfad) |
+| `USERS_FILE` | `<cwd>/data/users.json` | — | Datei der Alt-Konten — **kein Anmeldeweg mehr**, nur Übernahme beim Start |
 | `NODE_ENV` | `development` | `NODE_ENV` | Betriebsmodus |
 | `IS_PRODUCTION` | — | — | Abgeleitet: `NODE_ENV === "production"` |
 

@@ -25,6 +25,7 @@ src/
 │   ├── persoenlich.ts    — gehört dieser projektlose Datensatz mir?
 │   ├── projekt-bezug.ts  — löst ?projectId=, ?projektnummer= und ?project= auf
 │   ├── dateiname.ts     — Dateiname im Content-Disposition-Header (RFC 5987)
+│   ├── datenabfluss.ts   — schreibt ins Prüfprotokoll, was das Haus verlässt
 │   └── routes/           — 33 Route-Dateien, siehe unten
 ├── data/                 — Repository-Schicht (ausschließlich PostgreSQL)
 │   ├── index.ts          — einzige Import-Fläche für alle Repositories
@@ -33,6 +34,7 @@ src/
 │   ├── konflikt.ts       — Konflikt-Zähler `rev` (Migration 042)
 │   ├── projektnummer.ts  — Regeln der Projektnummer (Migration 052)
 │   ├── zeitstempel.ts    — jedes Datum verlässt den Server als ISO 8601
+│   ├── heute.ts          — welcher Tag heute ist, in der Zeitzone des Büros
 │   ├── sql-like.ts       — Maskierung für LIKE-Muster
 │   ├── termin-validation.ts — Validierung von Termin-Eingaben
 │   └── db-*.ts           — 27 Repositories, siehe unten
@@ -40,7 +42,7 @@ src/
 │   ├── client.ts         — postgres.js-Verbindungspool
 │   ├── migrate.ts        — SQL-Migrations-Runner
 │   ├── index.ts          — Barrel-Export
-│   └── migrations/       — 61 SQL-Dateien, Nummern bis 059
+│   └── migrations/       — 62 SQL-Dateien, Nummern bis 060
 ├── workspace/            — LESENDER Dateizugriff auf WORKSPACE_PATH
 │   ├── index.ts          — Re-Export (nur `readFile`)
 │   ├── helpers.ts        — `safePath` (Traversal-Schutz)
@@ -150,7 +152,9 @@ dritter Punkt. Es ist entfallen, weil die Tabelle selbst entfallen ist
 Die Hono-Anwendung. Enthält neben der Route-Registrierung:
 
 - **Health-Check** `GET /api/health` — ohne Anmeldung und ohne Rate-Limit,
-  liefert nur `ok`, Uptime und ob eine Datenbank konfiguriert ist. Bewusst
+  liefert `ok`, Uptime und das Ergebnis eines echten Datenbank-Pings; ist die
+  Datenbank nicht erreichbar, lautet die Antwort **503** statt 200 (Ergebnis
+  fünf Sekunden zwischengespeichert, Ping-Abbruch nach drei Sekunden). Bewusst
   ohne Versionen oder Build-Hashes, weil der Endpunkt anonym erreichbar ist.
 - **Zentrale Fehlerbehandlung** (`app.onError`) — übersetzt Ausnahmen in
   JSON-Antworten: kaputter JSON-Body wird 400, Statement-Timeout und
@@ -272,7 +276,7 @@ unten steht.
 | `export-templates.ts` | Word-Exportvorlagen und die Export-Endpunkte |
 | `project-modules.ts` | Aktivierbare Module je Projekt |
 | `ui-preferences.ts` | Oberflächen-Einstellungen je Benutzer |
-| `auth-2fa.ts` | TOTP-Routen — **nicht eingebunden** (`server.ts:575` auskommentiert) |
+| `auth-2fa.ts` | TOTP-Routen — **nicht eingebunden** (die `auth2faRoutes`-Zeile am Ende der Routen-Registrierung in `server.ts` ist auskommentiert) |
 
 ### `src/api/dateiname.ts`
 
@@ -385,9 +389,14 @@ Seiten der Abfrage mit `lower()`.
 
 ### `src/data/zeitstempel.ts`
 
-`alsIso()` und `alsIsoOderNull()`. Jedes Datum verlässt den Server als ISO
-8601 — auch dann, wenn der Treiber ein `Date`-Objekt liefert und nicht den
-Text aus der Spalte.
+`alsIso()` und `alsIsoOderNull()` für Zeitstempel, `dateStr()` und
+`dateStrPflicht()` für reine Datumsspalten, `istIsoDatum()` als
+Eingangsprüfung. Jedes Datum verlässt den Server als ISO 8601 — auch dann,
+wenn der Treiber ein `Date`-Objekt liefert und nicht den Text aus der Spalte.
+
+`dateStr()` schneidet auf `YYYY-MM-DD`. Es stand vorher **sechsmal** einzeln
+in den Repositories, eine Kopie davon unter einem anderen Namen — wer nach
+`dateStr` suchte, fand sie nicht.
 
 Vorher gab es zwei Formate nebeneinander: die Oberfläche sortierte
 Zeitstempel als Zeichenketten, und `Fri Aug 22 2026 …` sortiert nach dem
@@ -454,8 +463,12 @@ Nicht-Admins, weil Admins gar nicht gefiltert werden.
 ### `src/db/client.ts`
 
 Verbindungspool über das `postgres`-Paket, konfiguriert aus `DATABASE_URL`.
-Exportiert unter anderem `getDb`, `checkDbHealth`, `getPoolStats`, `closeDb`
-und `withRetry`.
+Exportiert `getDb`, `checkDbHealth`, `getPoolStats`, `closeDb` und `jsonb`.
+Letzteres schreibt einen Wert in eine `jsonb`-Spalte, ohne ihn ein zweites Mal
+zu kodieren — sieben Spalten hatten genau diesen Fehler. Beim Lesen kam dort
+eine Zeichenkette zurück statt eines Objekts oder einer Liste; sichtbar wurde
+das unter anderem daran, dass die Kontaktvermerke eines Team-Mitglieds leer
+blieben.
 
 ### `src/db/migrate.ts`
 
@@ -477,7 +490,7 @@ umgestellt, passend zu `chat_sessions.id` — vorher scheiterte jeder JOIN mit
 
 ### `src/db/migrations/`
 
-61 Dateien, `001` bis `059` (zwei Nummern sind doppelt vergeben: `005` und
+62 Dateien, `001` bis `060` (zwei Nummern sind doppelt vergeben: `005` und
 `006`). Die inhaltlich wichtigsten:
 
 | Migration | Inhalt |
@@ -714,7 +727,7 @@ vorzuziehen.
 
 | Verzeichnis | Inhalt |
 |---|---|
-| `tests/` | Vitest-Suite: **733 Tests in 80 Dateien**, darunter `tests/web/` für die Oberfläche. Ohne `DATABASE_URL` überspringen sich die ACL-, Auth- und Datenbanktests **still** — gemessen am 26.08.2026 laufen dann 206, die übrigen 527 werden übersprungen, und der Lauf meldet trotzdem grün. **In der CI** verhindert das ein Wächter (`tests/waechter.test.ts`); mit Datenbank bestehen 731, zwei bleiben übersprungen |
+| `tests/` | Vitest-Suite: **852 Prüfungen in 95 Dateien**, darunter `tests/web/` für die Oberfläche und `tests/betrieb-skripte.test.ts` für die Server-Skripte. Ohne `DATABASE_URL` überspringen sich die ACL-, Auth- und Datenbanktests **still** — gemessen am 02.09.2026 laufen dann 253, die übrigen 599 werden übersprungen (63 der 95 Dateien vollständig), und der Lauf meldet trotzdem grün. **In der CI** verhindert das ein Wächter (`tests/waechter.test.ts`); mit Datenbank bestehen 850, zwei bleiben übersprungen |
 | `scripts/` | Installation, Sicherung, Rücksicherung, Offline-Pakete, Neuverschlüsselung, Prüfstand des Arbeitsplatz-Programms |
 | `electron/` | Hülle des Arbeitsplatz-Programms |
 | `docker/` | Caddyfile, Init-SQL für den Postgres-Container, alte VPS-Compose-Datei. **Der Firmenserver-Stack liegt im Repo-Root** (`docker-compose.yml`) |

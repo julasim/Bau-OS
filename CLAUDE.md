@@ -26,7 +26,7 @@
 - **Sprache & Tonalität:** Bürodeutsch, kein Baustellen-Jargon. „Eintrag
   dokumentieren" statt „schnell auf der Baustelle eintippen".
 
-## Umbau zum Firmenserver (LAUFEND — Stand 2026-08-05)
+## Umbau zum Firmenserver (Stand 2026-08-30 — Version 1.0.0 ausgeliefert)
 
 > PATIO wird vom Internet-Stack zum **zentral betriebenen Firmenprogramm im
 > eigenen Netz** umgebaut: ein Mini-PC im Büro, kein Internet, echte
@@ -161,7 +161,245 @@
 > und sind mit ihm entfallen. Das verbliebene `chown -R 1000:1000` arbeitet
 > numerisch und kollidiert mit nichts.
 >
-> ### Stand 24.08.2026 — 733 Tests, Migrationen bis 059
+> ### Stand 01.09.2026 — Bugs aus dem Review: AP1, AP3, AP4, AP5 abgearbeitet
+>
+> Plan: `~/.claude/plans/ich-m-chte-das-du-deep-simon.md`. **801 Prüfungen**
+> (vorher 740), Migrationen bis **060**. Uncommittet auf `main`.
+>
+> **AP1 Sicherung und Betrieb** (elf Fehler): Die nächtliche Sicherung endete
+> mit Fehlschlag, obwohl sie durchlief — und blockierte damit **jedes Update**.
+> Dazu Rückweg, Proxy-Neustart, systemd-Einheiten, Rücksicherung,
+> Gesundheitsprüfung. Am laufenden System belegt, Prüfstand mit 64
+> Zusicherungen.
+>
+> **AP3 Präsentationsrolle.** Das Board durfte Listen sehen, aber keine Akte
+> öffnen — es sah aus wie ein Defekt. Jetzt darf es beides. ⚠ Dabei ging der
+> **Volldump am Personendaten-Filter vorbei**: Der Filter fasst nur JSON an,
+> ein ZIP nicht. Zwei unabhängige Sperren.
+>
+> ⚠ **Beim Bauen gefunden: das Prüfprotokoll protokollierte seine Details
+> nie.** `logEvent` schrieb sie doppelt kodiert, die Leseseite verwarf sie
+> stillschweigend zu `{}` — **alle 2839 Einträge** der Testdatenbank. Dieselbe
+> Schreibform steckt in fünf weiteren jsonb-Spalten; dort fangen die Leser sie
+> ab. Eigener Schritt, Aufgabe liegt an.
+>
+> **AP4 `termine.datum` von TEXT auf `date`** (Migration 060). ⚠ **Das Board
+> hat seit seinem Bau keinen Termin angezeigt** — ISO gegen `TT.MM.JJJJ`
+> verglichen, trifft nie zu, wirft nie. Ebenso kaputt: Wochenansicht,
+> Portfolio-Frist, „nächster Termin" in der Projektakte, die Sortierung (nach
+> Tag im Monat) und das Datumsfeld im Kalender (blieb leer). Gegen eine Kopie
+> der gewachsenen Testdatenbank gefahren, **2212 Zeilen Tag für Tag verglichen
+> — keine verschoben**, fünf unlesbare in den Papierkorb.
+>
+> ⚠ **Die eigene Erkennungsabfrage wäre am Dienststart gestorben:**
+> `to_date('31.02.2026','DD.MM.YYYY')` wirft in PG16, und der Ausdruck läuft,
+> weil das Muster passt. Die Migration, die einen Startabbruch verhindern soll,
+> wäre die Ursache dafür geworden. Jetzt über eine Funktion mit
+> `EXCEPTION`-Zweig.
+>
+> **AP5 Frontend.** ⚠ **Der Konfliktschutz für Team-Mitglieder war von jedem
+> Client aus unerreichbar** — die Route nimmt nur eine Feld-Weißliste, `rev`
+> stand nicht darin. Nicht im Review, beim Nachlesen des Plans gefunden.
+> Geprüft wird das jetzt über die **Wirkung**, nicht über den Anfragekörper;
+> eine Prüfung der zweiten Art wäre grün geblieben. Dazu: `ApiError` mit
+> Statuscode (keine Ansicht konnte 409 von 500 unterscheiden), 204-Antworten
+> meldeten einen Fehler trotz Erfolg, die Team-Seite hatte **kein einziges
+> Fehler-Ref** bei dreizehn `catch`-Blöcken, und `useEvents` hielt drei
+> Verbindungen für dieselben Ereignisse.
+>
+> ⚠ **Der eigene `useEvents`-Umbau war zuerst wirkungslos:** Drei Komponenten
+> im selben Tick kamen alle an `if (quelle) return` vorbei, weil `quelle` erst
+> nach dem `await` gesetzt wird. Vom Test gefunden, nicht beim Lesen.
+>
+> **Die Selbstprüfung danach fand vier weitere Fehler**, zwei davon durch
+> diesen Umbau entstanden: Die Migration verglich mit `<>` statt
+> `IS DISTINCT FROM` (auf einer Datenbank ohne die Tabelle wäre der Dienst
+> nicht gestartet); ein geleertes Datumsfeld wäre ein 500er geworden
+> (`if (updates.datum)` ist für `""` falsy). Dazu zwei Altbestände:
+> **die Datenübernahme verschob Datumsangaben um Monate** — der 5. Oktober
+> wurde zum 9. Mai, ohne Meldung, in vier Tabellen —, und die Portfolio-Frist
+> rechnete „heute" aus der Prozesszeit und lag in Wien immer einen Tag zurück.
+>
+> ⚠ **Die adversariale Runde ist dabei NICHT durchgelaufen:** Die Suchphase
+> lieferte 37 Befunde, aber alle 111 Skeptiker scheiterten am Sitzungslimit.
+> Die vier oben sind von Hand am System nachgemessen; die übrigen 33 sind
+> **ungeprüft** und liegen unter
+> `…/subagents/workflows/wf_fe6d71c8-a9d/journal.jsonl`. Darunter unter
+> anderem: `tasks.date` ist die letzte TEXT-Datumsspalte ohne jede
+> Formatprüfung.
+>
+> **Offen (nicht beauftragt):** AP2 (Löschen und Rechte — `DELETE /team/:name`
+> ohne jede Rechteprüfung, Dateilöschung ohne Papierkorb, Papierkorb-Filter in
+> Suche und Aktivität) und AP6 (Gestaltung und Wächter). Zusammen neun der
+> zwanzig Review-Bugs.
+>
+> ### Stand 05.09.2026 — die gesamte Doku gegen den Code abgeglichen
+>
+> Alle 30 Handbuchseiten plus README, Behauptung für Behauptung. **102
+> Verdachtsfälle**, jeder von **zwei** unabhängigen Skeptikern gegengelesen
+> (einer gegen die Behauptung, einer gegen den Korrekturvorschlag): **27
+> widerlegt, 75 echt und behoben.** Uncommittet auf `main`.
+>
+> ⚠ **Zwei Pflichtschritte fehlten in der Anleitung.** Nach dem Einhängen der
+> Sicherungsplatte muss der App-Container einmal neu erzeugt werden — sonst
+> meldet die Sicherungsanzeige dauerhaft „keine Sicherung gefunden", während
+> jede Nacht eine geschrieben wird. Und das **Board-Konto lässt sich in der
+> Oberfläche gar nicht anlegen**: `AdminUsersView.vue` bietet nur „Nutzer" und
+> „Admin"; die Präsentationsrolle geht nur über `POST /api/admin/users`.
+>
+> **Was schlicht nicht stimmte:** drei Seiten führten ein Verzeichnis `tools/`,
+> das es nur in der VPS-Variante gibt · zwei Befehle scheitern ohne `sudo`
+> (`.env` ist 600, die Sicherungsarchive auch) · die Fehlersuche empfahl
+> Befehle für eine Bare-Metal-Betriebsform, die es nicht mehr gibt, und ein
+> `npm ci` auf dem Server, wo kein Quelltext liegt · „Assistent erscheint,
+> obwohl Konten existieren" war genau **verkehrt** erklärt · der Papierkorb
+> deckt **vier** Datenarten ab, nicht alle · Benachrichtigungen gibt es nur
+> beim **Anlegen** · `pdf-parse` ist kein natives Modul.
+>
+> **Neu dokumentiert, weil es der Code seit dieser Woche anders macht:** das
+> Prüfprotokoll hält jeden Datenabfluss fest · die Ratebremse trägt nur hinter
+> dem Proxy (daher die Regel „nie ein `ports:` am App-Container") · zwei Wege
+> führen das JWT doch in die URL (SSE-Rückfall und jeder Datei-Download) · die
+> Rücksicherung legt den alten Dokumentenstand daneben statt ihn zu
+> überschreiben.
+>
+> **`package.json` steht jetzt auf 1.1.0.** Die Doku kündigte den
+> Migrationsschritt seit dem 01.09. unter dieser Nummer an, der Code trug noch
+> 1.0.0 — das nächste Paket hätte `patio-1.0.0.tar.gz` geheißen und das vorige
+> überschrieben. Das vorige Paket ist der Rückweg.
+>
+> ⚠ **Zum Verfahren, ehrlich:** Die Prüfung lief als Workflow und ist **dreimal
+> am Sitzungslimit** gescheitert — beim ersten Lauf starben 158 von 242
+> Agenten, darunter **alle acht Schreiber**. Geschrieben habe ich am Ende
+> selbst, jeden Befund vorher noch einmal am Code nachgemessen. Ein
+> ausgefallener Skeptiker zählte dabei nie als Zustimmung.
+>
+> ⚠ **WSL fährt zwischen den Aufrufen herunter und nimmt `patio-test-db` mit.**
+> Ein `npm test` über mehrere Minuten schlägt dann mitten im Lauf um
+> (66 Dateien rot, Meldung `Test timed out`) — es sieht nach einer Regression
+> aus und ist keine. Abhilfe: vorher `wsl -d Ubuntu-24.04 -- bash -lc 'sleep
+> 900'` im Hintergrund starten. Danach 850 bestanden, 2 übersprungen.
+>
+> ### Stand 02.09.2026 — der Rest: AP2, AP6 und was die Selbstprüfung fand
+>
+> **850 Prüfungen** (vorher 801), fünf Bereiche, jeder Fix mit Gegenprobe.
+> Uncommittet auf `main`.
+>
+> ⚠ **Ein Kontaktvermerk zu einem Team-Mitglied war noch NIE sichtbar.**
+> `jsonb_typeof` sagte bei **223 von 223** Zeilen `string` — der Leser prüft
+> `Array.isArray`, fällt durch, liefert `[]`. Dieselbe Schreibform steckte in
+> **sieben** Spalten, nicht in fünf, wie mein eigener Kommentar behauptete;
+> und bei zweien fangen die Leser sie **nicht** ab: `users.settings` war beim
+> nächsten Speichern weg. Der Leser bleibt nachsichtig (Altbestand,
+> forward-only) und kennt jetzt **drei** Formen — die dritte
+> (`["[]", "[{…}]"]`) entsteht durch das `||`-Anhängen auf zwei jsonb-**Zeichen-
+> ketten** und wäre einem zu einfachen Leser durchgerutscht: `Array.isArray`
+> ist dort wahr.
+>
+> **AP2 Löschen und Rechte.** `DELETE /team/:name` hatte **keine Zeile**
+> Rechteprüfung — jedes angemeldete Konto konnte jedes Mitglied entfernen, mit
+> vier Fremdschlüsseln und zwei Triggern dahinter und ohne Papierkorb. Zwei
+> gleichnamige Mitglieder gingen beide. Bei Dateien prüften Rechte und Wirkung
+> **verschiedene Zeilen** (streng über die ID / zusätzlich über den
+> Dateinamen). Und das Abhaken einer Aufgabe lief **projektübergreifend**: Die
+> Route gab den Projektnamen mit, `complete()` nahm ihn gar nicht entgegen.
+> Dazu der Papierkorb-Filter an fünf Stellen — in der Aktivitätsliste stand
+> das Gelöschte durch `trg_tasks_updated_at` **ganz oben**.
+>
+> ⚠ **Zwei Wege am Datei-Verbot des Anzeigekontos vorbei:** Die **Suche** gab
+> ihm Dateinamen und 200 Zeichen ausgelesenen Dokumententext aus jedem
+> Projekt (Freitextfeld `snippet` — weder Geld- noch Personendaten-Filter
+> greifen dort), und die **SSE-Meldung** über einen Upload trug als `id` den
+> Dateinamen, beim Sammelupload eine ganze Liste. Entscheid Julius:
+> Datei-Treffer für diese Rolle ganz weglassen.
+>
+> ⚠ **Eine Regression aus der eigenen Runde:** Ich hatte in `DashboardView.vue`
+> die lokale Datumsfassung entfernt, die deutsche Werte abfing.
+> `new Date("05.09.2026")` ergibt **Sat May 09 2026**, `new Date("15.09.2026")`
+> ergibt `Invalid Date`. Aus sichtbar falsch wurde **plausibel falsch**.
+> Behoben an EINER Stelle (`toDate()`), weil zehn Formatierer daran hängen.
+> `tasks.date` ist weiterhin TEXT — die Prüfung beim Schreiben ist ergänzt, der
+> Typwechsel wäre Migration 061 und ein eigener Schritt.
+>
+> **Die 409-Sackgasse — die Kehrseite meiner eigenen `rev`-Arbeit.** In drei
+> Ansichten konnte man nach einem Konflikt **gar nicht mehr speichern**: Der
+> nächste Versuch schickte denselben veralteten Zähler. Beim Positionskatalog
+> hätte der naheliegende Fix (`load()` im `catch`) die Eingabe weggeworfen —
+> dort SIND die Listenobjekte der Entwurf. Geprüft wird auf Wirkung:
+> speichern → 409 → **noch einmal speichern → 200**.
+>
+> ⚠ **`useEvents` hatte zwei Zustände ohne Rückweg**, beide aus dem Umbau vom
+> 01.09.: nach ~5,5 Minuten Verbindungsverlust (kürzer als ein `patio update`)
+> wurde nie wieder verbunden, und ein hängender Ticket-Abruf verhinderte
+> **stumm** jeden weiteren Versuch. Die Zuhörer für `online`/`visibilitychange`
+> gehören auf Modul-Ebene — in `onMounted` hätten dreizehn Aufrufstellen
+> dreizehn davon angehängt.
+>
+> ⚠ **Der Bau brach ab, während der Prüflauf grün war.** Ein HTML-Kommentar
+> mitten in einem öffnenden Tag (`ProjectZugriffTab.vue`): `vue-tsc` meldet
+> nichts, ESLint sieht `.vue` gar nicht an, `npm test` grün — Vite:
+> `SyntaxError: Illegal '/' in tags`. Genau die Konstellation, die den
+> Docker-Bau schon einmal 45 Commits lang kaputt hielt. Neuer Wächter in
+> `tests/vue-komponenten-importiert.test.ts` (übersetzt jedes Template mit
+> demselben Compiler, den Vite benutzt); Gegenprobe: Wächter rot, `vue-tsc`
+> grün.
+>
+> **Kleineres:** ein falsches Passwort lud die Anmeldeseite neu und löschte die
+> Meldung · eine Notiz meldete Erfolg ohne zu speichern · Benachrichtigungen zu
+> Aufgaben und Terminen trugen **nie** einen Projektbezug (nur Besprechungen
+> gaben ihn mit) · über die Projektakte angelegte Aufgaben/Termine hatten
+> keinen Verfasser · Standardvorlage wechselte in zwei Anweisungen ohne
+> Transaktion · Upload meldete `success: true` trotz Fehlschlägen · ein
+> Datenabfluss wurde protokolliert, **bevor** feststand, dass etwas ausgeliefert
+> wird · die Druckansicht blendete Klassen aus, die es nicht mehr gibt · 20
+> Gestaltungsklassen waren nirgends definiert.
+>
+> ⚠ **Fünf falsche Kommentare aus der eigenen Runde korrigiert** — darunter
+> „fünf Spalten, die Leser fangen es ab" (sieben, zwei fangen es nicht) und
+> „das Board hat NIE einen Termin gezeigt" (die ISO-Auto-Meilensteine schon;
+> richtig ist: kein von Hand angelegter).
+>
+> ⚠ **Ehrlich zum Stand der Prüfung:** Die adversariale Runde ist erneut
+> **nicht** gelaufen (Sitzungslimit am 01.09.). Von den 37 Befunden der
+> Suchphase sind fünf von Hand am System nachgemessen — alle fünf stimmten —,
+> die übrigen nach Aktenlage eingeordnet und behoben. Das ist weniger als eine
+> Widerlegungsrunde. Ebenfalls offen: der Browser-Nachweis für die geteilte
+> SSE-Verbindung und die Konflikt-Sackgassen; dafür müsste der Stand in WSL
+> ausgerollt werden, dort läuft das alte Image.
+>
+> **Bewusst nicht behoben:** Der Rückfall auf `token=<JWT>` in der SSE-URL,
+> wenn der Ticket-Abruf scheitert. Er hebt den Zweck des Einmal-Tickets auf
+> (das JWT landet in Caddys Zugriffslog), ihn zu streichen hieße aber, bei
+> einem Ticket-Ausfall gar keine Live-Updates mehr zu haben. Abwägung, keine
+> Fehlerbehebung — gehört Julius vorgelegt.
+>
+> ### Stand 30.08.2026 — Verteilweg, Ratebremse nachgemessen, Zeitstempel
+>
+> **Die Anleitung zum Arbeitsplatz-Programm zeigte noch auf die abgeschaffte
+> Freigabe** — `docs/betrieb/arbeitsplatz.md` hatte der Samba-Ausbau nicht
+> angefasst. Sechs Stellen in drei Seiten liessen die `.exe` von einem
+> Netzordner starten, den es nicht mehr gibt; jetzt steht dort der USB-Stick,
+> auf dem ohnehin Paket und Wurzelzertifikat liegen — samt dem Hinweis, dass
+> eine neue Fassung die Datei **an jedem Platz einzeln** ersetzt.
+>
+> ⚠ **Die Ratebremse haengt vollstaendig an Caddy — an der laufenden Anlage
+> nachgemessen.** Direkt gegen den Dienst gerichtet nimmt die App
+> `x-forwarded-for` ungeprueft (der Eintrag `login.fail` trug die gefaelschte
+> IP); ueber Caddy 2.11.4 wird der Header ERSETZT, und der zweite Versuch
+> bekam 429. Betriebsregel daraus, jetzt am Code: **der App-Container darf nie
+> ein `ports:` bekommen.** Ein zweiter Proxy davor macht den rechtesten
+> Eintrag zum richtigen, nicht den linken.
+>
+> **Notiz-Auswahl ohne definiertes Ergebnis** (CI-Fehlschlag): `findeNotiz`
+> sortiert `ORDER BY rang, created_at DESC`, der Zeitstempel kam aber aus
+> JavaScript — Millisekunden. Zwei schnell aufeinanderfolgende Notizen trugen
+> denselben Wert, Postgres darf dann beliebig sortieren. Lokal fiel es nie
+> auf, weil die Test-DB an der WSL-IP haengt; auf demselben Host kollidierten
+> **20 von 20 Paaren**. `DEFAULT now()` genuegt NICHT (Transaktionszeit,
+> postgres.js buendelt die INSERTs) — erst `clock_timestamp()`, dazu
+> `id DESC` als Tiebreaker.
+>
+> ### Stand 24.08.2026 — 733 Tests (damals), Migrationen bis 059
 >
 > **AP9 ist fertig.** Der Fokus-Modus (Schritt 3) steht: `ContextSidebar.vue`
 > trägt in der Projektakte die Reiter, in den Einstellungen die Bereiche; die
@@ -221,7 +459,9 @@
 >   Drei neue Ansichten im Aufgabenreiter (Eingang, Matrix, Mein Tag), der
 >   Umschalter sitzt in der **Topbar** — die einzige Stelle, die in allen vier
 >   Arbeitsweisen gleich liegt. Doku: `docs/konzepte/aufgabensystem.md`.
->   **Noch nicht gebaut:** der Verfall von Rang 4 nach 30 Tagen.
+>   Der Verfall von Rang 4 nach 30 Tagen ist inzwischen gebaut
+>   (`RANG4_VERFALL_TAGE`, Wartungslauf 03:15 — verfallen heisst Papierkorb,
+>   nicht geloescht).
 > - **Die Projektnummer ist die Kennung** (Migrationen 052–054): Pflicht,
 >   eindeutig über `lower()` (Papierkorb eingeschlossen), frei im Format,
 >   dritte Adressierungsform `?projektnummer=`, in 14 Ansichten, in Dateinamen
@@ -347,8 +587,14 @@
 > Server mit interner CA und einen echten Windows-Arbeitsplatz — hier **nicht**
 > geprüft.
 >
-> **Was als Nächstes ansteht:** **AP17** VPN (bringt den zweiten Faktor
-> zurück). AP9 bis AP15 sind abgearbeitet.
+> **Was als Nächstes ansteht:** Der Bug-Plan ist mit dem Stand 02.09.2026
+> **abgearbeitet** (AP1–AP6 plus die Befunde der Selbstprüfung). Offen bleiben
+> daraus nur drei bewusste Entscheidungen: der **Typwechsel von `tasks.date`**
+> (wäre Migration 061, eigener Schritt mit eigener CSV-Gegenprobe), der
+> **JWT-Rückfall in der SSE-URL** (Abwägung, gehört vorgelegt) und der
+> **Browser-Nachweis** für die geteilte SSE-Verbindung und die
+> Konflikt-Sackgassen. Danach **AP17** VPN (bringt den zweiten Faktor zurück).
+> AP9 bis AP15 sind abgearbeitet.
 >
 > **Bewusst offen geblieben**, mit Begründung im jeweiligen Commit:
 > - Ein **Papierkorb für einzelne Datensätze** (Notizen, Aufgaben, Termine).
@@ -426,7 +672,9 @@ damit von sich aus außenkontaktfrei).
 
 - **Backend:** Node.js + TypeScript + Hono (HTTP-API), PostgreSQL via
   postgres.js. Kein LLM, kein Bot, kein Außenkontakt im Betrieb.
-- **Frontend:** Vue 3 (Composition API) + Pinia + Vite + Tailwind v4 (`web/`).
+- **Frontend:** Vue 3 (Composition API) + Vue Router + Vite + Tailwind v4
+  (`web/`). **Kein Pinia** — das Paket ist entfernt, geteilter Zustand liegt in
+  Composables (`useAufgabensystem`, `useEvents`, `useTheme`, `useBranding`).
 - **Deployment:** ein in sich geschlossener Compose-Stack unter `/opt/patio`.
   Drei Container: `patio-postgres`, `patio-app`, `patio-caddy`. Nur Caddy hat
   Ports nach außen (80/443) und terminiert TLS mit einem Zertifikat aus der
@@ -461,7 +709,7 @@ npm run build:electron   # Arbeitsplatz-Huelle nach dist-electron/
 npm run electron:dev     # Huelle lokal starten
 npm run dist             # portable .exe bauen (signiert, braucht das Zertifikat)
 
-npm test             # vitest run (733 Tests — nur MIT Datenbank vollstaendig, siehe unten)
+npm test             # vitest run (852 Pruefungen — nur MIT Datenbank vollstaendig, siehe unten)
 npx vitest run tests/<file>.test.ts   # einzelne Datei
 npm run lint  /  npm run lint:fix
 npm run format
@@ -477,15 +725,17 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
 > `web/src` **und** `electron/` ab. `.vue`-Dateien
 > bleiben aussen vor (kein `eslint-plugin-vue`), dafür greift `vue-tsc`.
 > Für `scripts/` gibt es jetzt `tsconfig.scripts.json`: `npx tsc --noEmit -p
-> tsconfig.scripts.json`. Grund: in `scripts/migrate-vault-to-db.ts` stand
-> monatelang ein Import auf ein `VAULT_PATH`, das es gar nicht gibt — das
-> Skript brach beim Start ab, und keine Prüfung sah je in den Ordner.
+> tsconfig.scripts.json`. Grund: im damaligen Uebernahme-Skript (heute
+> `scripts/import-vault.ts`) stand monatelang ein Import auf ein `VAULT_PATH`,
+> das es gar nicht gibt — das Skript brach beim Start ab, und keine Pruefung
+> sah je in den Ordner.
 
-> **`npm test` ohne `DATABASE_URL` überspringt still 527 von 733 Tests** —
+> **`npm test` ohne `DATABASE_URL` überspringt still 599 von 852 Prüfungen** —
 > und zwar genau die ACL-, Auth- und DB-Tests (`describe.skipIf(!HAS_DB)` in
-> 34 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
-> Gemessen am 2026-08-24: `24 passed | 56 skipped (80)` Dateien,
-> `206 passed | 527 skipped (733)` Prüfungen; mit Datenbank `731 passed | 2 skipped`. **Diese Zahlen wandern mit jedem
+> 63 Testdateien; `HAS_DB` selbst kommt aus `tests/helpers/acl-fixture.ts`).
+> Gemessen am 2026-09-02: `32 passed | 63 skipped (95)` Dateien,
+> `253 passed | 599 skipped (852)` Prüfungen; mit Datenbank `850 passed |
+> 2 skipped (852)`. **Diese Zahlen wandern mit jedem
 > neuen Test** — wer sie hier liest, prüft sie besser einmal nach, statt sich
 > auf sie zu verlassen. Der Punkt bleibt derselbe: die Farbe sagt nichts.
 >
@@ -527,7 +777,11 @@ Commit; ein Pre-Push-Hook lässt `npm test` laufen.
   forward-only, idempotent (`IF NOT EXISTS` / DO-Block-Guards). Runner
   (`src/db/migrate.ts`) trackt per Dateiname in `_migrations` (keine
   Prüfsumme), jede Migration in eigener Transaktion, Advisory-Lock gegen
-  parallele Starts. Aktuellste: `054_projektnummer_bereinigung.sql`. **Schema-Lektion:**
+  parallele Starts. **62 Dateien, aktuellste `060_termine_datum_als_date.sql`** (`055`
+  raeumt den letzten Bot-Rest, `056` die Outlook-/Telegram-Spalten, `057` die
+  Zuordnungstabelle der Datenuebernahme, `058` die Benachrichtigungen, `059`
+  die KI-Freigabe, `060` hebt `termine.datum` von TEXT auf `date`).
+  **Schema-Lektion:**
   Beim JOIN müssen Typen passen — `034` hat `chat_messages.session_id` von TEXT
   auf UUID umgestellt (passend zu `chat_sessions.id`), sonst
   `operator does not exist: text = uuid`.
@@ -560,7 +814,10 @@ Das gesamte Frontend wurde auf das **PATIO Design System v2** umgestellt
   `patio-fach.css` (Klassen, die mehrere Fach-Ansichten teilen). Keine
   Hardcode-Farben/-Abstände — Tokens (`var(--…)`) verwenden. Niveau-Referenz:
   Linear/Vercel/Stripe; Prinzip: monochrom, flach, präzise, viel Ruhe.
-  Schrift: **Inter / Inter Tight / JetBrains Mono**.
+  Schrift: **ausschliesslich Systemschriften** — `--font-sans` und
+  `--font-display` sind `"Helvetica Neue", Helvetica, Arial`, `--font-mono` ist
+  `ui-monospace, Consolas`. **Keine Webfonts**, kein Inter: die Oberfläche darf
+  nichts nachladen.
 - **Shell-Bausteine** in `web/src/components/shell/`: `NavRail`,
   `ContextSidebar`, `AppTopbar`, `ListPane`, `DetailPane`, `IconBtn`,
   `Avatar`, `StatusDot`. Die NavRail ist **nicht** mehr kontext-wechselnd —

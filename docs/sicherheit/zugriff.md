@@ -75,7 +75,7 @@ antwortet der Endpunkt mit 410.
 |---|---|---|---|---|
 | **admin** | Alles (`getVisibleProjectIds()` liefert `"all"`) | ja | ja | ja |
 | **user** | Nur die Projekte aus `user_projects` | ja | nur mit Geld-Recht | ja |
-| **praesentation** | Alle Projekte in den Listen; die Projektakte selbst bleibt zu (siehe unten) | **nein** | **nie** | **nie** — mit einer Ausnahme, siehe unten |
+| **praesentation** | Alle Projekte, Listen **und** Akte (seit 31.08.2026, siehe unten) | **nein** | **nie** | **nie** — in jeder Ausgabeform |
 
 Die dritte Rolle ist das [Board für den Besprechungsraum](/betrieb/board). Sie
 ist eine Beschränkung, kein Zugangsschlüssel — und zwar an drei Stellen
@@ -86,6 +86,10 @@ serverseitig, nicht in der Oberfläche:
 | Alles außer `GET` und `HEAD` endet mit 403 | `schreibschutz()` in `src/api/personendaten.ts`, als Middleware vor allen Routen |
 | Beträge: hart „nein", noch vor dem Recht am Konto | `darfGeldSehen()` in `src/api/geld.ts` |
 | Kontaktdaten fallen aus jeder JSON-Antwort | `personendatenFilter()` in `src/api/personendaten.ts` |
+| Kontaktdaten fallen auch aus Markdown und ZIP | `darfPersonendatenSehen()`, aufgerufen in `routes/projects.ts` und `export/volldump.ts` |
+| Keine Dokumente: `/api/exports/*` antwortet mit 403 | eigene Middleware in `routes/export-templates.ts` |
+| Keine Dateien | `canAccessFile()` fragt `user_projects` direkt — ein Anzeigekonto hat dort keine Zeile |
+| **Keine Datei-Treffer in der Suche** | `search()` bekommt seit dem 02.09.2026 einen Schalter; `routes/search.ts` setzt ihn aus der Rolle |
 
 Der Personendaten-Filter arbeitet wie der Geld-Filter auf dem Rückweg und
 entfernt `email`, `phone`, `mobile`, `telefon`, `handy`, `adresse`/`address`,
@@ -93,38 +97,93 @@ entfernt `email`, `phone`, `mobile`, `telefon`, `handy`, `adresse`/`address`,
 Board ohne Namen wäre leer, und wer im Besprechungsraum sitzt, ist ohnehin
 bekannt; seine Privatnummer nicht.
 
-::: danger Offener Befund: der Volldump geht am Personendaten-Filter vorbei
-`GET /exports/volldump` liefert ein ZIP, kein JSON — der Filter sieht es
-nicht. Darin liegt `Team.md` mit **Name, Rolle, E-Mail, Telefon und Firma
-aller Mitglieder** (`src/export/volldump.ts`, Zeile 354). Die Projektauswahl
-holt sich die Route aus `getVisibleProjectIds()`, und das liefert der
-Präsentationsrolle `"all"`.
+::: warning Die Regel für alles, was kein JSON ist
+Der Antwort-Filter fasst ausschließlich `application/json` an. Ein Dossier
+(`text/markdown`), ein Volldump (ZIP) und ein Word-Export laufen unverändert
+durch ihn hindurch — genau wie beim Geld-Recht eine Ebene tiefer.
 
-Die Route ist ein `GET`, der Schreibschutz greift also nicht, und einen
-Rollen-Wächter hat sie nicht (`src/api/routes/export-templates.ts`, Zeile
-264). Ein Anzeigekonto kann das Archiv damit herunterladen. Beträge fehlen
-darin — `darfGeldSehen(c)` wird in den ZIP-Bau durchgereicht —, Kontaktdaten
-nicht.
+**Wer einen Weg baut, der etwas anderes als JSON ausliefert, prüft selbst:**
 
-**Das ist ein Befund, keine Entwurfsentscheidung**, und keine Prüfung deckt
-ihn ab: `tests/api-board.test.ts` ist der einzige Test, der die
-Präsentationsrolle überhaupt kennt, und er fasst die Export-Wege nicht an.
-Bis das behoben ist, gilt: ein Anzeigekonto gehört auf ein Gerät, an dem
-niemand einen Download auslösen kann.
+| Weg | Prüfung |
+|---|---|
+| `GET /projects/:name/export.md` | `darfPersonendatenSehen(c)` — ohne das Recht steht im Dossier der Name ohne Kontaktweg |
+| `GET /exports/volldump` | reicht das Recht in den ZIP-Bau durch; `teamMarkdown()` lässt die Spalten E-Mail und Telefon dann ganz weg |
+| KI-Akte (`text/markdown`) | Verwaltung, plus eigene Personendaten-Stufe in der KI-Freigabe |
+| Word-/PDF-Export | trägt keine Kontaktdaten — nachgesehen: die Abfragen lesen `name`, `role`, `company`. `FirmenTelefon`/`FirmenEmail` stammen aus `org_branding`, also vom eigenen Briefkopf |
+
+Das ist die Schwesterregel zu der beim Geld-Recht weiter unten, und sie ist
+aus demselben Grund nötig: ein Filter, der nur eine Ausgabeform kennt, ist an
+jeder anderen wirkungslos.
+:::
+
+::: tip Behoben am 31.08.2026 — der Volldump ging am Filter vorbei
+Hier stand bis dahin ein offener Befund: `GET /exports/volldump` lieferte
+`Team.md` mit E-Mail und Telefon **aller** Mitglieder, und die
+Präsentationsrolle bekam aus `getVisibleProjectIds()` `"all"`. Der
+Schreibschutz greift bei einem `GET` nicht, einen Rollen-Wächter gab es nicht.
+
+Geschlossen mit zwei voneinander unabhängigen Sperren: die Anzeige kommt gar
+nicht mehr an `/api/exports/*`, und selbst wenn sie es täte, ließe
+`teamMarkdown()` die Kontaktspalten weg. Festgehalten in
+`tests/api-board.test.ts` (Positiv- und Sperrliste) und
+`tests/volldump-team.test.ts`; jede dieser Prüfungen ist ohne den Fix rot —
+nachgemessen, nicht angenommen.
 :::
 
 Warum das Geld-Recht hart gesetzt ist, statt am Schalter zu hängen: sonst
 genügte ein versehentlich gesetzter Haken im Benutzerdialog, um Honorare an
 die Wand eines Raums zu werfen, in dem auch Bauherren sitzen.
 
-::: info „Alle Projekte" heißt: in den Listen, nicht in der Akte
-`getVisibleProjectIds()` liefert der Präsentationsrolle `"all"` — das Board
-soll das ganze Haus zeigen, ein Ausschnitt wäre irreführend.
-`canSeeProject()` und `canSeeProjectByName()` kennen diese Ausnahme **nicht**;
-sie fragen `user_projects`. Ein Anzeigekonto bekommt `GET /projects` deshalb
-vollständig, auf `GET /projects/:name` aber 403 — und damit auch auf jede
-Unterroute der Projektakte. Für das Board reicht das: es liest ausschließlich
-`/api/board/*`.
+::: info „Alle Projekte" heißt seit 31.08.2026 auch: in der Akte
+Bis dahin kannte `canSeeProject()` die Ausnahme **nicht**: Die Listen zeigten
+jedes Projekt, jede Detailroute antwortete mit 403. Ein Board, dessen Kacheln
+sich nicht öffnen lassen, sieht nach einem Defekt aus und ist einer — deshalb
+trägt `canSeeProject()` die Ausnahme jetzt ebenfalls.
+
+`canSeeProjectByName()` bekommt sie **nicht** zusätzlich, sondern reicht durch:
+eine eigene Zeile vor dem `getInfo` gäbe für ein Projekt, das es gar nicht
+gibt, `true` zurück. Ein Rechtepfad, der bei Nichtexistenz freigibt, ist die
+falsche Bauform, auch wo er folgenlos bliebe.
+
+**Was das Anzeigekonto damit liest — und was nicht:**
+
+| Erreichbar | Bleibt gesperrt |
+|---|---|
+| Projektakte, Notizen, Aufgaben, Termine, Bautagebuch, Besprechungsprotokolle, Entscheidungen, Phasen, Stunden, Team-Zuordnungen, Dossier (ohne Kontaktdaten), Suche über Projekte/Notizen/Aufgaben | Dateien · **Datei-Treffer in der Suche** · alle Beträge · Kontaktdaten in jeder Form · `/api/exports/*` · KI-Akten und KI-Freigabe · jedes Schreiben |
+
+::: warning Zwei Wege, die am Datei-Verbot vorbeiführten (behoben 02.09.2026)
+Die Sperre für Dateien lag auf `/api/files/*`. Zwei andere Routen lieferten
+denselben Inhalt aus, ohne je nach der Rolle zu fragen:
+
+- **Die Suche** gab Dateinamen **und die ersten 200 Zeichen des ausgelesenen
+  Dokumententexts** zurück — aus jedem Projekt, weil das Anzeigekonto alle
+  sieht. Weder Geld- noch Personendaten-Filter greifen dort: Der Inhalt steckt
+  im Freitextfeld `snippet`.
+- **Die Live-Meldung über eine hochgeladene Datei** trug als Kennung den
+  **Dateinamen** statt der Kennung — beim Sammelupload eine kommagetrennte
+  Liste. Wer die Ereignisse mitliest, bekam die Dateinamen des ganzen Hauses.
+
+Beides ist geschlossen. Die Gegenrichtung steht mit im Wächter: Ein normales
+Konto findet weiterhin Dateien — sonst „funktionierte" der Filter, indem er
+für alle greift.
+:::
+
+::: tip Persönliche Einträge auf dem Bildschirm — bewusst so
+Aufgaben und Termine **ohne Projektzuordnung** sind persönlich (siehe Tabelle
+weiter unten), erscheinen auf dem Bildschirm im Besprechungsraum aber trotzdem:
+Er zeigt den Tag des Hauses, nicht den einer Person. Wer einen Eintrag dort
+nicht sehen möchte, ordnet ihn einem Projekt zu.
+:::
+
+⚠ **Das ist eine spürbare Ausweitung**, und sie trifft ausgerechnet die
+vertraulichsten Freitexte: ein Besprechungsprotokoll wiegt im Zweifel schwerer
+als eine Telefonnummer. Getragen wird sie davon, dass an dem Gerät niemand
+sitzt, es nichts schreiben und nichts mitnehmen kann.
+
+**Wo die Reichweite wirklich steht, ist `tests/api-board.test.ts`** — dort
+liegt sie als Positiv- und Sperrliste. Wer die Rolle erweitert, sieht in der
+Diff genau, was er aufmacht; ohne diesen Test wüchse sie beim nächsten Umbau
+lautlos mit.
 :::
 
 Datensätze **ohne** Projektbezug sind persönlich:
@@ -136,9 +195,16 @@ Datensätze **ohne** Projektbezug sind persönlich:
 | Notizen | Ersteller |
 | Dateien | Hochladende Person oder über eine Freigabe |
 
-Die gesamte Logik liegt in `src/data/access.ts` — niemand setzt sich die
-Sichtbarkeit selbst aus `user_projects` zusammen, deshalb ist genau diese eine
-Stelle prüfbar.
+Für **Projekte** fällt diese Entscheidung in `src/data/access.ts` — niemand
+setzt sich die Sichtbarkeit selbst aus `user_projects` zusammen, deshalb ist
+genau diese eine Stelle prüfbar. Eine Ausnahme hält der Code selbst fest:
+`canAccessFile()` in `src/api/routes/files.ts` fragt die Projektliste direkt ab.
+
+Für die **persönlichen** Datensätze der Tabelle darüber gilt das nicht. Die
+Frage „gehört der mir?" wird an mehreren Stellen beantwortet: in
+`src/api/persoenlich.ts` und je einmal eigens in `routes/tasks.ts`,
+`routes/termine.ts` und `routes/notes.ts`, für Dateien in `routes/files.ts`.
+Wer diese Regel ändert, muss sie an jeder dieser Stellen ändern.
 
 **Wichtig ist aber, wo sie ausgewertet wird:** die Routen rufen
 `getVisibleProjectIds()` bzw. `canSeeProjectByName()` auf und reichen das
@@ -241,7 +307,7 @@ Statt es neunmal einzeln zu prüfen — und beim zehnten Mal zu vergessen — si
 **eine Middleware hinter allen Routen**:
 
 ```
-app.use("/api/*", geldFilter);      // src/api/server.ts:503
+app.use("/api/*", geldFilter);      // src/api/server.ts
 ```
 
 `src/api/geld.ts` geht die fertige JSON-Antwort rekursiv durch und entfernt die
@@ -342,6 +408,16 @@ Sekunden Gültigkeit. Grund: `EventSource` kann keine eigenen Header setzen,
 das Credential müsste also in die URL — und dort landet es in Server-Logs,
 Browser-Verlauf und Referer.
 
+::: warning Zwei Wege führen das Anmelde-Token doch in die Adresse
+Antwortet `/api/events/ticket` nicht innerhalb von zehn Sekunden oder mit
+einem Fehler, hängt die Oberfläche das Token stattdessen als `?token=` an die
+Verbindungsadresse; die Middleware lässt das für `/api/events` ausdrücklich zu.
+Derselbe Parameter trägt **jeden Datei-Download** — dort nicht als Rückfall,
+sondern im Regelfall, weil auch ein Browser-Download keine eigene Kopfzeile
+setzen kann. In beiden Fällen steht das langlebige Token genau dort, wovor das
+Ticket es bewahren soll.
+:::
+
 ## Rate-Limiting
 
 | Bereich | Grenze | Reaktion |
@@ -352,9 +428,18 @@ Browser-Verlauf und Referer.
 Beide Zähler liegen im Arbeitsspeicher. Für den vorgesehenen Betrieb — eine
 Instanz — genügt das; ein Neustart setzt sie zurück.
 
-::: tip Nur die erste IP aus X-Forwarded-For
-Ein Angreifer könnte sonst mit wechselnden Header-Werten pro Anfrage einen
-anderen Zähler erzeugen und das Limit umgehen.
+::: warning Die Ratebremse trägt nur hinter dem Proxy
+Gezählt wird nach der **ersten** Adresse aus `X-Forwarded-For`, und der Dienst
+nimmt diesen Eintrag ungeprüft entgegen. Richtig ist das bei genau einem Proxy,
+der den Eintrag **ersetzt** — und das tut Caddy.
+
+Wer den Dienst am Proxy vorbei erreicht, setzt den Eintrag selbst und bekommt
+für jede Anfrage einen eigenen Zähler; die erfundene Adresse steht dann auch im
+Prüfprotokoll (am 29.08.2026 nachgemessen). Daraus die Betriebsregel: **der
+App-Container bekommt nie ein eigenes `ports:`** — `docker-compose.yml` hält
+das ausdrücklich so. Wer einen anderen Proxy davorsetzt, verliert Ratebremse
+und Aussagekraft des Protokolls, ohne dass es auffällt; dann wäre der rechteste
+Eintrag der richtige.
 :::
 
 ## Uploads
@@ -452,9 +537,44 @@ Sicherheitsrelevante Vorgänge werden protokolliert, einsehbar unter
 | Anmeldung | `login.success`, `login.fail` |
 | Passwort | `password.change` (selbst geändert), `password.admin_reset` (vom Admin zurückgesetzt) |
 | Benutzer | `user.create`, `user.update`, `user.role`, `user.delete` |
+| **Datenabflüsse** | `export.volldump`, `export.dossier`, `export.docx`, `ki.dossier` |
 
-Mehr wird derzeit nicht geschrieben. `user.role` statt `user.update` erscheint
-nur, wenn sich tatsächlich die Rolle ändert.
+`user.role` statt `user.update` erscheint nur, wenn sich tatsächlich die Rolle
+ändert.
+
+### Datenabflüsse
+
+Bis zum 31.08.2026 stand im Protokoll ausschließlich, **wer hereinkommt** —
+nicht, **was hinausgeht**. Dabei zieht der Volldump den gesamten sichtbaren
+Bestand samt aller hochgeladenen Pläne in ein ZIP, und Dossier, KI-Akte und
+Word-Export fassen je ein ganzes Projekt in eine Datei.
+
+| Ereignis | Wann | Was in `details` steht |
+|---|---|---|
+| `export.volldump` | `GET /exports/volldump` | Umfang (alle Projekte oder Anzahl), ob Beträge und Kontaktdaten enthalten sind |
+| `export.dossier` | `GET /projects/:name/export.md` | Projektname, ob Kontaktdaten enthalten sind |
+| `export.docx` | jeder Word-/PDF-Export | Dateiname und Format |
+| `ki.dossier` | Abruf einer KI-Akte | Projekt-ID bzw. Anzahl der Akten |
+
+Geschrieben wird an einer Stelle (`src/api/datenabfluss.ts`); beim Word-Export
+ist das der Punkt, an dem alle sechs Export-Wege zusammenlaufen.
+
+**Ein abgewiesener Abfluss wird nicht protokolliert.** Ein 403 ist kein
+Abfluss — er steht in den Zugriffslogs des Proxys. Protokolliert wird nur, was
+das Haus wirklich verlassen hat; alles andere verwässerte die Liste, die man
+im Ernstfall liest.
+
+::: warning Einträge von vor dem 01.09.2026 haben keine lesbaren Details
+`logEvent()` schrieb das Feld `details` bis dahin doppelt kodiert: In der
+Spalte stand ein JSON-**String** statt eines Objekts, und die Leseseite
+verwarf ihn stillschweigend zu `{}`. Betroffen war **jeder** Eintrag — der
+Grund einer fehlgeschlagenen Anmeldung, die alte und neue Rolle bei einer
+Änderung: alles wurde geschrieben und war nie abrufbar.
+
+Behoben; die Ansicht liest Alteinträge inzwischen ebenfalls (sie werden beim
+Lesen nachgeparst). Eine Datenmigration gibt es bewusst nicht — die Daten sind
+lesbar, und Migrationen sind hier forward-only.
+:::
 
 ::: info Tote Ereignistypen im Quellcode
 `src/data/db-audit.ts` führt weitere Typen, die **nicht mehr entstehen können**:
@@ -467,7 +587,7 @@ nur, wenn sich tatsächlich die Rolle ändert.
   `telegram_pair_tokens` ist mit Migration `055` gefallen, die Spalte
   `users.telegram_bot_token` mit `056`.
 - `2fa.*` — hier steht der Code noch (`src/api/routes/auth-2fa.ts`), aber die
-  Routen sind **nicht eingehängt** (`src/api/server.ts:575` ist
+  Routen sind **nicht eingehängt** (die `auth2faRoutes`-Zeile in `src/api/server.ts` ist
   auskommentiert). Unerreichbar, nicht gelöscht — der zweite Faktor kommt mit
   dem VPN zurück.
 

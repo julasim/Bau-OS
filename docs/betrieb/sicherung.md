@@ -13,7 +13,7 @@
 | Datensätze | Container `patio-postgres` | Projekte, Notizen, Aufgaben, Termine, Rechnungen — **und die hochgeladenen Dateien**, sie liegen in der Datenbank |
 | Dokumentenordner | `/opt/patio-workspace` | Altbestand aus der Vault-Zeit; die Anwendung liest nur noch daraus |
 | `.env` | `/opt/patio` | enthält `JWT_SECRET` **und** `ENCRYPTION_KEY` |
-| `data/`, `tools/` | `/opt/patio` | Konten-Altbestand und Werkzeuge |
+| `data/` | `/opt/patio` | Konten-Altbestand (`users.json`) |
 | **CA-Schlüssel** | Volume `patio_caddy_data` | der private Schlüssel der internen Zertifizierungsstelle |
 
 **Die letzten beiden Zeilen sind die, die man vergisst.**
@@ -57,12 +57,12 @@ auffallen würde es erst in dem Moment, in dem man die Sicherung braucht.
 ::: danger Es gibt KEINE automatische Auslagerung
 Die `.env.example` beschrieb `BACKUP_REMOTE` als zweites Ziel, auf das jede
 Sicherung zusätzlich abgeworfen wird. **Das ist nicht umgesetzt.** Weder
-`scripts/backup.sh` noch `scripts/restore.sh` lesen die Variable; im ganzen
-Repo kommt sie nur in der `.env.example` vor:
+`scripts/backup.sh` noch `scripts/restore.sh` lesen die Variable; sie kommt in
+keiner Zeile Code vor — nur in der `.env.example` und in dieser Dokumentation:
 
 ```bash
-grep -rl BACKUP_REMOTE --exclude-dir=node_modules .
-# → nur .env.example
+grep -rl BACKUP_REMOTE --exclude-dir=node_modules --exclude-dir=dist .
+# → .env.example, docs/konfiguration/env.md, docs/betrieb/sicherung.md
 ```
 
 Wer sie gesetzt hat, hat **keine** Kopie außer Haus. Das ist genau die Art
@@ -88,7 +88,7 @@ Tagesstand wegrotiert, kostet der Wochenstand überhaupt Platz.
 ├── taeglich/20260806-030000/
 │   ├── datenbank.sql.gz
 │   ├── dokumente.tar.gz
-│   ├── konfiguration.tar.gz     ← .env, data/, tools/ (Rechte 600)
+│   ├── konfiguration.tar.gz     ← .env, data/ (Rechte 600)
 │   ├── caddy-daten.tar.gz       ← CA-Schlüssel
 │   ├── pruefsummen.sha256
 │   └── VOLLSTAENDIG             ← erst nach bestandener Selbstprüfung
@@ -110,6 +110,43 @@ die Zeilenzahlen der Kerntabellen gegen die Quelle. Weicht etwas ab:
 `restore.sh` betrachtet ohne Argument nur Stände **mit** dieser Marke. Damit
 kann im Ernstfall weder ein fehlgeschlagener noch ein von einem Stromausfall
 abgeschnittener Stand eingespielt werden — obwohl er der jüngste wäre.
+
+::: tip Seit dem 30.08.2026 zählt der Dump nicht mehr allein
+Die Selbstprüfung deckt die Datenbank ab. Für die drei übrigen Bestandteile
+stand vorher nur eine Warnung im Protokoll, und die Marke `VOLLSTAENDIG`
+entstand trotzdem. Am teuersten fiel das beim **CA-Schlüssel** aus: die
+Sicherung war formal vollständig, der Wiederaufbau kostete trotzdem den Gang zu
+jedem Arbeitsplatz.
+
+Heute wird nach der Selbstprüfung abgehakt, ob alle vier Teile da **und nicht
+leer** sind — `datenbank.sql.gz`, `dokumente.tar.gz`, `konfiguration.tar.gz`,
+`caddy-daten.tar.gz`. Fehlt einer, ist es ein `.UNVOLLSTAENDIG`-Stand, kein
+vollständiger mit Fußnote. Häufigste Ursache bei `caddy-daten.tar.gz`: das
+Volume heißt anders als `CADDY_VOLUME` (`docker volume ls`).
+:::
+
+::: warning Ein abgebrochener Lauf lässt nichts mehr liegen
+Bricht die Sicherung mittendrin ab, blieb ihr Zielverzeichnis früher **ohne
+jede Marke** liegen — und damit außerhalb beider Aufräumregeln, die nur auf
+`VOLLSTAENDIG` bzw. auf die Endung `.UNVOLLSTAENDIG` sehen. Bei einem Dump von
+mehreren hundert Megabyte je Versuch füllt das die Platte, ohne dass die
+Aufbewahrung es bemerkt.
+
+Dagegen wirken seit dem 31.08.2026 **zwei** Vorkehrungen, und die zweite ist
+die wichtigere:
+
+1. Bricht das Skript ab, benennt es seinen eigenen Stand auf
+   `.UNVOLLSTAENDIG` um. Das deckt Strg+C, `systemctl stop` und jeden
+   Programmfehler ab — **nicht** aber Stromausfall oder ein hartes Abschießen
+   des Prozesses: Dabei läuft kein Aufräumer mehr.
+2. Deshalb räumt **jeder Lauf zusätzlich die Reste seiner Vorgänger nach**: Ein
+   Ordner ohne Marke ist per Definition ein abgebrochener und wird umbenannt.
+   Damit greift die normale Rotation, und der Stand meldet sich als
+   „unbrauchbarer Stand" in der Abschlusszeile.
+
+Nach einem Stromausfall liegt der Teilstand also bis zur nächsten Nacht — dann
+ist er eingeordnet.
+:::
 
 ## Einrichtung
 
@@ -142,7 +179,18 @@ sudo systemctl enable --now patio-backup.timer
 # 7. Einmal von Hand laufen lassen und zusehen
 sudo systemctl start patio-backup.service
 journalctl -u patio-backup -f
+
+# 8. Den Dienst die Platte sehen lassen
+cd /opt/patio && sudo docker compose up -d --force-recreate app
 ```
+
+::: warning Schritt 8 nicht überspringen
+Die Container laufen seit der Installation — also seit **vor** dem Einhängen
+der Platte. Ein Container sieht ein Verzeichnis so, wie es beim Start aussah;
+das spätere Einhängen bekommt er nicht mit. Ohne das Neuerzeugen bleibt die
+Anzeige unter **Verwaltung → Sicherung** bei „Die Sicherung ist überfällig",
+obwohl jede Nacht eine geschrieben wird.
+:::
 
 ## Wenn etwas schiefgeht
 
@@ -150,6 +198,11 @@ Ein fehlgeschlagener Lauf meldet sich über `OnFailure=` an drei Stellen:
 `/var/log/patio-sicherung-fehler.log`, die Datei
 `/opt/patio/logs/SICHERUNG-FEHLGESCHLAGEN` und als Nachricht an alle
 angemeldeten Terminals.
+
+**Die Datei nimmt der nächste erfolgreiche Lauf selbst zurück.** Bis zum
+30.08.2026 löschte sie niemand — im ganzen Programm gab es keine Stelle, die
+das tat. Das rote Kreuz in `patio status` blieb damit stehen, auch nach zehn
+geglückten Nächten, und war nach kurzer Zeit nur noch Hintergrundrauschen.
 
 Ohne diesen Weg scheitert die Sicherung still im Journal — genau das ist in
 diesem Projekt schon einmal passiert: der nächtliche Lauf brach monatelang mit
@@ -212,3 +265,23 @@ Nach jeder Rücksicherung prüfen:
 1. Anmelden — ohne Zertifikatswarnung
 2. Ein Projekt öffnen, eine Datei herunterladen
 3. Prüfprotokoll unter `/admin/audit` ansehen
+
+::: warning Der bisherige Dokumentenstand bleibt liegen
+Das Skript überschreibt `/opt/patio-workspace` nicht, sondern legt den
+bisherigen Stand daneben — als
+`/opt/patio-workspace.vor-ruecksicherung-<Zeitstempel>`. Den genauen Pfad
+nennt es zum Schluss. Zweierlei folgt daraus:
+
+- **Platz.** Kurzzeitig liegen beide Stände auf der Platte. Ist weniger frei,
+  als der bisherige Dokumentenstand belegt, bricht das Skript an dieser Stelle
+  ab — die Datenbank ist dann bereits eingespielt, die Dokumente noch nicht.
+  Also vorher Platz schaffen, etwa mit älteren Ständen unter
+  `/mnt/patio-backup`.
+- **Nachzügler.** Was nach der Sicherung entstanden ist, steht nur im
+  beiseitegelegten Ordner und fehlt im wiederhergestellten Stand. Was
+  gebraucht wird, von Hand herüberholen — und erst danach löschen:
+
+```bash
+sudo rm -rf /opt/patio-workspace.vor-ruecksicherung-<Zeitstempel>
+```
+:::

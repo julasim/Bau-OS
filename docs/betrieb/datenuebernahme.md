@@ -63,7 +63,10 @@ Uebernahme erprobt** — die stand bis jetzt aus.
 :::
 
 Zuerst **immer** mit `--trocken`. Der Trockenlauf liest alles, schreibt nichts
-und meldet genau dieselben Probleme, die der echte Lauf hätte.
+und meldet fast dieselben Probleme, die der echte Lauf hätte. Zwei Meldungen
+fehlen ihm: ob die Projektnummer hier schon vergeben ist und ob es den
+Projektnamen hier schon gibt. Beides prüft der Import erst im echten Lauf
+gegen den Bestand in der Datenbank.
 
 ```bash
 npm run db:import -- "\\NAS\PATIO-Vault" --als jsima
@@ -98,7 +101,7 @@ Kennungen, hier UUIDs; die Zuordnung liegt in `import_zuordnung`.
 **Konten.** Der Vault kennt keine Benutzer — er kennt Team-Mitglieder. Wer
 sich am Server anmelden soll, braucht ein Konto, und die Verknüpfung
 Konto ↔ Team-Mitglied setzt ein Administrator danach unter
-`Team → Mitglied → Ich bin`.
+`Team → Mitglied → Verknüpfung mit Benutzer-Account`.
 
 **Stunden.** PATIO Desktop führt keine Stundenerfassung.
 :::
@@ -163,6 +166,16 @@ ihn zu verwerfen wäre Datenverlust. Ein Wert, den es gar nicht gibt, wird auf
 den Standard gesetzt **und im Bericht genannt**. Eine einzige von Hand
 bearbeitete Datei hat beim Bau des Programms den gesamten Import mit einem
 Datenbankfehler abgebrochen.
+
+**Bei Datumsangaben ist es strenger.** Gelesen werden `TT.MM.JJJJ` und
+`JJJJ-MM-TT`, und nur Jahre von 2020 bis 2099. Ein Pflichtdatum, das nicht
+passt, kostet den ganzen Datensatz: Termine, Besprechungen, Entscheidungen und
+Bautagebuch-Einträge werden übersprungen und zählen in der Tabelle unter
+„übersprungen" — derselben Spalte, in der sonst das schon Vorhandene steht.
+Bei einem Nebenfeld — Projektbeginn und -ende, die Termine einer
+Leistungsphase, das Datum einer Aufgabe oder einer Rechnung — bleibt nur das
+Feld leer, der Datensatz kommt an. Beides meldet der Lauf als `⚠`-Zeile im
+Terminal, **nicht** in der Liste „Hinweise und Fehler" am Ende.
 :::
 
 ## Zeitstempel

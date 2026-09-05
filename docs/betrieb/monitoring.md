@@ -14,6 +14,26 @@ docker exec patio-app curl -s localhost:3000/api/health
 { "ok": true, "uptime": 86400, "db": true }
 ```
 
+::: tip `db` ist seit dem 30.08.2026 eine echte Auskunft
+Vorher stand dort nur, ob eine Datenbank-Adresse **konfiguriert** ist — der
+Endpunkt konnte deshalb gar nicht anders als 200 antworten. Ein Postgres, das
+im laufenden Betrieb ausfällt, blieb damit unsichtbar: Container `healthy`,
+`patio status` meldete „Der Dienst antwortet", und ein Update galt als
+gelungen, während jeder Datenzugriff einen Fehler lieferte.
+
+Heute fragt der Endpunkt die Datenbank wirklich und antwortet bei einem
+Ausfall mit **HTTP 503** und `{ "ok": false, "db": false }`. Nachgemessen am
+30.08.2026: Datenbank gestoppt → 503, Datenbank zurück → 200.
+
+Zwei Schranken hängen daran: Das Ergebnis wird **fünf Sekunden**
+zwischengespeichert — nicht wegen des 30-Sekunden-Takts des Healthchecks,
+sondern weil mehrere Aufrufer gleichzeitig anklopfen (Monitoring,
+`patio status`, das Arbeitsplatz-Programm); sie teilen sich dann einen Ping.
+Und der Ping selbst bricht nach **drei Sekunden** ab: Sind alle
+Datenbankverbindungen belegt, wartet er sonst unbegrenzt — und der
+Health-Endpunkt, den jede Diagnose als Erstes fragt, hinge mit.
+:::
+
 ::: warning Nicht vom Server aus auf Port 3000
 `curl http://localhost:3000/api/health` **auf dem Server** antwortet nicht.
 Der Dienst hört zwar auf 3000, aber `docker-compose.yml` legt den Port nicht
@@ -42,10 +62,15 @@ bewusst wenig: keine Versionen, keine Build-Hashes, keine Zugangsdaten — er
 ist anonym erreichbar.
 
 ::: warning Was der Health-Check nicht sagt
-`ok: true` heißt: der Prozess lebt und nimmt Anfragen an. `db: true` heißt
-lediglich, dass eine `DATABASE_URL` konfiguriert ist — **nicht**, dass die
-Datenbank gerade antwortet. Eine ausgefallene Datenbank zeigt sich hier
-nicht; sie zeigt sich als 503 auf den fachlichen Routen.
+`ok: true` heißt: der Prozess lebt **und** die Datenbank hat auf ein
+`SELECT 1` geantwortet (Zeitlimit 3 Sekunden, Ergebnis 5 Sekunden
+zwischengespeichert). Was er weiterhin **nicht** sagt:
+
+- **ob Caddy läuft** — der Weg der Arbeitsplätze führt über ihn; dafür der
+  Hostnamen-Aufruf oben.
+- **ob die Platte vollläuft** — dafür gibt es bis heute gar keine automatische
+  Überwachung, nur `df -h` von Hand (siehe unten).
+- **ob die nächtliche Sicherung funktioniert** — das zeigt `patio status`.
 :::
 
 Dasselbe über Compose, wenn man ohnehin in `/opt/patio` steht:
@@ -94,8 +119,9 @@ PATIO schreibt zusätzlich in `logs/`:
 | `patio.log` | Lesbarer Auszug, auf 500 Zeilen gekürzt |
 | `patio.jsonl` | Vollständig und maschinenlesbar, rotiert bei 5 MB, 5 Dateien |
 
-Die Dateinamen sind ein Überbleibsel aus der Bot-Zeit und in `src/config.ts`
-fest hinterlegt.
+Die Dateinamen sind in `src/config.ts` fest hinterlegt. Bis zum Umbau zum
+Firmenserver hiess die erste Datei `bot.log` — in älteren Anleitungen kann
+dieser Name noch auftauchen.
 
 ::: danger Sind beide Dateien leer, liegt es an den Rechten — nicht daran, dass alles gutgeht
 `/opt/patio/logs/` wird in den Container gehängt, und der Dienst läuft dort
@@ -119,7 +145,7 @@ ls -la /opt/patio/logs        # liegen dort Dateien, und wachsen sie?
 **vorher aufgesetzten** Installation einmalig nachholen:
 
 ```bash
-sudo chown -R 1000:1000 /opt/patio/logs /opt/patio/data /opt/patio/tools
+sudo chown -R 1000:1000 /opt/patio/logs /opt/patio/data
 cd /opt/patio && sudo docker compose restart app
 ```
 :::
@@ -160,9 +186,10 @@ docker compose exec postgres \
 ```
 
 ::: warning Speicherplatz ist der wahrscheinlichste Ausfallgrund
-Hochgeladene Dateien liegen in der Datenbank, die Backups daneben auf der
-Platte. Läuft sie voll, antwortet die API mit HTTP 507 („Kein Speicherplatz
-mehr auf dem Server") und Schreibvorgänge scheitern. Ein Schwellwert-Alarm
+Hochgeladene Dateien liegen in der Datenbank und damit auf der Systemplatte;
+die Sicherung schreibt auf eine eigene, extern eingehängte Platte. Läuft die
+Systemplatte voll, antwortet die API mit HTTP 507 („Kein Speicherplatz mehr
+auf dem Server.") und Schreibvorgänge scheitern. Ein Schwellwert-Alarm
 bei 80 Prozent ist die lohnendste einzelne Überwachungsmaßnahme.
 :::
 

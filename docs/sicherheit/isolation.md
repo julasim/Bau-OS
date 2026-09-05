@@ -56,7 +56,7 @@ Innerhalb einer Installation trennt PATIO über Rollen und Projektzuordnung.
 |---|---|
 | **admin** | Alle Projekte, dazu die Benutzerverwaltung und das Audit-Log |
 | **user** | Nur zugewiesene Projekte, plus die eigenen Aufgaben, Termine und Notizen ohne Projektbezug |
-| **praesentation** | Alle Projekte in den Listen und im Board — sie kann nichts schreiben und bekommt in den Antworten weder Beträge noch Kontaktdaten (eine Ausnahme nennt die [Zugriffskontrolle](/sicherheit/zugriff)) |
+| **praesentation** | Alle Projekte — in den Listen, im Board und seit dem 31.08.2026 auch in der Projektakte samt Notizen, Aufgaben, Terminen und Besprechungen; sie kann nichts schreiben und bekommt in den Antworten weder Beträge noch Kontaktdaten. Gesperrt bleiben Dateien, Datei-Treffer in der Suche und die Exporte unter `/api/exports/*`; das Projekt-Dossier als Markdown bleibt lesbar (eine Ausnahme nennt die [Zugriffskontrolle](/sicherheit/zugriff)) |
 
 Die dritte Rolle trägt das [Board für den Besprechungsraum](/betrieb/board):
 ein Gerät, an dem niemand angemeldet ist und in dessen Raum auch Bauherren

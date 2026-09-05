@@ -17,10 +17,10 @@ verpassen.
 
 | Anlass | Wann |
 |---|---|
-| **Aufgabe zugewiesen** | Eine Aufgabe wird Ihnen zugewiesen — beim Anlegen oder beim Ändern |
+| **Aufgabe zugewiesen** | Sie werden als zuständig eingetragen — beim Anlegen oder beim späteren Wechsel der Zuständigkeit. Ausnahme: Wird die Aufgabe im Reiter „Aufgaben" der Projektakte gleich mit Zuständigem angelegt, bleibt die Meldung aus |
 | **Heute fällig** | Eine Ihnen zugewiesene Aufgabe ist heute fällig (einmal, im nächtlichen Lauf) |
-| **Termin** | Sie werden als Teilnehmer eingetragen |
-| **Besprechung** | Sie werden als Teilnehmer eingetragen |
+| **Termin** | Sie werden **beim Anlegen** als Teilnehmer eingetragen — wer nachträglich dazukommt, bekommt noch keine Meldung |
+| **Besprechung** | Sie werden **beim Anlegen** als Teilnehmer eingetragen — auch hier bekommt nachträglich Ergänztes noch keine Meldung |
 
 Vier Anlässe, nicht vierzig. Alles andere ist Aktivität — eine Glocke, die bei
 jeder Änderung im Haus aufleuchtet, wird nach zwei Tagen ignoriert.
@@ -30,9 +30,10 @@ Sonst wäre die Liste nach einer halben Stunde Arbeit voll mit dem, was man
 gerade selbst getan hat.
 :::
 
-Abschaltbar je Person und je Anlass unter **Einstellungen → Präferenzen →
-Benachrichtigungen**. Die Voreinstellung ist „an": eine Meldung, die niemand
-bestellt hat, ist besser als eine verpasste Zuweisung.
+Abschaltbar je Person unter **Einstellungen → Präferenzen →
+Benachrichtigungen** — mit drei Schaltern: Aufgaben (Zuweisung und Fälligkeit
+gemeinsam), Termine, Besprechungen. Die Voreinstellung ist „an": eine Meldung,
+die niemand bestellt hat, ist besser als eine verpasste Zuweisung.
 
 ## Warum es dafür eine eigene Tabelle braucht
 

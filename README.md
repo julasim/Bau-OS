@@ -18,6 +18,10 @@ eigenen Netz — ein Rechner im Büro, an jedem Arbeitsplatz ein eigenes Program
 - **Projekte** mit Stammdaten, Sub-Projekten, Bauherr-Verknüpfung und
   projektweiser Sichtbarkeit
 - **Aufgaben & Termine** mit Team-Zuweisung
+- **Aufgabensystem** — Eingang, Matrix und Tagesplan im selben Reiter: Rang
+  statt Priorität, Tagesbudget mit sichtbarer Auslastung, Verfall von Rang 4
+- **Projektnummer als Kennung** — vom Büro vergeben, eindeutig, korrigierbar;
+  das Projekt wird überall unter ihr geführt
 - **Notizen** — Markdown-Aktenvermerke, projektverknüpft, durchsuchbar
 - **Meetings/Protokolle** (Bauherrentermine, Behördentermine) mit
   Action-Items, die per Klick zu Aufgaben werden — Export nach DOCX
@@ -36,11 +40,25 @@ eigenen Netz — ein Rechner im Büro, an jedem Arbeitsplatz ein eigenes Program
 - **Volltextsuche** über Notizen, Aufgaben, Projekte und Dateien, mit
   deutschen Wortstämmen
 - **Aktivität** — was zuletzt im Büro passiert ist, über alle Datenarten
-- **Papierkorb** — Gelöschtes bleibt wiederherstellbar
+- **Neuigkeiten** — was an *Sie* gerichtet ist (Zuweisungen, Termine,
+  Besprechungen, fällige Aufgaben), mit Lesestatus
+- **Board für den Besprechungsraum** — eigene Rolle „Präsentation": nur lesen,
+  nie Beträge, keine Kontaktdaten
+- **KI-Zugriff** — je Projekt eine Akte für ein Sprachmodell, freigegeben bis
+  auf die Kategorie genau, mit drei Personendaten-Stufen
+- **Exporte** — fünf Dokumentarten aus eigenen Word-Vorlagen (Protokoll,
+  Bautagebuch, Stundenzettel, Projektübersicht, Rechnung), wahlweise als PDF;
+  dazu der Volldump des ganzen Bestands als Markdown-Ordnerbaum
+- **Papierkorb** — gelöschte Projekte, Notizen, Aufgaben und Termine bleiben
+  wiederherstellbar; alle übrigen Datenarten (etwa Dateien, Besprechungen,
+  Rechnungen, Team-Einträge) werden sofort endgültig entfernt
 - **Konfliktschutz** — zwei Arbeitsplätze am selben Datensatz überschreiben
   einander nicht mehr wortlos
 - **Geld-Recht** je Konto — wer keine Honorare sehen darf, bekommt sie in
   keiner Antwort
+- **Prüfprotokoll** — Anmeldungen, Kontenverwaltung und die Ausgabe ganzer
+  Bestände (Volldump, Projekt-Dossier, Word-Export, KI-Akte) stehen mit Konto,
+  Zeit und IP im Protokoll; einsehbar für die Verwaltung
 - **Web-App** (Vue 3) als Arbeitsoberfläche: Dashboard, Listen, Kalender,
   Projektakten — Live-Aktualisierung über Server-Sent Events
 
@@ -57,14 +75,16 @@ vom Server lädt. Der Browser bleibt der Weg für den Besprechungsraum.
 **Kein Außenkontakt im Betrieb:** kein Chat-Bot, keine KI-Laufzeit, kein
 Cloud-Dienst, keine Telemetrie, kein Mailversand. Auch die Oberfläche lädt
 nichts nach: der frühere Aufruf zu Google Fonts ist entfallen, gesetzt werden
-**Systemschriften** (Inter, falls installiert, sonst Segoe UI / Helvetica).
-Die mitgelieferte Dokumentation bringt ihre Schriften als lokale Dateien mit.
+ausschließlich **Systemschriften** (`"Helvetica Neue", Helvetica, Arial` in
+`web/src/patio-tokens.css`). Die mitgelieferte Dokumentation bringt ihre
+Schriften als lokale Dateien mit.
 
 ## Tech-Stack
 
 - Node.js **24** + TypeScript + Hono (HTTP-API)
 - PostgreSQL 16 via `postgres.js`, Migrationen als plain SQL, forward-only
-- Vue 3 + Pinia + Vite + Tailwind v4
+- Vue 3 + Vue Router + Vite + Tailwind v4 (**kein** Pinia — geteilter Zustand
+  liegt in Composables)
 - Electron als Hülle des Arbeitsplatz-Programms
 - Docker Compose: `postgres` + `app` + `caddy`
 
@@ -91,18 +111,33 @@ npm run docs:build       # statische Site bauen
 
 ## Status
 
-Pre-Launch. Der Umbau vom Internet-Stack zum Firmenserver im eigenen Netz ist
-weit fortgeschritten: Anmeldung, Compose-Stack, Zertifikat aus eigener CA,
-Sicherung, Offline-Updates und das Arbeitsplatz-Programm stehen.
+**Version 1.1.0** — der Umbau vom Internet-Stack zum Firmenserver ist
+abgeschlossen: Anmeldung, Compose-Stack, Sicherung, Offline-Updates,
+Oberfläche, Datenübernahme, Board, KI-Zugriff und das Arbeitsplatz-Programm
+stehen. Für **1.0.0** wurde die Erstinstallation am 28.08.2026 zum ersten Mal
+von Null durchgespielt: leere Volumes, `mkdir /opt/patio` bis zum
+Einrichtungsassistenten, 61 Migrationen auf frischer Datenbank, Zertifikat aus
+der eigenen CA; das Paket dazu liegt gebaut unter `release/` (497 MB,
+inklusive der drei Basis-Images).
+
+> **Für 1.1.0 ist noch kein Paket geschnürt.** Migration `060` hebt
+> `termine.datum` von Text auf ein echtes Datum. Danach lässt sich das Programm
+> **nicht mehr allein zurückrollen** — Schema und Programm gehören zusammen,
+> der Rückweg ist `scripts/restore.sh`. Details: `docs/betrieb/updates.md`.
 
 Die **Anmeldung ist einstufig** (Benutzername + Passwort, bcrypt). Der frühere
 E-Mail-Code über SMTP ist ersatzlos entfallen — er war auf einem Rechner ohne
 Internet nicht gangbar. Der zweite Faktor kommt zurück, sobald es einen Zugang
 von außen gibt (VPN).
 
-**Noch offen:** Übernahme der Oberfläche aus PATIO Desktop, Datenübernahme aus
-dem alten Vault, PDF-Export, Benachrichtigungen, Board für den
-Besprechungsraum, VPN.
+**Noch offen:**
+
+- **VPN** und mit ihm der zweite Faktor
+- Was sich nur vor Ort prüfen lässt: Sicherungsplatte samt Rücksicherung, USV,
+  und ob das Arbeitsplatz-Programm dem Zertifikat der internen CA nach dem
+  Import traut
+- Die **Datenübernahme** aus dem alten Vault ist gebaut, aber noch an keiner
+  echten Übernahme erprobt
 
 ---
 

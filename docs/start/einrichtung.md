@@ -70,13 +70,17 @@ neue Felder bedeutet, steht unter
 ## 3. Firmen-Branding hinterlegen
 
 Unter **Einstellungen → Branding**: Firmenname, Anschrift, Kontaktdaten und
-Logo. Diese Angaben laufen in die DOCX-Exporte (Meeting-Protokolle,
-Bautagebuch, Stundenlisten, Projektübersichten) und erscheinen auf der
-Anmeldeseite.
+Logo. Die Textangaben stehen allen fünf Word-Exporten als Platzhalter zur
+Verfügung — Besprechungsprotokoll, Bautagebuch, Stundenzettel,
+Projektübersicht und Rechnung — und erscheinen dort, wo Ihre Vorlage sie
+verwendet ([Exporte](/konzepte/export)). Das Logo gehört nicht dazu: im
+Programm steht es in der Navigationsleiste, in die Word-Dokumente kommt es
+über Ihre eigene Vorlage. Die **Anmeldeseite zeigt kein Firmen-Branding**.
 
-Das Logo wird über einen eigenen, nicht angemeldeten Endpunkt ausgeliefert,
-damit `<img>`-Tags es auch auf der Anmeldeseite laden können. Es sollte also
-nichts Vertrauliches enthalten.
+Das Logo wird über einen eigenen Endpunkt ausgeliefert
+(`GET /api/branding/logo`), der ohne Anmeldung erreichbar ist — ein
+`<img>`-Tag kann den Anmelde-Token nicht mitschicken. Es sollte also nichts
+Vertrauliches enthalten.
 
 ## 4. Team und Firmen erfassen
 

@@ -54,7 +54,7 @@ Geheimnissen, spielt PATIO **und die Basis-Images** aus dem Paket ein, startet
 den Stack, richtet den Sicherungs-Zeitplan ein und macht den Befehl `patio`
 verfügbar.
 
-Dabei gibt es den Dokumentenordner sowie `logs/`, `data/` und `tools/` der
+Dabei gibt es den Dokumentenordner sowie `logs/` und `data/` der
 **UID 1000** — der Kennung, unter der der Dienst im Container läuft. Ohne das
 bliebe `logs/patio.log` dauerhaft leer, während der Dienst normal weiterläuft
 (Begründung: [Server aufsetzen](/betrieb/server), Abschnitt 8).
@@ -99,15 +99,24 @@ Prüfen und einmal von Hand sichern:
 mountpoint /mnt/patio-backup      # muss "is a mountpoint" sagen
 sudo systemctl enable --now patio-backup.timer
 sudo patio sicherung              # zusehen!
+cd /opt/patio && sudo docker compose up -d --force-recreate app
 ```
 
 Der erste Lauf muss durchlaufen **und** seine Selbstprüfung bestehen.
 Details: [Sicherung](/betrieb/sicherung).
 
+::: warning Die letzte Zeile nicht überspringen
+Die Container laufen seit Schritt 2 — also seit **vor** dem Einhängen der
+Platte. Ein Container sieht ein Verzeichnis so, wie es beim Start aussah; das
+spätere Einhängen bekommt er nicht mit. Ohne das Neuerzeugen meldet die
+Sicherungsanzeige in PATIO dauerhaft „keine Sicherung gefunden", obwohl jede
+Nacht eine geschrieben wird.
+:::
+
 ## 4. Rechnername und Zertifikat
 
 ```bash
-grep PATIO_HOSTNAME /opt/patio/.env
+sudo grep PATIO_HOSTNAME /opt/patio/.env
 ```
 
 Diesen Namen im Router-DNS auf die Server-IP zeigen lassen, dann das

@@ -61,9 +61,11 @@ Ersatzgerät, auf dem nie etwas lief, ist ein Karton.
 
 ### Zur Größe der Sicherungsplatte
 
-Die Staffelung hält 23 Stände (7 Tage, 4 Wochen, 12 Monate), aber
-Wochen- und Monatsstände sind **harte Links** auf den jeweiligen Tagesstand
-und kosten keinen zusätzlichen Platz. Als Faustregel: das Fünffache des
+Die Staffelung hält 23 Stände (7 Tage, 4 Wochen, 12 Monate).
+Wochen- und Monatsstände sind **harte Links** auf den jeweiligen Tagesstand —
+solange dieser existiert, kosten sie keinen zusätzlichen Platz. Nach sieben
+Tagen fällt der Tagesstand weg, und der verlinkte Wochen- oder Monatsstand
+hält seine Datenblöcke ab da allein. Als Faustregel: das Fünffache des
 erwarteten Datenbestands. Für ein Büro dieser Größe reichen 2 TB reichlich.
 
 **ext4, nicht exFAT oder NTFS** — harte Links gibt es nur auf einem

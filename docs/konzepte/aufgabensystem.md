@@ -67,12 +67,13 @@ Aufwände und wie viel davon auf Rang 3 entfällt.
 
 ::: warning Keine dieser Grenzen sperrt
 Die Routen lehnen nichts ab, wenn eine Grenze überschritten ist — sie liefern
-die Zahl, und die Oberfläche verlangt eine bewusste Bestätigung.
+die Zahl, und die Oberfläche macht sie sichtbar: der Zähler färbt sich,
+darunter steht, was überschritten ist. Bestätigen müssen Sie nichts.
 
 Das ist kein Versehen. Eine harte Sperre wird nach der zweiten Umgehung zur
-Gewohnheit, und dann ist das ganze System entwertet. Eine Grenze, die man mit
-einer bewussten Bestätigung überschreiten kann, wirkt dagegen dauerhaft — weil
-man sich beim Bestätigen selbst zusieht.
+Gewohnheit, und dann ist das ganze System entwertet. Eine Grenze, die man
+überschreiten kann, die das aber sichtbar macht, wirkt dagegen dauerhaft —
+weil die Zahl beim Überschreiten vor einem steht.
 :::
 
 ## Der Tag beginnt leer

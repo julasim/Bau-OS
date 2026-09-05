@@ -127,8 +127,8 @@ npm run dist             # portable .exe bauen (signiert)
 
 ::: danger Tests ohne Datenbank melden grün, obwohl der größere Teil fehlt
 Ohne gesetzte `DATABASE_URL` überspringen sich die ACL-, Auth- und
-Datenbanktests **still** — gemessen am 26.08.2026: `206 passed | 527 skipped
-(733)`, kein einziger Fehlschlag. Mit Datenbank sind es `731 passed |
+Datenbanktests **still** — gemessen am 31.08.2026: `210 passed | 532 skipped
+(742)`, kein einziger Fehlschlag. Mit Datenbank sind es `740 passed |
 2 skipped`. Die Zahlen wandern mit jedem neuen Test; das Verhältnis ist der
 Punkt, nicht der genaue Wert.
 

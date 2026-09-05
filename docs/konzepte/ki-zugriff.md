@@ -47,8 +47,9 @@ Die Stufe wirkt auf **Felder**, nicht auf Prosa. Steht in einem Protokoll
 
 Das ist eine bewusste Grenze: eine automatische Namenserkennung in Freitext
 wäre entweder löchrig oder zerstörerisch, und beides wäre schlechter als eine
-klare Ansage. **Wer das nicht will, gibt Notizen und Besprechungen nicht
-frei.**
+klare Ansage. **Wer das nicht will, gibt Notizen, Besprechungen, Bautagebuch
+und Entscheidungen nicht frei** — dort gehen ganze Absätze unverändert in die
+Akte.
 :::
 
 ::: tip „Keine Namen" heißt nicht „keine Person"
@@ -56,6 +57,11 @@ Personen erscheinen als ihre stabile Kennung — dasselbe Pseudonym in jedem
 Bereich. Damit bleibt „wer war in Besprechung X und hat Aufgabe Y?"
 beantwortbar, ohne dass ein Klarname durchsickert. Ein erfundener Platzhalter
 („Person 1") wäre pro Abschnitt verschieden und damit wertlos.
+
+Eine Kennung hat allerdings nur, wer im Team angelegt ist. Ein frei
+eingetippter Name — ein externer Teilnehmer einer Besprechung, ein Beteiligter
+einer Entscheidung, Personal im Bautagebuch ohne Zuordnung — fällt bei
+„Keine Namen" ersatzlos weg, statt als Kennung zu erscheinen.
 :::
 
 ## Vorschau: nicht glauben, nachlesen

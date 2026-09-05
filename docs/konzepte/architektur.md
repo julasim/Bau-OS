@@ -157,7 +157,7 @@ src/
 ├── db/
 │   ├── client.ts  Verbindungspool (postgres.js)
 │   ├── migrate.ts Migrations-Runner mit Advisory-Lock
-│   └── migrations/ 61 SQL-Dateien, forward-only (bis `059`)
+│   └── migrations/ 62 SQL-Dateien, forward-only (bis `060`)
 ├── workspace/     NUR Lesezugriff auf den internen Ordner (Rueckfall fuer alte
 │                  Datei-Datensaetze) + Text aus PDF und DOCX ziehen
 ├── mcp/           die KI-Akten je Projekt (Positivliste + Redaktion)
@@ -219,8 +219,12 @@ ist ersatzlos entfallen — alle Repositories sind Postgres-Repositories und
 non-nullable, kein Aufrufer prüft mehr auf `null`. Auch hochgeladene Dokumente
 liegen dort und nicht auf der Platte; das ist der Sinn von „ein Speicher".
 
-Der Datenzugriff läuft **ausschließlich** über `src/data/index.ts`. Direkt
-aus `db-*` zu importieren umgeht die Abstraktion und ist verboten.
+Der Datenzugriff auf die Fachdaten läuft über `src/data/index.ts`. Wo dort ein
+Repository steht, umgeht ein direkter Import aus `db-*` die Abstraktion und
+ist verboten. Acht `db-*`-Module liegen bewusst außerhalb dieser Sammelstelle
+und werden direkt importiert: Prüfprotokoll, Branding, Vorlagen und
+Platzhalter, Projekt-Module und Modul-Kategorien, Export-Vorlagen und die
+Oberflächen-Präferenzen.
 
 ### Harter Abbruch statt stiller Zombie
 
@@ -248,10 +252,14 @@ jeder betroffenen Route einzeln zu prüfen — Rechnungen, Portfolio, Cockpit,
 Positionskatalog, Suche, Live-Kanal, Export und Sicherungs-Status — sitzt eine
 einzige Middleware hinter allen Routen: `src/api/geld.ts` geht die fertige
 JSON-Antwort rekursiv durch und entfernt die Geldfelder, wenn das Konto das
-Recht nicht hat. Eine neue Route kann das nicht vergessen, weil sie nichts
-dafür tun muss.
+Recht nicht hat. Eine neue Route, die JSON zurückgibt, kann das nicht
+vergessen, weil sie nichts dafür tun muss.
 
-**Die Grenze:** erkannt wird an Feldnamen aus einer festen Liste, nicht am
+**Zwei Grenzen.** Erstens fasst der Filter nur JSON an; alles andere läuft
+unverändert durch. Der Volldump als ZIP und der Rechnungsexport als Word-Datei
+fragen das Geld-Recht deshalb selbst ab. Der Live-Kanal braucht es nicht —
+seine Ereignisse tragen nur Typ und Kennung, keine Nutzdaten. Zweitens wird an
+Feldnamen aus einer festen Liste erkannt, nicht am
 Inhalt. Ein Betrag unter einem neuen Namen ginge durch — Einzelheiten unter
 [Zugriffskontrolle](/sicherheit/zugriff).
 
@@ -284,7 +292,7 @@ Dateiname in `_migrations`, fährt jede Migration in einer eigenen
 Transaktion und hält einen Advisory-Lock gegen parallel startende Instanzen.
 Rückwärts-Migrationen gibt es nicht.
 
-Derzeit 61 Dateien mit Nummern bis `059`. Die Nummern `005` und `006` sind
+Derzeit 62 Dateien mit Nummern bis `060`. Die Nummern `005` und `006` sind
 historisch **je zweimal** vergeben — das ist kein Fehler: der Runner
 unterscheidet nach vollem Dateinamen, nicht nach Nummer.
 

@@ -1,7 +1,8 @@
 # Was PATIO herausgeben kann
 
 > **In einem Satz:** Fünf Dokumentarten aus Ihren eigenen Word-Vorlagen,
-> wahlweise als PDF — und einmal der ganze Bestand als Textdateien.
+> wahlweise als PDF, dazu das Projekt-Dossier als Markdown — und einmal der
+> ganze Bestand als Textdateien.
 
 ## Die fünf Dokumentarten
 
@@ -44,7 +45,8 @@ Die Platzhalter stehen dort je Art aufgelistet, zum Beispiel für die Rechnung:
 
 **Mehrere Vorlagen je Art** sind möglich — etwa „Protokoll ausführlich" und
 „Protokoll kurz". Gibt es mehr als eine, erscheint beim Export ein Auswahlfeld
-daneben; bei genau einer nicht.
+daneben; bei genau einer nicht. **Ausnahme Rechnung:** Dort gibt es kein
+Auswahlfeld — sie wird immer aus der als Standard markierten Vorlage erzeugt.
 
 ## PDF: dieselbe Datei, anderes Format
 
@@ -65,11 +67,26 @@ dieser Server kann. Ein direkter Aufruf antwortet mit **503** und einem Satz in
 Klartext: die Anfrage war richtig, dem Server fehlt ein Werkzeug. Der
 Word-Export bleibt in jedem Fall vollständig.
 
-Abschalten beim Bauen:
+Abschalten beim Schnüren des Auslieferungspakets:
 
 ```bash
-docker compose build --build-arg MIT_PDF=nein app
+DATABASE_URL="…" MIT_PDF=nein bash scripts/release-offline.sh
 ```
+
+Der Wert gehört an das Paket-Skript, nicht an ein einzelnes `docker compose
+build`: Das Skript baut das Abbild selbst neu und überschriebe ein zuvor ohne
+LibreOffice gebautes.
+
+## Das Projekt-Dossier als Markdown
+
+**Projektkopf → Weitere Aktionen → Als Markdown exportieren.** Eine einzelne
+Textdatei mit dem, was zu einem Projekt bekannt ist: Stammdaten, Notizen,
+Aufgaben, Termine, Beteiligte. Keine Word-Vorlage, kein Layout — gedacht zum
+Weiterreichen und zum Nachschlagen ohne PATIO.
+
+Kontaktdaten stehen nur darin, wenn das abrufende Konto sie sehen darf; für
+das Anzeigekonto im Besprechungsraum fallen sie weg. Jeder Abruf steht im
+Prüfprotokoll.
 
 ## Der Volldump — die Lock-in-Versicherung
 

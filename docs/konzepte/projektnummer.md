@@ -119,8 +119,9 @@ Platzhalter ein (`OHNE-NUMMER-…`), damit die Spalte überhaupt Pflicht werden
 konnte.
 
 Dieser Platzhalter wird **nirgends wie eine Aktennummer angezeigt**. In
-Projektliste, Portfolio und Projektkopf steht stattdessen „ohne Nummer" in
-Warnfarbe, und in Dateinamen und Exporten fehlt er ersatzlos. Er ist eine
+Projektliste und Portfolio steht stattdessen „ohne Nummer", im Projektkopf
+„Projektnummer fehlt" — beides in Warnfarbe; in Dateinamen und Exporten fehlt
+er ersatzlos. Er ist eine
 sichtbare offene Aufgabe, keine Nummer.
 
 ## Was PATIO als Nummer ablehnt

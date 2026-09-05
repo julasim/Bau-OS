@@ -85,7 +85,7 @@ Stundenerfassung, im Bautagebuch), bedienen es aber nicht.
 | **[Neuigkeiten](/konzepte/benachrichtigungen)** | Was an **Sie** gerichtet ist: Zuweisungen, Termine, Besprechungen, fällige Aufgaben — mit Lesestatus |
 | **[Board](/betrieb/board)** | Bildschirm für den Besprechungsraum: heute, Aufgaben, Projekte, Woche — ohne Beträge und Kontaktdaten |
 | **[KI-Zugriff](/konzepte/ki-zugriff)** | Je Projekt eine Akte für ein Sprachmodell — freigegeben bis auf die Kategorie genau, mit Vorschau |
-| **Papierkorb** | Gelöschtes ist wiederherstellbar, statt sofort weg zu sein |
+| **Papierkorb** | Gelöschte Projekte, Notizen, Aufgaben und Termine lassen sich zurückholen; alles Übrige ist mit dem Löschen endgültig weg |
 | **[Exporte](/konzepte/export)** | Fünf Dokumentarten aus eigenen Word-Vorlagen — Protokoll, Bautagebuch, Stundenzettel, Projektübersicht, **Rechnung** — wahlweise als PDF |
 | **Volldump** | Der ganze Bestand als Markdown-Ordnerbaum: lesbar ohne PATIO |
 
@@ -166,7 +166,9 @@ Sicherung nimmt den Ordner mit.
 
 Anmeldung mit Benutzername und Passwort. **Admin** sieht alles, **Benutzer**
 sieht die Projekte, die ihm zugewiesen sind. Aufgaben, Termine und Notizen ohne
-Projektbezug sind persönlich — sie gehören dem, der sie angelegt hat.
+Projektbezug sind persönlich: eine Notiz sieht nur, wer sie angelegt hat; eine
+Aufgabe zusätzlich die zugewiesene Person, einen Termin zusätzlich die
+eingetragenen Teilnehmer.
 
 Dazu kommt eine dritte Rolle **Präsentation** — für den Bildschirm im
 Besprechungsraum. Sie ist eine Beschränkung, kein Zugangsschlüssel: nur lesen,

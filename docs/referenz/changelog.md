@@ -799,3 +799,702 @@ Gegengeprüft mit drei Läufen über dieselbe Historie: ohne Allowlist ein Fund,
 mit Allowlist keiner — und ein testweise eingeschmuggeltes Zufallstoken in
 derselben Datei wird weiterhin gefunden. Die Ausnahme deckt also genau diesen
 einen Wert ab und nimmt nicht die Datei von der Prüfung aus.
+
+---
+
+## Doku gegen den Code geprüft — und dabei den Word-Export repariert
+**26.–27.08.2026**
+
+Alle 31 Doku-Seiten durchgesehen und jede Behauptung am Code belegt. Dabei kam
+ein Programmfehler heraus, der schwerer wiegt als alles Redaktionelle.
+
+### Der Word-Export war kaputt — alle sechs Wege
+
+Ohne `?format=pdf` rief sich die ausliefernde Funktion **selbst** auf, mit
+denselben Argumenten. Wer ein Word-Dokument wollte — der häufigere Fall —,
+bekam keines, sondern einen Absturz der Anfrage
+(`RangeError: Maximum call stack size exceeded`). Betroffen waren Protokoll,
+Bautagebuch, Stundenzettel, Projektübersicht, Rechnung und die
+Vorlagen-Vorschau.
+
+Der Fehler kam mit dem Commit herein, der den PDF-Schalter einbaute; beim
+Umbau ging der Word-Zweig verloren.
+
+**Warum ihn kein Test gefangen hat:** keiner kam bis dorthin. In der
+Testdatenbank liegt keine Word-Vorlage, deshalb enden alle vorhandenen
+Export-Tests vorher — mit 400 (keine Vorlage), 403 (fremdes Projekt,
+fehlendes Geld-Recht) oder 404 (unbekannte Rechnung). Vier Prüfungen über den
+Rechnungs-Export, und keine erreichte die eine fehlerhafte Zeile.
+`tests/api-export-word.test.ts` schließt die Lücke: es baut eine minimale
+gültige `.docx`, lädt sie als Standardvorlage hoch und geht den Weg zu Ende.
+
+### Zwei Doku-Befehle, die auf dem Server nie laufen konnten
+
+`docker compose exec app npm run db:status` stand als Diagnosebefehl in
+Monitoring und Troubleshooting. Er kann dort nicht funktionieren: das
+Laufzeit-Image enthält `scripts/` gar nicht — kopiert werden nur
+`node_modules`, `dist` und `package.json`. Ersetzt durch eine `psql`-Abfrage
+auf `_migrations`, gegen die laufende Datenbank ausprobiert. `db:migrate`,
+`db:import` und `db:reencrypt` sind Werkzeuge für den Entwicklungsrechner,
+und das steht jetzt auch dort.
+
+### Betriebsfallen, die still wirken
+
+- **`docker image prune -a` löscht auf diesem Rechner den Rückweg.** Daran
+  hängen zwei Dinge, die ohne Internet nicht zu beschaffen sind: das vorige
+  PATIO-Image (nach einem Update markenlos, für `prune` also „ungenutzt" — es
+  ist der automatische Rückweg) und `alpine:latest`, mit dem die Sicherung den
+  CA-Schlüssel holt.
+- **Fehlt `alpine:latest`, scheitert die nächtliche Sicherung ohne Meldung** —
+  und danach bricht jedes Update mit „Die Sicherung ist fehlgeschlagen" ab,
+  ohne dass die Ursache irgendwo steht.
+- **Ein leeres Protokoll sieht aus wie Fehlerfreiheit.** Gehörte `logs/` dem
+  Systemverwalter statt dem Dienst, blieben `patio.log` und `patio.jsonl`
+  dauerhaft leer, während alles normal lief — und die Schnelldiagnose meldete
+  null Fehler auf einer Maschine mit Fehlern.
+- **Die Datenübernahme nannte einen Befehl, aber keinen Ort.** Jetzt steht der
+  gangbare Weg da — temporäres Port-Mapping auf `127.0.0.1` plus SSH-Tunnel,
+  danach wieder zurückgebaut —, ausdrücklich mit dem Hinweis, dass er noch an
+  keiner echten Übernahme erprobt ist.
+
+Dazu Redaktionelles, das im Betrieb teuer geworden wäre: Die Installation
+versprach „einmal Internet, dann nie wieder", was bis zum 25.08. nicht
+einlösbar war; die Server-Seite führte `/opt/patio` pauschal unter einem
+Eigentümer, dem der Dienst die eigenen Ordner damit lautlos wieder verliert;
+und die Paketgröße stand an drei Stellen mit drei verschiedenen Zahlen.
+
+---
+
+## Version 1.0.0 — die Erstinstallation zum ersten Mal wirklich gegangen
+**28.08.2026**
+
+Der Weg vom leeren Verzeichnis bis zum Einrichtungsassistenten wurde
+vollständig durchgespielt: leere Volumes, das echte Paket, kein Internet.
+`release/patio-1.0.0.tar.gz`, 497 MB, mit allen drei Basis-Images.
+
+Belegt am laufenden Stand, nicht behauptet: Gesundheitsmeldung
+`{"ok":true,"db":true}`, HTTP 200 auf die eigene Adresse und auf `/docs/`,
+`{"needsSetup":true}` vom Einrichtungsassistenten, 61 Migrationen auf frischer
+Datenbank, Zertifikat aus der eigenen CA, Umleitung von HTTP auf HTTPS — und
+`patio.log` wird wirklich beschrieben, der Punkt, der drei Tage zuvor noch als
+„bleibt dauerhaft leer" notiert war.
+
+### Beim Durchspielen gefunden
+
+- **Der zweite Installationsversuch scheitert — und die Meldung zeigt in die
+  falsche Richtung.** Die Installation erzeugt jedes Mal ein neues
+  Zufallspasswort für die Datenbank; Postgres übernimmt eines aber nur bei
+  leerem Datenverzeichnis. Das Datenverzeichnis liegt in Docker und überlebt
+  ein Löschen des Installationsverzeichnisses. Ergebnis: „Passwort falsch",
+  während die Datenbank als gesund gemeldet wird und die Konfiguration in sich
+  stimmt. Die Installation bricht jetzt vorher ab und nennt beide Wege.
+- **Drei Diagnosewege meldeten auf einem gesunden Server Fehler.** Sie riefen
+  einen Port, der auf dem Host gar nicht liegt, und ein Programm, das dort
+  nicht installiert ist — auf dem Server läuft alles in Containern. Die
+  Fehlerzeile brach zusätzlich in zwei, weil das Zählen von Treffern bei null
+  Treffern zwar `0` ausgibt, aber als Fehlschlag endet.
+- **`https://localhost/` antwortet auch auf einem gesunden Server nicht.** Das
+  Zertifikat gilt für den Rechnernamen aus der Konfiguration, und nur für ihn.
+  Beide Diagnosestellen nehmen den Namen jetzt von dort.
+- **Die Prüfsumme trug den Pfad vom Baurechner.** Die Handprobe auf dem Server
+  meldete daraufhin einen Lesefehler — es liest sich wie ein beschädigtes
+  Paket, obwohl nur der Pfad nicht passte.
+- **Auf dem Server war nicht feststellbar, welcher Stand läuft.** Eine Datei
+  `/opt/patio/VERSION` hält ihn jetzt fest — geschrieben erst nach bestandener
+  Gesundheitsprüfung, beim Rückweg zurückgenommen —, und die Statusabfrage
+  zeigt ihn an.
+
+::: warning Was in dieser Umgebung nicht prüfbar war
+Sicherungsplatte samt Rücksicherung, USV, und ob das Arbeitsplatz-Programm dem
+Zertifikat der internen CA nach dem Import traut. Das bleibt Handarbeit vor
+Ort.
+:::
+
+---
+
+## Die Netzfreigabe ist entfallen — Dateien kommen nur noch über PATIO herein
+**29.08.2026**
+
+**Entscheidung:** Es wird keine Samba-Freigabe geben. Niemand bindet den
+Dokumentenordner mehr im Windows-Explorer ein. Was ins System soll, geht über
+die Oberfläche und liegt danach in der Datenbank — mit Projektbezug, Rechten
+und Volltextsuche. Damit fällt die zweite Ablage weg; „zwei Ablagen, klar
+getrennt" war ein tragendes Konzept dieser Dokumentation und ist jetzt eines.
+
+Entfallen sind die Freigabe-Konfiguration und ihre Seite in dieser
+Dokumentation, dazu ein Schritt der Installation, die Prüfung im Installer,
+die Gruppe und das Konto dahinter, der Papierkorb der Freigabe und Port 445 in
+der Firewall — es sind jetzt genau drei Ports.
+
+**Der interne Ordner bleibt** (`/opt/patio-workspace`, im Container
+`/workspace`): Er wird weiter gesichert, und der Dienst liest daraus
+Alt-Datensätze nach, deren Inhalt nicht in der Datenbank liegt. Von außen ist
+er nicht mehr erreichbar. An der Funktion hat sich nichts geändert.
+
+Drei Stellen brauchten mehr als Streichen: Die Begründung für die
+Ordner-Rechte stand danach genau falsch herum — nicht die Freigabe zählt,
+sondern der Dienst, der als `uid 1000` läuft. Der Hinweis zum Reparieren der
+Rechte stand unter „Upload schlägt fehl", obwohl der Upload gar nichts ins
+Dateisystem schreibt; er gehört zum **Herunterladen** eines Alt-Eintrags. Und
+das Wurzelzertifikat wurde bisher über die Freigabe verteilt — dieser Weg ist
+weg, es bleiben USB-Stick oder `scp`.
+
+**Nebeneffekt:** Die beiden Befehle, die auf Ubuntu 24.04 an der bereits
+vergebenen Kennung 1000 gescheitert wären — der Punkt, der die
+Erstinstallation als erstes getroffen hätte —, brauchte ausschließlich Samba.
+Sie sind mit ihm entfallen.
+
+### Dazu zwei rote CI-Läufe
+
+- **Ein Test war nur gegen die gewachsene Entwicklungsdatenbank grün.** Er
+  prüfte auf ein Konto, das er nie anlegte; lokal war es seit Wochen da, auf
+  einer von Null migrierten Datenbank nicht. Seit dem 23.08. kippte er bei
+  **jedem** Lauf neun Prüfungen. Der Test versorgt sich jetzt selbst und räumt
+  nur weg, was er selbst angelegt hat.
+- **Die Fehlermeldung des Übernahme-Skripts gab die Abfrage aus statt ihres
+  Ergebnisses** — also gerade nicht die Auskunft, die man braucht. Eine
+  Datenübernahme läuft im Ernstfall einmal, unter Zeitdruck, auf fremden
+  Daten; jetzt listet die Meldung die vorhandenen Konten auf.
+- **Die Dokumentation behauptete an zwei Stellen, der Installer bringe Docker
+  und Samba mit.** Er installiert nichts, er prüft nur. Das ist hier nicht
+  kosmetisch: Es gibt genau ein Fenster, in dem Nachinstallieren möglich ist —
+  danach hat der Rechner kein Internet mehr.
+
+---
+
+## Verteilweg des Arbeitsplatz-Programms, und ein Zeitstempel ohne definierte Reihenfolge
+**30.08.2026**
+
+**Die Anleitung zum Arbeitsplatz-Programm zeigte noch auf die abgeschaffte
+Freigabe** — sechs Stellen in drei Seiten ließen die `.exe` von einem
+Netzordner starten, den es auf diesem Server nicht mehr gibt. Jetzt steht dort
+der Weg, der ohnehin zweimal gebraucht wird: der USB-Stick, auf dem
+Auslieferungspaket und Wurzelzertifikat liegen. Dazu deutlich gesagt, was das
+heißt — eine neue Fassung ersetzt die Datei **an jedem Platz einzeln**.
+
+**Die Ratebremse hängt vollständig an Caddy — nachgemessen.** Eine Prüfung
+hatte gemeldet, ein Angreifer könne die Bremse über einen mitgeschickten
+Kopfzeilen-Eintrag umgehen. An der laufenden Anlage nachgestellt: Direkt gegen
+den Dienst gerichtet stimmt das — die Anwendung nimmt den Eintrag ungeprüft.
+Über Caddy nicht: Caddy **ersetzt** ihn durch die echte Adresse, und der
+zweite Versuch bekam prompt die Sperre. Daraus die Betriebsregel, die jetzt am
+Code steht: **der App-Container darf nie einen eigenen Port nach außen
+bekommen.** Wer den Dienst direkt erreichbar macht oder einen anderen Proxy
+davorsetzt, verliert Ratebremse und Aussagekraft des Protokolls — lautlos.
+
+**Und ein Fehler, der lange nur aus Zufall gutging:** Bei zwei gleichnamigen
+Notizen soll die jüngere getroffen werden. Der Zeitstempel kam aus der
+Anwendung und war auf Millisekunden genau — zwei schnell aufeinanderfolgende
+Notizen bekamen denselben Wert, und die Abfrage hatte damit kein definiertes
+Ergebnis. Auf dem Entwicklungsrechner fielen die beiden Anlagen durch den
+Netzweg zur Datenbank immer auseinander; in der CI, wo die Datenbank auf
+demselben Rechner liegt, nicht: **20 von 20 Paaren** trugen dieselbe Zeit.
+Auch die Vorgabe der Datenbank half nicht — sie liefert die Zeit der
+Transaktion, und beide Anlagen liegen in derselben. Erst die Anweisungszeit
+macht sie unterscheidbar; ein zusätzliches Ordnungsmerkmal macht das Ergebnis
+im theoretischen Gleichstand wenigstens vorhersagbar statt zufällig.
+
+---
+
+## Die Sicherung meldete jede Nacht Fehlschlag — und blockierte damit jedes Update
+**30.08.2026**
+
+Ein Code-Review über das ganze System hat zwanzig Fehler zutage gefördert. Die
+schwerwiegendsten sitzen im Betrieb, und sie haben eines gemeinsam: Sie treffen
+nicht den Ausnahmefall, sondern den Regelfall — und sie melden sich nicht.
+
+### Die nächtliche Sicherung endete mit einem Fehler, obwohl sie gelang
+
+Die letzte Zeile des Sicherungsskripts prüfte, ob unbrauchbare Stände
+herumliegen. Liegt keiner herum — der Normalfall —, ist das Ergebnis dieser
+Prüfung „nein", und weil es die letzte Zeile war, wurde daraus der Rückgabewert
+des ganzen Skripts: **Fehlschlag.**
+
+Die Folgen:
+
+- Der Dienst, der bei einem Fehlschlag Alarm schlägt, feuerte nach **jeder
+  erfolgreichen Nacht** — Meldung an alle angemeldeten Terminals, Eintrag im
+  Fehlerprotokoll, Fehlermarke im Programm.
+- Jedes Update bricht ab, wenn die Sicherung davor fehlschlägt. **Der Server
+  wäre nicht mehr aktualisierbar gewesen.**
+
+Nachgemessen auf Ubuntu 24.04: Die Sicherung lief sauber durch — „Selbstprüfung
+bestanden", „Sicherung abgeschlossen" — und endete mit Rückgabewert 1. Nach der
+Reparatur: 0. Ein Test hält die Konstruktion jetzt für alle Server-Skripte fest.
+
+### Die Fehlermarke wurde nie zurückgenommen
+
+Schlägt die Sicherung fehl, entsteht eine Datei, die `patio status` als rotes
+Kreuz anzeigt. **Gelöscht hat sie niemand** — im ganzen Programm gab es keine
+Stelle dafür. Zusammen mit dem Fehler oben stand das Kreuz ab der ersten Nacht
+dauerhaft. Der nächste erfolgreiche Lauf nimmt es jetzt selbst zurück.
+
+### Eine Sicherung ohne CA-Schlüssel galt als vollständig
+
+Der Datenbank-Teil wird seit jeher scharf geprüft: Jeder Lauf spielt den
+frischen Stand in einen Wegwerf-Container zurück und vergleicht die Zeilen.
+Für die drei übrigen Bestandteile stand dagegen nur eine Warnung im Protokoll —
+die Marke „vollständig" entstand trotzdem.
+
+Am teuersten fällt das beim **Schlüssel der internen Zertifizierungsstelle**
+aus: Ohne ihn erzeugt der Proxy beim Wiederaufbau eine neue, und dann muss
+jemand an **jeden** Arbeitsplatz. Die Sicherung wäre formal in Ordnung gewesen
+und der Wiederanlauf trotzdem ein Tagesprojekt. Jetzt zählt ein Stand nur als
+vollständig, wenn alle vier Teile da und nicht leer sind.
+
+### Abgebrochene Läufe blieben für immer liegen
+
+Bricht die Sicherung mittendrin ab, trug ihr Verzeichnis bisher **keine der
+beiden Marken** — und fiel damit durch beide Aufräumregeln. Jeder Fehlversuch
+ließ mehrere hundert Megabyte zurück, ohne dass die Aufbewahrung es bemerkte.
+
+### Der Rückweg eines Updates holte nur das halbe System zurück
+
+Schlägt ein Update fehl, wird das vorige Programm-Abbild wieder eingesetzt.
+Compose-Datei, Proxy-Konfiguration und die Systemdienste waren zu diesem
+Zeitpunkt aber **längst ersetzt**. Setzt die neue Fassung etwas voraus, das die
+alte nicht mitbringt, scheitert auch der Rückweg — übrig bleibt genau der halb
+aktualisierte Rechner, den die Vorprüfung verhindern soll. Der vorige Stand
+wird jetzt vorher beiseitegelegt und mit zurückgespielt.
+
+### Eine geänderte Proxy-Konfiguration erreichte den Proxy nie
+
+Beim Update wird das Verzeichnis mit der Proxy-Konfiguration ersetzt. Die Datei
+darin ist einzeln in den laufenden Container eingehängt — und der hält nach dem
+Austausch weiter die alte fest. Ein Update, das einen Zugriffsweg korrigiert,
+war damit eingespielt und trotzdem wirkungslos, ohne jede Meldung. Der Proxy
+wird jetzt neu erzeugt.
+
+### Geänderte Systemdienste wurden nie wirksam
+
+Die Einheiten der Sicherung wurden **nur bei der Erstinstallation** eingespielt.
+Ein Update ersetzte sie im Installationsverzeichnis, die tatsächlich laufende
+Einheit blieb die alte — und niemand merkte es, weil sie weiterlief.
+
+### Die Gesundheitsprüfung sagte nichts über die Datenbank
+
+`/api/health` meldete `db: true`, sobald eine Datenbank-Adresse **konfiguriert**
+war. Ob sie erreichbar ist, wurde nie gefragt. Fällt Postgres im laufenden
+Betrieb aus, blieb das damit unsichtbar: Container „gesund", `patio status`
+meldet „Der Dienst antwortet", ein Update gilt als gelungen — während jeder
+Datenzugriff fehlschlägt.
+
+Jetzt fragt der Endpunkt die Datenbank wirklich (mit fünf Sekunden
+Zwischenspeicher) und antwortet bei einem Ausfall mit **503**. Nachgemessen:
+Datenbank gestoppt → 503, Datenbank zurück → 200.
+
+### Die Rücksicherung meldete Erfolg, ohne den Dienst gesehen zu haben
+
+Lief das Programm vor der Rücksicherung nicht — der Regelfall beim
+Totalausfall —, übersprang das Skript den Start und meldete trotzdem
+„abgeschlossen". Dazu wurde der Proxy nach dem Zurückspielen des
+CA-Schlüssels nicht neu gestartet; er arbeitete mit dem alten Zustand weiter,
+und am Arbeitsplatz stand weiterhin eine Zertifikatswarnung. Beides behoben,
+und die Abschlussmeldung sagt jetzt ausdrücklich, ob der Dienst antwortet.
+
+### Die Sicherungsanzeige blieb nach der Erstinstallation blind
+
+Die Platte wird erst **nach** dem Start der Container eingehängt. Ein solcher
+Mount ist für den Container unsichtbar — die Anzeige unter „Verwaltung →
+Sicherung" hätte dauerhaft „keine Sicherung gefunden" gemeldet, während nachts
+sauber gesichert wird.
+
+Der naheliegende Weg — die Einhänge-Art auf `rslave` stellen — wurde geprüft
+und **verworfen**: Auf einem Rechner, dessen Mountpunkt `private` ist, verweigert
+Docker dann den Start des Containers („path … is not a shared or slave mount",
+in WSL Ubuntu-24.04 nachgemessen). Eine Compose-Datei, die auf der eigenen
+Prüfmaschine nicht hochkommt, wäre ein schlechter Tausch gegen eine Anzeige.
+Stattdessen nennt die Installation den Schritt, der immer trägt: nach dem
+Einhängen einmal `docker compose up -d --force-recreate app`.
+
+### `patio restart` las die Konfiguration nicht neu
+
+Der Befehl startete die Container nur neu; geänderte Werte in der `.env` greifen
+dabei nicht. Wer nach einer Änderung den naheliegenden Befehl nahm, arbeitete
+weiter mit den alten Werten. Jetzt werden die Container neu erzeugt.
+
+---
+
+## Das Board darf die Akte öffnen — und Kontaktdaten bleiben trotzdem drin
+
+Die Rolle **Präsentation** ist das Konto für das Board im Besprechungsraum. Sie
+sah bisher in den *Listen* jedes Projekt, bekam auf die *Akte* aber 403 — ein
+Board, dessen Kacheln sich nicht öffnen lassen, sieht nach einem Defekt aus und
+ist einer. Die Ausnahme steht jetzt auch in `canSeeProject()`.
+
+Damit erreicht das Konto die Detailrouten: Projektakte, Notizen, Aufgaben,
+Termine, Bautagebuch, Besprechungsprotokolle, Entscheidungen, Phasen, Stunden.
+Das ist eine spürbare Ausweitung, und sie trifft ausgerechnet die
+vertraulichsten Freitexte. Getragen wird sie davon, dass an dem Gerät niemand
+sitzt, es nichts schreiben und — ab jetzt — nichts mitnehmen kann.
+
+### Der Volldump ging am Personendaten-Filter vorbei
+
+Der Filter, der E-Mail und Telefonnummer aus den Antworten für dieses Konto
+entfernt, fasst ausschließlich JSON an. Ein Volldump ist ein ZIP, ein Dossier
+ist Markdown — beide liefen unverändert hindurch, und im Volldump lag die
+Team-Liste des ganzen Hauses mit allen Kontaktdaten.
+
+Geschlossen mit zwei voneinander unabhängigen Sperren: die Anzeige kommt gar
+nicht mehr an `/api/exports/*` — an dem Gerät gibt es weder Drucker noch
+Dateidialog, ein Massenabzug über ein unbeaufsichtigtes Konto ist genau die
+Bauform, die man später erklären muss — und selbst wenn sie hinkäme, ließe die
+Team-Liste die Spalten E-Mail und Telefon weg. Dasselbe gilt für das Dossier.
+
+Der Word-Export war ebenfalls verdächtig und ist es nicht: nachgesehen liest er
+`name`, `role` und `company`; die Kontaktangaben darin stammen aus dem eigenen
+Briefkopf.
+
+**Nicht eingeschränkt wurde der Volldump für normale Konten.** Sein Inhalt
+hängt bereits an den Rechten — ein Mitarbeiter bekommt seine eigenen Projekte,
+nicht das Haus. Ein Verwaltungsvorbehalt hätte jedem den Abzug seines eigenen
+Bestands genommen, ohne dass irgendwo weniger Daten flössen.
+
+### Wer etwas mitnimmt, steht jetzt im Protokoll
+
+Bis hierher hielt das Prüfprotokoll ausschließlich fest, **wer hereinkommt**.
+Was hinausgeht, stand nirgends — dabei ist das die Zeile, die man bei einer
+Frage nach Bauherrendaten sucht. Vier neue Ereignisse: Volldump, Dossier,
+Word-/PDF-Export und KI-Akte, jeweils mit Umfang und der Angabe, ob Beträge und
+Kontaktdaten enthalten waren.
+
+::: danger Dabei gefunden: das Prüfprotokoll protokollierte seine Details nie
+Beim Schreiben eines Eintrags wurde das Detailfeld **doppelt kodiert** — in der
+Spalte landete eine Zeichenkette statt eines Objekts, und die Leseseite verwarf
+sie stillschweigend zu einer leeren Klammer.
+
+Betroffen war **jeder Eintrag**, seit es das Protokoll gibt: der Grund einer
+fehlgeschlagenen Anmeldung, die alte und die neue Rolle bei einer Änderung, das
+Ziel eines Passwort-Resets — alles wurde geschrieben und war nie abrufbar. In
+der Testdatenbank traf es 2839 von 2839 Zeilen.
+
+Keine Prüfung hat das gefangen, weil alle vorhandenen nur den Statuscode und
+die Listenform prüfen; der **Inhalt** der Einträge war nie Gegenstand. Behoben,
+und Alteinträge sind jetzt ebenfalls lesbar.
+
+Dieselbe Schreibform steckt in fünf weiteren Feldern (Alternativen einer
+Entscheidung, Rechnungspositionen, Aufgabenpunkte einer Besprechung, Personal
+im Bautagebuch, Kontaktverlauf). Dort fällt sie nicht auf, weil die Leseseiten
+sie abfangen — sie gehört trotzdem geradegezogen, in einem eigenen Schritt mit
+eigener Prüfung.
+:::
+
+---
+
+## Das Board zeigte seit seinem Bau keinen einzigen Termin
+
+Die Terminspalte war Text. Darin standen **drei Schreibweisen nebeneinander**:
+`15.09.2026` aus der Oberfläche, `2026-09-15` aus dem automatischen
+Phasen-Meilenstein, und aus der alten Datenübernahme alles, was dort eben
+stand — bis hin zu `morgen` und einem leeren Feld.
+
+Das Board im Besprechungsraum vergleicht das heutige Datum in ISO gegen diese
+Spalte. Gegen `15.09.2026` trifft das nie zu. **Es hat deshalb nie einen Termin
+angezeigt** — und weil dabei kein Fehler entstand, sah es aus wie ein ruhiger
+Tag im Büro.
+
+Migration `060` hebt die Spalte auf ein echtes Datum. Damit funktionieren
+gleichzeitig: die Wochenansicht des Boards, die nächste Frist im Portfolio, der
+nächste Termin in der Projektakte und die Sortierung — sie ging vorher nach dem
+Tag im Monat, also 3. Dezember vor 15. Januar.
+
+Was dabei sonst noch herauskam:
+
+- **`/board/heute` antwortete jedem Konto mit eingeschränkter Sicht mit einem
+  Serverfehler.** Eine Zeichenketten-Ersetzung im Abfrage-Baukasten traf die
+  falsche Stelle. Für die Verwaltung fiel das nicht auf, weil bei ihr gar nichts
+  zu ersetzen war — und die Prüfung fuhr die Route nur als Verwaltung.
+- **Der 31. Februar wurde angenommen.** Geprüft wurden nur Bereiche: Tag
+  höchstens 31, Monat höchstens 12. Solange die Spalte Text war, landete das
+  unbeanstandet in der Datenbank.
+- **Die Kachel „heute" im Dashboard rechnete in der falschen Zeitzone.** Sie
+  las die Uhrzeit des Servers, und der läuft im Container auf UTC — zwischen
+  Mitternacht und zwei Uhr früh zeigte sie den Vortag.
+- **Das Datumsfeld im Kalender öffnete sich leer.** Ein Datumsfeld im Browser
+  nimmt ausschließlich ISO; es bekam den deutschen Rohwert und zeigte nichts.
+  Wer nur den Text eines Termins ändern wollte, musste das Datum neu eingeben.
+- **Die Datenübernahme prüfte das Datum nicht** — sie war die Quelle des
+  Mischbestands. Jetzt überspringt sie unlesbare Termine und meldet sie.
+
+Unlesbare Datumsangaben wandern beim Update in den Papierkorb, mit ihrem
+ursprünglichen Wert im Text. Nichts geht verloren; was zu tun ist, steht unter
+[Updates](/betrieb/updates).
+
+::: danger Nach diesem Update ist ein Downgrade des Programms nicht möglich
+Schema und Programm gehören zusammen. Der Rückweg ist die Sicherung von vor dem
+Update.
+:::
+
+---
+
+## Fehler waren unsichtbar, und der Konfliktschutz war es auch
+
+### Der Konfliktschutz für Team-Mitglieder war nie erreichbar
+
+Das System zählt bei jedem Datensatz mit, wie oft er geändert wurde — damit
+zwei Personen, die gleichzeitig dasselbe bearbeiten, nicht einander
+überschreiben. Bei den Team-Mitgliedern kam dieser Zähler **nie an**: Die
+Route nimmt nur eine feste Liste von Feldern entgegen, und der Zähler stand
+nicht darin. Kein Client hätte daran etwas ändern können.
+
+Gefunden beim Nachlesen des eigenen Plans, nicht im Code-Review. Festgehalten
+ist es jetzt über die **Wirkung** — zweimal mit demselben Zähler schreiben muss
+beim zweiten Mal abgewiesen werden. Eine Prüfung, die nur nachsieht, ob die
+Oberfläche den Zähler mitschickt, wäre grün geblieben.
+
+### Fehlermeldungen kamen nicht an
+
+Die Oberfläche warf bei jedem Serverfehler denselben allgemeinen Fehler —
+**keine Ansicht konnte einen Konflikt von einer Störung unterscheiden.** Die
+Folge war überall dieselbe: Bei einem abgelehnten Speichern wurde neu geladen
+und die Eingabe des Nutzers dabei verworfen, ohne ihm zu sagen, was falsch war.
+
+- **Die Team-Seite hatte keine einzige Fehleranzeige** bei dreizehn Stellen,
+  die Fehler abfingen — die meisten davon leer. Jeder Fehlschlag lief lautlos
+  ab: Der Wert sprang zurück, die Zuordnung erschien nicht, das Häkchen blieb
+  ungesetzt. Für den Nutzer nicht von der eigenen Fehlbedienung zu
+  unterscheiden.
+- **Aufgaben- und Notiz-Editor hängten sich bei einem Speicherfehler selbst
+  aus.** Die Meldung erschien *anstelle* des Textes — genau in dem Moment, in
+  dem man ihn am dringendsten braucht.
+- **Eine neue Aufgabe verschwand beim Tippen**, wenn das Anlegen fehlschlug:
+  Das Feld wurde vor dem Absenden geleert, und es gab keine Meldung.
+- **Löschen meldete einen Fehler, obwohl es gelungen war.** Zwei Routen
+  antworten ohne Inhalt; die Oberfläche versuchte trotzdem, einen zu lesen.
+- **Eine Meldung in den Neuigkeiten ließ sich nicht öffnen**, wenn das
+  Markieren als gelesen scheiterte — das Öffnen hing daran.
+
+### Live-Updates: drei Verbindungen für dieselben Ereignisse
+
+Im Aufgabenbereich hielten Navigationsleiste, Kopfzeile und Liste je eine
+eigene Verbindung zum Server offen. Jetzt teilen sich alle Ansichten eine.
+Nebeneffekt: Das Störungsbanner wurde vorher von einer einzelnen abgerissenen
+Verbindung gesetzt, während die anderen standen.
+
+### Was die Selbstprüfung danach noch gefunden hat
+
+Nach dem Umbau lief eine Prüfrunde über die eigenen Änderungen. Sie hat vier
+Dinge zutage gefördert — zwei davon Fehler, die erst durch diesen Umbau
+entstanden wären:
+
+- **Die Migration hätte den Dienststart verhindern können.** Ihr zweiter
+  Sicherungsblock verglich mit `<>` statt mit `IS DISTINCT FROM`. Auf einer
+  Datenbank ohne die Terminspalte ergibt dieser Vergleich weder wahr noch
+  falsch, sondern nichts — die Abbruchbedingung feuerte nicht, und die
+  Migration lief in eine Abfrage auf eine Tabelle, die es nicht gibt. Ein paar
+  Zeilen weiter oben war derselbe Fall korrekt behandelt.
+- **Ein geleertes Datumsfeld wäre zum Serverfehler geworden.** Die Prüfung im
+  Datenzugriff lautete „falls ein Datum da ist" — und ein leerer Text zählt
+  dort nicht als „da". Solange die Spalte Text war, landete er einfach
+  unbeanstandet in der Datenbank; danach wäre es ein Absturz gewesen. Das
+  Datumsfeld im Kalender lässt sich leeren, der Weg war also offen.
+- **Die Datenübernahme verschob Datumsangaben um Monate.** Sie schrieb rohe
+  Zeichenketten in Datumsspalten; der Datenbanktreiber liest einen
+  punktgetrennten Wert in amerikanischer Schreibweise. Nachgemessen: **der
+  5. Oktober wurde zum 9. Mai** — ohne Fehlermeldung. Betroffen waren
+  Besprechungen, Entscheidungen, Bautagebuch und Rechnungen; bei den Terminen
+  war es in derselben Runde bereits behoben. Andere Werte (`31.12.2026`, ein
+  leeres Feld) rissen stattdessen die gesamte Übernahme ab, mit einer Meldung,
+  aus der niemand ableiten kann, welche Datei gemeint war.
+- **Die nächste Frist im Portfolio war einen Tag zu früh.** Sie rechnete
+  „heute" aus der Uhrzeit des Servers und schob dabei über den
+  Zeitzonen-Versatz auf den Vortag. Ein Termin von gestern galt damit als
+  nächste Frist, und die Ampel sprang für einen Tag auf Rot.
+
+Dazu behoben, weil es in derselben Datei lag: Leere Datumsfelder erschienen im
+Archiv als `..null` statt als Gedankenstrich — die Bremse dafür prüfte einen
+Wert, der nie leer sein kann.
+
+---
+
+## Zweiter Durchgang der Fehlerbehebung
+**02.09.2026**
+
+Die Arbeitspakete, die im ersten Durchgang bewusst offen geblieben waren, plus
+das, was die Selbstprüfung darüber hinaus gefunden hat. **850 Prüfungen**
+(vorher 801).
+
+### Ein Kontaktvermerk war noch nie sichtbar
+
+Jeder Vermerk, den jemand zu einem Team-Mitglied notiert hat, wurde in einer
+Form gespeichert, die die Leseseite verwirft: **223 von 223 Zeilen** in der
+Prüfdatenbank standen auf „leer", obwohl geschrieben wurde. Dieselbe
+Schreibweise steckte in **sieben** Feldern; bei zweien kostete sie Daten — bei
+den Kontaktvermerken sofort, bei den persönlichen Einstellungen beim nächsten
+Speichern.
+
+Die Leseseite bleibt bewusst nachsichtig: Der Altbestand liegt weiter in der
+alten Form, und Migrationen laufen hier nur vorwärts. Sie versteht jetzt drei
+Formen statt einer — die dritte entsteht, wenn an eine bereits falsch
+gespeicherte Liste angehängt wurde.
+
+### Löschen traf mehr als das Gemeinte
+
+- **Ein Team-Mitglied konnte jedes angemeldete Konto entfernen** — an dem
+  Löschvorgang hängen vier Fremdschlüssel und zwei Auslöser, und einen
+  Papierkorb gibt es dafür nicht. Jetzt der Verwaltung vorbehalten.
+- **Zwei gleichnamige Mitglieder wurden beide gelöscht.** Jetzt wird über die
+  Kennung aufgelöst; bei Mehrdeutigkeit passiert nichts, statt zu raten.
+- **Bei Dateien prüften Rechte und Wirkung verschiedene Zeilen.** Die
+  Rechteprüfung löste streng über die Kennung auf, das Löschen zusätzlich über
+  den Dateinamen — projektübergreifend und endgültig.
+- **Das Abhaken einer Aufgabe lief projektübergreifend.** Der Aufruf gab den
+  Projektnamen mit, die Datenschicht nahm ihn gar nicht entgegen: Jede Aufgabe
+  mit demselben Wortlaut wurde mit abgehakt, in jedem Projekt.
+
+### Was im Papierkorb liegt, ist jetzt überall weg
+
+Der Filter fehlte an fünf Stellen: in der Suche, in der Aktivitätsliste, in den
+Kennzahlen der Projektakte, in der Notizliste eines Projekts und bei der
+nächsten Frist im Portfolio. Besonders auffällig in der Aktivitätsliste: Das
+Löschen setzt den Änderungszeitpunkt neu — der gelöschte Eintrag stand danach
+**ganz oben**.
+
+### Das Anzeigekonto: zwei Wege am Verbot vorbei
+
+Das Konto für den Bildschirm im Besprechungsraum darf keine Dateien öffnen.
+Über die **Suche** bekam es trotzdem Dateinamen und die ersten 200 Zeichen des
+ausgelesenen Dokumententexts. Datei-Treffer entfallen für diese Rolle jetzt
+ganz; Projekte, Notizen und Aufgaben bleiben durchsuchbar.
+
+Der zweite Weg war unscheinbarer: Die Live-Meldung über eine hochgeladene Datei
+trug als Kennung **den Dateinamen** — bei einem Sammelupload eine ganze Liste.
+Jetzt steht dort die Kennung.
+
+::: tip Persönliche Einträge auf dem Bildschirm
+Aufgaben und Termine **ohne Projektzuordnung** erscheinen weiterhin auf dem
+Bildschirm im Besprechungsraum. Wer einen Eintrag dort nicht sehen möchte,
+ordnet ihn einem Projekt zu.
+:::
+
+### Datumsangaben: was im ersten Durchgang übrig blieb
+
+- **Projektbeginn und -ende erschienen im Dossier und in der KI-Akte als
+  Wochentagsangabe** (`Sun Mar 01 2026 01:00:00 GMT+0100`). Dieselbe Ursache
+  wie bei den Terminen, eine Tabelle weiter.
+- **Das Fälligkeitsdatum einer Aufgabe wurde bisher nirgends geprüft.** Ein
+  deutsch geschriebenes Datum wurde beim Anzeigen **vertauscht**: aus dem
+  5. September wurde der 9. Mai, ein Tag über dem 12. ergab eine leere Zelle.
+  Die Prüfung beim Speichern ist ergänzt, die Anzeige versteht beide
+  Schreibweisen. Ein Tag, den es nicht gibt (`31.02.`), bleibt bewusst leer,
+  statt still auf den 3. März verschoben zu werden.
+
+### Konflikte waren eine Sackgasse
+
+Der im ersten Durchgang eingeführte Konfliktschutz hatte eine Kehrseite: Wer
+auf einen Konflikt lief, konnte in drei Ansichten **nicht mehr speichern** —
+auch der nächste Versuch scheiterte mit demselben veralteten Zähler, und ohne
+Neuladen der Seite war die Ansicht nicht mehr benutzbar. Jetzt wird im
+Konfliktfall der Stand der Kollegin nachgezogen.
+
+Dazu bei den Live-Updates zwei Zustände, aus denen es kein Zurück gab: Nach
+rund fünfeinhalb Minuten Verbindungsverlust — kürzer als ein Update dauert —
+wurde nie wieder verbunden; und blieb der Abruf der Eintrittskarte ohne
+Antwort, kam es gar nicht erst zu einem Verbindungsversuch. Beides greift jetzt
+wieder, sobald das Netz zurück ist oder das Fenster wieder in den Vordergrund
+kommt.
+
+### Kleineres, das keiner gemerkt hätte
+
+- **Ein Anmeldeversuch mit falschem Passwort lud die Seite neu** und löschte
+  damit die Meldung, bevor jemand sie lesen konnte.
+- **Eine Notiz meldete Erfolg, ohne gespeichert zu haben**, wenn sie zwischen
+  Auflösen und Schreiben verschwunden war.
+- **Benachrichtigungen zu Aufgaben und Terminen trugen keinen Projektbezug** —
+  die Glocke zeigte sie ohne Projekt an, obwohl die Spalte dafür von Anfang an
+  vorhanden war. Nur Besprechungen gaben ihn je mit.
+- **Aufgaben und Termine, die über die Projektakte angelegt wurden, hatten
+  keinen Verfasser.** Über den anderen Weg angelegt schon — dieselbe Aufgabe,
+  je nach Weg.
+- **Der Wechsel der Standardvorlage lief in zwei Schritten**, dazwischen gab es
+  keine. Jetzt in einem.
+- **Ein Upload meldete Erfolg, auch wenn Dateien fehlschlugen.** Jetzt nennt
+  die Antwort, welche.
+- **Ein Datenabfluss wurde protokolliert, bevor feststand, dass etwas
+  ausgeliefert wird** — ein gescheiterter PDF-Export und jeder Vorschau-Klick
+  standen als Abfluss im Protokoll.
+- **Die Druckansicht der Projektakte blendete Elemente aus, die es nicht mehr
+  gibt** — die Navigationsleiste kam mit aufs Blatt.
+- **Zwanzig Gestaltungsklassen waren nirgends definiert.** Der Störungsbanner
+  schwebte deshalb nicht über der Oberfläche, der Ungelesen-Zähler hatte kein
+  Aussehen, und Einstellungen und Profilbild saßen nicht am unteren Rand.
+
+### Zwei neue Wächter
+
+- **Eine benutzte, aber nirgends definierte Gestaltungsklasse** fällt jetzt
+  beim Prüflauf auf. Geprüft wird gegen das gebaute Ergebnis, nicht gegen die
+  Quelltexte — sonst gäbe es Fehlalarme für alle Hilfsklassen.
+- **Eine Ansicht, die sich nicht übersetzen lässt**, fällt ebenfalls auf. Am
+  02.09. stand in einer Ansicht ein Kommentar mitten in einem öffnenden Tag:
+  Typprüfung und Stilprüfung meldeten nichts, der Prüflauf war grün — und der
+  Bau brach ab. Genau die Konstellation, die den Auslieferungsbau schon einmal
+  45 Commits lang unbemerkt kaputt gehalten hat.
+
+---
+
+## Dokumentation gegen den Code abgeglichen
+**05.09.2026**
+
+Alle 30 Handbuchseiten plus das README wurden Behauptung für Behauptung gegen
+den Quelltext geprüft. **102 Verdachtsfälle**, jeder von zwei unabhängigen
+Prüfern gegengelesen — einer gegen die Behauptung, einer gegen den
+Korrekturvorschlag. **27 haben sich als unbegründet erwiesen** und blieben
+unangetastet; **75 waren echt** und sind behoben.
+
+### Zwei Schritte fehlten in der Anleitung
+
+- **Nach dem Einhängen der Sicherungsplatte** muss der Anwendungs-Container
+  einmal neu erzeugt werden. Ein Container sieht ein Verzeichnis so, wie es
+  beim Start aussah. Ohne diesen Handgriff meldet die Sicherungsanzeige
+  dauerhaft, es gebe keine Sicherung — während jede Nacht eine geschrieben
+  wird. Steht jetzt in Installation und Sicherung.
+- **Das Konto für den Besprechungsraum** lässt sich in der Oberfläche gar
+  nicht anlegen: Die Rolle steht dort nicht zur Auswahl. Der Weg über die
+  Schnittstelle ist jetzt beschrieben — samt der Warnung, dass die Nutzerliste
+  dieses Konto als gewöhnlichen Nutzer führt.
+
+### Was schlicht nicht mehr stimmte
+
+- Drei Seiten führten ein Verzeichnis `tools/`, das es nicht gibt.
+- Zwei Befehle scheiterten ohne `sudo`, weil die betroffenen Dateien nur für
+  den Systemverwalter lesbar sind.
+- Die Fehlersuche empfahl Befehle für eine Betriebsform ohne Container, die es
+  seit dem Umbau nicht mehr gibt, und ein Neubauen auf dem Server — dort liegt
+  überhaupt kein Quelltext.
+- „Der Einrichtungsassistent erscheint, obwohl Konten existieren" war genau
+  verkehrt erklärt: Antwortet die Datenbank nicht, erscheint er gar nicht.
+- Die Aufgaben-Ansicht verlangt beim Überschreiten einer Tagesgrenze keine
+  Bestätigung; sie macht die Zahl nur sichtbar.
+- Die Anmeldeseite zeigt kein Firmen-Branding — die Einrichtung behauptete es.
+
+### Wo die Beschreibung zu großzügig war
+
+- **Der Papierkorb** deckt vier Datenarten ab (Projekte, Notizen, Aufgaben,
+  Termine), nicht alles. Dateien, Besprechungen, Rechnungen und Team-Einträge
+  sind mit dem Löschen endgültig weg.
+- **Benachrichtigungen** gibt es nur beim Anlegen. Wer nachträglich zu einem
+  Termin oder einer Besprechung hinzukommt, bekommt keine.
+- **Harte Links in der Sicherung** kosten keinen Platz, solange der Tagesstand
+  existiert — nach sieben Tagen schon.
+- **Ein Zeitlimit auf Datenbankabfragen** setzt allein die Volltextsuche.
+- **Der Trockenlauf der Datenübernahme** meldet zwei Dinge nicht, die der
+  echte Lauf meldet.
+
+### Neu dokumentiert
+
+- Das **Prüfprotokoll** hält seit dem 02.09.2026 auch jeden Datenabfluss fest.
+- Die **Ratebremse trägt nur hinter dem Proxy** — daraus folgt die
+  Betriebsregel, dass der Anwendungs-Container nie einen eigenen Port bekommt.
+- **Zwei Wege führen das Anmelde-Token doch in die Adresse:** der Rückfall bei
+  den Live-Updates und jeder Datei-Download.
+- Die **Rücksicherung überschreibt den Dokumentenordner nicht**, sondern legt
+  ihn daneben. Das braucht Platz, und Nachzügler muss man von Hand
+  herüberholen.
+- **Das Projekt-Dossier als Markdown** hatte in der Export-Übersicht gefehlt.
+
+### Version 1.1.0
+
+`package.json` steht jetzt auf 1.1.0. Die Anleitung kündigte den
+Migrationsschritt seit dem 01.09.2026 unter dieser Nummer an, während der Code
+noch 1.0.0 trug — das nächste Auslieferungspaket hätte den Namen des vorigen
+getragen, und das vorige ist der Rückweg.

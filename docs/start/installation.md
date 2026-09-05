@@ -174,7 +174,9 @@ selbst an.
 
 ### Build-Werkzeuge
 
-Unter Linux für die nativen Module (`bcrypt`, `pdf-parse`):
+Unter Linux für `bcrypt` — das einzige Paket mit nativem Code. Es
+greift zuerst auf ein vorgebautes Binärpaket zurück; nur wenn dafür keines
+passt, wird übersetzt:
 
 ```bash
 sudo apt-get install -y build-essential

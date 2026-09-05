@@ -5,8 +5,24 @@
 
 ## Einrichten
 
-**1. Ein Konto für das Gerät anlegen** — Verwaltung → Nutzer → Neu, Rolle
-**Präsentation**.
+**1. Ein Konto für das Gerät anlegen.** Die Rolle **Präsentation** steht im
+Anlegen-Dialog unter **System → Nutzer → Neu** nicht zur Auswahl — dort gibt es
+nur „Nutzer" und „Admin". Das Konto wird deshalb als Verwalter über die
+Schnittstelle angelegt:
+
+```
+POST /api/admin/users
+{ "username": "board", "password": "<mindestens 12 Zeichen>", "role": "praesentation" }
+```
+
+Ein bestehendes Konto stellt `PATCH /api/admin/users/<id>` mit demselben Feld
+um — das ist auch der einzige Weg zurück.
+
+::: warning In der Nutzerliste steht das Gerätekonto als „Nutzer"
+Die Liste kennt nur diese beiden Beschriftungen. Die Schaltfläche daneben
+fragt „zum Admin befördern?" — wer bestätigt, macht aus dem Anzeigekonto einen
+Verwalter.
+:::
 
 **2. Am Gerät anmelden** und `/board` aufrufen.
 
@@ -48,6 +64,8 @@ Sie ist eine **Beschränkung**, kein Zugangsschlüssel.
 | **Schreiben** | gar nicht. Jede Anfrage außer Lesen wird abgewiesen |
 | **Beträge** | nie — auch dann nicht, wenn jemand das Geld-Recht am Konto setzt |
 | **Kontaktdaten** | keine E-Mail, keine Telefonnummer, kein Kontakt-Log |
+| **Dokumente** | keine Ausgabe. Word, PDF und der Volldump werden abgewiesen — an einem unbeaufsichtigten Gerät hat ein Massenabzug nichts zu suchen |
+| **Dateien** | keine. Auch die Suche liefert diesem Konto keine Datei-Treffer — sonst stünde ein Dateiname samt Textausschnitt an der Wand. Notizen, Aufgaben und Projekte bleiben durchsuchbar |
 | **Projekte** | alle. Ein Board, das nur einen Ausschnitt zeigt, wäre irreführend |
 
 ::: danger Warum das im Server steht und nicht in der Anzeige
@@ -73,6 +91,6 @@ Verbindung, die niemand wieder aufbaut, eine Fehlerquelle mehr.
 
 ::: warning Ein Gerätekonto lässt sich nicht sperren
 PATIO kennt kein „deaktiviert" — nur Löschen. Geht das Gerät verloren oder
-verlässt es den Raum, muss das Konto unter **Verwaltung → Nutzer** gelöscht
+verlässt es den Raum, muss das Konto unter **System → Nutzer** gelöscht
 werden. Das Passwort danach nicht wiederverwenden.
 :::

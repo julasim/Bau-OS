@@ -208,7 +208,8 @@ Ausgeführt wird das im selben Wartungs-Cron um 03:15. Hintergrund:
 
 Das maschinenlesbare JSONL-Log rotiert größenbasiert: bei Überschreitung
 wird `patio.jsonl` zu `patio.jsonl.1`, `.1` zu `.2` und so weiter; die älteste
-Datei fällt weg. Standard sind 5 MB und 5 Dateien, also höchstens 25 MB.
+Datei fällt weg. Standard sind 5 MB und fünf rotierte Dateien; zusammen mit
+der laufenden `patio.jsonl` also höchstens rund 30 MB.
 
 ## Rate-Limiting
 
@@ -274,9 +275,12 @@ Sonst schreibt die Sicherung in das leere Verzeichnis auf der **Systemplatte**,
 meldet Erfolg und füllt über Wochen das Wurzel-Dateisystem. Auffallen würde das
 in genau dem Moment, in dem man die Sicherung braucht.
 
-Stimmt der Name in `CADDY_VOLUME` nicht, warnt der Lauf und sichert den
-CA-Schlüssel **nicht** — ein Wiederaufbau kostet dann den Gang zu jedem
-Arbeitsplatz.
+Stimmt der Name in `CADDY_VOLUME` nicht, fehlt der CA-Schlüssel im Stand — und
+der Lauf **schlägt fehl**. Die Sicherung prüft am Ende, ob alle vier
+Bestandteile da sind, legt den Stand sonst als `.UNVOLLSTAENDIG` ab und bietet
+ihn bei einer Rücksicherung nicht mehr an. Das ist Absicht: ein Stand ohne
+diesen Schlüssel sähe vollständig aus, der Wiederaufbau wäre aber ein
+Tagesprojekt — jemand müsste an jeden Arbeitsplatz.
 :::
 
 ### BACKUP_REMOTE

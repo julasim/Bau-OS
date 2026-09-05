@@ -145,11 +145,15 @@ docker logs patio-caddy 2>&1 | grep -i "certificate obtained"
 
 # Prüfung durch die ganze Kette
 docker cp patio-caddy:/data/caddy/pki/authorities/local/root.crt /tmp/ca.crt
-curl --cacert /tmp/ca.crt https://patio.sima.intern/api/health
+curl --cacert /tmp/ca.crt --resolve patio.sima.intern:443:127.0.0.1      https://patio.sima.intern/api/health
 ```
 
 Ohne `--cacert` **muss** curl die Verbindung ablehnen — das ist der Beweis,
 dass hier kein öffentliches Zertifikat im Spiel ist.
+
+Das `--resolve` braucht es nur **auf dem Server**: Der Rechnername steht im
+Router-DNS und auf den Arbeitsplätzen, der Server selbst löst ihn nicht
+zwangsläufig auf. Vom Arbeitsplatz aus fällt der Zusatz weg.
 
 ## Der teuerste Fehler
 
@@ -162,7 +166,9 @@ bis jemand an **jedem einzelnen** das neue Wurzelzertifikat einspielt.
 `scripts/restore.sh` spielt es zurück. Prüfen, dass es wirklich drin ist:
 
 ```bash
-tar -tzf /mnt/patio-backup/taeglich/*/caddy-daten.tar.gz | grep root.key
+# Neuesten Tagesstand prüfen — die Archive gehören root und haben Rechte 600:
+STAND=$(sudo ls -1d /mnt/patio-backup/taeglich/*/ | tail -1)
+sudo tar -tzf "$STAND/caddy-daten.tar.gz" | grep root.key
 ```
 :::
 
