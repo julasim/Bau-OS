@@ -103,7 +103,14 @@ let serverAdresse: string | null = null;
 /** Wie lange auf `/api/health` gewartet wird, bevor der Server als nicht
  *  erreichbar gilt. Großzügig, weil ein Bürorechner morgens auch mal aus dem
  *  Standby kommt — aber kurz genug, dass niemand vor einem toten Fenster
- *  sitzt und rät. */
+ *  sitzt und rät.
+ *
+ *  Die Zahl muss ÜBER dem Zeitlimit liegen, das der Server sich selbst für
+ *  seinen Datenbank-Ping setzt (3 s, `src/api/server.ts`). Sonst bricht das
+ *  Programm die Anfrage ab, bevor der Server mit 503 antworten kann — und der
+ *  Nutzer bekäme „Zeitüberschreitung" zu sehen, wo „Datenbank nicht
+ *  erreichbar" die brauchbare Auskunft wäre. 8 s lassen dafür reichlich
+ *  Luft. */
 const HEALTH_TIMEOUT_MS = 8000;
 
 // ── Erreichbarkeitsprüfung ───────────────────────────────────────────────────
@@ -154,6 +161,21 @@ export function pruefeServer(basis: string): Promise<PruefErgebnis> {
       antwort.on("end", () => {
         if (antwort.statusCode >= 200 && antwort.statusCode < 300) {
           fertig({ ok: true });
+        } else if (antwort.statusCode === 503) {
+          // 503 kommt seit dem 31.08.2026 von PATIO SELBST: `/api/health`
+          // fragt die Datenbank wirklich und antwortet mit 503, wenn sie nicht
+          // erreichbar ist. Die Adresse ist also RICHTIG, der Server lebt —
+          // nur die Datenbank fehlt.
+          //
+          // Ohne diesen Zweig laute die Meldung „kein PATIO-Server", und die
+          // Fehlersuche liefe auf Adresse, DNS und Proxy, waehrend das
+          // Problem im Serverraum liegt. Die Adresse deshalb NICHT verwerfen.
+          fertig({
+            ok: false,
+            grund:
+              "Der PATIO-Server antwortet, erreicht aber seine Datenbank nicht (HTTP 503). " +
+              "Die Adresse stimmt — im Serverraum nachsehen: `patio status`.",
+          });
         } else {
           fertig({
             ok: false,

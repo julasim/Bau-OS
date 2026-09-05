@@ -16,11 +16,15 @@
 #
 # ── Was dieses Skript NICHT tut ─────────────────────────────────────────────
 #
-# Es INSTALLIERT NICHTS — es prueft nur, ob Docker da ist. Das ist Absicht
-# (der Server hat kein Internet), wurde aber zweimal falsch dokumentiert:
-# „install-server.sh installiert Docker und Samba". Docker muss im einmaligen
-# Internet-Fenster von Hand kommen:
+# Es installiert KEINE Pakete — es prueft nur, ob Docker da ist. Das ist
+# Absicht (der Server hat kein Internet), wurde aber zweimal falsch
+# dokumentiert: „install-server.sh installiert Docker und Samba". Docker muss
+# im einmaligen Internet-Fenster von Hand kommen:
 #   sudo apt install -y docker.io docker-compose-v2
+#
+# Was es sehr wohl tut: die .env mit frischen Geheimnissen anlegen, Eigentuemer
+# setzen, das Paket auspacken, den Stack starten, die systemd-Einheiten der
+# Sicherung installieren und `patio` nach /usr/local/bin legen.
 #
 # Dazu bleiben drei Schritte Handarbeit, weil sie Entscheidungen brauchen:
 #   1. die Sicherungsplatte einrichten (formatieren löscht Daten)
@@ -81,7 +85,7 @@ fi
 # ── 2. Verzeichnisse ─────────────────────────────────────────────────────────
 schritt "Verzeichnisse anlegen"
 
-mkdir -p "$INSTALL_DIR"/{scripts,logs,data,tools}
+mkdir -p "$INSTALL_DIR"/{scripts,logs,data}
 mkdir -p "$WORKSPACE_DIR"
 mkdir -p "$BACKUP_DIR"
 
@@ -107,8 +111,8 @@ ok "$WORKSPACE_DIR gehört uid 1000 (die Kennung des Dienstes)"
 #
 # Das `chown -R node:node` im Dockerfile hilft nicht: das gilt fürs Image,
 # nicht für den daruntergehängten Ordner vom Host.
-chown -R 1000:1000 "$INSTALL_DIR"/{logs,data,tools}
-ok "logs/, data/ und tools/ gehören uid 1000 (sonst bleibt das Protokoll leer)"
+chown -R 1000:1000 "$INSTALL_DIR"/{logs,data}
+ok "logs/ und data/ gehören uid 1000 (sonst bleibt das Protokoll leer)"
 ok "$INSTALL_DIR angelegt"
 
 # ── 3. Konfiguration ─────────────────────────────────────────────────────────
@@ -250,6 +254,13 @@ deshalb nicht im Skript:
      über die UUID einhängen. Danach:
          sudo systemctl start patio-backup.timer
          sudo patio sicherung          # einmal von Hand, zusehen
+         cd $INSTALL_DIR && sudo docker compose up -d --force-recreate app
+
+     Die letzte Zeile nicht überspringen: Die Container laufen seit eben,
+     die Platte kommt erst jetzt dazu. Ohne das Neuerzeugen sieht der Dienst
+     weiterhin das leere Verzeichnis von vorhin und meldet unter
+     „Verwaltung → Sicherung" dauerhaft „keine Sicherung gefunden" —
+     während nachts sauber gesichert wird.
      Anleitung: docs/betrieb/sicherung.md
 
   2. RECHNERNAME IM NETZ

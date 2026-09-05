@@ -135,6 +135,77 @@ else
        genommen, was auf diesem Rechner liegt."
 fi
 
+# ── Den alten Stand beiseitelegen — der Rueckweg braucht mehr als das Image ──
+#
+# Abschnitt 6 setzte bisher nur `patio-app:latest` auf das vorige Image zurueck.
+# Compose-Datei, docker/, deploy/ und die Skripte waren zu diesem Zeitpunkt aber
+# laengst ersetzt. Wenn die neue Compose-Datei etwas voraussetzt, das die alte
+# Fassung nicht mitbringt — eine neue Pflicht-Env, ein neuer Mount —, startet
+# auch das zurueckgesetzte Image nicht. Uebrig bliebe genau der halb
+# aktualisierte Rechner, den die Vorpruefung verhindern soll.
+BEISEITE="$INSTALL_DIR/.vorher"
+MARKER="$INSTALL_DIR/.update-laeuft"
+
+# ── Wurde ein frueherer Anlauf mitten im Ersetzen abgebrochen? ───────────────
+#
+# Der Marker entsteht unten, unmittelbar vor dem ersten Ersetzen, und wird
+# erst entfernt, wenn das Verzeichnis wieder in einem GANZEN Zustand ist —
+# nach bestandener Gesundheitspruefung oder nach vollzogenem Rueckweg.
+#
+# Liegt er beim Start noch da, ist das Installationsverzeichnis halb
+# aktualisiert, und `.vorher` ist die EINZIGE gute Kopie des alten Stands.
+# Sie jetzt mit `rm -rf` zu ueberschreiben hiesse: der Rueckweg dieses Anlaufs
+# wuerde den halb aktualisierten Stand als „vorher" zurueckspielen und dabei
+# Erfolg melden. Deshalb bleibt `.vorher` in diesem Fall unangetastet — auch
+# die Image-Kennung darin, denn `patio-app:latest` zeigt nach dem `docker
+# load` des abgebrochenen Anlaufs bereits auf das NEUE Image.
+if [ -f "$MARKER" ]; then
+  MARKER_LAG=true
+  log "WARNUNG: Ein frueherer Update-Anlauf wurde mitten im Ersetzen abgebrochen"
+  log "         (Marke $MARKER vom $(cat "$MARKER" 2>/dev/null || echo '?'))."
+  log "         Der Stand unter $BEISEITE bleibt deshalb ERHALTEN und gilt"
+  log "         weiter als Rueckweg — samt der dort vermerkten Image-Kennung."
+  # Fehlt `.vorher`, hat der Marker nichts mehr zu schuetzen — er wuerde sonst
+  # jedes kuenftige Update an derselben Stelle abbrechen, und der Ratschlag
+  # „Sicherung einspielen" fuehrt aus dieser Sackgasse nicht heraus:
+  # `restore.sh` fasst weder Marker noch `.vorher` an. Also: melden, Marke
+  # loeschen, normal weitermachen — mit dem Hinweis, dass es diesmal keinen
+  # automatischen Rueckweg auf den vorigen Stand gibt.
+  if [ ! -d "$BEISEITE" ]; then
+    log "         ABER: $BEISEITE fehlt (von Hand geloescht?). Es gibt damit"
+    log "         keinen automatischen Rueckweg auf den vorigen Stand."
+    log "         Der Rueckweg dieses Laufs ist die Sicherung, die gleich"
+    log "         gezogen wird. Die Marke wird zurueckgesetzt."
+    rm -f "$MARKER"
+    MARKER_LAG=false
+  fi
+else
+  MARKER_LAG=false
+  rm -rf "${BEISEITE:?}"
+  mkdir -p "$BEISEITE"
+  for teil in docker-compose.yml .env.example VERSION docker deploy scripts; do
+    # Vollstaendiges `if` statt `[ … ] && cp`: eine AND-Liste, deren Test in der
+    # letzten Iteration fehlschlaegt, wuerde den Status der Schleife auf 1 setzen
+    # — unter `set -e` ein Abbruch mitten im Update, ohne erkennbaren Grund.
+    if [ -e "$INSTALL_DIR/$teil" ]; then
+      cp -a "$INSTALL_DIR/$teil" "$BEISEITE/"
+    fi
+  done
+  # Die Image-Kennung gehoert MIT beiseite: sie wurde oben gelesen, solange
+  # `patio-app:latest` noch auf das alte Image zeigte. Ein zweiter Anlauf kann
+  # sie nicht mehr selbst ermitteln — nach dem `docker load` zeigt die Marke
+  # auf das neue.
+  if [ -n "$VORHER_ID" ]; then
+    printf '%s\n' "$VORHER_ID" > "$BEISEITE/IMAGE_ID"
+  fi
+  log "Voriger Stand liegt unter $BEISEITE"
+fi
+
+# Ab der naechsten Zeile ist das Verzeichnis nicht mehr in einem ganzen
+# Zustand. Der Marker haelt das fest — fuer den Fall, dass genau hier der
+# Strom ausfaellt oder jemand Strg+C drueckt.
+date --iso-8601=seconds > "$MARKER"
+
 log "Konfiguration und Skripte aktualisieren..."
 # .env wird NICHT angefasst — dort stehen die Geheimnisse dieser Installation.
 cp "$ARBEIT/dabei/docker-compose.yml" "$INSTALL_DIR/"
@@ -196,8 +267,87 @@ cd "$INSTALL_DIR"
 #
 # Deshalb den Fehlschlag auffangen und in den Rueckweg laufen lassen. Die
 # Ausgabe von Compose bleibt sichtbar, sie steht meist schon in der Meldung.
+# `--force-recreate` fuer Caddy, und zwar aus einem Grund, der sonst still
+# durchrutscht: `rm -rf docker/ && cp -r` legt eine NEUE Inode an, waehrend die
+# Compose-Datei die Datei einzeln einhaengt (./docker/Caddyfile:/etc/caddy/...).
+# Der laufende Container haelt die alte Inode weiter fest, und `up -d` erzeugt
+# ihn nicht neu, weil sich an seiner Dienstdefinition nichts geaendert hat.
+# Ein Update, das einen Routing-Pfad korrigiert, waere also eingespielt und
+# trotzdem wirkungslos — ohne jede Meldung.
 if ! docker compose up -d; then
   log "Der Stack liess sich nicht starten — weiter zum Rueckweg."
+fi
+if ! docker compose up -d --force-recreate caddy; then
+  log "Caddy liess sich nicht neu erzeugen — weiter zum Rueckweg."
+fi
+
+# ── Lebt Caddy nach dem Neuerzeugen noch? ───────────────────────────────────
+#
+# Diese Pruefung ist NEU noetig, weil der Caddyfile jetzt sofort wirksam wird.
+# Vorher hielt der Container die alte Inode fest; ein fehlerhafter Caddyfile im
+# Paket blieb dadurch folgenlos. Jetzt kann er den EINZIGEN Zugangsweg der
+# Arbeitsplaetze lahmlegen — und die Gesundheitspruefung unten wuerde es nicht
+# merken: Sie fragt die App per `docker exec` container-intern, also am Proxy
+# vorbei, und meldete „Update erfolgreich", waehrend im Buero niemand mehr
+# hineinkommt.
+#
+# `caddy` hat bewusst keinen Healthcheck in der Compose-Datei; geprueft wird
+# deshalb hier, und zwar auf das, was wirklich zaehlt: Steht der Container nach
+# ein paar Sekunden noch, oder kreiselt er in der Neustartschleife
+# (`restart: always`), weil der Caddyfile nicht geparst werden konnte?
+sleep 5
+CADDY_STATUS=$(docker inspect -f '{{.State.Status}}' patio-caddy 2>/dev/null || echo "fehlt")
+CADDY_NEUSTARTS=$(docker inspect -f '{{.RestartCount}}' patio-caddy 2>/dev/null || echo 0)
+if [ "$CADDY_STATUS" != "running" ] || [ "${CADDY_NEUSTARTS:-0}" -gt 2 ]; then
+  log "WARNUNG: Der Proxy laeuft nicht sauber (Status: $CADDY_STATUS, Neustarts: $CADDY_NEUSTARTS)."
+  log "         Haeufigste Ursache: ein fehlerhafter Caddyfile im Paket."
+  docker compose logs --tail 20 caddy || true
+  # Kein `fehl` an dieser Stelle: Der Rueckweg unten spielt den vorigen
+  # Caddyfile zurueck und erzeugt den Proxy erneut — das ist die richtige
+  # Antwort, nicht ein Abbruch mit halb aktualisiertem Proxy.
+  #
+  # Gemerkt wird es in CADDY_KAPUTT und NICHT in GESUND: Die Warteschleife
+  # unten setzt GESUND ohnehin neu, ein hier gesetztes `false` waere also
+  # wirkungslos.
+  CADDY_KAPUTT=true
+else
+  CADDY_KAPUTT=false
+fi
+
+# ── systemd-Einheiten nachziehen ─────────────────────────────────────────────
+#
+# Bis hierher wurden sie NUR bei der Erstinstallation eingespielt. Das Update
+# ersetzte `deploy/` im Installationsverzeichnis, kopierte aber nichts nach
+# /etc/systemd/system — eine geaenderte Sicherungs-Einheit wurde also nie
+# wirksam, und niemand merkte es, weil die alte weiterlief.
+#
+# Jeder Handgriff hier ist gegen `set -e` abgeschirmt. Grund: Dieser Block
+# laeuft NACH dem Ersetzen der Dateien und VOR der Gesundheitspruefung — ein
+# harter Abbruch hier hinterliesse den halb aktualisierten Rechner OHNE
+# Rueckweg, und der naechste Anlauf wuerde mit seinem `rm -rf .vorher` auch
+# noch den beiseitegelegten Vorher-Stand ueberschreiben. Eine nicht
+# aktualisierte systemd-Einheit ist ein Schoenheitsfehler; ein Update ohne
+# Rueckweg ist keiner.
+if [ -d "$INSTALL_DIR/deploy" ]; then
+  EINHEITEN_NEU=false
+  for einheit in patio-backup.service patio-backup.timer patio-backup-fehler@.service; do
+    quelle="$INSTALL_DIR/deploy/$einheit"
+    ziel="/etc/systemd/system/$einheit"
+    [ -f "$quelle" ] || continue
+    if ! cmp -s "$quelle" "$ziel" 2>/dev/null; then
+      if cp "$quelle" "$ziel" 2>/dev/null; then
+        EINHEITEN_NEU=true
+        log "systemd-Einheit aktualisiert: $einheit"
+      else
+        log "WARNUNG: $einheit liess sich nicht nach /etc/systemd/system kopieren."
+      fi
+    fi
+  done
+  if [ "$EINHEITEN_NEU" = "true" ]; then
+    systemctl daemon-reload 2>/dev/null \
+      || log "WARNUNG: systemctl daemon-reload fehlgeschlagen — Einheiten greifen erst nach einem Neustart."
+    log "systemd neu eingelesen. Der Timer-Zustand bleibt unveraendert."
+  fi
 fi
 
 # ── 5. Gesundheit pruefen ────────────────────────────────────────────────────
@@ -211,13 +361,69 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 
-if [ "$GESUND" = "true" ]; then
+# ── Nur der Proxy kaputt? Dann NUR den Proxy zuruecknehmen ──────────────────
+#
+# Ein Tippfehler in einer Zeile des Caddyfile darf kein Downgrade der
+# Anwendung ausloesen. Der grosse Rueckweg unten taggt `patio-app:latest` auf
+# das vorige Image zurueck — und das laeuft dann gegen ein Schema, das die
+# neue Fassung bereits VORWAERTS migriert hat. Aus einem Einzeiler in der
+# Proxy-Konfiguration wuerde so ein Fall fuer die Ruecksicherung.
+#
+# Antwortet die App also einwandfrei und hakt es nur am Proxy, wird genau das
+# zurueckgenommen, was den Schaden verursacht hat: `docker/` aus `.vorher`,
+# danach den Proxy erneut erzeugen.
+if [ "$GESUND" = "true" ] && [ "$CADDY_KAPUTT" = "true" ]; then
+  echo
+  log "Die Anwendung antwortet, aber der Proxy kam mit der neuen Konfiguration"
+  log "nicht hoch. Es wird NUR die Proxy-Konfiguration zurueckgenommen — das"
+  log "Programm-Abbild bleibt auf dem neuen Stand, denn seine Migrationen sind"
+  log "bereits angewendet und laufen nur vorwaerts."
+  if [ -d "$BEISEITE/docker" ]; then
+    rm -rf "${INSTALL_DIR:?}/docker"
+    cp -a "$BEISEITE/docker" "$INSTALL_DIR/"
+    log "Vorige Proxy-Konfiguration zurueckgespielt."
+  fi
+  docker compose up -d --force-recreate caddy || log "Caddy liess sich nicht neu erzeugen."
+  sleep 5
+  if [ "$(docker inspect -f '{{.State.Status}}' patio-caddy 2>/dev/null || echo fehlt)" = "running" ]; then
+    # Die ANWENDUNG ist auf dem neuen Stand — nur der Proxy laeuft mit der
+    # vorigen Konfiguration. Die Versionsdatei muss das sagen, sonst behauptet
+    # `patio status` einen Stand, der nicht laeuft, und das naechste Update
+    # rechnet mit der falschen Ausgangslage.
+    if [ -n "$PAKET_VERSION" ]; then
+      printf '%s
+' "$PAKET_VERSION" > "$VERSION_DATEI"
+      log "Stand vermerkt: $PAKET_VERSION (die Anwendung ist aktualisiert)."
+    fi
+    rm -f "$MARKER"
+    echo
+    echo "════════════════════════════════════════════════════════"
+    echo "Die Anwendung ist aktualisiert, der Proxy laeuft wieder mit der"
+    echo "VORIGEN Konfiguration."
+    echo "════════════════════════════════════════════════════════"
+    echo
+    echo "Der Caddyfile aus dem Paket ist fehlerhaft — er liegt zum Vergleich"
+    echo "unter $BEISEITE/docker/Caddyfile (der alte, laufende Stand)."
+    echo "Bitte beim Paketbau nachsehen: docker/Caddyfile."
+    exit 1
+  fi
+  log "Auch mit der vorigen Konfiguration kommt der Proxy nicht hoch —"
+  log "weiter zum vollstaendigen Rueckweg."
+fi
+
+# Der Proxy zaehlt mit: Eine App, die intern antwortet, waehrend der einzige
+# Zugangsweg der Arbeitsplaetze tot ist, ist KEIN gelungenes Update.
+if [ "$GESUND" = "true" ] && [ "$CADDY_KAPUTT" != "true" ]; then
   # Erst jetzt festschreiben — vor der Gesundheitspruefung waere es eine
   # Behauptung ueber einen Dienst, der vielleicht gar nicht laeuft.
   if [ -n "$PAKET_VERSION" ]; then
     printf '%s\n' "$PAKET_VERSION" > "$VERSION_DATEI"
     log "Stand vermerkt: $PAKET_VERSION (in $VERSION_DATEI)"
   fi
+  # Das Verzeichnis ist wieder in einem ganzen Zustand - die Abbruch-Marke
+  # kann weg. `.vorher` bleibt bewusst liegen: es ist der Rueckweg von Hand,
+  # falls sich der neue Stand erst im Betrieb als untauglich erweist.
+  rm -f "$MARKER"
   echo
   echo "════════════════════════════════════════════════════════"
   echo "Update erfolgreich — der Dienst antwortet."
@@ -230,12 +436,56 @@ fi
 
 # ── 6. Rueckweg ──────────────────────────────────────────────────────────────
 echo
-log "Der Dienst antwortet nicht. Letzte Protokollzeilen:"
+if [ "$CADDY_KAPUTT" = "true" ]; then
+  log "Der Proxy kam mit der neuen Konfiguration nicht hoch. Letzte Protokollzeilen:"
+else
+  log "Der Dienst antwortet nicht. Letzte Protokollzeilen:"
+fi
 docker compose logs --tail 30 app || true
 
+# Die Image-Kennung bevorzugt aus `.vorher/IMAGE_ID`: Im zweiten Anlauf nach
+# einem Abbruch zeigt `patio-app:latest` laengst auf das NEUE Image - die beim
+# ERSTEN Anlauf beiseitegelegte Kennung ist dann die einzig richtige.
+#
+# Fehlt die Datei, obwohl der Marker lag, gab es beim ersten Anlauf GAR KEIN
+# voriges Image — der Fall einer gescheiterten ERSTinstallation. Dann waere
+# `VORHER_ID` aus `docker images` das NEUE Image, und der Rueckweg wuerde es
+# als „voriges" zuruecktaggen und Erfolg melden. Die Kennung wird deshalb
+# ausdruecklich verworfen: Es gibt hier nichts, wohin man zurueck koennte.
+if [ -f "$BEISEITE/IMAGE_ID" ]; then
+  VORHER_ID=$(cat "$BEISEITE/IMAGE_ID")
+elif [ "$MARKER_LAG" = "true" ]; then
+  log "Kein voriges Image vermerkt — der abgebrochene Anlauf hatte keines"
+  log "(gescheiterte Erstinstallation). Es gibt keinen Weg zurueck auf ein"
+  log "frueheres Image."
+  VORHER_ID=""
+fi
 if [ -n "$VORHER_ID" ]; then
   log "Zurueck auf das vorige Image..."
   docker tag "$VORHER_ID" patio-app:latest
+
+  # Und zurueck auf die vorige Konfiguration. Ohne diesen Schritt liefe das
+  # alte Image gegen die NEUE Compose-Datei — und scheiterte womoeglich am
+  # selben Punkt wie das neue.
+  #
+  # ACHTUNG, `scripts/` ist hier BEWUSST ausgenommen: dieses Skript laeuft
+  # selbst aus diesem Verzeichnis. Ein `cp` darueber schneidet die Datei ab,
+  # die bash gerade zeilenweise liest — sie fuehrt dann Bruchstueck-Kommandos
+  # aus (die Begruendung steht ausfuehrlich beim Einspielen weiter oben). Die
+  # Skripte des vorigen Stands bleiben unter $BEISEITE/scripts liegen und
+  # koennen nach dem Lauf von Hand zurueckgeholt werden; der Hinweis dazu steht
+  # in der Abschlussmeldung.
+  if [ -d "$BEISEITE" ]; then
+    for teil in docker-compose.yml .env.example docker deploy; do
+      if [ -e "$BEISEITE/$teil" ]; then
+        rm -rf "${INSTALL_DIR:?}/$teil"
+        cp -a "$BEISEITE/$teil" "$INSTALL_DIR/"
+      fi
+    done
+    log "Vorige Compose-Datei, docker/ und deploy/ zurueckgespielt."
+    log "Die vorigen Skripte liegen unter $BEISEITE/scripts — sie werden NICHT"
+    log "automatisch zurueckgespielt, weil dieses Skript selbst dazugehoert."
+  fi
   # Die Versionsdatei mit zuruecknehmen — sonst weist sie auf einen Stand,
   # der hier gerade NICHT laeuft, und das ist schlimmer als keine Angabe.
   if [ -n "$VORHER_VERSION" ]; then
@@ -243,7 +493,15 @@ if [ -n "$VORHER_ID" ]; then
   else
     rm -f "$VERSION_DATEI"
   fi
-  docker compose up -d app
+  docker compose up -d app || log "App liess sich nicht starten — Pruefung unten sagt mehr."
+  # Caddy auch im Rueckweg neu erzeugen: docker/ wurde gerade zurueckgespielt,
+  # der laufende Container haelt aber noch den Caddyfile des NEUEN Standes fest
+  # (dieselbe Inode-Falle wie beim Einspielen, nur rueckwaerts).
+  docker compose up -d --force-recreate caddy || log "Caddy liess sich nicht neu erzeugen."
+  # Die Dateien sind wieder auf dem alten Stand - der Rueckweg ist vollzogen,
+  # die Abbruch-Marke kann weg. Ob der alte Dienst antwortet, prueft die
+  # Schleife darunter; fuer die Frage "sind die Dateien ganz?" ist das egal.
+  rm -f "$MARKER"
   for _ in $(seq 1 30); do
     docker exec "$APP_CONTAINER" curl -fsS -o /dev/null http://localhost:3000/api/health 2>/dev/null && {
       echo

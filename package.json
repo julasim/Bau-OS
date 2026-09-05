@@ -1,6 +1,6 @@
 {
   "name": "patio",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "PATIO — KI-Plattform fuer Architektur- und Planungsbueros (Planung, Projektsteuerung). Planungswerkzeug fuers Buero — nicht fuer die Baustelle.",
   "type": "module",
   "main": "dist/index.js",

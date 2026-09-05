@@ -35,9 +35,9 @@ command -v docker >/dev/null || fehl "docker nicht gefunden."
 
 # ── Kein stilles Ueberschreiben ──────────────────────────────────────────────
 #
-# Ohne Argument kommt die Version aus package.json — und die steht seit dem
-# ersten Commit auf 0.1.0. Jedes Paket hiess damit `patio-0.1.0.tar.gz` und
-# ueberschrieb das vorige ohne Rueckfrage. Das vorige Paket ist aber der
+# Ohne Argument kommt die Version aus package.json (heute 1.1.0). Bis zum
+# 28.08.2026 stand die seit dem ersten Commit auf 0.1.0: jedes Paket hiess
+# damit `patio-0.1.0.tar.gz` und ueberschrieb das vorige ohne Rueckfrage. Das vorige Paket ist aber der
 # Rueckweg, wenn ein Update auf dem Server nicht traegt.
 if [ -e "$PAKET" ] && [ "${UEBERSCHREIBEN:-false}" != "true" ]; then
   fehl "Es gibt bereits $PAKET (vom $(date -r "$PAKET" '+%d.%m.%Y %H:%M')).
@@ -64,8 +64,9 @@ if [ "${SKIP_TESTS:-false}" != "true" ]; then
   if [ -n "${DATABASE_URL:-}" ]; then
     npm test || fehl "Tests"
   else
-    # Ohne DATABASE_URL ueberspringt vitest still 142 von 267 Tests — genau
-    # die ACL-, Auth- und DB-Tests — und meldet trotzdem gruen. Ein Paket auf
+    # Ohne DATABASE_URL ueberspringt vitest still den groesseren Teil der
+    # Pruefungen — genau die ACL-, Auth- und DB-Tests — und meldet trotzdem
+    # gruen (gemessen am 30.08.2026: 532 von 738 uebersprungen). Ein Paket auf
     # dieser Grundlage zu bauen waere fahrlaessig.
     fehl "DATABASE_URL ist nicht gesetzt. Ohne Datenbank ueberspringt die
        Testsuite still die Haelfte der Pruefungen und meldet trotzdem gruen.

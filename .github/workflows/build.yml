@@ -5,8 +5,11 @@
 # der Pre-Push-Hook lokal nicht gefangen hat (--no-verify, fremde Maschine,
 # Race-Condition).
 #
-# Was geprueft wird (dieselben Befehle wie .husky/pre-push, plus Gitleaks und
-# den Docker-Bau — der Hook laesst beides aus):
+# Was geprueft wird. Der Pre-Push-Hook faehrt davon nur `build:all`, `vue-tsc`
+# und `npm test` — und letzteres OHNE Datenbank, ueberspringt also lokal den
+# groesseren Teil der Pruefungen. Hier laufen zusaetzlich Lint, die beiden
+# uebrigen tsc-Projekte, die Migrationen gegen einen frischen Postgres,
+# Gitleaks und der Docker-Bau:
 #   - Backend-TypeScript (tsc --noEmit)
 #   - Frontend-TypeScript (vue-tsc --noEmit)
 #   - Vite-Production-Build der SPA — faengt SFC-Parse-Errors,

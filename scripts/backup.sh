@@ -2,12 +2,14 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # PATIO — Naechtliche Sicherung auf die externe Festplatte
 #
-# Gesichert wird alles, was nach einem Totalausfall gebraucht wird:
+# Gesichert wird alles, was nach einem Totalausfall NICHT wiederbeschaffbar
+# ist. Compose-Datei, Caddyfile und die Skripte gehoeren nicht dazu — die
+# kommen aus dem Auslieferungspaket:
 #
 #   1. Die Datensaetze          pg_dump aus dem Container patio-postgres
 #   2. Die Dokumente            /opt/patio-workspace (echte Dateien)
 #   3. .env                     enthaelt JWT_SECRET und ENCRYPTION_KEY
-#   4. data/, tools/            Legacy-Konten und Werkzeuge
+#   4. data/                   Legacy-Konten (users.json)
 #   5. Volume caddy_data        der private Schluessel der internen CA
 #
 # Punkt 5 ist neu und der teuerste, wenn er fehlt: geht der CA-Schluessel
@@ -91,6 +93,32 @@ fi
 ZIEL="$BACKUP_DIR/taeglich/$STAMP"
 mkdir -p "$ZIEL"
 
+# ── Abbruch-Aufraeumer ───────────────────────────────────────────────────────
+#
+# Ab hier existiert ein Zielverzeichnis. Bricht der Lauf danach ab — leerer
+# Dump, tar-Fehler, Ctrl-C, SIGTERM —, blieb es bisher OHNE Marke liegen:
+# weder `VOLLSTAENDIG` noch die Endung `.UNVOLLSTAENDIG`. Beide Aufraeumregeln
+# unten sehen nur auf genau diese beiden Zustaende; ein markenloser Ordner
+# gehoert damit keiner Kategorie an und bleibt fuer immer liegen. Bei einem
+# Dump von mehreren hundert Megabyte fuellt das die Platte, ohne dass die
+# Aufbewahrung es bemerkt.
+#
+# Der Aufraeumer erledigt ZWEI Dinge, und deshalb gibt es nur EINEN trap:
+# ein zweiter `trap ... EXIT` wuerde den ersten stillschweigend ersetzen, und
+# dann bliebe bei einem Abbruch waehrend der Selbstpruefung ein
+# postgres:16-Container stehen.
+PRUEF_CONTAINER="patio-backup-pruefung-$$"
+
+abbruch_aufraeumen() {
+  docker rm -f "$PRUEF_CONTAINER" >/dev/null 2>&1 || true
+  # Nur eingreifen, wenn der Stand NICHT als vollstaendig markiert wurde.
+  if [ -d "$ZIEL" ] && [ ! -f "$ZIEL/VOLLSTAENDIG" ]; then
+    mv "$ZIEL" "${ZIEL}.UNVOLLSTAENDIG" 2>/dev/null || true
+    log "Abgebrochener Stand als ${ZIEL}.UNVOLLSTAENDIG abgelegt."
+  fi
+}
+trap abbruch_aufraeumen EXIT
+
 # ── 2. Datenbank ─────────────────────────────────────────────────────────────
 docker ps --format '{{.Names}}' | grep -qx "$DB_CONTAINER" \
   || fehl "Postgres-Container laeuft nicht: $DB_CONTAINER"
@@ -109,15 +137,14 @@ log "Dokumente sichern..."
 tar -czf "$ZIEL/dokumente.tar.gz" -C "$(dirname "$WORKSPACE_DIR")" "$(basename "$WORKSPACE_DIR")"
 
 log "Konfiguration sichern..."
-# .env, data/, tools/ — jedes nur, wenn vorhanden.
+# .env und data/ — jedes nur, wenn vorhanden.
 TAR_TEILE=()
 [ -f "$INSTALL_DIR/.env" ] && TAR_TEILE+=(".env")
 [ -d "$INSTALL_DIR/data" ] && TAR_TEILE+=("data")
-[ -d "$INSTALL_DIR/tools" ] && TAR_TEILE+=("tools")
 if [ ${#TAR_TEILE[@]} -gt 0 ]; then
   tar -czf "$ZIEL/konfiguration.tar.gz" -C "$INSTALL_DIR" "${TAR_TEILE[@]}"
 else
-  log "WARNUNG: weder .env noch data/ noch tools/ gefunden."
+  log "WARNUNG: weder .env noch data/ gefunden."
 fi
 
 log "CA-Schluessel sichern (Volume $CADDY_VOLUME)..."
@@ -142,11 +169,7 @@ chmod 600 "$ZIEL"/*.gz
 # gegen die Quelle gehalten. Weicht etwas ab, schlaegt der Lauf fehl — lieber
 # eine Fehlermeldung um 3 Uhr nachts als eine Ueberraschung im Ernstfall.
 log "Selbstpruefung: Dump probeweise zurueckspielen..."
-PRUEF_CONTAINER="patio-backup-pruefung-$$"
 TABELLEN="users projects notes tasks termine team_members"
-
-pruefung_aufraeumen() { docker rm -f "$PRUEF_CONTAINER" >/dev/null 2>&1 || true; }
-trap pruefung_aufraeumen EXIT
 
 docker run -d --name "$PRUEF_CONTAINER" \
   -e POSTGRES_USER="$POSTGRES_USER" -e POSTGRES_PASSWORD=pruefung \
@@ -176,8 +199,7 @@ for t in $TABELLEN; do
     log "  $t: $ist Zeilen"
   fi
 done
-pruefung_aufraeumen
-trap - EXIT
+docker rm -f "$PRUEF_CONTAINER" >/dev/null 2>&1 || true
 
 if [ "$ABWEICHUNGEN" -ne 0 ]; then
   # Den unbrauchbaren Stand kenntlich machen, statt ihn liegen zu lassen.
@@ -191,6 +213,29 @@ if [ "$ABWEICHUNGEN" -ne 0 ]; then
        nicht angeboten."
 fi
 log "Selbstpruefung bestanden."
+
+# ── 5b. Sind wirklich alle vier Bestandteile da? ─────────────────────────────
+#
+# Die Selbstpruefung oben deckt nur den Datenbank-Dump ab. Fuer die drei
+# uebrigen Teile stand bisher lediglich eine WARNUNG im Protokoll, und die
+# Marke VOLLSTAENDIG entstand trotzdem. Am teuersten faellt das beim
+# CA-Schluessel aus: fehlt er, ist die Sicherung formal vollstaendig, der
+# Wiederanlauf aber ein Tagesprojekt, weil jemand an jeden Arbeitsplatz muss.
+#
+# Ein Stand, dem etwas fehlt, ist deshalb ein UNVOLLSTAENDIGER Stand — kein
+# vollstaendiger mit Fussnote.
+FEHLT=()
+for teil in datenbank.sql.gz dokumente.tar.gz konfiguration.tar.gz caddy-daten.tar.gz; do
+  [ -s "$ZIEL/$teil" ] || FEHLT+=("$teil")
+done
+if [ ${#FEHLT[@]} -gt 0 ]; then
+  mv "$ZIEL" "${ZIEL}.UNVOLLSTAENDIG"
+  fehl "Der Sicherung fehlen Bestandteile: ${FEHLT[*]}
+       Der Stand liegt als ${ZIEL}.UNVOLLSTAENDIG und wird von restore.sh
+       nicht angeboten. Haeufigste Ursache bei caddy-daten.tar.gz: das Volume
+       heisst anders als \$CADDY_VOLUME (${CADDY_VOLUME}) — pruefen mit
+       'docker volume ls'."
+fi
 
 # Erst JETZT gilt der Stand als brauchbar. restore.sh sucht nach dieser Marke
 # und ueberspringt jeden Stand ohne sie — auch einen, der mittendrin
@@ -227,8 +272,15 @@ aufraeumen() {
   [ -d "$ordner" ] || return 0
 
   local vollstaendige
+  # `if` statt `[ … ] && echo`: die while-Schleife endet sonst mit dem Status
+  # ihres letzten Durchlaufs. Sortiert ein Ordner OHNE Marke als letzter —
+  # ein `.UNVOLLSTAENDIG` tut genau das —, endete die Schleife mit 1, und
+  # pipefail + set -e toeteten die Sicherung NACH getaner Arbeit, mitten im
+  # Aufraeumen. Seit der Abbruch-Aufraeumer solche Ordner zuverlaessig anlegt,
+  # waere das kein Randfall mehr gewesen, sondern der zweite Lauf nach jedem
+  # Fehlschlag.
   vollstaendige=$(find "$ordner" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
-                  | while read -r d; do [ -f "$d/VOLLSTAENDIG" ] && echo "$d"; done | sort)
+                  | while read -r d; do if [ -f "$d/VOLLSTAENDIG" ]; then echo "$d"; fi; done | sort)
   local anzahl
   anzahl=$(echo "$vollstaendige" | grep -c . || true)
   if [ "$anzahl" -gt "$behalten" ]; then
@@ -254,20 +306,88 @@ aufraeumen_unvollstaendige() {
       done
 }
 
+# Ordner, die WEDER eine Marke tragen NOCH die Endung .UNVOLLSTAENDIG haben.
+#
+# Der EXIT-trap oben faengt Ctrl-C, SIGTERM und jeden Skript-Abbruch — aber
+# NICHT den Stromausfall und nicht SIGKILL (der OOM-Killer um drei Uhr nachts).
+# In diesen Faellen bleibt das Zielverzeichnis markenlos liegen und faellt
+# durch beide Rotationsregeln: `aufraeumen` sieht nur VOLLSTAENDIG,
+# `aufraeumen_unvollstaendige` nur die Endung. Ein solcher Ordner traegt einen
+# halben Dump von mehreren hundert Megabyte und verschwindet nie wieder.
+#
+# Deshalb raeumt JEDER Lauf die Reste seiner Vorgaenger nach: markenlos =
+# abgebrochen. Das eigene Ziel ist zu diesem Zeitpunkt bereits als
+# VOLLSTAENDIG markiert und deshalb nicht betroffen.
+#
+# `-mmin +120` ist dabei kein Feinschliff: Ohne diese Grenze wuerde der Lauf
+# das Zielverzeichnis eines GLEICHZEITIG laufenden zweiten Sicherungslaufs
+# umbenennen — dessen Marke steht ja erst am Ende. Zwei Laeufe zur selben Zeit
+# sind moeglich: der systemd-Timer, ein `patio sicherung` von Hand und das
+# erzwungene Backup vor einem Update sind drei unabhaengige Ausloeser, und es
+# gibt keine Sperre zwischen ihnen. Zwei Stunden liegen weit ueber jeder
+# realistischen Laufzeit und weit unter dem Tagesabstand.
+aufraeumen_markenlose() {
+  local ordner="$BACKUP_DIR/$1"
+  [ -d "$ordner" ] || return 0
+  find "$ordner" -mindepth 1 -maxdepth 1 -type d ! -name '*.UNVOLLSTAENDIG' -mmin +120 2>/dev/null     | while read -r d; do
+        if [ ! -f "$d/VOLLSTAENDIG" ]; then
+          mv "$d" "${d}.UNVOLLSTAENDIG" 2>/dev/null || true
+          log "Rest eines abgebrochenen Laufs gefunden und als $(basename "$d").UNVOLLSTAENDIG abgelegt."
+        fi
+      done
+}
+aufraeumen_markenlose taeglich
+aufraeumen_markenlose woechentlich
+aufraeumen_markenlose monatlich
+
 aufraeumen taeglich "$KEEP_DAILY"
 aufraeumen woechentlich "$KEEP_WEEKLY"
 aufraeumen monatlich "$KEEP_MONTHLY"
+# Auf allen drei Stufen: seit `aufraeumen_markenlose` koennen abgebrochene
+# Wochen- und Monatsstaende (`verlinken` bricht mittendrin ab) ebenfalls die
+# Endung tragen. Liefe die Rotation nur auf `taeglich`, blieben sie fuer immer
+# liegen — und die Abschlusszeile meldete sie fuer immer als „unbrauchbar".
 aufraeumen_unvollstaendige taeglich
+aufraeumen_unvollstaendige woechentlich
+aufraeumen_unvollstaendige monatlich
 
 GROESSE=$(du -sh "$ZIEL" | cut -f1)
 log "Sicherung abgeschlossen: $ZIEL ($GROESSE)"
 # Nur vollstaendige Staende melden — eine Zahl, die kaputte mitzaehlt, waere
 # eine Erfolgsmeldung ueber etwas, das im Ernstfall nicht traegt.
 zaehle_vollstaendige() {
+  # `if` statt AND-Liste — gleiche Begruendung wie in aufraeumen().
   find "$BACKUP_DIR/$1" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
-    | while read -r d; do [ -f "$d/VOLLSTAENDIG" ] && echo x; done | wc -l
+    | while read -r d; do if [ -f "$d/VOLLSTAENDIG" ]; then echo x; fi; done | wc -l
 }
 log "Bestand (nur vollstaendige): $(zaehle_vollstaendige taeglich) taeglich, $(zaehle_vollstaendige woechentlich) woechentlich, $(zaehle_vollstaendige monatlich) monatlich"
 
 UNBRAUCHBAR=$(find "$BACKUP_DIR" -maxdepth 2 -type d -name '*.UNVOLLSTAENDIG' 2>/dev/null | wc -l)
-[ "$UNBRAUCHBAR" -gt 0 ] && log "HINWEIS: $UNBRAUCHBAR unbrauchbare(r) Stand/Staende liegen zur Fehlersuche bereit."
+if [ "$UNBRAUCHBAR" -gt 0 ]; then
+  log "HINWEIS: $UNBRAUCHBAR unbrauchbare(r) Stand/Staende liegen zur Fehlersuche bereit."
+fi
+
+# ── Die Fehlermarke des letzten Fehlschlags zuruecknehmen ────────────────────
+#
+# `patio-backup-fehler@.service` schreibt bei einem Fehlschlag
+# logs/SICHERUNG-FEHLGESCHLAGEN, und `patio status` zeigt den Inhalt an.
+# Geloescht hat sie bisher NIEMAND — im ganzen Repo gab es keinen einzigen
+# `rm` darauf. Das rote Kreuz stand damit dauerhaft, auch nach zehn geglueckten
+# Naechten, und war nach kurzer Zeit nur noch Hintergrundrauschen.
+rm -f "$INSTALL_DIR/logs/SICHERUNG-FEHLGESCHLAGEN"
+
+# ── Warum hier ein ausdrueckliches `exit 0` steht ────────────────────────────
+#
+# Frueher endete das Skript mit `[ "$UNBRAUCHBAR" -gt 0 ] && log "..."`. Ist die
+# Zahl 0 — also im NORMALFALL —, ist der Status dieser Zeile 1, und weil es die
+# letzte war, war das der Exit-Code des Skripts. Nachgemessen: EXIT=1.
+#
+# Die Folgen waren erheblich und zeigten in die falsche Richtung:
+#   * `patio-backup.service` loeste nach JEDER erfolgreichen Nacht seinen
+#     OnFailure-Dienst aus — Wall-Nachricht, Fehler-Log, Fehlermarke.
+#   * `update-offline.sh` bricht ab, wenn die Sicherung fehlschlaegt. Der
+#     Server waere damit nicht mehr aktualisierbar gewesen.
+#
+# Die Bedingung steht jetzt in einem vollstaendigen `if`, und der Erfolgsfall
+# wird ausdruecklich gemeldet statt sich aus der letzten Zeile zu ergeben.
+exit 0

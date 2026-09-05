@@ -113,7 +113,6 @@ services:
       - ${WORKSPACE_HOST_DIR:-./workspace}:/workspace
       - ./logs:/opt/patio/logs
       - ./data:/opt/patio/data
-      - ./tools:/opt/patio/tools
       # Sicherungsverzeichnis, NUR LESEND. Der Dienst zeigt damit unter
       # „Verwaltung -> Sicherung", wann zuletzt gesichert wurde und ob es
       # geklappt hat. Schreiben darf er dort nichts: die Sicherung selbst
@@ -122,6 +121,32 @@ services:
       # Ohne diese Anzeige faellt eine seit Wochen still scheiternde Sicherung
       # erst auf, wenn man sie braucht — `OnFailure=` schreibt ins Journal, und
       # dort schaut niemand hinein.
+      #
+      # ── Warum hier KEIN `propagation: rslave` steht ────────────────────────
+      #
+      # Reizvoll waere es: Bei der Erstinstallation entsteht /mnt/patio-backup
+      # als gewoehnliches Verzeichnis, der Stack startet — und die
+      # Sicherungsplatte wird ERST DANACH eingehaengt. Mit der Vorgabe
+      # `rprivate` sieht der Container dieses spaetere Einhaengen nicht und
+      # meldet dauerhaft „keine Sicherung gefunden", waehrend nachts sauber
+      # gesichert wird.
+      #
+      # `rslave` wuerde das loesen — aber nur auf einem Host, dessen
+      # Mountpunkt `shared` oder `slave` ist. Ist er `private`, verweigert der
+      # Daemon den START DES CONTAINERS:
+      #
+      #     Error response from daemon: path /mnt/patio-backup is mounted on /
+      #     but it is not a shared or slave mount
+      #
+      # Am 31.08.2026 in WSL Ubuntu-24.04 nachgemessen (`findmnt -no
+      # PROPAGATION /` → `private`): mit der langen Syntax startet der
+      # app-Container NICHT, mit dieser Kurz-Syntax startet er. WSL ist die
+      # dokumentierte Prueffumgebung dieses Projekts — eine Compose-Datei, die
+      # dort nicht hochkommt, waere ein schlechter Tausch gegen eine Anzeige.
+      #
+      # Der Weg, der IMMER traegt, steht deshalb im Abschlusstext von
+      # `install-server.sh`: nach dem Einhaengen der Platte einmal
+      # `docker compose up -d --force-recreate app`.
       - ${BACKUP_DIR:-/mnt/patio-backup}:/opt/patio/backup:ro
     # Kein `ports:` — erreichbar nur ueber Caddy.
     expose:

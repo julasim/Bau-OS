@@ -11,7 +11,7 @@
 # Was zurueckgespielt wird — genau das, was backup.sh ablegt:
 #   datenbank.sql.gz     → in den laufenden Postgres-Container
 #   dokumente.tar.gz     → /opt/patio-workspace
-#   konfiguration.tar.gz → .env, data/, tools/
+#   konfiguration.tar.gz → .env, data/
 #   caddy-daten.tar.gz   → Volume mit dem privaten CA-Schluessel
 #
 # ZEITMESSUNG: Das Skript misst und meldet die Dauer. Diese Zahl gehoert ins
@@ -44,8 +44,30 @@ if [ -z "$STAND" ]; then
   # juengste Stand genommen worden — und das kann ausgerechnet der sein, der
   # gerade wegen eines unvollstaendigen Dumps fehlgeschlagen ist, oder einer,
   # den ein Stromausfall mittendrin abgeschnitten hat.
-  STAND=$(find "$BACKUP_DIR"/{taeglich,woechentlich,monatlich} -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
-          | while read -r d; do [ -f "$d/VOLLSTAENDIG" ] && echo "$d"; done \
+  # Erst pruefen, WELCHE der drei Kategorien-Verzeichnisse existieren — und
+  # zwar ausdruecklich, nicht per Brace-Expansion direkt in `find`:
+  #
+  # `find a b c` endet mit Exit 1, sobald EINER der Pfade fehlt (das
+  # 2>/dev/null verdeckt nur den Text, nicht den Exit-Code). Unter
+  # `set -euo pipefail` riss das die ganze Zuweisung mit, und das Skript starb
+  # WORTLOS — noch vor der Fehlermeldung, die genau fuer diesen Fall gebaut
+  # wurde. Getroffen hat es ausgerechnet den haeufigsten Bedienfehler im
+  # Ernstfall: Sicherungsplatte nicht oder falsch eingehaengt. Im Prüfstand
+  # nachgestellt am 30.08.2026: RC=1, null Zeilen Ausgabe.
+  KANDIDATEN=()
+  for kategorie in taeglich woechentlich monatlich; do
+    [ -d "$BACKUP_DIR/$kategorie" ] && KANDIDATEN+=("$BACKUP_DIR/$kategorie")
+  done
+  [ ${#KANDIDATEN[@]} -gt 0 ] || fehl "Unter $BACKUP_DIR liegt keine Sicherungsstruktur
+       (weder taeglich/ noch woechentlich/ noch monatlich/).
+       Ist die Sicherungsplatte eingehaengt? Pruefen mit:
+         lsblk -f   und   ls -la $BACKUP_DIR"
+  # `if` statt `[ … ] && echo` im Schleifenkoerper: eine while-Schleife endet
+  # mit dem Status ihres LETZTEN Durchlaufs. Ist der letzte Ordner einer ohne
+  # Marke (ein `.UNVOLLSTAENDIG` sortiert alphabetisch dahinter), endete die
+  # Schleife mit 1 — und pipefail + set -e toeteten das Skript wortlos.
+  STAND=$(find "${KANDIDATEN[@]}" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+          | while read -r d; do if [ -f "$d/VOLLSTAENDIG" ]; then echo "$d"; fi; done \
           | sort | tail -1)
   [ -n "$STAND" ] || fehl "Kein vollstaendiger Sicherungsstand gefunden unter $BACKUP_DIR.
        Vorhandene Staende ohne Marke VOLLSTAENDIG sind unbrauchbar — pruefen mit:
@@ -190,22 +212,81 @@ else
 fi
 
 # ── 6. Dienst wieder starten ─────────────────────────────────────────────────
-if [ "$APP_LIEF" = "true" ]; then
-  log "Dienst starten..."
-  docker start "$APP_CONTAINER" >/dev/null
-  for _ in $(seq 1 30); do
-    docker exec "$APP_CONTAINER" curl -fsS -o /dev/null http://localhost:3000/api/health 2>/dev/null && break
-    sleep 1
-  done
+#
+# Caddy MUSS mit, sobald der CA-Schluessel zurueckgespielt wurde: das Volume
+# wurde unter dem laufenden Container ausgetauscht, er arbeitet sonst mit dem
+# alten Zustand weiter. Das faellt erst am Arbeitsplatz auf — dort steht dann
+# weiterhin eine Zertifikatswarnung, obwohl der Schluessel wieder da ist, und
+# Schritt 1 der Pruefliste unten schlaegt ohne erkennbaren Grund fehl.
+# ── Warum der App-Container NICHT neu erzeugt wird ──────────────────────────
+#
+# Caddy MUSS neu erzeugt werden (das CA-Volume wurde unter ihm ausgetauscht).
+# Die App ausdruecklich NICHT, solange ihr Container noch existiert:
+#
+# `docker compose up -d --force-recreate app` baut die Umgebung aus der
+# Compose-Datei neu auf — und dort steht
+# `DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:...`.
+# Die Werte kaemen aus der `.env`, die Schritt 4 GERADE aus der Sicherung
+# zurueckgespielt hat.
+#
+# Im dokumentierten Ernstfall — Ersatzgeraet — ist das genau der falsche Wert:
+# `install-server.sh` hat dort ein frisches Zufallspasswort erzeugt und
+# Postgres damit initialisiert; der pg_dump enthaelt keine Rollen-Passwoerter,
+# das Rollenpasswort bleibt also das NEUE. Die zurueckgespielte `.env` traegt
+# das ALTE (sie muss zurueck, wegen ENCRYPTION_KEY). Ein neu erzeugter
+# App-Container verbindet damit gegen die falsche Zugangsdaten und meldet
+# `password authentication failed` — waehrend der bestehende Container mit
+# seiner Erzeugungs-Umgebung problemlos weiterlaeuft.
+#
+# `docker start` behaelt diese Umgebung. Nur wenn es gar keinen Container gibt
+# (Neuaufbau), bleibt `up -d app` — dann existiert auch keine andere Wahl.
+log "Dienst und Proxy starten..."
+if docker ps -a --format '{{.Names}}' | grep -qx "$APP_CONTAINER"; then
+  docker start "$APP_CONTAINER" >/dev/null 2>&1 || true
+elif [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+  log "Kein App-Container vorhanden — er wird aus der Compose-Datei erzeugt."
+  log "ACHTUNG: Stimmt POSTGRES_PASSWORD in der zurueckgespielten .env nicht"
+  log "         mit dem Datenbank-Volume ueberein, kommt der Dienst nicht"
+  log "         hinein. Siehe docs/betrieb/troubleshooting.md."
+  ( cd "$INSTALL_DIR" && docker compose up -d app >/dev/null 2>&1 ) || true
 fi
+if [ -f "$INSTALL_DIR/docker-compose.yml" ]; then
+  ( cd "$INSTALL_DIR" && docker compose up -d --force-recreate caddy >/dev/null 2>&1 ) || true
+fi
+
+# ── 7. Und zwar IMMER pruefen, ob der Dienst wirklich hochkommt ──────────────
+#
+# Bisher lief dieser Abschnitt nur, wenn die App vorher lief. Beim Totalausfall
+# — dem Regelfall fuer eine Ruecksicherung — lief sie gerade NICHT, und das
+# Skript meldete „abgeschlossen", ohne den Dienst je gesehen zu haben. Die
+# Dauer, die es danach ausgibt, waere dann die Dauer bis zu einer Behauptung.
+GESUND=false
+for _ in $(seq 1 60); do
+  if docker exec "$APP_CONTAINER" curl -fsS -o /dev/null http://localhost:3000/api/health 2>/dev/null; then
+    GESUND=true
+    break
+  fi
+  sleep 1
+done
 
 DAUER=$(( $(date +%s) - BEGINN ))
 
 echo
 echo "════════════════════════════════════════════════════════"
-echo "Ruecksicherung abgeschlossen in ${DAUER} Sekunden"
+if [ "$GESUND" = "true" ]; then
+  echo "Ruecksicherung abgeschlossen in ${DAUER} Sekunden — der Dienst antwortet."
+else
+  echo "Ruecksicherung eingespielt in ${DAUER} Sekunden — ABER DER DIENST"
+  echo "ANTWORTET NICHT. Die Daten liegen zurueck, der Betrieb steht noch."
+fi
 echo "  (= $((DAUER / 60)) Minuten $((DAUER % 60)) Sekunden)"
 echo "════════════════════════════════════════════════════════"
+if [ "$GESUND" != "true" ]; then
+  echo
+  echo "Zuerst nachsehen:"
+  echo "  cd $INSTALL_DIR && docker compose ps"
+  echo "  cd $INSTALL_DIR && docker compose logs --tail 50 app"
+fi
 echo
 echo "Diese Dauer gehoert ins Betriebshandbuch — sie ist die Antwort auf"
 echo "\"wie lange stehen wir?\"."
@@ -225,3 +306,9 @@ if [ -d "$BEISEITE" ]; then
   echo "  sudo rm -rf '$BEISEITE'"
   echo
 fi
+
+# Der Exit-Code sagt dasselbe wie die Meldung. Wer die Ruecksicherung aus
+# einem anderen Skript oder einer Probe heraus faehrt, soll nicht den
+# Bildschirmtext parsen muessen.
+[ "$GESUND" = "true" ] || exit 1
+exit 0

@@ -117,7 +117,22 @@ befehl_logs() {
 
 befehl_start()   { braucht_root start;   echo; dc up -d;             sleep 3; befehl_status; }
 befehl_stop()    { braucht_root stop;    echo; dc stop;              sleep 1; befehl_status; }
-befehl_restart() { braucht_root restart; echo; dc restart;           sleep 3; befehl_status; }
+# `up -d --force-recreate` statt `restart`. Das ist kein Feinschliff:
+# `docker compose restart` startet die vorhandenen Container neu und liest die
+# `.env` dabei NICHT neu ein. Wer eine Einstellung aendert und danach den
+# naheliegenden Befehl benutzt, arbeitet also weiter mit den alten Werten —
+# ohne Hinweis. Dieselbe Falle steht im Server-Playbook.
+#
+# Nur `app` und `caddy`, NICHT `postgres` — aus zwei Gruenden:
+#   1. `--force-recreate` ENTFERNT die Container und legt neue an; deren
+#      stdout-Historie (`docker compose logs`) ist danach weg. Bei der App
+#      verschmerzbar (logs/patio.jsonl haelt alles), bei Postgres waere es
+#      zusaetzlich eine unnoetige Datenbank-Unterbrechung.
+#   2. Die POSTGRES_*-Werte aus der .env uebernimmt Postgres ohnehin nur bei
+#      LEEREM Datenverzeichnis — ein Neuerzeugen aendert daran nichts.
+# Wer Caddys bisherige Protokollzeilen braucht, zieht sie VOR dem Neustart
+# mit `patio logs`.
+befehl_restart() { braucht_root restart; echo; dc up -d --force-recreate app caddy; sleep 3; befehl_status; }
 
 befehl_update() {
   braucht_root update
@@ -235,7 +250,8 @@ befehl_hilfe() {
     patio dokumente           Dokumentenordner, Belegung, Rechte
 
   STEUERN                     (brauchen sudo)
-    patio start | stop | restart
+    patio start | stop
+    patio restart             Container neu erzeugen — liest auch die .env neu
     patio update <paket>      Auslieferungspaket einspielen
     patio sicherung           Sicherung jetzt ausführen
     patio ruecksicherung [stand]

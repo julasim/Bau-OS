@@ -81,7 +81,7 @@ COPY --from=builder /opt/patio/node_modules ./node_modules
 COPY --from=builder /opt/patio/dist ./dist
 COPY --from=builder /opt/patio/package.json ./package.json
 
-RUN mkdir -p /opt/patio/logs /opt/patio/data /opt/patio/tools \
+RUN mkdir -p /opt/patio/logs /opt/patio/data \
     && chown -R node:node /opt/patio
 
 USER node
@@ -94,8 +94,18 @@ EXPOSE 3000
 # antwortete mit 404. Zusammen mit dem fehlenden -f (curl beendet sich bei
 # JEDER HTTP-Antwort mit 0) war das faktisch nur ein TCP-Check — ein Prozess
 # ohne funktionierende Routen galt als healthy.
-# Jetzt mit -f: alles >=400 laesst curl mit != 0 enden und schlaegt an.
-# Port 3000 ist im Container fix — API_PORT aus .env ist nur das Host-Mapping.
+# Jetzt mit -f: alles >=400 laesst curl mit != 0 enden — und das hat seit dem
+# 31.08.2026 echte Wirkung. `/api/health` fragt die Datenbank wirklich (mit
+# 3 s Zeitlimit, src/api/server.ts) und antwortet bei einem Ausfall mit 503.
+# Der Container geht dann auf „unhealthy"; ein Neustart folgt daraus NICHT
+# (Docker startet nur bei einem Exit neu), aber Monitoring, `patio status` und
+# der Update-Rueckweg sehen es.
+#
+# Die 3000 hier ist FEST verdrahtet, `API_PORT` aus der .env aber nicht: der
+# Dienst hoert auf API_PORT (src/config.ts). Wer den Wert aendert, macht den
+# Container dauerhaft „unhealthy" und schneidet Caddy ab (docker/Caddyfile
+# zeigt ebenfalls auf app:3000). Ein Host-Mapping gibt es nicht — der
+# App-Dienst hat bewusst kein `ports:`.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS -o /dev/null "http://localhost:3000/api/health" || exit 1
 
