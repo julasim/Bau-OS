@@ -14,6 +14,40 @@ let sql: postgres.Sql | null = null;
  * Erstellt den Pool beim ersten Aufruf (Lazy Init).
  * Wirft einen Fehler wenn DB_ENABLED=false.
  */
+/**
+ * Ein Wert fuer eine `jsonb`-Spalte.
+ *
+ * ── Warum es diesen Helfer gibt, und zwar an EINER Stelle ─────────────────
+ *
+ * Im Haus stand siebenmal `${JSON.stringify(x)}::jsonb`. Das sieht richtig aus
+ * und ist es nicht: postgres.js serialisiert die uebergebene ZEICHENKETTE noch
+ * einmal, in der Spalte landet ein JSON-String statt eines Objekts. Am Treiber
+ * nachgemessen (02.09.2026, postgres 3.4.9 — die installierte Fassung; in
+ * `package.json` steht `^3.4.7`, das ist nur die Untergrenze):
+ *
+ *   ${JSON.stringify(x)}::jsonb   ->   jsonb_typeof = 'string'
+ *   ${sql.json(x)}                ->   jsonb_typeof = 'object' bzw. 'array'
+ *
+ * Folgenreich war das an drei Stellen: das Pruefprotokoll zeigte zu jedem
+ * Eintrag `{}` (alle 2839), **jeder Kontaktvermerk eines Team-Mitglieds war
+ * unsichtbar** (223 von 223 Zeilen), und die Einstellungen eines Kontos gingen
+ * beim naechsten Speichern verloren, weil dieselbe Funktion sie MERGT.
+ *
+ * ── Warum der Cast noetig ist ─────────────────────────────────────────────
+ *
+ * `sql.json()` verlangt `postgres.JSONValue`. Ein typisiertes Array
+ * (`InvoicePosition[]`, `EntscheidungAlternative[]`) laesst sich darauf nicht
+ * einengen — TypeScript vermisst die Index-Signatur. Der Cast sagt dem
+ * Compiler, was der Aufrufvertrag ohnehin verlangt: JSON-taugliches Material.
+ * Er steht hier einmal statt an sieben Aufrufstellen.
+ *
+ * Nachgemessen: ein ARRAY wird dabei zu jsonb, **nicht** zu einem
+ * Postgres-Array — `jsonb_typeof` sagt `array`.
+ */
+export function jsonb(wert: unknown): postgres.Parameter {
+  return getDb().json(wert as postgres.JSONValue);
+}
+
 export function getDb(): postgres.Sql {
   if (!DB_ENABLED) {
     throw new Error("Datenbank nicht konfiguriert. Setze DATABASE_URL in .env");
@@ -27,7 +61,8 @@ export function getDb(): postgres.Sql {
         undefined: null, // undefined → NULL in SQL
       },
       types: {
-        // pgvector: float4[] als number[] parsen
+        // `bigint` als JS-BigInt statt als Zeichenkette — betrifft `count(*)`
+        // und die Groessenangaben in den Kennzahlen.
         bigint: postgres.BigInt,
       },
     });
@@ -97,28 +132,11 @@ export async function closeDb(): Promise<void> {
   }
 }
 
-/**
- * Führt eine DB-Operation aus und retried bei transienten Connection-Fehlern
- * (ECONNREFUSED, ECONNRESET, Connection terminated, ...).
- * Exponential backoff: 200ms, 600ms, 1800ms. Max 3 Versuche.
- * Nicht für Queries mit Seiteneffekten (INSERT/UPDATE) ohne Transaktion!
- */
-export async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
-  let lastErr: unknown;
-  for (let i = 0; i < tries; i++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastErr = err;
-      const msg = err instanceof Error ? err.message : String(err);
-      const transient = /ECONN|terminated|timeout|Connection/i.test(msg);
-      if (!transient || i === tries - 1) throw err;
-      const delay = 200 * Math.pow(3, i);
-      logInfo(`[DB] Retry ${i + 1}/${tries} nach ${delay}ms (${msg.slice(0, 80)})`);
-      await new Promise((r) => setTimeout(r, delay));
-    }
-  }
-  throw lastErr;
-}
-
-export { sql };
+// `withRetry()` stand hier — eine Wiederholung bei kurzzeitigen
+// Verbindungsfehlern, die nie ein Aufrufer benutzt hat (geprueft ueber src,
+// web, tests, scripts). postgres.js baut die Verbindung von sich aus neu auf;
+// was hier fehlte, war der Fall „Datenbank dauerhaft weg", und den beantwortet
+// die Anwendung mit einem Fehler an den Aufrufer, nicht mit Warten.
+//
+// `export { sql }` stand ebenfalls hier und war doppelt irrefuehrend: keinen
+// Importeur, und bis zum ersten `getDb()` ist die Variable `null`.

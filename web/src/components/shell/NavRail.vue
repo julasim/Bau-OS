@@ -8,7 +8,7 @@
 
 import { computed, onMounted, ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { api, clearToken } from "../../api";
+import { clearToken } from "../../api";
 import { useBranding } from "../../composables/useBranding";
 import { useCurrentUser } from "../../composables/useCurrentUser";
 import BIcon from "../BIcon.vue";
@@ -136,7 +136,10 @@ onMounted(() => void ensureBranding());
       >
         <BIcon :name="it.icon" :size="16" />
         <span class="pt-nav-text">{{ it.label }}</span>
-        <span v-if="it.badge" class="badge pt-nav-text">{{ it.badge }}</span>
+        <!-- `.pt-nav-count` gibt es in `patio-components.css`; hier stand `.badge`,
+           das nirgends definiert war — der Ungelesen-Zähler rendert seither
+           ungestaltet. -->
+        <span v-if="it.badge" class="pt-nav-count pt-nav-text">{{ it.badge }}</span>
       </button>
     </div>
 
@@ -156,7 +159,11 @@ onMounted(() => void ensureBranding());
       </button>
     </div>
 
-    <div class="spacer"></div>
+    <!-- `.pt-nav-spacer`, nicht `.spacer`: Die Regel liegt global in
+         `patio-shell.css`, und ein derart allgemeiner Name dort waere eine
+         Falle fuer jede spaetere Ansicht. Vorher war sie NIRGENDS definiert —
+         Einstellungen und Avatar klebten unter der Navigation statt unten. -->
+    <div class="pt-nav-spacer"></div>
 
     <!-- Settings -->
     <button

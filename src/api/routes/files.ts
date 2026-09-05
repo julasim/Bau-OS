@@ -13,6 +13,7 @@ import { projektBezugAusQuery } from "../projekt-bezug.js";
 import { canSeeProjectByName } from "../../data/access.js";
 import { alsIso } from "../../data/zeitstempel.js";
 import { contentDisposition } from "../dateiname.js";
+import { logError } from "../../logger.js";
 
 export const filesRoutes = new Hono<AppEnv>();
 
@@ -34,7 +35,26 @@ async function getVisibleProjectIds(c: Context<AppEnv>): Promise<string[] | unde
  *    - explizit via file_shares geshared.
  *  Liest project_id/uploaded_by direkt aus der DB, weil FileEntry beide
  *  Felder nicht exponiert. */
+/** Ist das die Form einer UUID?
+ *
+ *  `WHERE id = <keine UUID>` wirft in Postgres `invalid input syntax for type
+ *  uuid` (22P02). Das faengt `app.onError` bereits ab und macht daraus einen
+ *  400 („Ungueltige ID im Pfad") — ein 500er entsteht also NICHT, anders als
+ *  hier zwischenzeitlich behauptet stand.
+ *
+ *  Der Wert dieser Pruefung ist ein anderer, und zwar zweifach: Die Antwort
+ *  wird zu dem, was sie fachlich ist (kein Zugriff statt „ungueltige ID"), und
+ *  die Datenbank wird gar nicht erst gefragt. Dass sie ausserdem VOR der
+ *  Rollenpruefung steht, ist Absicht — sonst bekaeme ein Admin `true` fuer
+ *  eine Kennung, die keine Datei bezeichnet. */
+function istUuid(wert: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wert);
+}
+
 async function canAccessFile(c: Context<AppEnv>, fileId: string): Promise<boolean> {
+  // Vor der Rolle: eine unbrauchbare Kennung ist kein Zugriff, egal von wem.
+  // Sonst bekaeme ein Admin hier `true` fuer eine Datei, die es nicht gibt.
+  if (!istUuid(fileId)) return false;
   const userRole = c.get("userRole");
   if (userRole === "admin") return true;
   const userId = c.get("userId");
@@ -59,6 +79,7 @@ async function canAccessFile(c: Context<AppEnv>, fileId: string): Promise<boolea
 
 /** Ownership-Check: nur Admin oder Uploader darf Shares verwalten / loeschen. */
 async function isFileOwnerOrAdmin(c: Context<AppEnv>, fileId: string): Promise<boolean> {
+  if (!istUuid(fileId)) return false;
   const userRole = c.get("userRole");
   if (userRole === "admin") return true;
   const userId = c.get("userId");
@@ -89,32 +110,28 @@ function uploadRejection(c: Context<AppEnv>, reason: "extension" | "content-mism
 // Filesystem-Zweig (`?path=` / `?source=fs`) ist entfallen — siehe den
 // Kopfkommentar bei „Datei lesen".
 filesRoutes.get("/files", async (c) => {
-  {
-    const bezug = await projektBezugAusQuery(c);
-    if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
-    const project = bezug.name;
-    // Sicherheit: getVisibleProjectIds IMMER aufrufen. Fuer Admins liefert
-    // sie undefined (kein Filter). Fuer Non-Admins wird geprueft, ob das
-    // angefragte Projekt in der sichtbaren Menge liegt — sonst koennte ein
-    // Non-Admin per ?project=irgendwas alle Dateien fremder Projekte sehen.
-    const visibleProjectIds = await getVisibleProjectIds(c);
-    const files = await fileRepo.list(project ?? undefined, 50, visibleProjectIds);
-    return c.json(
-      files.map((f) => ({
-        name: f.filename,
-        type: "file" as const,
-        size: f.filesize,
-        modified: f.updatedAt,
-        extension: f.filetype || "",
-        id: f.id,
-        project: f.project,
-        projektnummer: f.projektnummer ?? null,
-        analyzed: f.analyzed,
-      })),
-    );
-  }
-
-  return c.json([]);
+  const bezug = await projektBezugAusQuery(c);
+  if (bezug.unbekannt) return c.json({ error: "Projekt nicht gefunden" }, 404);
+  const project = bezug.name;
+  // Sicherheit: getVisibleProjectIds IMMER aufrufen. Fuer Admins liefert
+  // sie undefined (kein Filter). Fuer Non-Admins wird geprueft, ob das
+  // angefragte Projekt in der sichtbaren Menge liegt — sonst koennte ein
+  // Non-Admin per ?project=irgendwas alle Dateien fremder Projekte sehen.
+  const visibleProjectIds = await getVisibleProjectIds(c);
+  const files = await fileRepo.list(project ?? undefined, 50, visibleProjectIds);
+  return c.json(
+    files.map((f) => ({
+      name: f.filename,
+      type: "file" as const,
+      size: f.filesize,
+      modified: f.updatedAt,
+      extension: f.filetype || "",
+      id: f.id,
+      project: f.project,
+      projektnummer: f.projektnummer ?? null,
+      analyzed: f.analyzed,
+    })),
+  );
 });
 
 // ── Datei lesen ─────────────────────────────────────────────────────────────
@@ -137,18 +154,16 @@ filesRoutes.get("/files", async (c) => {
 filesRoutes.get("/files/read", async (c) => {
   const id = c.req.query("id");
   if (!id) return c.json({ error: "id erforderlich (?id=...)" }, 400);
-  {
-    const file = await fileRepo.get(id);
-    if (!file) return c.json({ error: "Datei nicht gefunden" }, 404);
-    if (!(await canAccessFile(c, id))) return c.json({ error: "Zugriff verweigert" }, 403);
-    // Text-Inhalt aus DB zurueckgeben wenn vorhanden
-    if (file.contentText) {
-      return c.json({ path: file.filepath, content: file.contentText, filename: file.filename });
-    }
-    // Fallback: von Filesystem lesen
-    const content = readFile(file.filepath);
-    return c.json({ path: file.filepath, content: content ?? "", filename: file.filename });
+  const file = await fileRepo.get(id);
+  if (!file) return c.json({ error: "Datei nicht gefunden" }, 404);
+  if (!(await canAccessFile(c, id))) return c.json({ error: "Zugriff verweigert" }, 403);
+  // Text-Inhalt aus der Datenbank, wenn er dort steht
+  if (file.contentText) {
+    return c.json({ path: file.filepath, content: file.contentText, filename: file.filename });
   }
+  // Rueckfall fuer Alt-Datensaetze: Inhalt aus dem internen Ordner lesen
+  const content = readFile(file.filepath);
+  return c.json({ path: file.filepath, content: content ?? "", filename: file.filename });
 });
 
 // ── Loeschen ─────────────────────────────────────────────────────────────────
@@ -187,7 +202,8 @@ filesRoutes.delete("/files", async (c) => {
       }
     }
     await fileRepo.delete(body.id);
-    emitForProjectName({ type: "file", action: "deleted", id: file.filename }, file.project, {
+    // Die ID, nicht der Dateiname — siehe die Begruendung beim Hochladen.
+    emitForProjectName({ type: "file", action: "deleted", id: body.id }, file.project, {
       actorId: c.get("userId"),
     });
     return c.json({ success: true });
@@ -202,7 +218,6 @@ filesRoutes.delete("/files", async (c) => {
 
 // ── Zuletzt bearbeitet ──────────────────────────────────────────────────────
 // Gibt die 50 zuletzt geaenderten Dateien zurueck, sortiert nach updatedAt desc.
-// Nur DB-Modus — im FS-Modus gibt es kein updatedAt aus der DB.
 filesRoutes.get("/files/recent", async (c) => {
   const visibleProjectIds = await getVisibleProjectIds(c);
   const files = await fileRepo.list(undefined, 200, visibleProjectIds);
@@ -227,7 +242,6 @@ filesRoutes.get("/files/recent", async (c) => {
 
 // ── Markierte Dateien (Starred) ─────────────────────────────────────────────
 // Gibt alle Dateien zurueck, die der aktuelle User markiert (starred) hat.
-// Nur DB-Modus; im FS-Modus gibt es keine user_id-Semantik.
 filesRoutes.get("/files/starred", async (c) => {
   const userId = c.get("userId");
   if (!userId) return c.json([]);
@@ -333,11 +347,10 @@ filesRoutes.get("/files/search", async (c) => {
 
 // ── Upload (Drag & Drop) ─────────────────────────────────────────────────────
 // Die Datei wird als bytea in der files-Tabelle gespeichert, NICHTS landet
-// auf der Platte. Der Zweig darunter schreibt in den Vault und ist heute
-// unerreichbar: `fileRepo` ist seit dem Umbau non-nullable, und der Dienst
-// bricht ohne DATABASE_URL schon beim Start ab (src/index.ts). Er bleibt
-// vorerst stehen, weil sein Ausbau die Upload-Route umbaut — das gehoert in
-// einen eigenen Schritt, nicht in eine Aufraeumrunde.
+// auf der Platte. Einen zweiten Zweig, der in den internen Ordner schrieb,
+// gibt es hier nicht — er waere ohnehin unerreichbar, weil `fileRepo`
+// non-nullable ist und der Dienst ohne DATABASE_URL gar nicht erst startet
+// (src/index.ts).
 filesRoutes.post("/files/upload", async (c) => {
   const userId = c.get("userId");
   if (!userId) return c.json({ error: "Nicht authentifiziert" }, 401);
@@ -367,6 +380,8 @@ filesRoutes.post("/files/upload", async (c) => {
   if (files.length === 0) return c.json({ error: "Keine Dateien gesendet" }, 400);
 
   const saved: string[] = [];
+  /** Dateien, deren Speichern fehlgeschlagen ist — siehe unten. */
+  const gescheitert: string[] = [];
   const dbEntries: Array<{ id: string; filename: string }> = [];
 
   for (const file of files) {
@@ -418,17 +433,45 @@ filesRoutes.post("/files/upload", async (c) => {
       });
       dbEntries.push({ id: entry.id, filename: entry.filename });
       saved.push(safeName);
-    } catch {
-      // DB-Fehler — Datei geht verloren (kein Vault-Fallback mehr, weil der
-      // User explizit "alles in die DB" wollte).
+    } catch (e) {
+      // ⚠ Hier stand ein blankes `catch`, und die Antwort blieb
+      // `success: true`. Wer fuenf Dateien hochlud und bei dreien einen
+      // Datenbankfehler traf, bekam „erfolgreich" gemeldet und merkte es erst,
+      // wenn die Plaene nicht da waren.
+      //
+      // Jetzt sammelt die Antwort die gescheiterten Dateien mit — der Upload
+      // der uebrigen laeuft weiter, das ist bei mehreren Dateien richtig.
+      logError(`[Files] Upload fehlgeschlagen: ${safeName}`, e);
+      gescheitert.push(safeName);
     }
   }
 
   if (saved.length > 0)
-    emitForProjectName({ type: "file", action: "created", id: saved.join(", ") }, project, {
+    // ── Die ID, nicht der Dateiname ──────────────────────────────────────
+    //
+    // ⚠ Hier stand `id: saved.join(", ")` — eine kommagetrennte Liste von
+    // DATEINAMEN. Der Live-Kanal geht als `text/event-stream` hinaus, und
+    // weder der Geld- noch der Personendaten-Filter sehen ihn; die Begruendung
+    // dafuer steht in `geld.ts`: „seine Ereignisse tragen keine Nutzdaten, nur
+    // Typ und ID".
+    //
+    // Fuer Dateien stimmte das nicht — die ID WAR der Nutzdatensatz. Ein
+    // Anzeigekonto bekommt aus `getVisibleProjectIds` „all" und damit JEDES
+    // Ereignis: „Honorarvereinbarung Mueller.pdf, Statik.pdf" lief damit ueber
+    // den Bildschirm im Besprechungsraum, vor Bauherren und ausfuehrenden
+    // Firmen — waehrend jeder Weg ueber `/api/files/*` fuer dieselbe Rolle
+    // gesperrt ist.
+    //
+    // Niemand liest die ID aus (die einzige lauschende Ansicht,
+    // `AktivitaetView.vue`, laedt bei jedem Ereignis neu) — sie wird also nur
+    // nicht mehr missbraucht.
+    emitForProjectName({ type: "file", action: "created", id: dbEntries.map((e) => e.id).join(",") }, project, {
       actorId: c.get("userId"),
     });
-  return c.json({ success: true, uploaded: saved, dbEntries });
+  // `success` sagt jetzt die Wahrheit: false, sobald eine Datei nicht
+  // gespeichert werden konnte. Der Statuscode bleibt 200 — die uebrigen
+  // Dateien LIEGEN ja, ein 500 waere die falsche Auskunft.
+  return c.json({ success: gescheitert.length === 0, uploaded: saved, gescheitert, dbEntries });
 });
 
 // ── Download (Blob aus DB ausliefern) ───────────────────────────────────────

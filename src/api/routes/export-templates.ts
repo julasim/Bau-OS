@@ -19,6 +19,8 @@
 //   GET    /api/exports/project/:name/summary
 //   GET    /api/exports/invoice/:id           (braucht zusaetzlich das Geld-Recht)
 //   GET    /api/exports/faehigkeiten           → { pdf: boolean }
+//   GET    /api/exports/volldump               → der ganze sichtbare Bestand
+//                                                als ZIP (Markdown + Dateien)
 //
 //   Alle Export-Endpunkte verstehen `?format=pdf` — dieselbe Word-Datei,
 //   durch LibreOffice geschickt. Fehlt LibreOffice, kommt ein 503 mit einem
@@ -54,6 +56,8 @@ import { contentDisposition } from "../dateiname.js";
 import { docxNachPdf, pdfMoeglich, PdfNichtMoeglich } from "../../export/pdf.js";
 import { volldumpAlsZip } from "../../export/volldump.js";
 import { getVisibleProjectIds } from "../../data/access.js";
+import { darfPersonendatenSehen } from "../personendaten.js";
+import { protokolliereAbfluss } from "../datenabfluss.js";
 
 export const exportTemplatesRoutes = new Hono<AppEnv>();
 
@@ -72,6 +76,27 @@ export const exportTemplatesRoutes = new Hono<AppEnv>();
 // stehenden Handler nicht mehr erfassen.
 exportTemplatesRoutes.on(["POST", "PATCH", "DELETE"], ["/export-templates", "/export-templates/*"], adminMiddleware);
 
+// ── Kein Dokument fuer die Anzeige ──────────────────────────────────────────
+//
+// Seit die Praesentationsrolle Detailrouten lesen darf (src/data/access.ts),
+// kaeme sie auch hierher — und dieser Zweig ist etwas anderes als eine
+// Ansicht: er erzeugt DATEIEN. Der Volldump zieht den gesamten sichtbaren
+// Bestand samt aller hochgeladenen Plaene in ein ZIP.
+//
+// An dem Geraet sitzt niemand, es hat weder Drucker noch Dateidialog, und
+// niemand meldet sich daran ab. Ein Massenabzug ueber ein unbeaufsichtigtes
+// Konto im Besprechungsraum ist genau die Bauform, die man spaeter erklaeren
+// muss. Lesen ja, mitnehmen nein.
+//
+// Der Schutz steht hier als Sperre und nicht im Antwort-Filter, weil kein
+// Filter ein ZIP oder eine .docx durchsieht.
+exportTemplatesRoutes.use("/exports/*", async (c, next) => {
+  if (c.get("userRole") === "praesentation") {
+    return c.json({ error: "Dieses Konto ist eine Anzeige und kann keine Dokumente ausgeben." }, 403);
+  }
+  await next();
+});
+
 const VALID_KINDS: ExportKind[] = ["meeting", "bautagebuch", "time-entry", "project-summary", "invoice"];
 const MAX_DOCX_BYTES = 10 * 1024 * 1024; // 10 MB
 /**
@@ -84,8 +109,29 @@ const MAX_DOCX_BYTES = 10 * 1024 * 1024; // 10 MB
  * auseinanderlaufen. Der Schalter macht sichtbar, dass es ein Dokument in zwei
  * Formaten ist.
  */
-async function ausliefern(c: Context<AppEnv>, result: { buffer: Buffer; filename: string }) {
+async function ausliefern(
+  c: Context<AppEnv>,
+  result: { buffer: Buffer; filename: string },
+  /** Zaehlt das als Datenabfluss? Beim Test-Render nicht — er enthaelt
+   *  nur Attrappendaten und wuerde die Liste verwaessern. */
+  protokollieren = true,
+) {
   const alsPdf = c.req.query("format") === "pdf";
+  // ── Protokolliert wird ERST, wenn wirklich etwas hinausgeht ──────────────
+  //
+  // ⚠ Der Aufruf stand hier oben, vor der Erzeugung. Das widersprach der
+  // Zusage in `src/api/datenabfluss.ts` woertlich: „Protokolliert wird nur,
+  // was wirklich hinausging; alles andere verwaesserte die Liste, die man im
+  // Ernstfall liest."
+  //
+  // Zwei Faelle, in denen dabei ein Abfluss im Protokoll stand, den es nie
+  // gab: ein `?format=pdf` auf einem Server ohne LibreOffice (503 statt
+  // Datei), und JEDER Vorschau-Klick des Verwalters auf
+  // `/export-templates/:id/test` — der arbeitet ausschliesslich mit
+  // Attrappendaten („Max Mustermann").
+  //
+  // Der Test-Render wird deshalb gar nicht protokolliert; er uebergibt
+  // `protokollieren: false`.
   if (!alsPdf) {
     // ── Der Word-Weg, und warum er hier lange gefehlt hat ──────────────────
     //
@@ -101,12 +147,14 @@ async function ausliefern(c: Context<AppEnv>, result: { buffer: Buffer; filename
     // `tests/api-export-word.test.ts`.
     c.header("Content-Type", DOCX_MIME);
     c.header("Content-Disposition", contentDisposition(result.filename));
+    if (protokollieren) protokolliereAbfluss(c, "export.docx", { datei: result.filename, format: "docx" });
     return c.body(new Uint8Array(result.buffer));
   }
   try {
     const pdf = await docxNachPdf(result.buffer, result.filename);
     c.header("Content-Type", "application/pdf");
     c.header("Content-Disposition", contentDisposition(result.filename.replace(/\.docx$/i, ".pdf")));
+    if (protokollieren) protokolliereAbfluss(c, "export.docx", { datei: result.filename, format: "pdf" });
     return c.body(new Uint8Array(pdf));
   } catch (err) {
     // 503, nicht 500: die Anfrage war richtig, dem Server fehlt ein Werkzeug.
@@ -172,7 +220,11 @@ exportTemplatesRoutes.get("/export-templates/:id/test", async (c) => {
   const id = c.req.param("id");
   try {
     const result = await renderDocxTest(id, userName(c));
-    return ausliefern(c, result);
+    // Kein Protokolleintrag: der Test-Render arbeitet ausschliesslich mit
+    // Attrappendaten („Max Mustermann", „(Test-Projekt)"). Jeder Vorschau-
+    // Klick des Verwalters als „Datenabfluss" zu fuehren verwaessert genau
+    // die Liste, die man nach einem Vorfall liest.
+    return ausliefern(c, result, false);
   } catch (err) {
     if (err instanceof DocxRenderError) return c.json({ error: err.message }, 400);
     logError("[Export] Test-Render", err);
@@ -275,9 +327,28 @@ exportTemplatesRoutes.get("/exports/faehigkeiten", async (c) => {
 // Kein Weg an den Rechten vorbei: enthalten ist genau das, was der Fragende
 // auch einzeln abrufen duerfte. Betraege haengen zusaetzlich am Geld-Recht —
 // ein ZIP ist kein JSON, der Antwort-Filter sieht es nicht.
+//
+// ── Warum er NICHT auf die Verwaltung eingeschraenkt ist ───────────────────
+//
+// Weil sein Inhalt bereits an den Rechten haengt: enthalten ist genau das,
+// was der Fragende auch einzeln abrufen duerfte — fuer ein normales Konto
+// also seine eigenen Projekte, nicht das Haus. Ein Verwaltungsvorbehalt
+// naehme jedem Mitarbeiter die Moeglichkeit, seinen eigenen Bestand
+// mitzunehmen, ohne dass irgendwo weniger Daten flossen.
+//
+// Das eine Konto, fuer das er wirklich ein Vollabzug des Hauses waere, ist
+// die Praesentationsrolle — sie sieht per Definition ALLE Projekte. Genau
+// die faengt die Sperre ueber `/exports/*` weiter oben ab, und zwar an der
+// Stelle, an der es um die Sache geht (unbeaufsichtigtes Anzeigegeraet),
+// statt hier als pauschale Einschraenkung fuer alle.
 exportTemplatesRoutes.get("/exports/volldump", async (c) => {
   const sichtbar = await getVisibleProjectIds(userCtx(c));
-  const strom = await volldumpAlsZip(sichtbar, darfGeldSehen(c));
+  const strom = await volldumpAlsZip(sichtbar, darfGeldSehen(c), darfPersonendatenSehen(c));
+  protokolliereAbfluss(c, "export.volldump", {
+    umfang: sichtbar === "all" ? "alle Projekte" : `${sichtbar.length} Projekt(e)`,
+    mitBetraegen: darfGeldSehen(c),
+    mitKontaktdaten: darfPersonendatenSehen(c),
+  });
   c.header("Content-Type", "application/zip");
   c.header("Content-Disposition", contentDisposition(`PATIO Volldump ${new Date().toISOString().slice(0, 10)}.zip`));
   return c.body(strom as unknown as ReadableStream);

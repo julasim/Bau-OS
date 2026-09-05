@@ -2,7 +2,7 @@
 // PATIO — Teilrechnungen-Routes (Migration 035)
 // ============================================================
 // /projects/:projectName/invoices (Liste/Anlage), /invoices/:id (Update/
-// Delete). ACL ueber die Projekt-Zugehoerigkeit. DB-only.
+// Delete). ACL ueber die Projekt-Zugehoerigkeit.
 // ============================================================
 
 import { Hono } from "hono";
@@ -33,13 +33,6 @@ async function resolveProject(c: {
   if (!info?.id) return { error: c.json({ error: "Projekt nicht gefunden" }, 404) };
   return { id: info.id, name: info.name };
 }
-
-const guard = async (c: { json: (o: unknown, s?: number) => Response }, next: () => Promise<void>) => {
-  await next();
-};
-invoicesRoutes.use("/projects/:projectName/invoices", guard);
-invoicesRoutes.use("/projects/:projectName/invoices/*", guard);
-invoicesRoutes.use("/invoices/*", guard);
 
 invoicesRoutes.get("/projects/:projectName/invoices", async (c) => {
   const proj = await resolveProject(c);

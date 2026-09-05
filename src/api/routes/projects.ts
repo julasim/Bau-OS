@@ -41,6 +41,8 @@ import {
   alsDokumentwert,
 } from "../../data/projektnummer.js";
 import { contentDisposition } from "../dateiname.js";
+import { darfPersonendatenSehen } from "../personendaten.js";
+import { protokolliereAbfluss } from "../datenabfluss.js";
 
 // Hilfs-Builder: holt UserCtx aus dem Hono-Context — eine Stelle weniger,
 // an der man c.var-Felder vergisst.
@@ -83,7 +85,8 @@ function normalizePatchValue(v: unknown): string | null | undefined {
 projectsRoutes.get("/projects", async (c) => {
   const visible = await getVisibleProjectIds(userCtx(c));
   // PERF-1: eine Aggregat-Query statt N+1 (frueher list() + getInfo() je Name).
-  // Der FS-Mode kennt listInfos nicht → alter Pfad als Fallback.
+  // `listInfos` ist an der Schnittstelle noch optional (Rest aus der Zeit mit
+  // Dateisystem-Modus); das Postgres-Repo bringt es immer mit.
   if (projectRepo.listInfos) {
     return c.json(await projectRepo.listInfos(visible));
   }
@@ -153,9 +156,8 @@ projectsRoutes.post("/projects", async (c) => {
     return t === "" ? null : t;
   };
 
-  // Phase 3: Ersteller-UUID aus Auth-Context durchreichen. Im FS-Mode oder
-  // bei Legacy-Konten ohne UUID bleibt das Feld einfach NULL — die alte
-  // Semantik bleibt erhalten.
+  // Ersteller-UUID aus dem Auth-Kontext durchreichen. Fehlt sie (defektes
+  // JWT), bleibt das Feld NULL.
   const createdById = c.var.userId ?? null;
   const ok = await projectRepo.create(
     name,
@@ -395,8 +397,17 @@ projectsRoutes.get("/projects/:name/export.md", async (c) => {
 
   if (team.length > 0) {
     lines.push(`## Team (${team.length})\n`);
+    // ── Warum hier eine eigene Pruefung steht ───────────────────────────────
+    //
+    // Der Personendaten-Filter (`src/api/personendaten.ts`) raeumt E-Mail und
+    // Telefon aus JSON-Antworten. Dieses Dossier ist `text/markdown` — der
+    // Filter sieht es nicht und laesst es unveraendert durch. Ohne diese Zeile
+    // waere `export.md` der Weg, auf dem ein Anzeigekonto doch an die
+    // Kontaktdaten aller Beteiligten kaeme; dieselbe Ueberlegung wie beim
+    // Geld-Recht im Rechnungsexport.
+    const mitKontakt = darfPersonendatenSehen(c);
     for (const m of team) {
-      const contact = [m.email, m.phone].filter(Boolean).join(" · ");
+      const contact = mitKontakt ? [m.email, m.phone].filter(Boolean).join(" · ") : "";
       lines.push(`- **${m.name}**${m.role ? ` — ${m.role}` : ""}${contact ? ` (${contact})` : ""}`);
     }
     lines.push("");
@@ -434,6 +445,7 @@ projectsRoutes.get("/projects/:name/export.md", async (c) => {
   // Windows keine Zeichenfolge, sondern eine Pfadtrennung waere.
   const dateiname = mitProjektnummer(info.projektnummer, `${info.name}.md`);
   c.header("Content-Disposition", contentDisposition(dateiname));
+  protokolliereAbfluss(c, "export.dossier", { projekt: info.name, mitKontaktdaten: darfPersonendatenSehen(c) });
   return c.body(body);
 });
 
@@ -449,9 +461,10 @@ projectsRoutes.get("/projects/:name/export.md", async (c) => {
 // es also gar nicht auswaehlen koennte; das andere, weil es der einzige
 // unumkehrbare Schritt im ganzen Programm ist.
 //
-// Die drei Routen stehen VOR `/projects/:name`, sonst schluckt der
-// Platzhalter sie — Hono trifft in Registrierungsreihenfolge, nicht nach
-// Genauigkeit.
+// `GET /projects/_papierkorb` steht weiter oben, VOR `/projects/:name` —
+// sonst schluckt der Platzhalter den Namen `_papierkorb`. Fuer die beiden
+// Routen hier gilt das nicht: ein einsegmentiger Platzhalter kann einen
+// dreisegmentigen Pfad nicht treffen.
 projectsRoutes.post("/projects/:name/wiederherstellen", async (c) => {
   if (c.var.userRole !== "admin") return c.json({ error: "Admin-Rechte erforderlich" }, 403);
   if (!projectRepo.restore) return c.json({ error: "Nicht unterstuetzt" }, 501);
@@ -582,7 +595,11 @@ projectsRoutes.post("/projects/:name/tasks", async (c) => {
     return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
   }
   const body = await c.req.json<{ text: string; assigneeId?: string | null }>();
-  const task = await taskRepo.save(body.text, name);
+  // ⚠ Ohne `createdById` bleibt `tasks.created_by` NULL — und daran haengt,
+  // wem eine Aufgabe OHNE Projekt gehoert (`ownsPersonalTask`). Ueber
+  // `POST /tasks` wird es gesetzt, ueber diesen Weg nicht: dieselbe Aufgabe
+  // hatte je nach Anlageweg einen Verfasser oder keinen.
+  const task = await taskRepo.save(body.text, name, c.var.userId);
   // Wenn assigneeId mitkommt (Migration 007), direkt setzen — das Repo
   // denormalisiert auch den assignee-Textnamen.
   if (body.assigneeId !== undefined) {
@@ -597,9 +614,27 @@ projectsRoutes.patch("/projects/:name/tasks", async (c) => {
   if (!(await canSeeProjectByName(userCtx(c), name))) {
     return c.json({ error: "Kein Zugriff auf dieses Projekt" }, 403);
   }
-  const { text } = await c.req.json<{ text: string }>();
-  const ok = await taskRepo.complete(text, name);
-  if (ok) emitForProjectName({ type: "task", action: "completed" }, name, { actorId: c.var.userId });
+  // ── Ueber die ID, nicht ueber den Text ───────────────────────────────────
+  //
+  // ⚠ Hier stand `taskRepo.complete(text, name)` — und `complete()` nimmt den
+  // Projektnamen gar nicht entgegen (`db-tasks.ts`, ein Parameter). Der
+  // zweite Wert wurde also stillschweigend verworfen, und das `UPDATE` traf
+  // JEDE Aufgabe mit diesem Wortlaut, in JEDEM Projekt. Wer in zwei Projekten
+  // eine Aufgabe „Plan freigeben" hatte, hakte beide zugleich ab.
+  //
+  // Die Rechtepruefung oben schuetzte davor nicht: Sie prueft das Projekt aus
+  // dem Pfad, geschrieben wurde aber woanders.
+  const { id } = await c.req.json<{ id?: string; text?: string }>();
+  if (!id) return c.json({ error: "id erforderlich" }, 400);
+
+  // Gehoert die Aufgabe wirklich zu DIESEM Projekt? Ohne diese Zeile waere die
+  // Rechtepruefung wieder nur eine Behauptung ueber den Pfad.
+  const aufgabe = await taskRepo.get(id);
+  if (!aufgabe) return c.json({ error: "Aufgabe nicht gefunden" }, 404);
+  if (aufgabe.project !== name) return c.json({ error: "Aufgabe gehoert nicht zu diesem Projekt" }, 404);
+
+  const ok = await taskRepo.complete(id);
+  if (ok) emitForProjectName({ type: "task", action: "completed", id }, name, { actorId: c.var.userId });
   return c.json({ ok });
 });
 
@@ -623,7 +658,8 @@ projectsRoutes.post("/projects/:name/termine", async (c) => {
     uhrzeit?: string;
     assigneeIds?: string[];
   }>();
-  const termin = await terminRepo.save(body.datum, body.text, body.uhrzeit, name);
+  // Dasselbe wie bei den Aufgaben eine Route weiter oben.
+  const termin = await terminRepo.save(body.datum, body.text, body.uhrzeit, name, c.var.userId);
   if (typeof termin === "string") return c.json({ error: termin }, 400);
   // assigneeIds nachziehen, falls uebergeben (Migration 007).
   if (body.assigneeIds !== undefined) {

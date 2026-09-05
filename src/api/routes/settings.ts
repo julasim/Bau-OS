@@ -11,7 +11,6 @@
 
 import { Hono } from "hono";
 import {
-  updateUser,
   hashPassword,
   verifyPassword,
   updateDbUserSettings,
@@ -85,7 +84,7 @@ settingsRoutes.get("/settings", (c) => {
 // ── PATCH /settings — Profil + Settings-Werte aendern ────────────────────────
 settingsRoutes.patch("/settings", async (c) => {
   const dbUser = c.get("dbUser");
-  const jwtUser = c.get("user");
+  if (!dbUser) return c.json({ error: "Nicht authentifiziert" }, 401);
 
   let body: { settings?: Record<string, unknown> };
   try {
@@ -106,17 +105,13 @@ settingsRoutes.patch("/settings", async (c) => {
     }
   }
 
-  // DB-User: in DB schreiben. JSON-User: in JSON-Datei.
-  if (dbUser) {
-    const updated = await updateDbUserSettings(dbUser.id, filtered as UserSettings);
-    if (!updated) return c.json({ error: "User nicht gefunden" }, 404);
-    logInfo(`[Settings] ${dbUser.username} hat Einstellungen aktualisiert: ${Object.keys(filtered).join(", ")}`);
-    return c.json({ ok: true, settings: updated.settings ?? {} });
-  }
-
-  const updated = updateUser(jwtUser.username, { settings: filtered as UserSettings });
+  // `dbUser` ist hier immer gesetzt: `authMiddleware` weist eine Anfrage ohne
+  // Konto in der Datenbank mit 401 ab (src/api/auth.ts). Der frueher hier
+  // stehende zweite Zweig schrieb die Einstellungen in `data/users.json` und
+  // war damit seit dem Ende der JSON-Konten unerreichbar.
+  const updated = await updateDbUserSettings(dbUser.id, filtered as UserSettings);
   if (!updated) return c.json({ error: "User nicht gefunden" }, 404);
-  logInfo(`[Settings] ${jwtUser.username} hat Einstellungen aktualisiert: ${Object.keys(filtered).join(", ")}`);
+  logInfo(`[Settings] ${dbUser.username} hat Einstellungen aktualisiert: ${Object.keys(filtered).join(", ")}`);
   return c.json({ ok: true, settings: updated.settings ?? {} });
 });
 

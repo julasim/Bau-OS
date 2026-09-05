@@ -2,9 +2,9 @@
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
-import { validateDatum, validateUhrzeit, normalizeDatum } from "./termin-validation.js";
+import { validateDatum, validateUhrzeit, alsIsoDatum } from "./termin-validation.js";
 import type { Termin, TerminRepository } from "./types.js";
-import { alsIso } from "./zeitstempel.js";
+import { alsIso, dateStrPflicht } from "./zeitstempel.js";
 
 function rowToTermin(row: Record<string, unknown>): Termin {
   const assigneeIds = Array.isArray(row.assignee_ids) ? (row.assignee_ids as string[]).map(String) : [];
@@ -17,7 +17,11 @@ function rowToTermin(row: Record<string, unknown>): Termin {
   return {
     id: String(row.id),
     text: String(row.text),
-    datum: String(row.datum),
+    // `dateStrPflicht` und nicht `String(...)`: seit Migration 060 ist die
+    // Spalte `date`, und der Treiber liefert dafuer ein `Date`. `String()`
+    // darauf ergibt "Sat Jun 20 2026 ..." — die Wochentags-Falle, vor der
+    // `zeitstempel.ts` warnt.
+    datum: dateStrPflicht(row.datum),
     uhrzeit: row.uhrzeit ? String(row.uhrzeit) : null,
     endzeit: row.endzeit ? String(row.endzeit) : null,
     location: row.location ? String(row.location) : null,
@@ -70,7 +74,7 @@ export const dbTermine: TerminRepository = {
       const uhrzeitErr = validateUhrzeit(uhrzeit);
       if (uhrzeitErr) return uhrzeitErr;
     }
-    datum = normalizeDatum(datum);
+    datum = alsIsoDatum(datum);
 
     const db = getDb();
     // Volle UUID — die termine.id-Spalte ist UUID-typisiert, ein .slice(0,8)
@@ -121,14 +125,30 @@ export const dbTermine: TerminRepository = {
     // gespeichert. Ohne Zaehler gilt weiterhin „zuletzt gewinnt".
     pruefeRev(rowToTermin(current), current.rev, (updates as { rev?: number }).rev);
 
-    if (updates.datum) {
-      const err = validateDatum(updates.datum);
+    // `!== undefined` und nicht `if (updates.datum)`: ein LEERER String ist
+    // falsy und kam damit ungeprueft durch — bis Migration 060 landete er
+    // stillschweigend in der TEXT-Spalte, danach waere er ein 500er.
+    // Die Route prueft ebenfalls und liefert die bessere Meldung (400 statt
+    // des 404, das aus dem `return null` hier wird); dieser Zweig bleibt als
+    // zweite Schicht fuer Aufrufer, die nicht ueber die Route kommen.
+    //
+    // ⚠ Ehrlich dazu: Diesen Zweig erreicht KEINE Pruefung. Nimmt man ihn
+    // heraus, bleibt die Suite gruen, weil die Route vorher greift — der
+    // Schutz hier ist Absicht, nicht Nachweis.
+    if (updates.datum !== undefined) {
+      const err = validateDatum(String(updates.datum));
       if (err) return null;
-      updates = { ...updates, datum: normalizeDatum(updates.datum) };
+      updates = { ...updates, datum: alsIsoDatum(String(updates.datum)) };
     }
 
     const text = "text" in updates ? updates.text : current.text;
-    const datum = "datum" in updates ? updates.datum : current.datum;
+    // ⚠ Der Altwert kommt aus `SELECT * FROM termine` und ist damit ein
+    // `Date`. Wuerde er unveraendert durchgereicht, schriebe ein PUT ohne
+    // `datum` — der Normalfall beim Umbenennen oder Verschieben — ein
+    // Objekt zurueck, dessen Zeitzone der Treiber selbst aufloest.
+    // `!== undefined`, nicht `??`: `"" ?? x` ist `""`, und genau dieser Wert
+    // soll hier nicht mehr durchkommen (siehe oben).
+    const datum = updates.datum !== undefined ? updates.datum : dateStrPflicht(current.datum);
     const uhrzeit = "uhrzeit" in updates ? updates.uhrzeit : current.uhrzeit;
     const endzeit = "endzeit" in updates ? updates.endzeit : current.endzeit;
     const location = "location" in updates ? updates.location : current.location;

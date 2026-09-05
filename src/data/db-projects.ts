@@ -5,6 +5,8 @@
 // (Notizen, Tasks, Termine, Files als bytea). Der Vault speichert nur
 // noch System-Dateien (Agenten-Workspace, users.json, Tools, Logs).
 import { getDb } from "../db/client.js";
+import { escapeLike } from "./sql-like.js";
+import { dateStr } from "./zeitstempel.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Project, ProjectAccessEntry, ProjectCreateOptions, ProjectRepository, ProjectUpdate } from "./types.js";
 import { alsIso } from "./zeitstempel.js";
@@ -58,8 +60,18 @@ function rowToProjectInfo(row: Record<string, unknown>): Project {
     projektart: row.projektart ? String(row.projektart) : null,
     nutzung: row.nutzung ? String(row.nutzung) : null,
     phase: row.phase ? String(row.phase) : null,
-    startDate: row.start_date ? String(row.start_date) : null,
-    endDate: row.end_date ? String(row.end_date) : null,
+    // ⚠ `dateStr`, nicht `String(...)`: `projects.start_date` und `end_date`
+    // sind seit Migration 004 echte `date`-Spalten, und der Treiber liefert
+    // dafuer ein `Date`. `String()` darauf ergibt
+    // „Sun Mar 01 2026 01:00:00 GMT+0100 (…)" — genau die Wochentags-Form,
+    // vor der `zeitstempel.ts` warnt.
+    //
+    // Dieselbe Klasse Fehler wie bei `termine.datum` (Migration 060), eine
+    // Tabelle weiter. Sichtbar wurde sie in den Stammdaten der Projektakte, im
+    // Dossier (`routes/projects.ts`) und in der KI-Akte (`mcp/dossier.ts`);
+    // nur der Volldump war richtig, weil er nicht ueber dieses DTO geht.
+    startDate: dateStr(row.start_date),
+    endDate: dateStr(row.end_date),
     bauherrId: row.bauherr_id ? String(row.bauherr_id) : null,
     bauherrName: row.bauherr_name ? String(row.bauherr_name) : null,
     parentId: row.parent_id ? String(row.parent_id) : null,
@@ -95,11 +107,14 @@ function projectInfoSelect(db: ReturnType<typeof getDb>) {
       parent.name as parent_name,
       creator.username as created_by_username,
       p.created_at, p.updated_at,
-      (SELECT count(*) FROM notes n WHERE n.project_id = p.id) as notes,
-      (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done') as open_tasks,
-      (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'done') as done_tasks,
-      (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done' AND t.priority = 'hoch') as high_priority_count,
-      (SELECT count(*) FROM termine te WHERE te.project_id = p.id) as termine,
+      -- Der Papierkorb (Migration 049) zaehlt NICHT mit. Er fehlte hier: eine
+      -- weggeworfene Aufgabe stand weiter in „12 offen", und die Zahl liess
+      -- sich durch Abarbeiten nicht mehr auf null bringen.
+      (SELECT count(*) FROM notes n WHERE n.project_id = p.id AND n.deleted_at IS NULL) as notes,
+      (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done' AND t.deleted_at IS NULL) as open_tasks,
+      (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'done' AND t.deleted_at IS NULL) as done_tasks,
+      (SELECT count(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done' AND t.priority = 'hoch' AND t.deleted_at IS NULL) as high_priority_count,
+      (SELECT count(*) FROM termine te WHERE te.project_id = p.id AND te.deleted_at IS NULL) as termine,
       (SELECT count(*) FROM files f WHERE f.project_id = p.id) as files,
       (SELECT count(*) FROM projects child WHERE child.parent_id = p.id) as children_count,
       p.budget,
@@ -166,19 +181,39 @@ export const dbProjects: ProjectRepository = {
     const rows = await db`
       SELECT n.title FROM notes n
       JOIN projects p ON n.project_id = p.id
-      WHERE p.name = ${name}
+      WHERE p.name = ${name} AND n.deleted_at IS NULL
       ORDER BY n.created_at DESC
     `;
     return rows.map((r) => String(r.title));
   },
 
+  /** Der Inhalt einer Projekt-Notiz.
+   *
+   *  ── Drei Fehler in einer Abfrage, alle behoben ───────────────────────────
+   *
+   *  1. **Kein Papierkorb-Filter** — eine weggeworfene Notiz war ueber diesen
+   *     Weg weiterhin lesbar.
+   *  2. **`LIKE` ohne Maskierung** — ein `%` im Namen machte aus der Suche
+   *     einen Platzhalter: `readNote(projekt, "%")` lieferte irgendeine Notiz
+   *     des Projekts. `escapeLike` gibt es seit Migration 048
+   *     (`src/data/sql-like.ts`), es wurde hier nur nicht benutzt.
+   *  3. **Keine Sortierung** — bei mehreren Treffern hatte die Abfrage KEIN
+   *     definiertes Ergebnis; welche Notiz kam, hing am Ausfuehrungsplan.
+   *
+   *  Gleiche Reihenfolge wie `findeNotiz()` in `db-notes.ts`: exakter Titel
+   *  vor Praefix-Treffer, danach der juengste, `id` als stabiler Tiebreaker. */
   async readNote(project, noteName) {
     const db = getDb();
     const [row] = await db`
-      SELECT n.content FROM notes n
-      JOIN projects p ON n.project_id = p.id
-      WHERE p.name = ${project} AND (n.title = ${noteName} OR n.title LIKE ${noteName + "%"})
-      LIMIT 1
+      SELECT n.content,
+             CASE WHEN n.title = ${noteName} THEN 0 ELSE 1 END AS rang
+        FROM notes n
+        JOIN projects p ON n.project_id = p.id
+       WHERE p.name = ${project}
+         AND n.deleted_at IS NULL
+         AND (n.title = ${noteName} OR n.title LIKE ${escapeLike(noteName) + "%"})
+       ORDER BY rang, n.created_at DESC, n.id DESC
+       LIMIT 1
     `;
     return row ? String(row.content) : null;
   },
@@ -640,6 +675,13 @@ export const dbProjects: ProjectRepository = {
     const db = getDb();
     const [row] = await db`SELECT name FROM projects WHERE id = ${id} AND deleted_at IS NULL LIMIT 1`;
     return row ? String(row.name) : null;
+  },
+
+  async idByName(name) {
+    if (!isValidName(name)) return null;
+    const db = getDb();
+    const [row] = await db`SELECT id FROM projects WHERE name = ${name} AND deleted_at IS NULL LIMIT 1`;
+    return row ? String(row.id) : null;
   },
 
   async listDeleted() {

@@ -164,3 +164,23 @@ html.dark .ap-scrim { background: rgba(0,0,0,0.66); }
   .ap-phead-r { align-items: flex-start; }
   .ap-prog { width: 100%; }
 }
+
+
+/* ══ Zwei Klassen der Navigationsleiste, die nirgends definiert waren ═══════
+ *
+ * Gefunden am 02.09.2026 vom Waechter in `tests/web/geteilte-klassen.test.ts`.
+ * `NavRail.vue` hat keinen eigenen Style-Block; ihre Klassen liegen hier.
+ */
+
+/* Schiebt Einstellungen und Avatar ans untere Ende der Leiste. Ohne die Regel
+ * klebten beide direkt unter der Modul-Navigation. */
+.pt-nav-spacer {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Der Abmelde-Knopf ganz unten — rund, damit er sich von den Modul-Eintraegen
+ * unterscheidet. */
+.pt-nav-avatar {
+  border-radius: 999px;
+}

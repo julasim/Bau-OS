@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { formatDate } from "../utils/format";
 import { ref, onMounted, computed, watch } from "vue";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import { useConfirm } from "../composables/useConfirm";
 import { PASSWORD_MIN_LENGTH } from "../constants";
 import { useRoute, useRouter } from "vue-router";
@@ -1130,6 +1130,23 @@ async function katalogSpeichern(k: KatalogItem) {
     await loadKatalog();
   } catch (e) {
     katalogFehler.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+    // ── Nach einem Konflikt: NUR den Zähler nachziehen ─────────────────────
+    //
+    // ⚠ Hier ist `loadKatalog()` das Falsche, anders als bei den Phasen und
+    // Rechnungen. Dort liegt der Entwurf in einem eigenen `ref`; hier werden
+    // die Listenobjekte SELBST bearbeitet (`k.text`, `k.einzelpreis`), und
+    // ein Neuladen ersetzt sie — die Eingabe des Nutzers wäre weg.
+    //
+    // Ohne irgendein Nachziehen war die Zeile dagegen festgefahren: Jeder
+    // weitere Klick schickte denselben veralteten Zähler, und es gibt hier
+    // kein Formular, das man schließen und neu öffnen könnte.
+    //
+    // Der Server schickt den aktuellen Stand im Konflikt bereits mit
+    // (`aktuelleRev`) — genau dafür.
+    if (e instanceof ApiError && e.istKonflikt && typeof e.aktuelleRev === "number") {
+      k.rev = e.aktuelleRev;
+      katalogFehler.value = `${e.message} Der Stand wurde nachgezogen — bitte prüfen und erneut speichern.`;
+    }
   }
 }
 

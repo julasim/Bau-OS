@@ -769,7 +769,10 @@ export interface TaskRepository extends PapierkorbFaehig {
   listOpen(project?: string): Promise<Task[]>;
   get(id: string, project?: string): Promise<Task | null>;
   update(id: string, updates: Partial<Task>, project?: string): Promise<Task | null>;
-  complete(textOrId: string, project?: string): Promise<boolean>;
+  /** Hakt eine Aufgabe ab. Nur ueber die ID — der frueher zusaetzlich
+   *  erlaubte Textvergleich traf projektuebergreifend alle gleichlautenden
+   *  Aufgaben; der `project`-Parameter wurde dabei nie ausgewertet. */
+  complete(id: string): Promise<boolean>;
   delete(id: string, project?: string): Promise<boolean>;
 }
 
@@ -923,6 +926,13 @@ export interface ProjectRepository {
    *  auf die unveraenderliche ID stuetzen koennen. Liefert `null`, wenn es das
    *  Projekt nicht gibt oder es im Papierkorb liegt. */
   nameById?(id: string): Promise<string | null>;
+  /** Die Gegenrichtung: Projektname -> ID. Gebraucht ueberall dort, wo eine
+   *  Zeile die ID braucht, der Aufrufer aber nur den Namen hat — bei den
+   *  Benachrichtigungen (`benachrichtigungen.project_id`, Migration 058) trug
+   *  deshalb keine Aufgaben- und keine Terminmeldung einen Projektbezug, und
+   *  die Glocke zeigte sie ohne Projekt an. Liefert `null` fuer den
+   *  Papierkorb — wie `nameById` in der anderen Richtung. */
+  idByName?(name: string): Promise<string | null>;
   /** Loest eine Projektnummer auf den Projektnamen auf (Migration 052).
    *  Unempfindlich gegen Gross-/Kleinschreibung, passend zum eindeutigen
    *  Index. Projekte im Papierkorb liefern `null` — wer eine Nummer angibt,
@@ -986,8 +996,8 @@ export interface TeamRepository {
   remove(nameOrId: string): Promise<boolean>;
 
   // Migration 006: Junction-Management + Companies + Log.
-  // Optional weil fs-team.ts das im FS-Mode nicht unterstuetzen muss;
-  // Caller pruefen Verfuegbarkeit ueber ?.()-Operator.
+  // Optional deklariert, seit es neben Postgres einen Dateisystem-Modus gab;
+  // das Postgres-Repo bringt alles mit. Aufrufer pruefen mit ?.().
   assignToProject?(memberId: string, projectId: string, projectRole?: string | null): Promise<boolean>;
   unassignFromProject?(memberId: string, projectId: string): Promise<boolean>;
   updateProjectRole?(memberId: string, projectId: string, projectRole: string | null): Promise<boolean>;
@@ -1042,11 +1052,10 @@ export interface FileRepository {
   /** visibleProjectIds → zeigt nur Treffer aus diesen Projekten (Non-Admin-
    *  Scoping, gleiche Semantik wie list()). undefined → kein Filter (Admin). */
   search(query: string, limit?: number, visibleProjectIds?: string[]): Promise<FileEntry[]>;
+  /** Entfernt eine Datei endgueltig — es gibt keinen Papierkorb dafuer.
+   *  Ausschliesslich ueber die ID; der frueher zusaetzlich erlaubte Weg ueber
+   *  Dateinamen traf alle gleichnamigen Dateien, projektuebergreifend. */
   delete(id: string): Promise<boolean>;
-  updateContent(id: string, contentText: string): Promise<boolean>;
-  /** Ordnet eine bereits gespeicherte Datei einem Projekt zu (per Projektname).
-   *  Gibt false zurueck, wenn Projekt oder Datei nicht gefunden wurden. */
-  linkProject?(fileIdOrName: string, projectName: string): Promise<boolean>;
 
   // ── File-Sharing (Phase 3) ──────────────────────────
   listShares?(fileId: string): Promise<FileShareEntry[]>;

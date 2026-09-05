@@ -176,6 +176,13 @@ export const dbSearch = {
     visible: VisibleScope,
     project?: string | null,
     limit = SEARCH_LIMIT_DEFAULT,
+    /** Duerfen Datei-Treffer dabei sein?
+     *
+     *  Voreinstellung `true` — die Regel ist die Ausnahme, nicht der
+     *  Normalfall, und ein vergessener Parameter soll die Suche nicht
+     *  stillschweigend halbieren. Die eine Route, die es anders braucht,
+     *  setzt es ausdruecklich (siehe `routes/search.ts`). */
+    mitDateien = true,
   ): Promise<SearchHit[]> {
     const q = query.trim();
     if (!q) return [];
@@ -244,6 +251,9 @@ export const dbSearch = {
                    CASE WHEN n.title ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END AS rang
             FROM notes n LEFT JOIN projects p ON n.project_id = p.id, frage
            WHERE (n.such_text @@ frage.tsq OR n.title ILIKE ${like})
+             -- Papierkorb (Migration 049). Fehlte hier: eine geloeschte Notiz
+             -- war ueber die Suche weiterhin auffindbar UND lesbar.
+             AND n.deleted_at IS NULL
              AND (${all} OR n.project_id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR n.project_id = ${projectId}::uuid)
           UNION ALL
@@ -253,6 +263,7 @@ export const dbSearch = {
                    CASE WHEN t.text ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END
             FROM tasks t LEFT JOIN projects p ON t.project_id = p.id, frage
            WHERE (t.such_text @@ frage.tsq OR t.text ILIKE ${like})
+             AND t.deleted_at IS NULL
              AND (${all} OR t.project_id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR t.project_id = ${projectId}::uuid)
           UNION ALL
@@ -275,6 +286,14 @@ export const dbSearch = {
                    CASE WHEN f.filename ILIKE ${like} THEN ${TITEL_BONUS}::real ELSE 0 END
             FROM files f LEFT JOIN projects p ON f.project_id = p.id, frage
            WHERE (f.such_text @@ frage.tsq OR f.filename ILIKE ${like})
+             -- Datei-Treffer nur fuer Konten, die Dateien sehen duerfen.
+             -- Ein Anzeigekonto (Rolle praesentation) bekam hier Dateinamen
+             -- UND die ersten 200 Zeichen des extrahierten Dokumenttextes aus
+             -- JEDEM Projekt, waehrend /api/files/... fuer dieselbe Rolle
+             -- bewusst gesperrt ist. Weder Geld- noch Personendaten-Filter
+             -- greifen: beide entfernen Felder nach NAMEN, der Inhalt steckt
+             -- hier im Freitextfeld auszug. Erklaerung siehe search().
+             AND ${mitDateien}
              AND (${all} OR f.project_id = ANY(${db.array(ids)}::uuid[]))
              AND (${projectId === null} OR f.project_id = ${projectId}::uuid)
         )

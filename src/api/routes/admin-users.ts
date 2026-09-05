@@ -79,7 +79,9 @@ adminUsersRoutes.get("/users/mini", async (c) => {
   );
 });
 
-// Hilfsfunktion: Public-Shape des Users — Passwort-Hash bleibt drin.
+// Hilfsfunktion: Public-Shape des Users. Die Felder stehen einzeln da, damit
+// nichts mitwandert, was neu an `DbUser` dazukommt — `passwordHash` gehoert
+// ausdruecklich NICHT dazu.
 function publicUser(u: Awaited<ReturnType<typeof listDbUsers>>[number]) {
   return {
     id: u.id,

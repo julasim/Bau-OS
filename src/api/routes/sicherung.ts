@@ -17,8 +17,8 @@
 //
 // Aufbau, den `scripts/backup.sh` erzeugt:
 //
-//     <BACKUP_DIR>/taeglich/<JJJJ-MM-TT_HHMM>/    datenbank.sql.gz,
-//     <BACKUP_DIR>/woechentlich/<JJJJ-Wnn>/       dokumente.tar.gz,
+//     <BACKUP_DIR>/taeglich/<JJJJMMTT-HHMMSS>/    datenbank.sql.gz,
+//     <BACKUP_DIR>/woechentlich/<JJJJ-Wnn>/        dokumente.tar.gz,
 //     <BACKUP_DIR>/monatlich/<JJJJ-MM>/           konfiguration.tar.gz,
 //                                                 caddy-daten.tar.gz,
 //                                                 VOLLSTAENDIG

@@ -57,13 +57,14 @@ export type VisibleScope = string[] | "all";
 /** Liefert die UUID-Liste sichtbarer Projekte fuer den User. Admins kriegen
  *  "all".
  *
- *  Wichtig: wenn das Repo gar keine ACL-Methode hat (FS-Mode), bekommt der
- *  User AUCH "all". Begruendung: FS-Mode unterstuetzt keine Multi-User-
- *  Trennung; Legacy-Verhalten = "alles sichtbar fuer alle authentifizierten".
- *  Nur im DB-Mode mit aktiviertem Multi-User filtert getVisibleProjectIds
- *  tatsaechlich.
+ *  `listVisibleProjectIds` ist an der Repository-Schnittstelle noch als
+ *  optional deklariert — ein Rest aus der Zeit, als es neben Postgres einen
+ *  Dateisystem-Modus gab. Das Postgres-Repo bringt die Methode immer mit.
+ *  Fehlt sie wider Erwarten, gilt "nichts sichtbar": frueher stand hier das
+ *  Gegenteil ("alles sichtbar"), und ein Rueckfall, der im Zweifel MEHR
+ *  freigibt, ist an dieser Stelle die falsche Richtung.
  *
- *  User mit DB-Mode aber ohne UUID (defekte JWTs) kriegen []. */
+ *  User ohne UUID (defekte JWTs) kriegen []. */
 export async function getVisibleProjectIds(ctx: UserCtx): Promise<VisibleScope> {
   if (ctx.role === "admin") return "all";
   // Das Board zeigt das ganze Buero — es haengt im Besprechungsraum und
@@ -75,23 +76,50 @@ export async function getVisibleProjectIds(ctx: UserCtx): Promise<VisibleScope> 
   // src/api/personendaten.ts) — und dass es nichts schreiben kann, an einer
   // Middleware vor allen Routen.
   if (ctx.role === "praesentation") return "all";
-  if (!projectRepo.listVisibleProjectIds) return "all"; // FS-Mode → keine ACL
+  if (!projectRepo.listVisibleProjectIds) return [];
   if (!ctx.userId) return [];
   return projectRepo.listVisibleProjectIds(ctx.userId);
 }
 
-/** Convenience: darf der User dieses spezifische Projekt sehen? */
+/** Convenience: darf der User dieses spezifische Projekt sehen?
+ *
+ *  ── Warum hier dieselbe Ausnahme steht wie oben ──────────────────────────
+ *
+ *  Weil sie sonst nur die halbe Wahrheit waere. `getVisibleProjectIds` gab dem
+ *  Board „alle" — die Listen zeigten also jedes Projekt —, waehrend jede
+ *  Detailroute mit 403 antwortete. Ein Board, dessen Kacheln sich nicht
+ *  oeffnen lassen, sieht nach einem Defekt aus und ist einer.
+ *
+ *  Was das Board damit erreicht, steht nicht hier, sondern in
+ *  `tests/api-board.test.ts` als Positivliste — eine Rolle, deren Reichweite
+ *  nirgends festgehalten ist, waechst beim naechsten Umbau lautlos mit.
+ *
+ *  Nicht mit dieser Zeile geoeffnet werden Dateien: `canAccessFile`
+ *  (src/api/routes/files.ts) fragt `listVisibleProjectIds(userId)` DIREKT,
+ *  nicht ueber diese Funktion, und ein Anzeigekonto hat keine
+ *  `user_projects`-Zeilen. Dass der Dateizugriff damit ueber einen anderen
+ *  Weg geprueft wird als alles andere, ist eine Unstimmigkeit — sie zeigt
+ *  aber in die sichere Richtung, und ein Board braucht keine Plaene. */
 export async function canSeeProject(ctx: UserCtx, projectId: string): Promise<boolean> {
   if (ctx.role === "admin") return true;
-  // FS-Mode hat keine ACL → jeder authentifizierte User darf alles sehen.
-  if (!projectRepo.listVisibleProjectIds) return true;
+  if (ctx.role === "praesentation") return true;
+  // Gleiche Richtung wie oben: fehlt die ACL-Methode, wird nichts freigegeben.
+  if (!projectRepo.listVisibleProjectIds) return false;
   if (!ctx.userId) return false;
   const ids = await projectRepo.listVisibleProjectIds(ctx.userId);
   return ids.includes(projectId);
 }
 
 /** Convenience-Variante: nimmt den Projekt-NAMEN statt UUID — kommt in
- *  vielen Routes als Path-Param vor. */
+ *  vielen Routes als Path-Param vor.
+ *
+ *  Die Ausnahme fuer die Praesentationsrolle steht bewusst NICHT auch hier,
+ *  sondern nur in `canSeeProject`, an das diese Funktion durchreicht: eine
+ *  eigene Zeile vor dem `getInfo` wuerde fuer ein Projekt, das es gar nicht
+ *  gibt, `true` liefern — die Route antwortete dann 404 statt 403, je
+ *  nachdem, welche Pruefung zuerst kommt. Ein Rechtepfad, der bei
+ *  Nichtexistenz freigibt, ist die falsche Bauform, auch wenn er hier
+ *  folgenlos bliebe. */
 export async function canSeeProjectByName(ctx: UserCtx, name: string): Promise<boolean> {
   if (ctx.role === "admin") return true;
   const info = await projectRepo.getInfo(name);

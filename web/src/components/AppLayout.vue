@@ -2,7 +2,10 @@
 // ============================================================
 // PATIO Workspace v2 — App-Shell (Phase 7c)
 // ============================================================
-// Drei-Spalten-Layout (NavRail 56px + ListPane 320px + Detail 1fr).
+// Drei-Spalten-Layout (NavRail 240px, im Fokus-Modus 60px + ContextSidebar
+// 238px + ListPane + Detail 1fr). Die Rail-Breiten stehen als Tokens in
+// `patio-tokens.css` (--sidebar-width/--sidebar-mini); die 238px der
+// ContextSidebar sind in `style.css` hart gesetzt.
 // Routing via vue-router Named-Views:
 //   - Routes mit ListPane: components: { listpane: …, default: … }
 //   - Routes ohne ListPane: components: { default: … } → ListPane

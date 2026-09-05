@@ -120,8 +120,17 @@ export async function setDefaultExportTemplate(id: string): Promise<ExportTempla
   const db = getDb();
   const [current] = await db`SELECT kind FROM export_templates WHERE id = ${id}`;
   if (!current) return null;
-  await db`UPDATE export_templates SET is_default = false WHERE kind = ${current.kind} AND id <> ${id}`;
-  await db`UPDATE export_templates SET is_default = true WHERE id = ${id}`;
+  // ── Beide Anweisungen in EINER Transaktion ────────────────────────────
+  //
+  // Zwischen ihnen gab es einen Zustand OHNE Standardvorlage. Bricht der
+  // Prozess dort ab — oder liest ein zweiter Arbeitsplatz genau dann —,
+  // findet der Export keine Vorlage und meldet einen Fehler, obwohl eine
+  // gesetzt ist. Der Zustand ist selten und deshalb besonders unangenehm zu
+  // finden.
+  await db.begin(async (tx) => {
+    await tx`UPDATE export_templates SET is_default = false WHERE kind = ${current.kind} AND id <> ${id}`;
+    await tx`UPDATE export_templates SET is_default = true WHERE id = ${id}`;
+  });
   return getExportTemplate(id);
 }
 

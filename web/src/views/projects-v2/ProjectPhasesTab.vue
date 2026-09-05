@@ -5,9 +5,10 @@
 // Aufgaben abgeleitet (progress = progressManual ?? taskDone/taskTotal).
 // Der honorargewichtete Gesamtfortschritt kommt direkt aus der API.
 import { ref, computed, onMounted } from "vue";
-import { api } from "../../api";
+import { api, ApiError } from "../../api";
 import BIcon from "../../components/BIcon.vue";
 import PhaseGantt from "./PhaseGantt.vue";
+import { formatDate } from "../../utils/format";
 
 const props = defineProps<{ projectName: string }>();
 
@@ -32,6 +33,9 @@ interface ProjectPhase {
   taskDone: number;
   createdAt: string;
   updatedAt: string;
+  /** Konfliktzähler (Migration 042) — die Route liefert ihn mit, hier wurde
+   *  er nur weggeworfen. */
+  rev?: number;
 }
 
 // Entwurf fuer den Editor — Zahlenfelder als String, damit leere Eingabe = null.
@@ -46,6 +50,8 @@ interface PhaseDraft {
   istStart: string;
   istEnde: string;
   dependsOnPhaseId: string | null;
+  /** Konfliktzähler der geöffneten Phase — beim Anlegen `undefined`. */
+  rev?: number;
 }
 
 const STATUS_LABEL: Record<PhaseStatus, string> = {
@@ -118,6 +124,15 @@ async function load() {
   }
 }
 
+/**
+ * Aufgabe einer Phase zuordnen.
+ *
+ * Bewusst OHNE Konfliktzähler: Diese Ansicht lädt die Aufgabe nie ganz, sie
+ * kennt nur ihre ID aus einer Auswahlliste. Einen Zähler mitzuschicken, den
+ * man nicht gelesen hat, wäre eine Attrappe — und ein aus der Liste
+ * geratener Wert erzeugte 409er, die niemand versteht. Hier gilt „zuletzt
+ * gewinnt", und das ist für eine Zuordnung die richtige Antwort.
+ */
 async function assignTask(taskId: string, phaseId: string | null) {
   busy.value = true;
   try {
@@ -168,6 +183,7 @@ function emptyDraft(): PhaseDraft {
     istStart: "",
     istEnde: "",
     dependsOnPhaseId: null,
+    rev: undefined,
   };
 }
 
@@ -187,6 +203,10 @@ function selectPhase(p: ProjectPhase) {
     istStart: p.istStart ?? "",
     istEnde: p.istEnde ?? "",
     dependsOnPhaseId: p.dependsOnPhaseId ?? null,
+    // Konfliktzähler beim Öffnen merken (Muster wie in
+    // ProjectEntscheidungenTab): beim Speichern geht er nur im
+    // Bearbeiten-Fall mit, beim Anlegen gibt es noch keinen.
+    rev: p.rev,
   };
 }
 
@@ -221,7 +241,7 @@ async function save() {
   };
   try {
     if (d.id) {
-      await api.put(`/phases/${d.id}`, body);
+      await api.put(`/phases/${d.id}`, { ...body, rev: d.rev });
     } else {
       await api.post(`/projects/${encName.value}/phases`, body);
     }
@@ -229,6 +249,17 @@ async function save() {
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen.";
+    // ── Nach einem Konflikt neu laden ──────────────────────────────────────
+    //
+    // ⚠ Ohne diese Zeile war die Ansicht festgefahren: Der Entwurf behielt
+    // den veralteten Zähler, und weil weder hier noch über SSE neu geladen
+    // wurde, ergab JEDER weitere Versuch denselben 409 — auch nach Abbrechen
+    // und erneutem Öffnen, weil die Liste dahinter ebenfalls alt war.
+    // Ausweg war nur ein Reiterwechsel, unter Verlust der Eingabe.
+    //
+    // Der Entwurf liegt in einem eigenen `ref`; `load()` füllt nur die Liste
+    // und wirft die Eingabe deshalb nicht weg.
+    if (e instanceof ApiError && e.istKonflikt) await load();
   } finally {
     busy.value = false;
   }
@@ -496,7 +527,7 @@ onMounted(() => void load());
                 <div v-if="termineInPhase.length === 0" class="ph-assign-empty">Keine zugeordnet</div>
                 <div v-for="t in termineInPhase" :key="t.id" class="ph-assign-row">
                   <span class="ph-assign-text">
-                    <span class="ph-assign-date">{{ t.datum }}</span> {{ t.text }}
+                    <span class="ph-assign-date">{{ formatDate(t.datum) }}</span> {{ t.text }}
                     <BIcon v-if="t.isMilestone" name="zap" :size="11" title="Meilenstein" />
                   </span>
                   <button
@@ -515,7 +546,9 @@ onMounted(() => void load());
                   @change="onAssignTerminPick"
                 >
                   <option value="">+ Termin zuordnen…</option>
-                  <option v-for="t in assignableTermine" :key="t.id" :value="t.id">{{ t.datum }} · {{ t.text }}</option>
+                  <option v-for="t in assignableTermine" :key="t.id" :value="t.id">
+                    {{ formatDate(t.datum) }} · {{ t.text }}
+                  </option>
                 </select>
               </div>
             </template>
@@ -531,6 +564,13 @@ onMounted(() => void load());
 </template>
 
 <style scoped>
+/* Wurzel des Phasenreiters. */
+.phases-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 .ph-bar {
   display: flex;
   align-items: center;

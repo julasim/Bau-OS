@@ -62,6 +62,25 @@ function ohnePersonendaten(wert: unknown): unknown {
 }
 
 /**
+ * Darf dieser Aufrufer Kontaktdaten sehen?
+ *
+ * ── Warum das eine eigene Funktion ist und nicht nur ein Filter ────────────
+ *
+ * Weil der Filter unten NUR `application/json` anfasst. Alles andere geht
+ * ungefiltert hinaus: das Projekt-Dossier (`text/markdown`), der Volldump
+ * (ZIP) und die Word-Exporte. Solange die Präsentationsrolle keine
+ * Detailrouten lesen durfte, fiel das nicht auf — seit sie es darf, ist es
+ * das Loch neben der Tür.
+ *
+ * Dieselbe Bauform wie `darfGeldSehen()` in `geld.ts`, aus demselben Grund:
+ * eine Regel, zwei Anwendungsstellen (Filter und Nicht-JSON-Weg), damit sie
+ * nicht auseinanderlaufen können.
+ */
+export function darfPersonendatenSehen(c: Context<AppEnv>): boolean {
+  return c.get("userRole") !== "praesentation";
+}
+
+/**
  * Antwort-Filter für die Präsentationsrolle.
  *
  * Greift NUR für diese Rolle — für alle anderen ist die Middleware ein
@@ -69,7 +88,7 @@ function ohnePersonendaten(wert: unknown): unknown {
  */
 export async function personendatenFilter(c: Context<AppEnv>, next: Next): Promise<void> {
   await next();
-  if (c.get("userRole") !== "praesentation") return;
+  if (darfPersonendatenSehen(c)) return;
 
   const antwort = c.res;
   if (!antwort || !antwort.headers.get("content-type")?.includes("application/json")) return;

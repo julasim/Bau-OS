@@ -1,6 +1,7 @@
 // Datenbank-Implementation: files Tabelle (PostgreSQL)
 import crypto from "crypto";
 import { getDb } from "../db/client.js";
+import { escapeLike } from "./sql-like.js";
 import type { FileEntry, FileRepository, FileShareEntry } from "./types.js";
 import { alsIso } from "./zeitstempel.js";
 
@@ -45,6 +46,23 @@ function sanitizeTextForPg(s: string | null | undefined): string | null {
   // brechen die Konvertierung. Replacement-Char einsetzen.
   out = out.replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "�");
   return out;
+}
+
+/**
+ * Ist das die Form einer UUID?
+ *
+ * ── Warum das noetig ist und nicht `id::text` genuegt ─────────────────────
+ *
+ * `WHERE id = <keine UUID>` wirft in Postgres `invalid input syntax for type
+ * uuid` (22P02) — also einen 500er statt einer sauberen Absage. Am 02.09.2026
+ * nachgemessen.
+ *
+ * `id::text` haette den Absturz zwar vermieden, aber um den Preis eines
+ * Tabellenscans ohne Index. Die Form vorher in JavaScript zu pruefen ist
+ * beides: schnell und ehrlich. Dasselbe Muster wie in `db-termine.delete`.
+ */
+function istUuid(wert: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(wert);
 }
 
 export const dbFiles: FileRepository = {
@@ -133,26 +151,34 @@ export const dbFiles: FileRepository = {
     ).map(rowToFile);
   },
 
+  /** Eine Datei ueber ihre ID.
+   *
+   *  ⚠ Hier stand zusaetzlich `OR f.filename = $1 OR f.filepath = $1`. Die
+   *  Rechtepruefung davor (`canAccessFile` in `routes/files.ts`) loest aber
+   *  STRIKT ueber `WHERE id = $1` auf: Geprueft wurde die eine Zeile,
+   *  ausgeliefert womoeglich eine andere — bei zwei gleichnamigen Dateien in
+   *  zwei Projekten die aus dem fremden.
+   *
+   *  Der Namensweg war dabei von aussen tot: alle acht Testfundstellen und
+   *  jeder Aufrufer im Frontend uebergeben eine ID. */
   async get(id) {
+    if (!istUuid(id)) return null;
     const db = getDb();
-    // f.id::text verhindert "invalid input syntax for type uuid" wenn filename
-    // oder filepath statt einer UUID uebergeben wird.
     const [row] = await db`
       SELECT f.id, f.filename, f.filepath, f.filetype, f.filesize, f.mime_type, f.content_text, f.summary, f.tags, f.analyzed, f.created_at, f.updated_at, p.name as project_name, p.projektnummer AS project_nummer FROM files f
       LEFT JOIN projects p ON f.project_id = p.id
-      WHERE f.id::text = ${id} OR f.filename = ${id} OR f.filepath = ${id}
+      WHERE f.id = ${id}
       LIMIT 1
     `;
     return row ? rowToFile(row) : null;
   },
 
   async readBlob(id) {
+    if (!istUuid(id)) return null;
     const db = getDb();
-    // id::text verhindert "invalid input syntax for type uuid" wenn filename
-    // oder filepath statt einer UUID uebergeben wird.
     const [row] = await db`
       SELECT blob, mime_type, filename FROM files
-      WHERE id::text = ${id} OR filename = ${id} OR filepath = ${id}
+      WHERE id = ${id}
       LIMIT 1
     `;
     if (!row || !row.blob) return null;
@@ -167,7 +193,12 @@ export const dbFiles: FileRepository = {
 
   async search(query, limit = 20, visibleProjectIds) {
     const db = getDb();
-    const like = `%${query}%`;
+    // ⚠ `escapeLike` — ohne die Maskierung ist `%` kein Suchbegriff, sondern
+    // ein Platzhalter: `?q=%` lieferte den GESAMTEN sichtbaren Bestand samt
+    // `content_text`, also den extrahierten Text jedes Dokuments. Die
+    // Funktion gibt es seit Migration 048 (`src/data/sql-like.ts`) und wird
+    // in `db-search.ts` bereits benutzt; hier fehlte sie.
+    const like = `%${escapeLike(query)}%`;
     // ACL-Scoping analog zu list(): ohne diesen Filter lieferte die Suche
     // fremde Dateien samt vollem content_text aus — mit ?q=% den gesamten
     // Bestand. Die Methode kannte den Scope schlicht nicht.
@@ -207,37 +238,18 @@ export const dbFiles: FileRepository = {
     ).map(rowToFile);
   },
 
+  /** Entfernt eine Datei — endgueltig, es gibt keinen Papierkorb dafuer.
+   *
+   *  ⚠ Deshalb war der Namensweg hier der gefaehrlichste im Haus: `DELETE …
+   *  WHERE id::text = $1 OR filename = $1 OR filepath = $1` ohne Limit traf
+   *  ALLE gleichnamigen Dateien, projektuebergreifend und unwiederbringlich.
+   *  `DELETE /files` loeste in einer Anfrage sogar VIERMAL unabhaengig auf —
+   *  Rechtepruefung, `get`, `readBlob` und dieses `DELETE` konnten damit
+   *  verschiedene Zeilen meinen. */
   async delete(id) {
+    if (!istUuid(id)) return false;
     const db = getDb();
-    // id::text verhindert "invalid input syntax for type uuid" wenn filename
-    // oder filepath statt einer UUID uebergeben wird — sonst crasht die
-    // gesamte Query, bevor die OR-Klauseln ueberhaupt ausgewertet werden.
-    const result = await db`
-      DELETE FROM files WHERE id::text = ${id} OR filename = ${id} OR filepath = ${id}
-    `;
-    return result.count > 0;
-  },
-
-  async updateContent(id, contentText) {
-    const db = getDb();
-    const now = new Date().toISOString();
-    const result = await db`
-      UPDATE files SET content_text = ${contentText}, analyzed = true, updated_at = ${now}
-      WHERE id = ${id}
-    `;
-    return result.count > 0;
-  },
-
-  async linkProject(fileIdOrName, projectName) {
-    const db = getDb();
-    const [p] = await db`SELECT id FROM projects WHERE name = ${projectName} LIMIT 1`;
-    if (!p) return false;
-    const now = new Date().toISOString();
-    // id::text verhindert UUID-Cast-Crash, wenn ein filename uebergeben wird.
-    const result = await db`
-      UPDATE files SET project_id = ${p.id}, updated_at = ${now}
-      WHERE id::text = ${fileIdOrName} OR filename = ${fileIdOrName} OR filepath = ${fileIdOrName}
-    `;
+    const result = await db`DELETE FROM files WHERE id = ${id}`;
     return result.count > 0;
   },
 

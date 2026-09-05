@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { formatDateShort } from "../utils/format";
+import { formatDateShort, formatDate } from "../utils/format";
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import BIcon from "../components/BIcon.vue";
 import { useCurrentUser } from "../composables/useCurrentUser";
 import { useConfirm } from "../composables/useConfirm";
@@ -27,6 +27,13 @@ interface ContactLogEntry {
 interface TeamMember {
   id: string;
   name: string;
+  /** Konfliktzähler (Migration 042).
+   *
+   *  ⚠ Er war bis zum 01.09.2026 nicht nur ungenutzt, sondern von jedem
+   *  Client aus unerreichbar: `PATCH /team/:id` baut sein Update aus einer
+   *  Weißliste, und `rev` stand nicht darin. Zwei Personen, die dasselbe
+   *  Mitglied bearbeiteten, überschrieben einander lautlos. */
+  rev?: number;
   role: string | null;
   email: string | null;
   phone: string | null;
@@ -171,6 +178,18 @@ const deleting = ref(false);
 const allUsers = ref<AdminUserMini[]>([]);
 const allUsersLoaded = ref(false);
 const linkingUser = ref(false);
+/**
+ * Die Sammelmeldung dieser Ansicht.
+ *
+ * ⚠ Diese Datei hatte bis zum 01.09.2026 **kein einziges Fehler-Ref** bei
+ * dreizehn `catch`-Blöcken — die meisten davon leer. Jeder Fehlschlag lief
+ * lautlos ab: Der Wert sprang zurück, die Zuordnung erschien nicht, das
+ * Häkchen blieb ungesetzt. Für den Nutzer war das nicht von der eigenen
+ * Fehlbedienung zu unterscheiden.
+ *
+ * (`assignError` und `renameError` gab es — aber nur für ihre zwei Dialoge.)
+ */
+const fehler = ref<string | null>(null);
 
 async function loadAllUsersIfAdmin() {
   if (!isAdmin.value || allUsersLoaded.value) return;
@@ -187,8 +206,13 @@ async function setUserLink(userId: string | null) {
   if (!member.value || linkingUser.value) return;
   linkingUser.value = true;
   try {
-    const updated = await api.patch<TeamMember>(`/team/${member.value.id}`, { userId });
-    member.value = updated;
+    // `try … finally` ohne `catch`: der Fehler flog weiter und landete
+    // nirgends. Der Nutzer sah, wie das Kontofeld unverändert blieb.
+    member.value = await api.patch<TeamMember>(`/team/${member.value.id}`, { userId, rev: member.value.rev });
+    fehler.value = null;
+  } catch (e) {
+    fehler.value = e instanceof Error ? e.message : "Konto konnte nicht verknüpft werden";
+    if (e instanceof ApiError && e.istKonflikt) await loadMember();
   } finally {
     linkingUser.value = false;
   }
@@ -296,9 +320,10 @@ async function openTab(t: Tab) {
 async function completeTask(task: Task) {
   try {
     await api.patch(`/tasks/${encodeURIComponent(task.id)}/complete`, {});
+    fehler.value = null;
     await loadAssignedTasksAndTermine();
-  } catch {
-    /* no-op */
+  } catch (e) {
+    fehler.value = e instanceof Error ? e.message : "Aufgabe konnte nicht abgehakt werden";
   }
 }
 
@@ -329,9 +354,17 @@ async function saveField(key: EditableKey) {
   (member.value as unknown as Record<string, unknown>)[key] = newValue;
   editingField.value = null;
   try {
-    member.value = await api.patch<TeamMember>(`/team/${encodeURIComponent(memberId.value)}`, { [key]: newValue });
-  } catch {
+    member.value = await api.patch<TeamMember>(`/team/${encodeURIComponent(memberId.value)}`, {
+      [key]: newValue,
+      rev: member.value.rev,
+    });
+    fehler.value = null;
+  } catch (e) {
     (member.value as unknown as Record<string, unknown>)[key] = before;
+    // Vorher ein leeres `catch`: Der Wert sprang zurück, sonst nichts. Für
+    // den Nutzer nicht von „ich habe mich vertippt" zu unterscheiden.
+    fehler.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+    if (e instanceof ApiError && e.istKonflikt) await loadMember();
   } finally {
     saving.value = false;
   }
@@ -374,9 +407,10 @@ async function unassignProject(projectId: string) {
     return;
   try {
     await api.delete(`/team/${encodeURIComponent(memberId.value)}/projects/${encodeURIComponent(projectId)}`);
+    fehler.value = null;
     await loadMember();
-  } catch {
-    /* no-op */
+  } catch (e) {
+    fehler.value = e instanceof Error ? e.message : "Zuordnung konnte nicht entfernt werden";
   }
 }
 
@@ -385,9 +419,10 @@ async function updateProjectRole(projectId: string, newRole: string) {
     await api.patch(`/team/${encodeURIComponent(memberId.value)}/projects/${encodeURIComponent(projectId)}`, {
       projectRole: newRole.trim() || null,
     });
+    fehler.value = null;
     await loadMember();
-  } catch {
-    /* no-op */
+  } catch (e) {
+    fehler.value = e instanceof Error ? e.message : "Projektrolle konnte nicht gesetzt werden";
   }
 }
 
@@ -398,10 +433,12 @@ async function addLogEntry() {
   logSaving.value = true;
   try {
     await api.post(`/team/${encodeURIComponent(memberId.value)}/log`, { text });
+    // Erst leeren, wenn es gespeichert ist — sonst ist der Vermerk weg.
     newLogText.value = "";
+    fehler.value = null;
     await loadMember();
-  } catch {
-    /* no-op */
+  } catch (e) {
+    fehler.value = e instanceof Error ? e.message : "Vermerk konnte nicht gespeichert werden";
   } finally {
     logSaving.value = false;
   }
@@ -513,9 +550,14 @@ async function confirmDelete() {
   if (!member.value || deleting.value) return;
   deleting.value = true;
   try {
-    await api.delete(`/team/${encodeURIComponent(member.value.name)}`);
+    // Die ID, nicht den Namen: ueber den Namen loeschte der Server bei
+    // gleichnamigen Mitgliedern beide.
+    await api.delete(`/team/${encodeURIComponent(member.value.id)}`);
     router.push("/team");
-  } catch {
+  } catch (e) {
+    // Das Löschen schlug fehl und der Dialog schloss sich einfach — ohne
+    // Hinweis, ohne gelöschtes Mitglied.
+    fehler.value = e instanceof Error ? e.message : "Mitglied konnte nicht gelöscht werden";
     deleting.value = false;
   }
 }
@@ -544,6 +586,12 @@ onUnmounted(() => {
 
 <template>
   <div style="padding: 24px 32px 32px; color: var(--color-text)">
+    <!--
+      Die Sammelmeldung. Ohne sie liefen dreizehn `catch`-Blöcke ins Leere —
+      siehe `fehler` im Skript-Teil.
+    -->
+    <div v-if="fehler" class="pt-error" role="alert">{{ fehler }}</div>
+
     <!-- Back -->
     <button @click="router.push('/team')" class="back-link">
       <BIcon name="arrowLeft" :size="12" />
@@ -601,8 +649,14 @@ onUnmounted(() => {
                 <button class="action-menu-item" @click="printBusinessCard">
                   <BIcon name="file" :size="12" /><span>Visitenkarte drucken…</span>
                 </button>
-                <div class="action-menu-divider"></div>
+                <!--
+                  Nur für die Verwaltung — seit dem 02.09.2026 weist die Route
+                  jeden anderen mit 403 ab. Einen Knopf anzubieten, der
+                  zuverlässig scheitert, wäre die schlechtere Hälfte davon.
+                -->
+                <div v-if="isAdmin" class="action-menu-divider"></div>
                 <button
+                  v-if="isAdmin"
                   class="action-menu-item action-menu-danger"
                   @click="
                     showActionMenu = false;
@@ -923,7 +977,7 @@ onUnmounted(() => {
             <div style="flex: 1; min-width: 0">
               <div style="font-size: 13px; color: var(--color-text)">{{ te.text }}</div>
               <div style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px" class="font-mono">
-                {{ te.datum }}<span v-if="te.uhrzeit"> · {{ te.uhrzeit }}</span>
+                {{ formatDate(te.datum) }}<span v-if="te.uhrzeit"> · {{ te.uhrzeit }}</span>
                 <template v-if="te.project">
                   ·
                   <router-link

@@ -40,6 +40,7 @@ import {
   countDbUsers,
   createInitialAdmin,
 } from "./auth.js";
+import { checkDbHealth } from "../db/client.js";
 import { logEvent as audit } from "../data/db-audit.js";
 import { KonfliktFehler } from "../data/konflikt.js";
 import { geldFilter } from "./geld.js";
@@ -137,13 +138,77 @@ export const app = new Hono<AppEnv>();
 // Liveness-Probe fuer Reverse-Proxy / Uptime-Monitoring. Liefert minimale
 // Information — KEINE Versionen, Build-Hashes oder DB-Zugaenge, weil der
 // Endpunkt anonym erreichbar ist.
+//
+// ── Warum hier wirklich die Datenbank gefragt wird ──────────────────────────
+//
+// Bis zum 30.08.2026 stand hier `db: DB_ENABLED` — und das sagt nur, ob
+// `DATABASE_URL` GESETZT ist. Der Endpunkt konnte damit per Konstruktion nur
+// 200 liefern; das `-f` im HEALTHCHECK des Dockerfiles war wirkungslos, und
+// ein Postgres, das im laufenden Betrieb ausfaellt, blieb unsichtbar:
+// Container `healthy`, `patio status` meldet „Der Dienst antwortet", und
+// `update-offline.sh` bewertete ein Update als gelungen — waehrend jeder
+// Datenzugriff einen 500er lieferte.
+//
+// Gefragt wird mit Zwischenspeicher: mehrere Aufrufer klopfen gleichzeitig an
+// (Docker-Healthcheck, Monitoring, `patio status`, das Arbeitsplatz-Programm).
+// Fuenf Sekunden buendeln diese Anfragen zu EINEM Ping, ohne dass ein Ausfall
+// laenger als einen Healthcheck-Takt unentdeckt bliebe.
+//
+// ── Warum der Ping ein eigenes Zeitlimit braucht ────────────────────────────
+//
+// `checkDbHealth()` hat keines. `connect_timeout` in src/db/client.ts deckt
+// allein den VERBINDUNGSAUFBAU ab; sind alle Poolverbindungen belegt (ein
+// Volldump, ein paar parallele Berichte), landet die Abfrage im Backlog und
+// wartet dort unbegrenzt.
+//
+// Ohne Grenze haette das den Health-Endpunkt von einer Auskunft in eine
+// Haengepartie verwandelt — und zwar an Stellen, die alle KEIN eigenes Limit
+// mitbringen: der HEALTHCHECK im Dockerfile bricht nach 5 s ab und meldete
+// einen gesunden Dienst als krank; `patio status`, die Warteschleife von
+// `update-offline.sh` und der Prueflauf des Arbeitsplatz-Programms rufen
+// `curl` bzw. `net.request` ohne `--max-time`.
+//
+// Drei Sekunden sind reichlich fuer ein `SELECT 1` und liegen sicher unter
+// allen genannten Grenzen. Laeuft die Zeit ab, gilt die Datenbank als NICHT
+// erreichbar — was sie aus Sicht eines wartenden Nutzers auch ist.
 const startedAt = Date.now();
-app.get("/api/health", (c) => {
-  return c.json({
-    ok: true,
-    uptime: Math.floor((Date.now() - startedAt) / 1000),
-    db: DB_ENABLED,
-  });
+const DB_PING_CACHE_MS = 5_000;
+const DB_PING_TIMEOUT_MS = 3_000;
+let dbPingStand = { zeitpunkt: 0, ok: false };
+
+async function dbErreichbar(): Promise<boolean> {
+  if (!DB_ENABLED) return false;
+  if (Date.now() - dbPingStand.zeitpunkt < DB_PING_CACHE_MS) return dbPingStand.ok;
+
+  let uhr: NodeJS.Timeout | undefined;
+  const ok = await Promise.race([
+    checkDbHealth(),
+    new Promise<boolean>((loese) => {
+      uhr = setTimeout(() => loese(false), DB_PING_TIMEOUT_MS);
+    }),
+  ]);
+  if (uhr) clearTimeout(uhr);
+
+  // Der Zeitstempel wird NACH dem Ping gesetzt, nicht davor: sonst waere ein
+  // Eintrag, dessen Ping laenger gedauert hat als die Cache-Zeit, beim
+  // Schreiben schon abgelaufen — und jeder Folgeaufruf zahlte den vollen
+  // Zeitablauf erneut, genau dann, wenn die Datenbank ohnehin schwaechelt.
+  dbPingStand = { zeitpunkt: Date.now(), ok };
+  return ok;
+}
+
+app.get("/api/health", async (c) => {
+  const db = await dbErreichbar();
+  // 503 statt 200, wenn die Datenbank weg ist: erst damit hat der
+  // HEALTHCHECK etwas zu melden und der Update-Rueckweg etwas zu erkennen.
+  return c.json(
+    {
+      ok: db,
+      uptime: Math.floor((Date.now() - startedAt) / 1000),
+      db,
+    },
+    db ? 200 : 503,
+  );
 });
 
 // ── Zentrale Fehlerbehandlung ────────────────────────────────────────────────
@@ -318,8 +383,10 @@ app.use(
 
 // ── Globaler Rate-Limit (per-IP, vor Auth-Middleware) ────────────────────────
 // Schutz vor automatisierten Scans und Scrapern. Generoes (default 600/min),
-// damit normales UI-Browsing nie limitiert wird. Login + Setup-Wizard haben
-// zusaetzlich engere Limits weiter unten.
+// damit normales UI-Browsing nie limitiert wird. Der LOGIN hat zusaetzlich
+// eine eigene, engere Bremse (`loginAttempts` weiter unten). Der
+// Einrichtungsassistent hat KEINE eigene — er faellt nach dem ersten Konto
+// ohnehin mit 410 zu.
 //
 // In-Memory Sliding-Window: pro IP ein Bucket mit Counter und resetAt.
 // Reicht fuer Single-Instance-Deployments (PATIO laeuft auf einer VM).
@@ -442,7 +509,7 @@ app.post("/api/auth/login", async (c) => {
     actorRole: role,
     ip: meta.ip,
     userAgent: meta.userAgent,
-    details: { step: dbUser ? "password" : "password-legacy-json" },
+    details: { step: "password" },
   });
   return c.json({ token, username, role });
 });

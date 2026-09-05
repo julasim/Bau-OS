@@ -47,7 +47,7 @@ import {
   phaseRepo,
   invoiceRepo,
 } from "../data/index.js";
-import { dbKiFreigabe, KI_KATEGORIEN, type KiFreigabe, type KiKategorie } from "../data/db-ki-freigabe.js";
+import { dbKiFreigabe, type KiFreigabe, type KiKategorie } from "../data/db-ki-freigabe.js";
 import { redigiere } from "./redact.js";
 import { alsDokumentwert } from "../data/projektnummer.js";
 
@@ -395,6 +395,3 @@ export async function alleDossiers(): Promise<DossierErgebnis[]> {
   }
   return raus;
 }
-
-export { KI_KATEGORIEN };
-export type { KiKategorie };

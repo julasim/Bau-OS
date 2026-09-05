@@ -13,17 +13,16 @@
 // ============================================================
 
 import crypto from "crypto";
-import { getDb } from "../db/client.js";
+import { getDb, jsonb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Meeting, MeetingActionItem, MeetingInput, MeetingRepository } from "./types.js";
-import { alsIso, istIsoDatum } from "./zeitstempel.js";
+import { alsIso, istIsoDatum, dateStrPflicht } from "./zeitstempel.js";
 
 const HHMM = /^\d{2}:\d{2}(:\d{2})?$/;
 
 function rowToMeeting(row: Record<string, unknown>): Meeting {
   // meeting_date kommt als Date-Objekt → wir wollen YYYY-MM-DD-String.
-  const dateRaw = row.meeting_date;
-  const dateStr = dateRaw instanceof Date ? dateRaw.toISOString().slice(0, 10) : String(dateRaw).slice(0, 10);
+  const dateStr = dateStrPflicht(row.meeting_date);
 
   const nextRaw = row.next_meeting_date;
   const nextStr = nextRaw
@@ -211,7 +210,6 @@ export const dbMeetings: MeetingRepository = {
     const db = getDb();
     const id = crypto.randomUUID();
     const attendeeIds = await filterValidAttendees(norm.attendeeIds ?? []);
-    const actionItemsJson = JSON.stringify(norm.actionItems ?? []);
 
     try {
       await db`
@@ -226,7 +224,7 @@ export const dbMeetings: MeetingRepository = {
           ${norm.title!}, ${norm.meetingType ?? null}, ${norm.location ?? null},
           ${attendeeIds as string[]}, ${(norm.attendeesExternal ?? []) as string[]},
           ${norm.agenda ?? null}, ${norm.minutes ?? null}, ${norm.decisions ?? null},
-          ${actionItemsJson}::jsonb, ${norm.nextMeetingDate ?? null}, ${createdById}
+          ${jsonb(norm.actionItems ?? [])}, ${norm.nextMeetingDate ?? null}, ${createdById}
         )
       `;
     } catch (err) {
@@ -276,7 +274,6 @@ export const dbMeetings: MeetingRepository = {
 
     const actionItems =
       "actionItems" in norm ? (norm.actionItems ?? []) : ((current.action_items as MeetingActionItem[]) ?? []);
-    const actionItemsJson = JSON.stringify(actionItems);
 
     let betroffen: readonly unknown[] = [];
     try {
@@ -293,7 +290,7 @@ export const dbMeetings: MeetingRepository = {
           agenda = ${agenda as string | null},
           minutes = ${minutes as string | null},
           decisions = ${decisions as string | null},
-          action_items = ${actionItemsJson}::jsonb,
+          action_items = ${jsonb(actionItems)},
           next_meeting_date = ${nextMeetingDate as string | null},
           rev = rev + 1
         WHERE id = ${id} AND rev = ${current.rev}

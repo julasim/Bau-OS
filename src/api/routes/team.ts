@@ -3,10 +3,33 @@ import { teamRepo } from "../../data/index.js";
 import type { MemberType, ContactLogEntry } from "../../data/types.js";
 import type { AppEnv } from "../server.js";
 import { emit } from "../events.js";
+import { logError } from "../../logger.js";
 import { darfGeldSehen } from "../geld.js";
 import { getVisibleProjectIds, canSeeProject, type Rolle } from "../../data/access.js";
+import { adminMiddleware } from "../auth.js";
 
 export const teamRoutes = new Hono<AppEnv>();
+
+// ── Ein Mitglied loeschen ist Verwaltungssache ──────────────────────────────
+//
+// ⚠ Hier stand KEINE Pruefung. Jedes angemeldete Konto konnte jedes
+// Team-Mitglied entfernen — und daran haengen zwei Trigger und vier
+// Fremdschluessel: `project_team_members` mit CASCADE, `tasks.assignee_id`,
+// `time_entries.member_id` und `projects.bauherr_id` auf NULL, dazu
+// `array_remove` aus `termine.assignee_ids` und `meetings.attendee_ids`.
+// Einen Papierkorb fuer Mitglieder gibt es nicht.
+//
+// ── Warum genau `/team/:name` und nicht `/team/*` ──────────────────────────
+//
+// `DELETE /team/:id/projects/:projectId` — das Loesen einer Projektzuordnung —
+// ist fuer Nicht-Admins bewusst offen (`tests/api-team-projekt-acl.test.ts`).
+// Ein Platzhalter erfasste sie mit. `:name` deckt genau EIN Segment.
+//
+// Als eigener `.on()`-Eintrag und nicht als drittes Handler-Argument: mit
+// Middleware in der Signatur verliert Hono den Pfad-Generic, und
+// `c.req.param(...)` waere ploetzlich `string | undefined`. Dieselbe
+// Begruendung steht in `companies.ts`.
+teamRoutes.on(["DELETE"], "/team/:name", adminMiddleware);
 
 const ALLOWED_MEMBER_TYPES: MemberType[] = ["Intern", "Planer", "Ausführende", "Behörde", "Lieferant", "Bauherr"];
 
@@ -65,8 +88,21 @@ teamRoutes.post("/team", async (c) => {
     });
     emit({ type: "team", action: "created", id: member.id }, { actorId: c.var.userId });
     return c.json(member, 201);
-  } catch {
-    return c.json({ error: "Mitglied existiert bereits" }, 409);
+  } catch (e) {
+    // ⚠ Hier stand ein blankes `catch` mit „Mitglied existiert bereits" — JEDER
+    // Fehler wurde zu einem Namenskonflikt erklaert. Eine kaputte Verbindung,
+    // ein Tippfehler in einer Firmenkennung, ein verletzter CHECK: alles kam
+    // als 409 zurueck, und wer den Namen dann aenderte, kam keinen Schritt
+    // weiter.
+    //
+    // Muster wie in `companies.ts` und `admin-users.ts`.
+    const meldung = e instanceof Error ? e.message : String(e);
+    const klein = meldung.toLowerCase();
+    if (klein.includes("unique") || klein.includes("duplicate")) {
+      return c.json({ error: "Mitglied existiert bereits" }, 409);
+    }
+    logError("[Team] Anlegen fehlgeschlagen", e);
+    return c.json({ error: "Anlegen fehlgeschlagen: " + meldung }, 500);
   }
 });
 
@@ -88,6 +124,9 @@ teamRoutes.patch("/team/:id", async (c) => {
       // Migration 013: User-Account-Verknuepfung. Nur Admin darf
       // setzen — sonst koennten User sich gegenseitig "uebernehmen".
       userId: string | null;
+      // Konfliktschutz (Migration 042). Fehlt der Zaehler, gilt weiterhin
+      // „zuletzt gewinnt" — aeltere Aufrufer bleiben lauffaehig.
+      rev: number;
     }>
   >();
 
@@ -108,6 +147,24 @@ teamRoutes.patch("/team/:id", async (c) => {
   for (const key of ["name", "role", "email", "phone", "company", "companyId", "companyName", "projectId"] as const) {
     if (key in body) updates[key] = body[key];
   }
+
+  // ── Der Konfliktschutz war von JEDEM Client aus unerreichbar ──────────────
+  //
+  // `db-team.ts` liest den Zaehler aus dem Update-Objekt
+  // (`pruefeRev(..., (updates as { rev?: number }).rev)`) — und die Weissliste
+  // darueber kennt `rev` nicht. Der Zaehler kam also NIE an, egal was die
+  // Oberflaeche schickte.
+  //
+  // Das ist mehr als „vom Client aus abgeschaltet": Zwei Personen, die
+  // dasselbe Team-Mitglied bearbeiten, ueberschrieben einander lautlos, und
+  // kein Aufrufer haette daran etwas aendern koennen.
+  //
+  // Gefunden am 01.09.2026 beim Nachlesen des Plans, nicht im Code-Review.
+  // Festgehalten in `tests/api-konflikt-erreichbar.test.ts` — und zwar ueber
+  // die WIRKUNG (zweiter Schreibvorgang mit altem Zaehler ergibt 409), nicht
+  // darueber, ob ein Feld im Anfragekoerper steht: genau diese Unterscheidung
+  // haette den Fehler verhindert.
+  if (typeof body.rev === "number") updates.rev = body.rev;
   // Stundensatz (Migration 037): in Zahl wandeln, leer/ungueltig → null.
   // Ohne Geld-Recht wird der Stundensatz IGNORIERT, nicht abgelehnt: der
   // Antwort-Filter entfernt ihn aus jeder Antwort, das Formular schickt also
@@ -135,9 +192,9 @@ teamRoutes.patch("/team/:id", async (c) => {
 
 // Mitglied entfernen
 teamRoutes.delete("/team/:name", async (c) => {
-  const name = c.req.param("name");
-  const ok = await teamRepo.remove(name);
-  if (ok) emit({ type: "team", action: "deleted" }, { actorId: c.var.userId });
+  const nameOderId = c.req.param("name");
+  const ok = await teamRepo.remove(nameOderId);
+  if (ok) emit({ type: "team", action: "deleted", id: nameOderId }, { actorId: c.var.userId });
   return c.json({ ok });
 });
 
@@ -221,10 +278,21 @@ teamRoutes.post("/team/:id/log", async (c) => {
   if (!text) return c.json({ error: "text erforderlich" }, 400);
   if (!teamRepo.appendLog) return c.json({ error: "Nicht unterstützt" }, 501);
 
+  // ── Der Verfasser kommt aus der Anmeldung, nicht aus dem Koerper ──────────
+  //
+  // Hier stand `body.author?.trim()`. Damit liess sich ein Kontaktvermerk
+  // unter fremdem Namen ablegen — in einer Akte, die spaeter belegen soll,
+  // wer wann mit wem gesprochen hat. Der Zeitstempel wurde aus genau diesem
+  // Grund schon immer serverseitig gesetzt (siehe Kommentar oben); der Name
+  // gehoert daneben.
+  //
+  // `body.author` wird stillschweigend verworfen statt abgelehnt: aeltere
+  // Aufrufer schicken es weiterhin, und eine Absage brauchte niemand.
+  const dbUser = c.get("dbUser");
   const entry: ContactLogEntry = {
     ts: new Date().toISOString(),
     text,
-    author: body.author?.trim() || undefined,
+    author: dbUser?.displayName ?? dbUser?.username ?? undefined,
   };
   const ok = await teamRepo.appendLog(memberId, entry);
   if (!ok) return c.json({ error: "Mitglied nicht gefunden" }, 404);

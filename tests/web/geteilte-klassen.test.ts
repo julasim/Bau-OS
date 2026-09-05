@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 // `<style scoped>` ist nicht global — und genau das geht regelmäßig unter.
@@ -26,6 +26,7 @@ import { join } from "node:path";
 // Ausnahmeliste, die man pflegen müsste.
 
 const WEB = "web/src";
+const DIST = "dist/web/assets";
 
 function alleDateien(ordner: string, endung: string): string[] {
   const raus: string[] = [];
@@ -68,10 +69,25 @@ function globalerStil(quelle: string): string {
 }
 
 /** Klassen aus `class="…"` und aus `:class`-Ausdrücken (Zeichenketten darin). */
+/** Sieht das wie ein CSS-Klassenname aus?
+ *
+ *  ⚠ Ohne diese Huerde meldet die Pruefung „benutzt, nirgends definiert"
+ *  lauter Bruchstuecke aus dynamischen Bindungen — `.(c.value:` und `.),:`
+ *  waren die ersten zwei Befunde beim ersten Lauf. Fuer die Pruefung darueber
+ *  („scoped, aber woanders benutzt") war das folgenlos: Bruchstuecke sind nie
+ *  scoped definiert und trafen deshalb nie. Hier zaehlt jeder Eintrag. */
+function istKlassenname(k: string): boolean {
+  // Ein Bindestrich am ENDE heisst: das ist ein Praefix, das zur Laufzeit
+  // zusammengesetzt wird (`:class="'bd-rang-' + t.rang"`). Als Klassenname
+  // gemeldet waere es ein Fehlalarm — die fertige Klasse `bd-rang-2` steht
+  // sehr wohl im CSS, das Praefix allein nie.
+  return /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(k) && !k.endsWith("-");
+}
+
 function benutzteKlassen(tpl: string): Set<string> {
   const raus = new Set<string>();
   for (const m of tpl.matchAll(/\sclass="([^"]*)"/g)) {
-    for (const k of m[1].split(/\s+/)) if (k && !k.includes("{") && !k.includes("$")) raus.add(k);
+    for (const k of m[1].split(/\s+/)) if (istKlassenname(k)) raus.add(k);
   }
   // `:class="['a', b ? 'c' : 'd']"` und `:class="{ 'a-b': x }"`
   for (const m of tpl.matchAll(/\s:class="([^"]*)"/g)) {
@@ -79,9 +95,11 @@ function benutzteKlassen(tpl: string): Set<string> {
     // `['ph-vt', view === 'gantt' ? 'active' : '']` ist `gantt` ein
     // Ansichtsname, keine Klasse. Ohne diesen Schritt meldet der Test die
     // Zeitleisten-Klasse als geliehen, obwohl sie es nicht ist.
-    const ausdruck = m[1].replace(/[!=]==?\s*'[^']*'/g, "");
+    // Zusaetzlich `?? 'x'`: in `(info.status ?? 'aktiv') === 'aktiv'` ist
+    // `aktiv` ein Statuswert, keine Klasse.
+    const ausdruck = m[1].replace(/[!=]==?\s*'[^']*'/g, "").replace(/\?\?\s*'[^']*'/g, "");
     for (const k of ausdruck.matchAll(/'([^']+)'/g)) {
-      for (const t of k[1].split(/\s+/)) if (t) raus.add(t);
+      for (const t of k[1].split(/\s+/)) if (istKlassenname(t)) raus.add(t);
     }
   }
   return raus;
@@ -125,6 +143,41 @@ describe("Scoped-Klassen bleiben in ihrer Komponente", () => {
           befunde.push(`.${klasse}: definiert in ${quelldatei}, benutzt in ${nutzer}`);
         }
       }
+    }
+    expect(befunde.sort()).toEqual([]);
+  });
+
+  // ── Der zweite Fall: benutzt, aber NIRGENDS definiert ────────────────────
+  //
+  // Die Schwester des Fehlers darüber, und genauso lautlos: Eine Klasse steht
+  // im Template, es gibt sie aber weder global noch scoped noch als
+  // Tailwind-Hilfsklasse. Das Element rendert ohne Gestaltung — ohne Fehler,
+  // ohne Warnung, ohne Bau-Problem.
+  //
+  // ── Warum gegen das GEBAUTE CSS geprüft wird ──────────────────────────────
+  //
+  // Tailwind materialisiert seine Hilfsklassen erst beim Bau. Gegen die
+  // Quelldateien geprüft wäre jedes `flex` und `items-center` ein Befund, und
+  // man bräuchte eine Ausnahmeliste, die niemand pflegt. Im gebauten CSS
+  // stehen sie als echte Selektoren — nachgemessen: `flex` und `items-center`
+  // kommen dort vor, `spacer` und `badge` nicht.
+  //
+  // Ohne `dist/` überspringt sich die Prüfung mit klarer Meldung (Muster
+  // `HAS_DB`). In der CI greift sie scharf: dort läuft `npm run build:all`
+  // vor Vitest.
+  it("keine im Template benutzte Klasse ist nirgends definiert", () => {
+    const gebaut = existsSync(DIST) ? alleDateien(DIST, ".css") : [];
+    if (gebaut.length === 0) {
+      console.warn("[geteilte-klassen] dist/web/assets fehlt — Prüfung übersprungen (npm run build:all)");
+      return;
+    }
+    const imBau = new Set<string>();
+    for (const f of gebaut) for (const k of definierteKlassen(readFileSync(f, "utf8"))) imBau.add(k);
+
+    const befunde: string[] = [];
+    for (const [klasse, nutzer] of benutztVon) {
+      if (imBau.has(klasse) || global.has(klasse) || scopedVon.has(klasse)) continue;
+      befunde.push(`.${klasse}: benutzt in ${[...nutzer].sort().join(", ")}, nirgends definiert`);
     }
     expect(befunde.sort()).toEqual([]);
   });

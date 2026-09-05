@@ -61,6 +61,7 @@ import crypto from "node:crypto";
 import { DB_ENABLED } from "../src/config.js";
 import { getDb, checkDbHealth, closeDb } from "../src/db/index.js";
 import { PLATZHALTER_PRAEFIX, pruefeProjektnummer } from "../src/data/projektnummer.js";
+import { validateDatum, alsIsoDatum } from "../src/data/termin-validation.js";
 
 // ── Aufruf ──────────────────────────────────────────────────────────────────
 
@@ -202,6 +203,62 @@ interface Zaehler {
   uebersprungen: number;
 }
 const zaehler = new Map<string, Zaehler>();
+/**
+ * Ein Datumsfeld aus dem Vault, geprueft — oder `null` mit Meldung.
+ *
+ * ── Warum das noetig ist, und zwar dringend ────────────────────────────────
+ *
+ * Die INSERTs schrieben rohe Zeichenketten in `date`-Spalten. postgres.js
+ * serialisiert die ueber `new Date(x).toISOString()`, und `new Date()` liest
+ * einen Punkt-getrennten Wert in US-Notation. Am 01.09.2026 am Treiber
+ * nachgemessen:
+ *
+ *   "05.10.2026"  (5. Oktober)  ->  in der Spalte steht 2026-05-09
+ *   "31.12.2026"                ->  RangeError: Invalid time value
+ *   ""                          ->  RangeError: Invalid time value
+ *
+ * Der erste Fall ist der schlimmere: **fuenf Monate falsch, ohne jede
+ * Meldung.** Eine Rechnung steht danach im falschen Quartal und in jeder
+ * Sortierung an der falschen Stelle, und niemand hat einen Anlass
+ * nachzusehen.
+ *
+ * Der zweite und dritte reissen die GESAMTE Uebernahme ab — sie laeuft in
+ * einer Transaktion —, und im Terminal steht nur `Invalid time value`, ohne
+ * Datei, ohne Feld, ohne Tabelle.
+ *
+ * Deshalb: pruefen, umwandeln, und im Zweifel den einzelnen Datensatz
+ * ueberspringen und benennen. Ein fehlender Datensatz mit Meldung ist besser
+ * als ein falscher ohne.
+ */
+function pruefeDatum(roh: unknown, art: string, quellId: string): string | null {
+  const wert = String(roh ?? "");
+  const fehler = validateDatum(wert);
+  if (fehler) {
+    console.warn(`  ⚠ ${art} ${quellId} uebersprungen — ${fehler}`);
+    return null;
+  }
+  return alsIsoDatum(wert);
+}
+
+/**
+ * Ein OPTIONALES Datumsfeld: leer bleibt leer, falsch wird gemeldet und leer.
+ *
+ * Anders als bei `pruefeDatum` wird der Datensatz hier NICHT uebersprungen.
+ * Ein Projekt ohne Enddatum ist ein gueltiges Projekt; es wegen eines
+ * unlesbaren Nebenfeldes ganz zu verlieren waere schlimmer als das Feld leer
+ * zu lassen. Gemeldet wird es trotzdem — sonst faellt es niemandem auf.
+ */
+function datumOptional(roh: unknown, art: string, quellId: string): string | null {
+  if (roh == null || roh === "") return null;
+  const wert = String(roh);
+  const fehler = validateDatum(wert);
+  if (fehler) {
+    console.warn(`  ⚠ ${art} ${quellId}: Datumsfeld leer gelassen — ${fehler}`);
+    return null;
+  }
+  return alsIsoDatum(wert);
+}
+
 function zaehl(art: string): Zaehler {
   let z = zaehler.get(art);
   if (!z) {
@@ -469,8 +526,8 @@ try {
                   ${(d.color as string) ?? null}, ${(d.tags as string[]) ?? []}, ${nummer},
                   ${(d.bauherr as string) ?? null}, ${(d.standort as string) ?? null},
                   ${(d.projektart as string) ?? null}, ${(d.nutzung as string) ?? null},
-                  ${(d.phase as string) ?? null}, ${(d.startDate as string) ?? null},
-                  ${(d.endDate as string) ?? null}, ${(d.budget as number) ?? null},
+                  ${(d.phase as string) ?? null}, ${datumOptional(d.startDate, "Projekt", projektName)},
+                  ${datumOptional(d.endDate, "Projekt", projektName)}, ${(d.budget as number) ?? null},
                   ${(d.budgetUsed as number) ?? null}, ${alsBenutzerId}, ${t.erstellt}, ${t.geaendert})`;
       }
       merke("project", rec.id, id);
@@ -525,8 +582,10 @@ try {
                                         soll_start, soll_ende, ist_start, ist_ende, created_at, updated_at)
             VALUES (${id}, ${projektId}::uuid, ${String(d.name ?? "Phase")}, ${Number(d.sortOrder ?? 0)},
                     ${status}, ${(d.progressManual as number) ?? null},
-                    ${Number(d.feeShare ?? 0)}, ${(d.sollStart as string) ?? null}, ${(d.sollEnde as string) ?? null},
-                    ${(d.istStart as string) ?? null}, ${(d.istEnde as string) ?? null}, ${t.erstellt}, ${t.geaendert})`;
+                    ${Number(d.feeShare ?? 0)}, ${datumOptional(d.sollStart, "Phase", rec.id)},
+                    ${datumOptional(d.sollEnde, "Phase", rec.id)},
+                    ${datumOptional(d.istStart, "Phase", rec.id)},
+                    ${datumOptional(d.istEnde, "Phase", rec.id)}, ${t.erstellt}, ${t.geaendert})`;
         }
         merke("phase", rec.id, id);
         z.geschrieben++;
@@ -574,7 +633,7 @@ try {
                                project_id, phase_id, sort_order, completed_at, created_by, created_at, updated_at)
             VALUES (${id}, ${String(d.text ?? "")}, ${status}, ${(d.priority as string) ?? "mittel"},
                     ${(d.assignee as string) ?? null}, ${ziel("team", d.assigneeId as string)},
-                    ${(d.date as string) ?? null}, ${(d.location as string) ?? null},
+                    ${datumOptional(d.date, "Aufgabe", rec.id)}, ${(d.location as string) ?? null},
                     ${projektId}, ${ziel("phase", d.phaseId as string)}, ${Number(d.sortOrder ?? 0)},
                     ${(d.completedAt as string) ?? null}, ${alsBenutzerId}, ${t.erstellt}, ${t.geaendert})`;
         }
@@ -602,11 +661,29 @@ try {
         const id = crypto.randomUUID();
         const t = zeit(rec.meta);
         const teilnehmer = ((d.assigneeIds as string[]) ?? []).map((q) => ziel("team", q)).filter(Boolean) as string[];
+
+        // ── Die Quelle des Mischbestands ────────────────────────────────────
+        //
+        // Hier stand `String(d.datum ?? "")` — ungeprueft. Was im Vault stand,
+        // stand danach in der Datenbank: `''`, `morgen`, `2026-04`, alles.
+        // Solange `termine.datum` TEXT war, fiel das nie auf; seit Migration
+        // 060 ist die Spalte `date`, und eine unlesbare Zeile brechte die
+        // ganze Uebernahme ab.
+        //
+        // Uebersprungen und GEMELDET, nicht stillschweigend geraten: ein
+        // Datum zu erfinden waere schlimmer als ein fehlender Termin, und
+        // ohne Meldung wuesste niemand, dass etwas fehlt.
+        const datum = pruefeDatum(d.datum, "Termin", rec.id);
+        if (datum === null) {
+          z.uebersprungen++;
+          continue;
+        }
+
         if (!TROCKEN) {
           await sql`
             INSERT INTO termine (id, text, datum, uhrzeit, endzeit, location, assignees, assignee_ids,
                                  project_id, phase_id, recurring, color, is_milestone, created_by, created_at, updated_at)
-            VALUES (${id}, ${String(d.text ?? "")}, ${String(d.datum ?? "")}, ${(d.uhrzeit as string) ?? null},
+            VALUES (${id}, ${String(d.text ?? "")}, ${datum}, ${(d.uhrzeit as string) ?? null},
                     ${(d.endzeit as string) ?? null}, ${(d.location as string) ?? null},
                     ${(d.assignees as string[]) ?? []}, ${teilnehmer}::uuid[], ${projektId},
                     ${ziel("phase", d.phaseId as string)}, ${(d.recurring as string) ?? null},
@@ -669,18 +746,24 @@ try {
         const t = zeit(rec.meta);
         const teilnehmer = ((d.attendeeIds as string[]) ?? []).map((q) => ziel("team", q)).filter(Boolean) as string[];
         const art = nurErlaubt(d.meetingType, BESPRECHUNGSART, null, `Besprechung "${String(d.title)}"`);
+        const meetingDatum = pruefeDatum(d.date, "Besprechung", rec.id);
+        if (meetingDatum === null) {
+          z.uebersprungen++;
+          continue;
+        }
         if (!TROCKEN) {
           await sql`
             INSERT INTO meetings (id, project_id, meeting_date, start_time, end_time, title, meeting_type,
                                   location, attendee_ids, attendees_external, agenda, minutes, decisions,
                                   action_items, next_meeting_date, created_by, created_at, updated_at)
-            VALUES (${id}, ${projektId}::uuid, ${String(d.date ?? "")}, ${(d.startTime as string) ?? null},
+            VALUES (${id}, ${projektId}::uuid, ${meetingDatum}, ${(d.startTime as string) ?? null},
                     ${(d.endTime as string) ?? null}, ${String(d.title ?? "Besprechung")},
                     ${art}, ${(d.location as string) ?? null},
                     ${teilnehmer}::uuid[], ${(d.attendeesExternal as string[]) ?? []},
                     ${(d.agenda as string) ?? null}, ${(d.minutes as string) ?? null},
                     ${(d.decisions as string) ?? null},
-                    ${JSON.stringify(d.actionItems ?? [])}::jsonb, ${(d.nextMeetingDate as string) ?? null},
+                    ${JSON.stringify(d.actionItems ?? [])}::jsonb,
+                    ${datumOptional(d.nextMeetingDate, "Besprechung", rec.id)},
                     ${alsBenutzerId}, ${t.erstellt}, ${t.geaendert})`;
         }
         merke("meeting", rec.id, id);
@@ -705,11 +788,16 @@ try {
         const t = zeit(rec.meta);
         const beteiligte = ((d.beteiligteIds as string[]) ?? []).map((q) => ziel("team", q)).filter(Boolean) as string[];
         const status = nurErlaubt(d.status, ENTSCHEIDUNGSSTATUS, "entwurf", `Entscheidung "${String(d.titel)}"`);
+        const entscheidungDatum = pruefeDatum(d.datum, "Entscheidung", rec.id);
+        if (entscheidungDatum === null) {
+          z.uebersprungen++;
+          continue;
+        }
         if (!TROCKEN) {
           await sql`
             INSERT INTO entscheidungen (id, project_id, datum, titel, begruendung, alternativen, beteiligte_ids,
                                         beteiligte_extern, status, related_meeting_id, created_by, created_at, updated_at)
-            VALUES (${id}, ${projektId}::uuid, ${String(d.datum ?? "")}, ${String(d.titel ?? "Entscheidung")},
+            VALUES (${id}, ${projektId}::uuid, ${entscheidungDatum}, ${String(d.titel ?? "Entscheidung")},
                     ${(d.begruendung as string) ?? null}, ${JSON.stringify(d.alternativen ?? [])}::jsonb,
                     ${beteiligte}::uuid[], ${(d.beteiligteExtern as string[]) ?? []},
                     ${status}, ${ziel("meeting", d.relatedMeetingId as string)},
@@ -735,11 +823,16 @@ try {
         const d = rec.data;
         const id = crypto.randomUUID();
         const t = zeit(rec.meta);
+        const bautagDatum = pruefeDatum(d.date, "Bautagebuch-Eintrag", rec.id);
+        if (bautagDatum === null) {
+          z.uebersprungen++;
+          continue;
+        }
         if (!TROCKEN) {
           await sql`
             INSERT INTO bautagebuch (id, project_id, entry_date, weather, temperature_min, temperature_max,
                                      personnel, machines, activities, incidents, created_by, created_at, updated_at)
-            VALUES (${id}, ${projektId}::uuid, ${String(d.date ?? "")}, ${(d.weather as string) ?? null},
+            VALUES (${id}, ${projektId}::uuid, ${bautagDatum}, ${(d.weather as string) ?? null},
                     ${(d.temperatureMin as number) ?? null}, ${(d.temperatureMax as number) ?? null},
                     ${JSON.stringify(d.personnel ?? [])}::jsonb, ${(d.machines as string) ?? null},
                     ${(d.activities as string) ?? null}, ${(d.incidents as string) ?? null},
@@ -770,12 +863,15 @@ try {
         // einzige Position — ohne Fehler, ohne Meldung.
         const positionen = (d.positions as unknown[]) ?? [];
         const status = nurErlaubt(d.status, RECHNUNGSSTATUS, "entwurf", `Rechnung "${String(d.nummer ?? "")}"`);
+        // `project_invoices.datum` darf leer sein — ein fehlendes Datum ist
+        // hier kein Fehler, ein FALSCHES waere einer.
+        const rechnungDatum = datumOptional(d.datum, "Rechnung", rec.id);
         if (!TROCKEN) {
           await sql`
             INSERT INTO project_invoices (id, project_id, phase_id, nummer, betrag, datum, status, note,
                                           positionen, created_at, updated_at)
             VALUES (${id}, ${projektId}::uuid, ${ziel("phase", d.phaseId as string)},
-                    ${(d.nummer as string) ?? null}, ${Number(d.betrag ?? 0)}, ${(d.datum as string) ?? null},
+                    ${(d.nummer as string) ?? null}, ${Number(d.betrag ?? 0)}, ${rechnungDatum},
                     ${status}, ${(d.note as string) ?? null},
                     ${JSON.stringify(positionen)}::jsonb, ${t.erstellt}, ${t.geaendert})`;
         }

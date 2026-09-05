@@ -3,6 +3,7 @@ import { noteRepo, taskRepo, terminRepo, projectRepo } from "../../data/index.js
 import { getVisibleProjectIds, type UserCtx, type Rolle } from "../../data/access.js";
 import type { AppEnv } from "../server.js";
 import { gehoertMirPruefer, type PersoenlicherDatensatz } from "../persoenlich.js";
+import { heuteIso } from "../../data/heute.js";
 
 export const dashboardRoutes = new Hono<AppEnv>();
 
@@ -67,8 +68,25 @@ dashboardRoutes.get("/dashboard", async (c) => {
     }
   }
 
-  const today = new Date().toLocaleDateString("de-AT", { day: "2-digit", month: "2-digit", year: "numeric" });
-  const todayTermine = visibleTermine.filter((t) => t.datum === today || t.datum.includes(today));
+  // ── Der Fehler war die ZEITZONE, nicht das `includes` ─────────────────────
+  //
+  // Hier stand `t.datum.includes(today)` mit `today` aus
+  // `new Date().toLocaleDateString("de-AT", …)`.
+  //
+  // `new Date()` liest die Zeit des PROZESSES. Der laeuft im Container auf
+  // UTC — zwischen 00:00 und 02:00 oesterreichischer Zeit zeigte die Kachel
+  // also den Vortag, und im Winter eine Stunde lang. `heuteIso()` fragt
+  // stattdessen die Datenbank in der Zeitzone des Bueros, wie das Board und
+  // der Wartungslauf auch.
+  //
+  // Das `includes` war dagegen KEIN eigener Fehler: beide Zeichenketten sind
+  // zehn Zeichen lang, der Teilstring-Vergleich fiel mit der Gleichheit
+  // zusammen. Es ist trotzdem der falsche Operator — er wuerde bei jedem
+  // laengeren Datumsfeld still zu viel treffen — und steht jetzt als das da,
+  // was gemeint ist. Wer eine Gegenprobe darauf ansetzt, bekommt sie GRUEN
+  // zurueck; das ist richtig so und kein fehlender Test.
+  const heute = await heuteIso();
+  const todayTermine = visibleTermine.filter((t) => t.datum === heute);
   const openTasks = visibleTasks.filter((t) => t.status !== "done");
 
   return c.json({

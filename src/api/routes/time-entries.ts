@@ -26,15 +26,6 @@ function userCtx(c: { var: { userId: string | null; userRole: Rolle } }): UserCt
   return { userId: c.var.userId, role: c.var.userRole };
 }
 
-// Guard: 503 wenn FS-Mode (kein time-entries-Repo).
-const dbGuard = async (c: { json: (o: unknown, s?: number) => Response }, next: () => Promise<void>) => {
-  await next();
-};
-timeEntriesRoutes.use("/projects/:projectName/time-entries", dbGuard);
-timeEntriesRoutes.use("/projects/:projectName/time-entries/*", dbGuard);
-timeEntriesRoutes.use("/time-entries/*", dbGuard);
-timeEntriesRoutes.use("/team/:memberId/time-entries", dbGuard);
-
 async function resolveProject(c: {
   req: { param: (k: string) => string };
   json: (obj: unknown, status?: number) => Response;

@@ -19,7 +19,9 @@
 //   Feld in der Antwort von `GET /branding` (`src/api/routes/branding.ts`).
 // * **Die Bereichsnamen decken die Server-Routen ab** — der Server hat neun
 //   Ansichten, die der Desktop nicht kennt (Nutzer, Audit, Sicherung, Firmen,
-//   Dateien, Kalender, Suche, Projekte, Portfolio).
+//   Dateien, Kalender, Suche, Projekte, Portfolio). NICHT enthalten sind
+//   `neuigkeiten` (dort bleibt der Brotkrumen leer) und `board` — letzteres
+//   folgenlos, weil das Board neben dieser Hülle läuft.
 // ============================================================
 
 import { computed, onMounted, watch } from "vue";
@@ -57,6 +59,9 @@ const BEREICH: Record<string, string> = {
   search: "Suche",
   aktivitaet: "Aktivität",
   papierkorb: "Papierkorb",
+  // Fehlte — der Brotkrumenpfad blieb auf `/neuigkeiten` leer, als hätte die
+  // Seite keinen Namen.
+  neuigkeiten: "Neuigkeiten",
   settings: "Einstellungen",
   "admin-users": "Nutzer",
   "admin-audit": "Audit-Log",

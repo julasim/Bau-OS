@@ -40,9 +40,10 @@ export interface KiFreigabe {
   projekte: Record<string, KiKategorie[]>;
 }
 
-export function standardFreigabe(): KiFreigabe {
-  return { aktiv: false, personendaten: "namen-ohne-kontakt", projekte: {} };
-}
+// `standardFreigabe()` stand hier und hatte keinen Aufrufer: `lesen()` baut
+// den Standard selbst aus den gelesenen Werten (aus = gesperrt,
+// „namen-ohne-kontakt" als Stufe). Zwei Quellen fuer dieselbe Vorgabe sind
+// eine zu viel.
 
 function istStufe(v: unknown): v is PersonendatenStufe {
   return v === "keine" || v === "namen-ohne-kontakt" || v === "alle";

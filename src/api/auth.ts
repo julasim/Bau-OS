@@ -2,7 +2,7 @@ import fs from "fs";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { JWT_SECRET, USERS_FILE, BCRYPT_ROUNDS } from "../config.js";
-import { getDb } from "../db/client.js";
+import { getDb, jsonb } from "../db/client.js";
 import { encryptString, decryptString } from "./crypto.js";
 import { peekTicket } from "./sse-tickets.js";
 import type { Context, Next } from "hono";
@@ -63,7 +63,7 @@ export interface JwtPayload {
 // ── DB-Helper ────────────────────────────────────────────────────────────────
 
 function rowToDbUser(row: Record<string, unknown>): DbUser {
-  const settings = row.settings && typeof row.settings === "object" ? (row.settings as UserSettings) : {};
+  const settings = alsEinstellungen(row.settings);
   return {
     id: String(row.id),
     username: String(row.username),
@@ -169,8 +169,8 @@ export async function createDbUser(input: {
          AND (SELECT COUNT(*) FROM candidates) = 1
     `;
   } catch {
-    // Tabelle team_members existiert evtl. nicht (FS-Mode-Mix) — egal,
-    // dann gibt es eben keinen Auto-Link.
+    // Schlaegt die Abfrage fehl (Tabelle fehlt auf einem sehr alten Stand),
+    // gibt es eben keine automatische Verknuepfung zum Team-Mitglied.
   }
 
   return user;
@@ -260,16 +260,48 @@ export async function deleteDbUser(id: string): Promise<boolean | "last-admin"> 
   return result.count > 0;
 }
 
+/**
+ * Die Einstellungen eines Kontos — auch aus doppelt kodiertem Altbestand.
+ *
+ * ── Warum das noetig ist ──────────────────────────────────────────────────
+ *
+ * `updateDbUserSettings` schrieb bis zum 02.09.2026 mit
+ * `${JSON.stringify(...)}::jsonb`. postgres.js serialisiert die uebergebene
+ * Zeichenkette dabei ein zweites Mal — in der Spalte landet ein JSON-String
+ * statt eines Objekts.
+ *
+ * Die Pruefung `typeof === "object"` faellt darauf still auf `{}` zurueck, und
+ * weil dieselbe Funktion die Einstellungen MERGT, hiess das: **beim naechsten
+ * Speichern war alles Vorherige weg.** In der Testdatenbank betraf das eine
+ * von 123 Zeilen (die uebrigen stammen aus dem Anlegepfad, der ein leeres
+ * Objekt schreibt).
+ *
+ * Kein `throw`: eine unlesbare Einstellung darf keine Anmeldung verhindern.
+ */
+export function alsEinstellungen(roh: unknown): UserSettings {
+  if (typeof roh === "string") {
+    try {
+      const geparst: unknown = JSON.parse(roh);
+      return geparst && typeof geparst === "object" ? (geparst as UserSettings) : {};
+    } catch {
+      return {};
+    }
+  }
+  return roh && typeof roh === "object" ? (roh as UserSettings) : {};
+}
+
 /** Aktualisiert Settings eines DB-Users. Settings werden gemerged, nicht
  *  ueberschrieben — kompatibel zur JSON-Variante in updateUser(). */
 export async function updateDbUserSettings(userId: string, patch: UserSettings): Promise<DbUser | null> {
   const db = getDb();
   const [current] = await db`SELECT settings FROM users WHERE id = ${userId} LIMIT 1`;
   if (!current) return null;
-  const existing = (current.settings && typeof current.settings === "object" ? current.settings : {}) as UserSettings;
+  // Ueber `alsEinstellungen`, sonst geht beim Merge der doppelt kodierte
+  // Altbestand verloren — genau der Fall, der Einstellungen gekostet hat.
+  const existing = alsEinstellungen(current.settings);
   const merged: UserSettings = { ...existing, ...patch };
   const [row] = await db`
-    UPDATE users SET settings = ${JSON.stringify(merged)}::jsonb
+    UPDATE users SET settings = ${jsonb(merged)}
     WHERE id = ${userId} RETURNING *
   `;
   return row ? rowToDbUser(row) : null;
@@ -357,7 +389,7 @@ export async function importLegacyJsonUsers(): Promise<{ imported: number; skipp
         ${role},
         ${ju.settings?.displayName ?? null},
         ${shouldProtect},
-        ${JSON.stringify(ju.settings ?? {})}::jsonb,
+        ${jsonb(ju.settings ?? {})},
         ${ju.createdAt ?? new Date().toISOString()}
       )
     `;
@@ -378,29 +410,13 @@ export function loadUsers(): User[] {
   }
 }
 
-export function saveUsers(users: User[]): void {
-  fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), "utf-8");
-}
-
-// `findUser()` stand hier — die letzte Lesefunktion auf `data/users.json`,
-// die ausserhalb der Uebernahme beim Start noch existierte. Kein Aufrufer.
-// Die JSON-Konten sind als Anmeldeweg seit AP1 geschlossen; was bleibt, ist
+// `findUser()`, `saveUsers()` und `updateUser()` standen hier — die letzten
+// Schreib- und Lesefunktionen auf `data/users.json` ausserhalb der Uebernahme
+// beim Start. Ihr letzter Aufrufer war der JSON-Zweig in
+// `routes/settings.ts`, und der war unerreichbar: `authMiddleware` weist eine
+// Anfrage ohne Konto in der Datenbank mit 401 ab. Was bleibt, ist
 // `loadUsers()` fuer den einmaligen Import und die Sperre der
 // Ersteinrichtung.
-
-export function updateUser(username: string, patch: Partial<User>): User | undefined {
-  const users = loadUsers();
-  const idx = users.findIndex((u) => u.username === username);
-  if (idx === -1) return undefined;
-  const next: User = {
-    ...users[idx],
-    ...patch,
-    settings: patch.settings ? { ...users[idx].settings, ...patch.settings } : users[idx].settings,
-  };
-  users[idx] = next;
-  saveUsers(users);
-  return next;
-}
 
 // ── Crypto ───────────────────────────────────────────────────────────────────
 
@@ -598,7 +614,7 @@ export async function enableTotp(userId: string, backupCodeHashes: string[]): Pr
   const result = await db`
     UPDATE users
        SET totp_enabled = true,
-           totp_backup_codes = ${JSON.stringify(backupCodeHashes)}::jsonb,
+           totp_backup_codes = ${jsonb(backupCodeHashes)},
            totp_verified_at = now()
      WHERE id = ${userId}
        AND totp_secret_encrypted IS NOT NULL
@@ -636,7 +652,7 @@ export async function consumeBackupCode(userId: string, code: string): Promise<b
     if (ok) {
       const remaining = hashes.filter((_, j) => j !== i);
       await db`
-        UPDATE users SET totp_backup_codes = ${JSON.stringify(remaining)}::jsonb
+        UPDATE users SET totp_backup_codes = ${jsonb(remaining)}
         WHERE id = ${userId}
       `;
       return true;

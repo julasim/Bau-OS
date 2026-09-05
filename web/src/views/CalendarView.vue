@@ -9,6 +9,8 @@ interface Termin {
   id: string;
   text: string;
   datum: string;
+  /** Konfliktzähler (Migration 042) — beim Speichern zurückgeschickt. */
+  rev?: number;
   uhrzeit: string | null;
   endzeit: string | null;
   location: string | null;
@@ -76,20 +78,17 @@ function toISO(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function toDisplayISO(d: string): string {
-  // Backend kann sowohl 2026-04-10 als auch 10.04.2026 liefern
-  if (d.includes("-")) return d;
-  const [dd, mm, yyyy] = d.split(".");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
+// `toDisplayISO()` stand hier und drehte `10.04.2026` nach ISO. Seit
+// Migration 060 liefert der Server ausschliesslich ISO — die Umrechnung ist
+// nicht nur ueberfluessig, sie war der Grund, warum das Bearbeiten-Formular
+// nie funktionierte: `<input type="date">` bekam den deutschen Rohwert
+// gebunden und blieb deshalb leer.
 function termineForDate(iso: string): Termin[] {
-  return termine.value.filter((t) => toDisplayISO(t.datum) === iso);
+  return termine.value.filter((t) => t.datum === iso);
 }
 
 function formatDateLong(d: string): string {
-  const iso = toDisplayISO(d);
-  return formatWeekdayDayMonth(iso);
+  return formatWeekdayDayMonth(d);
 }
 
 // ── Monats-Grid ──────────────────────────────────────────────────────────────
@@ -157,7 +156,7 @@ const grouped = computed(() => {
   const groups: { date: string; label: string; items: Termin[] }[] = [];
   const map = new Map<string, Termin[]>();
   for (const t of termine.value) {
-    const k = toDisplayISO(t.datum);
+    const k = t.datum;
     if (!map.has(k)) map.set(k, []);
     map.get(k)!.push(t);
   }
@@ -238,6 +237,7 @@ async function save(t: Termin) {
       endzeit: t.endzeit,
       location: t.location,
       assignees: t.assignees,
+      rev: t.rev,
     });
     editing.value = null;
     await load();

@@ -169,8 +169,9 @@ watch(
 
     <div style="border: 1px solid var(--color-border); border-radius: 8px; overflow: hidden">
       <div v-for="entry in accessList" :key="entry.userId" class="access-row">
+        <!-- `.pt-avatar`/`--sm` statt `.member-avatar`: Letztere gibt es nicht. -->
         <div
-          class="member-avatar member-avatar-sm"
+          class="pt-avatar pt-avatar--sm"
           style="
             background: var(--color-bg-subtle);
             color: var(--color-text-secondary);
@@ -197,6 +198,13 @@ watch(
 </template>
 
 <style scoped>
+/* Wurzel des Zugriffsreiters. */
+.zugriff-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 /* ── Zugriff-Tab (Phase 3) ────────────────────────────── */
 .access-row {
   display: flex;

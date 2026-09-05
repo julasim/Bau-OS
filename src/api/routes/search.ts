@@ -43,6 +43,21 @@ searchRoutes.get("/search", async (c) => {
   const limit = Number(c.req.query("limit"));
   const visible = await getVisibleProjectIds(userCtx(c));
 
-  const results = await searchRepo.search(q, visible, project, limit);
+  // ── Datei-Treffer nur, wenn das Konto Dateien ueberhaupt sehen darf ──────
+  //
+  // Die Praesentationsrolle bekommt aus `getVisibleProjectIds` bewusst "all" —
+  // das Board zeigt das ganze Haus. Fuer Dateien gilt das ausdruecklich NICHT:
+  // `canAccessFile` (routes/files.ts) fragt `user_projects` direkt, und ein
+  // Anzeigekonto hat dort keine Zeile.
+  //
+  // Ueber die Suche lief dieselbe Rolle daran vorbei: Dateinamen UND die
+  // ersten 200 Zeichen des extrahierten Dokumenttextes, aus jedem Projekt.
+  // Weder `geldFilter` noch `personendatenFilter` helfen — beide entfernen
+  // Felder nach NAMEN, der Inhalt steckt hier in einer Freitext-Zeichenkette.
+  //
+  // Projekte, Notizen und Aufgaben bleiben durchsuchbar: im Besprechungsraum
+  // etwas nachzuschlagen ist der Zweck des Geraets.
+  const mitDateien = c.var.userRole !== "praesentation";
+  const results = await searchRepo.search(q, visible, project, limit, mitDateien);
   return c.json({ query: q, results });
 });

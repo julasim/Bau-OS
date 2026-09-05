@@ -2,7 +2,7 @@
 import { formatDate, heuteIso } from "../utils/format";
 import { ref, computed, onMounted, onUnmounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import MarkdownRenderer from "../components/MarkdownRenderer.vue";
 import BIcon from "../components/BIcon.vue";
 import TeamPicker from "../components/TeamPicker.vue";
@@ -26,6 +26,10 @@ const { confirm } = useConfirm();
 interface ProjectInfo {
   id: string;
   name: string;
+  /** Konfliktzähler (Migration 042). `PATCH /projects/:name` liest ihn aus
+   *  dem Körper und gibt den neuen Stand zurück — ohne ihn im Typ gäbe es
+   *  nichts mitzuschicken, und der Schutz bliebe abgeschaltet. */
+  rev?: number;
   description?: string | null;
   status?: string;
   color?: string | null;
@@ -192,9 +196,9 @@ watch(
 );
 
 // ── Projekt-Module (Phase 6e) ────────────────────────────────────────────
-// Effektive Modul-Sicht (globale Defaults + per-Projekt-Override). Tabs
-// deren Modul auf false ist werden ausgeblendet. uebersicht/zugriff
-// sind immer sichtbar (kein Modul-Mapping).
+// Effektive Modul-Sicht (globale Defaults + per-Projekt-Override).
+// Gedacht war: Reiter, deren Modul auf false steht, verschwinden. Umgesetzt
+// ist das nicht — siehe `tabVisible()` weiter unten.
 interface ProjectModuleFlags {
   stammdaten: boolean;
   notes: boolean;
@@ -235,11 +239,29 @@ const PROJECT_MODULE_LIST: { key: keyof ProjectModuleFlags; label: string }[] = 
   { key: "time_entries", label: "Stunden" },
 ];
 
-// Tab-Sichtbarkeit pro Modul. Tabs ohne Modul-Mapping sind immer aktiv.
+// Tab-Sichtbarkeit pro Modul.
+//
+// ACHTUNG: Diese Funktion blendet heute NICHTS aus. Sie wird nur in
+// `setProjectModule` und `resetProjectModulesToGlobal` gelesen, um nach einer
+// Umschaltung auf „uebersicht" zurueckzuspringen; die dreizehn Reiter im
+// Template und die Kontext-Leiste fragen sie nicht.
+//
+// ⚠ Behoben am 01.09.2026: Fuer die drei Reiter OHNE Modul-Eintrag
+// (`phasen`, `rechnungen`, `entscheidungen`) lieferte der letzte Ausdruck
+// `undefined`. Wer in einem dieser Reiter stand und irgendein Modul
+// umschaltete, wurde deshalb auf „Uebersicht" geworfen — und verlor dabei
+// den Reiter, an dem er gerade arbeitete. Ein `?tab=` in der Adresse half
+// nicht: der Sprung setzt `tab.value` direkt.
+//
+// Jetzt sind sie ausdruecklich immer sichtbar, wie „uebersicht" und
+// „zugriff" auch. Kaeme spaeter ein Modul dafuer dazu, gehoert es in
+// `ProjectModuleFlags` — dann greift diese Funktion von selbst.
+const IMMER_SICHTBAR: Tab[] = ["uebersicht", "zugriff", "phasen", "rechnungen", "entscheidungen"];
+
 function tabVisible(t: Tab): boolean {
-  if (t === "uebersicht" || t === "zugriff") return true;
+  if (IMMER_SICHTBAR.includes(t)) return true;
   if (t === "stunden") return moduleFlags.value.time_entries;
-  return moduleFlags.value[t as keyof ProjectModuleFlags];
+  return moduleFlags.value[t as keyof ProjectModuleFlags] === true;
 }
 
 async function loadProjectModules() {
@@ -395,6 +417,23 @@ onUnmounted(() => {
   document.removeEventListener("mousedown", onGlobalClick);
 });
 
+/**
+ * Nur die Stammdaten neu holen — nach einem Konflikt.
+ *
+ * Bewusst nicht `loadAll()`: das zöge Notizen, Aufgaben, Termine und Phasen
+ * mit und würde die Ansicht dabei zurücksetzen. Gebraucht wird hier
+ * ausschließlich der aktuelle Konfliktzähler, damit der nächste Versuch des
+ * Nutzers nicht mit demselben veralteten Wert scheitert.
+ */
+async function ladeInfoNeu() {
+  try {
+    info.value = await api.get<ProjectInfo>(`/projects/${encodeURIComponent(projectName.value)}`);
+  } catch {
+    // Die Meldung des ursprünglichen Fehlers steht bereits; ein zweiter
+    // Fehlschlag hier darf sie nicht überschreiben.
+  }
+}
+
 async function loadAll() {
   const n = encodeURIComponent(projectName.value);
   const [i, no, ta, te, ph] = await Promise.all([
@@ -463,12 +502,19 @@ async function saveField(key: EditableKey) {
 
   try {
     const n = encodeURIComponent(projectName.value);
-    const updated = await api.patch<ProjectInfo>(`/projects/${n}`, { [key]: newValue });
+    // `info.value = updated` darunter ist der Grund, warum das hier trägt:
+    // Die Route gibt `getInfo(name)` zurück, also den neuen Zähler. Ohne die
+    // Rückübernahme erzeugte der ZWEITE Speichervorgang in Folge einen 409.
+    const updated = await api.patch<ProjectInfo>(`/projects/${n}`, { [key]: newValue, rev: info.value.rev });
     info.value = updated;
+    saveError.value = null;
   } catch (e) {
     // Rollback
     (info.value as Record<string, unknown>)[key] = before;
     saveError.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+    // Beim Konflikt den Stand des anderen holen — sonst scheitert auch der
+    // nächste Versuch mit demselben veralteten Zähler.
+    if (e instanceof ApiError && e.istKonflikt) await ladeInfoNeu();
   } finally {
     saving.value = false;
   }
@@ -500,42 +546,72 @@ async function openNote(name: string) {
 async function addTask() {
   if (!newTask.value.trim()) return;
   const n = encodeURIComponent(projectName.value);
-  await api.post(`/projects/${n}/tasks`, {
-    text: newTask.value,
-    assigneeId: newTaskAssigneeId.value ?? undefined,
-  });
-  newTask.value = "";
-  newTaskAssigneeId.value = null;
-  await loadAll();
+  // ⚠ Kein `catch`: Schlug das Anlegen fehl, warf die Funktion, und der
+  // Nutzer sah NICHTS — kein Hinweis, keine Aufgabe. Das Feld wurde
+  // trotzdem nicht geleert, weil die Zeilen darunter nie liefen; wer nicht
+  // genau hinsah, klickte ein zweites Mal.
+  try {
+    await api.post(`/projects/${n}/tasks`, {
+      text: newTask.value,
+      assigneeId: newTaskAssigneeId.value ?? undefined,
+    });
+    newTask.value = "";
+    newTaskAssigneeId.value = null;
+    saveError.value = null;
+    await loadAll();
+  } catch (e) {
+    saveError.value = e instanceof Error ? e.message : "Aufgabe konnte nicht angelegt werden";
+  }
 }
 
 async function completeTask(task: Task) {
   const n = encodeURIComponent(projectName.value);
-  await api.patch(`/projects/${n}/tasks`, { text: task.text });
-  await loadAll();
+  try {
+    // Die ID, nicht den Text. Ueber den Text loeste der Server die Aufgabe
+    // frueher projektuebergreifend auf — siehe die Route.
+    await api.patch(`/projects/${n}/tasks`, { id: task.id });
+    saveError.value = null;
+    await loadAll();
+  } catch (e) {
+    // Ohne Meldung blieb das Häkchen einfach ungesetzt — für den Nutzer
+    // nicht von „hat nicht geklickt" zu unterscheiden.
+    saveError.value = e instanceof Error ? e.message : "Aufgabe konnte nicht abgehakt werden";
+  }
 }
 
 async function addTermin() {
   if (!newDatum.value || !newTerminText.value) return;
   const n = encodeURIComponent(projectName.value);
-  await api.post(`/projects/${n}/termine`, {
-    datum: newDatum.value,
-    text: newTerminText.value,
-    uhrzeit: newUhrzeit.value || undefined,
-    assigneeIds: newTerminAssigneeIds.value.length > 0 ? newTerminAssigneeIds.value : undefined,
-  });
-  newDatum.value = "";
-  newUhrzeit.value = "";
-  newTerminText.value = "";
-  newTerminAssigneeIds.value = [];
-  newTerminAssigneeFree.value = [];
-  await loadAll();
+  try {
+    await api.post(`/projects/${n}/termine`, {
+      datum: newDatum.value,
+      text: newTerminText.value,
+      uhrzeit: newUhrzeit.value || undefined,
+      assigneeIds: newTerminAssigneeIds.value.length > 0 ? newTerminAssigneeIds.value : undefined,
+    });
+    // Erst leeren, wenn es wirklich gespeichert ist — sonst ist die Eingabe
+    // im Fehlerfall weg und muss neu getippt werden.
+    newDatum.value = "";
+    newUhrzeit.value = "";
+    newTerminText.value = "";
+    newTerminAssigneeIds.value = [];
+    newTerminAssigneeFree.value = [];
+    saveError.value = null;
+    await loadAll();
+  } catch (e) {
+    saveError.value = e instanceof Error ? e.message : "Termin konnte nicht angelegt werden";
+  }
 }
 
 async function removeTermin(t: Termin) {
   const n = encodeURIComponent(projectName.value);
-  await api.delete(`/projects/${n}/termine`, { text: t.text });
-  await loadAll();
+  try {
+    await api.delete(`/projects/${n}/termine`, { text: t.text });
+    saveError.value = null;
+    await loadAll();
+  } catch (e) {
+    saveError.value = e instanceof Error ? e.message : "Termin konnte nicht gelöscht werden";
+  }
 }
 
 // ── Aktions-Menue (Lifecycle) ─────────────────────────────
@@ -600,9 +676,16 @@ async function setStatus(newStatus: "aktiv" | "pausiert" | "archiviert") {
   (info.value as Record<string, unknown>).status = newStatus;
   try {
     const n = encodeURIComponent(projectName.value);
-    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { status: newStatus });
-  } catch {
+    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { status: newStatus, rev: info.value.rev });
+    saveError.value = null;
+  } catch (e) {
     (info.value as Record<string, unknown>).status = before;
+    // ⚠ Hier stand ein leeres `catch`. Der Status sprang zurück, und der
+    // Nutzer sah eine Ansicht, die sich stillschweigend nicht ändern liess —
+    // `saveError` gibt es in dieser Datei seit jeher, es wurde nur nicht
+    // gesetzt.
+    saveError.value = e instanceof Error ? e.message : "Status konnte nicht geändert werden";
+    if (e instanceof ApiError && e.istKonflikt) await ladeInfoNeu();
   }
 }
 
@@ -691,9 +774,12 @@ async function setColor(value: string | null) {
   info.value.color = value;
   try {
     const n = encodeURIComponent(projectName.value);
-    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { color: value ?? null });
-  } catch {
+    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { color: value ?? null, rev: info.value.rev });
+    saveError.value = null;
+  } catch (e) {
     info.value.color = before;
+    saveError.value = e instanceof Error ? e.message : "Farbe konnte nicht gesetzt werden";
+    if (e instanceof ApiError && e.istKonflikt) await ladeInfoNeu();
   }
 }
 
@@ -714,9 +800,15 @@ async function linkBauherr(memberId: string, memberName: string) {
     info.value = await api.patch<ProjectInfo>(`/projects/${n}`, {
       bauherrId: memberId,
       bauherr: memberName,
+      rev: info.value.rev,
     });
-  } catch {
-    // Rueckgaengig: nichts zu tun, Server hat nicht geaendert.
+    saveError.value = null;
+  } catch (e) {
+    // Rueckgaengig ist nichts — der Server hat nicht geaendert. Aber der
+    // Nutzer muss erfahren, dass die Zuordnung NICHT steht; vorher blieb der
+    // alte Bauherr stehen und sah aus wie ein erfolgreiches Speichern.
+    saveError.value = e instanceof Error ? e.message : "Bauherr konnte nicht zugeordnet werden";
+    if (e instanceof ApiError && e.istKonflikt) await ladeInfoNeu();
   }
 }
 async function unlinkBauherr() {
@@ -724,9 +816,11 @@ async function unlinkBauherr() {
   if (!info.value) return;
   try {
     const n = encodeURIComponent(projectName.value);
-    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { bauherrId: null });
-  } catch {
-    /* no-op */
+    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { bauherrId: null, rev: info.value.rev });
+    saveError.value = null;
+  } catch (e) {
+    saveError.value = e instanceof Error ? e.message : "Bauherr konnte nicht entfernt werden";
+    if (e instanceof ApiError && e.istKonflikt) await ladeInfoNeu();
   }
 }
 
@@ -766,9 +860,16 @@ async function setParent(parentId: string | null) {
   if (!info.value) return;
   try {
     const n = encodeURIComponent(projectName.value);
-    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { parentId });
-  } catch {
-    /* no-op */
+    info.value = await api.patch<ProjectInfo>(`/projects/${n}`, { parentId, rev: info.value.rev });
+    saveError.value = null;
+  } catch (e) {
+    // ⚠ Der einzige Schreibpfad dieser Datei ohne Zähler UND mit leerem
+    // `catch` — beim `rev`-Umbau am 01.09.2026 übersehen. Der häufigste Fall
+    // ist ein 403: `PATCH /projects/:name` lässt nur Admin oder Ersteller
+    // schreiben. Der Auswahldialog schloss sich, das Oberprojekt war nicht
+    // gesetzt, und nichts sagte es dem Nutzer.
+    saveError.value = e instanceof Error ? e.message : "Oberprojekt konnte nicht gesetzt werden";
+    if (e instanceof ApiError && e.istKonflikt) await ladeInfoNeu();
   }
 }
 
@@ -1171,13 +1272,6 @@ const nextTermin = computed(() => {
   );
 });
 
-// Formatierung: "12.02.2026"
-function fmtDate(iso: string | null | undefined): string {
-  if (!iso) return "—";
-  const [y, m, d] = iso.split("-");
-  return `${d}.${m}.${y}`;
-}
-
 // Formatierung: "€ 1 142 800"
 function fmtEur(amount: number | null | undefined): string {
   if (amount == null) return "—";
@@ -1282,6 +1376,19 @@ async function exportProjectSummaryDocx(alsPdf = false) {
 
 <template>
   <div class="proj-detail-page">
+    <!--
+      ⚠ Der Fehlerkasten für ALLE Schreibvorgänge dieser Ansicht.
+
+      `saveError` gab es schon; gezeigt wurde es nur als 11-px-Text neben zwei
+      Eingabefeldern — und die Aktionen, die ihn am nötigsten hätten (Status
+      ändern, Bauherr zuordnen, Aufgabe abhaken, Termin anlegen), sitzen ganz
+      woanders auf der Seite. Wer den Status änderte und dabei einen Konflikt
+      bekam, sah gar nichts: Der Wert sprang zurück, sonst nichts.
+
+      Deshalb hier, oben, sichtbar — die kleinen Meldungen an den Feldern
+      bleiben zusätzlich, sie stehen dort am richtigen Ort.
+    -->
+    <div v-if="saveError" class="pt-error" role="alert">{{ saveError }}</div>
     <!-- Breadcrumb (Referenz: Projekte › Name) -->
     <nav class="pd-crumbs">
       <button class="pd-crumb-link" @click="router.push('/projects')">Projekte</button>
@@ -1804,7 +1911,7 @@ async function exportProjectSummaryDocx(alsPdf = false) {
                   <div v-if="t.assignee || t.date" class="pt-li-meta">
                     <span v-if="t.assignee">{{ t.assignee }}</span>
                     <span v-if="t.assignee && t.date"> · </span>
-                    <span v-if="t.date">{{ fmtDate(t.date) }}</span>
+                    <span v-if="t.date">{{ formatDate(t.date) }}</span>
                   </div>
                 </div>
                 <span
@@ -1850,7 +1957,7 @@ async function exportProjectSummaryDocx(alsPdf = false) {
               </div>
               <div v-for="t in upcomingTermine" :key="t.id" class="ap-termin">
                 <div class="ap-termin-date">
-                  <div class="d">{{ fmtDate(t.datum).slice(0, 2) }}</div>
+                  <div class="d">{{ t.datum.slice(8, 10) }}</div>
                   <div class="m">{{ t.datum.slice(5, 7) }}</div>
                 </div>
                 <div class="ap-termin-body">
@@ -2071,7 +2178,7 @@ async function exportProjectSummaryDocx(alsPdf = false) {
           <div class="min-w-0">
             <div style="font-size: 13px; color: var(--color-text)">{{ t.text }}</div>
             <div class="font-mono" style="font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px">
-              {{ t.datum }}{{ t.uhrzeit ? " · " + t.uhrzeit : "" }}
+              {{ formatDate(t.datum) }}{{ t.uhrzeit ? " · " + t.uhrzeit : "" }}
             </div>
           </div>
           <button @click="removeTermin(t)" class="del-btn">Löschen</button>
@@ -2599,21 +2706,6 @@ async function exportProjectSummaryDocx(alsPdf = false) {
   border: 1px solid var(--color-border);
   border-radius: 6px;
   background: var(--color-bg-subtle);
-}
-
-/* ── Stat-Kacheln ──────────────────────────────────────── */
-.stat-tile {
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 14px 16px;
-  background: var(--color-bg);
-}
-.stat-number {
-  font-size: 24px;
-  font-weight: 600;
-  color: var(--color-text);
-  margin-top: 4px;
-  letter-spacing: -0.02em;
 }
 
 /* ── Tabs ──────────────────────────────────────────────── */
@@ -3247,12 +3339,6 @@ async function exportProjectSummaryDocx(alsPdf = false) {
 }
 
 /* ── Verknuepfungs-Chips + Dropdown ───────────────────── */
-.link-row {
-  display: flex;
-  gap: 8px;
-  margin-top: 14px;
-  flex-wrap: wrap;
-}
 .link-picker-wrapper {
   position: relative;
 }
@@ -3704,9 +3790,20 @@ async function exportProjectSummaryDocx(alsPdf = false) {
      hochspezifisch, um nur bei der ProjectDetailView zu greifen. -->
 <style>
 @media print {
-  /* App-Chrome ausblenden */
-  .sidebar-root,
-  .sidebar-backdrop,
+  /* ── App-Chrome ausblenden ─────────────────────────────────────────────
+   *
+   * ⚠ Drei Selektoren zeigten ins Leere (`.sidebar-root`,
+   * `.sidebar-backdrop`, `.stat-tile`) — Reste aus der Zeit vor dem
+   * SIMA-Redesign. Die HEUTIGE Navigation stand dagegen gar nicht in der
+   * Liste: Navigationsleiste, Kontextleiste und Topbar kamen deshalb mit
+   * aufs Blatt.
+   *
+   * Am 02.09.2026 nachgezaehlt: von den vierzehn Selektoren waren elf noch
+   * gueltig. Die Behauptung, hier stuende „ueber ein Dutzend toter Klassen",
+   * war falsch — kaputt war, was FEHLTE. */
+  .pt-sidebar,
+  .pane-list,
+  .ap-topbar,
   header,
   .back-link,
   .action-menu-wrapper,
@@ -3716,7 +3813,8 @@ async function exportProjectSummaryDocx(alsPdf = false) {
   .link-row,
   .del-btn,
   .file-del-btn,
-  .team-remove {
+  .team-remove,
+  .pt-error {
     display: none !important;
   }
   /* Layout fuer A4: volle Breite, keine Scrollbalken */
@@ -3727,8 +3825,7 @@ async function exportProjectSummaryDocx(alsPdf = false) {
     color: #000 !important;
   }
   .ap-phead,
-  .ap-panel,
-  .stat-tile {
+  .ap-panel {
     page-break-inside: avoid;
     border-color: #ccc !important;
     background: #fff !important;

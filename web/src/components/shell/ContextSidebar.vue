@@ -138,6 +138,17 @@ function onItem(key: string) {
   display: flex;
   flex-direction: column;
 }
+/* Die Modul-Navigation im Fokus-Modus.
+ *
+ * Die Klasse stand im Template und war NIRGENDS definiert — das `<nav>`
+ * rendert seither ohne eigene Gestaltung. Sie auf `.ctx-scroll` umzubiegen
+ * waere falsch gewesen: das ist der Rollbereich der Leiste, nicht die
+ * Navigation darin. */
+.ctx-nav {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .ctx-back {
   display: flex;
   align-items: center;

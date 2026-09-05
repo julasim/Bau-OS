@@ -11,7 +11,7 @@
 // ein Login crashen weil pg gerade hickup hat.
 // ============================================================
 
-import { getDb } from "../db/client.js";
+import { getDb, jsonb } from "../db/client.js";
 import { logError } from "../logger.js";
 
 export type AuditEvent =
@@ -44,7 +44,16 @@ export type AuditEvent =
   | "bot.token.clear"
   | "pair.create"
   | "pair.success"
-  | "pair.fail";
+  | "pair.fail"
+  // ── Datenabfluesse (src/api/datenabfluss.ts) ─────────────────────────────
+  //
+  // Nicht wer hereinkommt, sondern was hinausgeht. Bis hierher stand im
+  // Protokoll kein einziger Export — dabei zieht der Volldump den gesamten
+  // sichtbaren Bestand samt aller Dateien in ein ZIP.
+  | "export.volldump"
+  | "export.dossier"
+  | "export.docx"
+  | "ki.dossier";
 
 export interface AuditEntry {
   id: string;
@@ -74,6 +83,30 @@ export interface AuditWriteInput {
   ok?: boolean;
 }
 
+/**
+ * Die Details eines Eintrags als Objekt.
+ *
+ * Der Zwischenschritt ueber die Zeichenkette ist der ALTBESTAND: bis zum
+ * 01.09.2026 schrieb `logEvent` die Details doppelt kodiert (siehe dort), in
+ * der Spalte steht dann ein JSON-String. Ohne diesen Zweig blieben alle vor
+ * dem Fix geschriebenen Eintraege dauerhaft leer — und das sind genau die,
+ * die man im Nachhinein liest.
+ *
+ * Kein `throw`: ein unlesbares Detail darf die Protokollansicht nicht
+ * abschiessen. Im Zweifel ein leeres Objekt, wie bisher.
+ */
+function alsDetails(wert: unknown): Record<string, unknown> {
+  if (typeof wert === "string") {
+    try {
+      const geparst: unknown = JSON.parse(wert);
+      return geparst && typeof geparst === "object" ? (geparst as Record<string, unknown>) : {};
+    } catch {
+      return {};
+    }
+  }
+  return wert && typeof wert === "object" ? (wert as Record<string, unknown>) : {};
+}
+
 function rowToEntry(row: Record<string, unknown>): AuditEntry {
   return {
     id: String(row.id),
@@ -86,13 +119,20 @@ function rowToEntry(row: Record<string, unknown>): AuditEntry {
     event: String(row.event),
     targetUserId: row.target_user_id ? String(row.target_user_id) : null,
     targetLabel: row.target_label ? String(row.target_label) : null,
-    details: row.details && typeof row.details === "object" ? (row.details as Record<string, unknown>) : {},
+    details: alsDetails(row.details),
     ok: row.ok !== false,
   };
 }
 
 /** Schreibt einen Audit-Eintrag. Fehlertolerant — Probleme nur loggen,
- *  niemals werfen. Im DB-deaktivierten Modus (FS-only) ein No-op. */
+ *  niemals werfen. Im DB-deaktivierten Modus (FS-only) ein No-op.
+ *
+ *  Warum `jsonb(…)` und nicht `${JSON.stringify(…)}::jsonb`: siehe den
+ *  Helfer selbst in `src/db/client.ts`. Kurz: die zweite Form kodiert doppelt,
+ *  und `rowToEntry` oben prueft auf `typeof === "object"` — eine Zeichenkette
+ *  faellt durch und wird zu `{}`. In der Testdatenbank betraf das ALLE 2839
+ *  Eintraege: ein Pruefprotokoll, das genau das nicht protokolliert, wofuer
+ *  man es aufschlaegt. */
 export async function logEvent(input: AuditWriteInput): Promise<void> {
   try {
     const db = getDb();
@@ -110,7 +150,7 @@ export async function logEvent(input: AuditWriteInput): Promise<void> {
         ${input.event},
         ${input.targetUserId ?? null},
         ${input.targetLabel ?? null},
-        ${JSON.stringify(input.details ?? {})}::jsonb,
+        ${jsonb(input.details ?? {})},
         ${input.ok ?? true}
       )
     `;

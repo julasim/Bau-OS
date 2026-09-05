@@ -1,11 +1,47 @@
 import { Hono } from "hono";
 import { taskRepo, projectRepo, teamRepo } from "../../data/index.js";
 import { canSeeProjectByName, getVisibleProjectIds, type UserCtx, type Rolle } from "../../data/access.js";
+import { validateDatum, alsIsoDatum } from "../../data/termin-validation.js";
 import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
 import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
 import { AUFWAND_STUFEN } from "../../data/types.js";
 import { meldeAufgabeZugewiesen } from "../melden.js";
+
+/**
+ * Das Faelligkeitsdatum einer Aufgabe, geprueft und auf ISO gebracht.
+ *
+ * ── Warum `tasks.date` eine Sonderrolle hat ────────────────────────────────
+ *
+ * Es ist die LETZTE Datumsspalte des Hauses, die noch `TEXT` ist — Migration
+ * 060 hat nur `termine.datum` angefasst. Und sie hatte NIRGENDS eine
+ * Formatpruefung: weder hier, noch in `db-tasks.ts`, noch in der
+ * Datenuebernahme.
+ *
+ * Verglichen und sortiert wird sie aber, als waere sie ISO:
+ *
+ *   * `src/maintenance.ts` prueft `t.date = to_char(now() …, 'YYYY-MM-DD')` —
+ *     bei einem deutschen Datum trifft das NIE, und die Faelligkeitsmeldung
+ *     (Migration 058) bleibt fuer diese Aufgabe fuer immer aus, ohne Fehler.
+ *   * `routes/board.ts` sortiert `ORDER BY t.rang, t.date` als Zeichenkette:
+ *     `01.09.2026` steht vor jedem ISO-Datum, die Aufgabe klebt also innerhalb
+ *     ihres Rangs immer ganz oben.
+ *
+ * Dieselbe Konstruktion hat das Board ein Jahr lang leer gelassen — eine
+ * Tabelle weiter. Der Typwechsel waere Migration 061 und braucht eine eigene
+ * Gegenprobe; hier wird zunaechst die QUELLE geschlossen, damit kein neuer
+ * Mischbestand mehr entsteht.
+ *
+ * Beide Formate werden angenommen, ISO wird gespeichert — genau wie bei den
+ * Terminen.
+ */
+function alsFaelligkeit(roh: unknown): { ok: true; wert: string | null } | { ok: false; text: string } {
+  if (roh === null || roh === undefined || roh === "") return { ok: true, wert: null };
+  const wert = String(roh);
+  const fehler = validateDatum(wert);
+  if (fehler) return { ok: false, text: fehler };
+  return { ok: true, wert: alsIsoDatum(wert) };
+}
 
 export const tasksRoutes = new Hono<AppEnv>();
 
@@ -154,12 +190,14 @@ tasksRoutes.post("/tasks", async (c) => {
   const task = await taskRepo.save(body.text, body.project, c.var.userId);
   // Apply optional fields inkl. assigneeId (Migration 007) und phaseId (035).
   if (body.assignee || body.assigneeId || body.date || body.location || body.phaseId) {
+    const faellig = alsFaelligkeit(body.date);
+    if (!faellig.ok) return c.json({ error: faellig.text }, 400);
     const updated = await taskRepo.update(
       task.id,
       {
         assignee: body.assignee ?? null,
         assigneeId: body.assigneeId ?? null,
-        date: body.date ?? null,
+        date: faellig.wert,
         location: body.location ?? null,
         phaseId: body.phaseId ?? null,
       },
@@ -167,15 +205,27 @@ tasksRoutes.post("/tasks", async (c) => {
     );
     emitForProjectName({ type: "task", action: "created", id: task.id }, body.project, { actorId: c.var.userId });
     if (body.assigneeId) {
+      // Ohne Projektbezug steht die Meldung in der Glocke ohne Projekt da —
+      // `benachrichtigungen.project_id` (Migration 058) blieb bei Aufgaben und
+      // Terminen IMMER leer, obwohl die Spalte und der JOIN auf den
+      // Projektnamen von Anfang an vorhanden waren. Nur die Besprechungen
+      // haben ihn je mitgegeben.
       await meldeAufgabeZugewiesen({
         aufgabeId: task.id,
         text: task.text,
         mitgliedId: body.assigneeId,
+        projectId: body.project ? await projectRepo.idByName?.(body.project) : null,
         ausloeserId: c.var.userId,
         ausloeserName: ausloeserName(c),
       });
     }
-    return c.json(updated, 201);
+    // `update()` liefert `null`, wenn die Zeile nicht mehr da ist. Ohne diesen
+    // Rueckfall antwortete die Route mit **Status 201 und dem Koerper `null`**:
+    // Der Client las eine erfolgreiche Anlage ohne Datensatz, `task.id` war
+    // `undefined`, und der naechste Schritt in der Oberflaeche lief ins Leere.
+    // Die Aufgabe SELBST ist angelegt — 201 bleibt richtig, nur ohne die
+    // optionalen Felder, die nicht mehr geschrieben werden konnten.
+    return c.json(updated ?? task, 201);
   }
   emitForProjectName({ type: "task", action: "created", id: task.id }, body.project, { actorId: c.var.userId });
   return c.json(task, 201);
@@ -217,7 +267,11 @@ tasksRoutes.put("/tasks/:id", async (c) => {
     const allowed = prev.project ? await canSeeProjectByName(ctx, prev.project) : await ownsPersonalTask(ctx, prev);
     if (!allowed) return c.json({ error: "Kein Zugriff" }, 403);
   }
-  const task = await taskRepo.update(id, body);
+  // Die Faelligkeit wird auch beim Aendern geprueft — sonst waere die Quelle
+  // nur halb geschlossen, und `PUT` ist der haeufigere Weg.
+  const faellig = "date" in body ? alsFaelligkeit(body.date) : null;
+  if (faellig && !faellig.ok) return c.json({ error: faellig.text }, 400);
+  const task = await taskRepo.update(id, faellig?.ok ? { ...body, date: faellig.wert } : body);
   if (!task) return c.json({ error: "Aufgabe nicht gefunden" }, 404);
   // prev.project (Stand VOR dem Update) ist hier die einzige verfuegbare
   // Projektangabe — taskRepo.update() aendert das Projekt nicht.
@@ -231,7 +285,7 @@ tasksRoutes.put("/tasks/:id", async (c) => {
       aufgabeId: id,
       text: task.text,
       mitgliedId: body.assigneeId,
-      projectId: null,
+      projectId: prev.project ? await projectRepo.idByName?.(prev.project) : null,
       ausloeserId: c.var.userId,
       ausloeserName: ausloeserName(c),
     });

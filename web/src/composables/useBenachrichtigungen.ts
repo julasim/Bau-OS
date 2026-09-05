@@ -5,8 +5,11 @@
 // Liste in der Ansicht sind DIESELBE Zahl. Zwei Kopien liefen sonst
 // auseinander, sobald jemand eine Meldung liest.
 //
-// Dieselbe Lehre wie bei `useEvents`: dort öffnete vor der Reparatur jeder
-// Aufruf eine eigene Verbindung für dieselben Daten.
+// `useEvents` war lange das Gegenbeispiel: dort legte JEDER Aufruf eine eigene
+// `EventSource` an, auf einer Seite liefen dadurch drei Verbindungen für
+// dieselben Ereignisse. Seit dem 01.09.2026 macht es dasselbe wie hier — eine
+// geteilte Verbindung, Modul-Zustand, Auf- und Abbau per Referenzzähler.
+// Festgehalten in `tests/web/use-events.test.ts`.
 // ============================================================
 
 import { ref } from "vue";

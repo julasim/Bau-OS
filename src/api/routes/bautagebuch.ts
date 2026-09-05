@@ -14,7 +14,6 @@
 // Sichtbarkeit:
 //   - Admin: alles.
 //   - User: nur fuer Projekte aus user_projects-Junction.
-//   - Im FS-Mode: 503, weil Bautagebuch nur im DB-Mode existiert.
 // ============================================================
 
 import { Hono } from "hono";

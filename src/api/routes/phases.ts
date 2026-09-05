@@ -3,7 +3,7 @@
 // ============================================================
 // Projekt-scoped Liste/Anlage unter /projects/:projectName/phases,
 // id-scoped Update/Delete unter /phases/:id (mit ACL ueber die Projekt-
-// Zugehoerigkeit der Phase). DB-only — 503 im FS-Modus.
+// Zugehoerigkeit der Phase).
 // ============================================================
 
 import { Hono } from "hono";
@@ -51,15 +51,6 @@ async function resolvePhaseAcl(c: {
   }
   return { phaseId, projectName };
 }
-
-// DB-Guard.
-const guard = async (c: { json: (o: unknown, s?: number) => Response }, next: () => Promise<void>) => {
-  await next();
-};
-phasesRoutes.use("/projects/:projectName/phases", guard);
-phasesRoutes.use("/projects/:projectName/phases/*", guard);
-phasesRoutes.use("/projects/:projectName/finance", guard);
-phasesRoutes.use("/phases/*", guard);
 
 // ── Liste je Projekt ──────────────────────────────────────────
 phasesRoutes.get("/projects/:projectName/phases", async (c) => {

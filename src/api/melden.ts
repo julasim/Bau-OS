@@ -92,6 +92,28 @@ export async function meldeAufgabeZugewiesen(opts: {
   );
 }
 
+/**
+ * Ein ISO-Datum als `TT.MM.JJJJ` fuer den Meldungstext.
+ *
+ * ── Warum die Meldung nicht einfach ISO zeigt ──────────────────────────────
+ *
+ * Weil dieser Titel **persistiert** wird (`benachrichtigungen.titel`,
+ * Migration 058) und der Nutzer ihn in der Glocke liest. Ein „Termin am
+ * 2026-09-15" ist im Buero die falsche Schreibweise, und weil der Titel in
+ * der Datenbank steht, waere ein spaeterer Wechsel eine Datenmigration.
+ *
+ * Die Besprechungs-Meldung hatte dasselbe Problem schon vorher — `meetings.
+ * meeting_date` ist seit jeher `date`, ihr Titel las sich also seit dem Bau
+ * der Glocke als ISO. Beide gehen jetzt durch dieselbe Zeile.
+ *
+ * Unbekannte Formen werden durchgereicht statt verstuemmelt: eine Meldung mit
+ * einem eigenartigen Datum ist besser als keine.
+ */
+function alsTagesdatum(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : iso;
+}
+
 export async function meldeTerminTeilnahme(opts: {
   terminId: string;
   text: string;
@@ -107,7 +129,7 @@ export async function meldeTerminTeilnahme(opts: {
     konten.map((k) => ({
       empfaengerId: k,
       anlass: "termin-teilnahme" as const,
-      titel: `Termin am ${opts.datum}: ${kurz(opts.text)}`,
+      titel: `Termin am ${alsTagesdatum(opts.datum)}: ${kurz(opts.text)}`,
       ausloeser: opts.ausloeserName,
       zielTyp: "termin",
       zielId: opts.terminId,
@@ -132,7 +154,7 @@ export async function meldeBesprechungTeilnahme(opts: {
     konten.map((k) => ({
       empfaengerId: k,
       anlass: "besprechung-teilnahme" as const,
-      titel: `Besprechung am ${opts.datum}: ${kurz(opts.titel)}`,
+      titel: `Besprechung am ${alsTagesdatum(opts.datum)}: ${kurz(opts.titel)}`,
       ausloeser: opts.ausloeserName,
       zielTyp: "meeting",
       zielId: opts.meetingId,

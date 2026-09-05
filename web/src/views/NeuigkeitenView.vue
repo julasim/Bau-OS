@@ -52,7 +52,19 @@ async function laden() {
  *  Beides zusammen, weil alles andere Bedienlast wäre: wer die Aufgabe
  *  öffnet, hat die Meldung gesehen. */
 async function oeffnen(m: Meldung) {
-  if (!m.gelesenAm) await alsGelesen(m.id);
+  // ⚠ Hier stand `await alsGelesen(...)` ohne Absicherung — und `alsGelesen`
+  // wirft, wenn die Route scheitert. Ein Netzaussetzer beim Markieren
+  // verhinderte damit die NAVIGATION: Der Nutzer klickte auf die Meldung, und
+  // es passierte nichts. Das Öffnen ist der Zweck, das Markieren die
+  // Nebensache — die Reihenfolge im Code hat sie vertauscht.
+  if (!m.gelesenAm) {
+    try {
+      await alsGelesen(m.id);
+    } catch {
+      // Bleibt ungelesen. Beim nächsten Laden steht sie wieder da, und das
+      // ist die harmlosere von beiden Möglichkeiten.
+    }
+  }
   if (m.zielTyp === "task" && m.zielId) {
     router.push(`/tasks/${m.zielId}`);
   } else if (m.projectName) {
@@ -121,6 +133,13 @@ useEvents(["task", "termin", "meeting"], () => void laden());
 </template>
 
 <style scoped>
+/* Der Kopfbereich der Neuigkeiten. Stand im Template, war nirgends definiert —
+ * Titel und Untertitel lagen ohne Abstand am Rand. */
+.nk-head {
+  padding: var(--space-6) var(--space-6) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
 .nk-wrap {
   padding: 24px 28px;
   max-width: 900px;

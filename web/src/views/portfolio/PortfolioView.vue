@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatEUR } from "../../utils/format";
+import { formatEUR, formatDate } from "../../utils/format";
 // ============================================================
 // PATIO — Portfolio-Cockpit (Leitungssicht)
 // ============================================================
@@ -72,7 +72,9 @@ function deadlineText(r: PortfolioEntry): string {
   if (!r.nextDeadline) return "—";
   const d = daysUntil(r.nextDeadline);
   const rel = d === null ? "" : d < 0 ? ` (${-d} T überfällig)` : d === 0 ? " (heute)" : ` (in ${d} T)`;
-  return `${r.nextDeadline}${rel}`;
+  // Roh war das ISO — im Buero die falsche Schreibweise, und vor Migration
+  // 060 stand hier je nach Herkunft der Frist mal ISO, mal TT.MM.JJJJ.
+  return `${formatDate(r.nextDeadline)}${rel}`;
 }
 
 function open(r: PortfolioEntry) {

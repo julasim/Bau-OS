@@ -14,8 +14,11 @@
 // „uebersicht" zurück — und die Leiste markiert den Eintrag trotzdem als
 // aktiv. Der Nutzer klickt auf „Stunden" und liest die Übersicht.
 //
-// Jetzt gibt es nur noch diese Liste; `VALID_TABS` wird daraus abgeleitet.
-// Ein Auseinanderlaufen ist damit nicht mehr möglich, sondern ein Typfehler.
+// Jetzt gibt es nur noch diese Liste; `VALID_TABS` wird daraus abgeleitet,
+// ein Auseinanderlaufen ist damit ausgeschlossen. Zu prüfen bleibt es zur
+// LAUFZEIT (`istProjektTab`): weil das Feld als `ProjektReiter[]` annotiert
+// ist und nicht `as const`, ist `ProjektTab` schlicht `string` — der
+// Typprüfer fängt einen falschen Schlüssel also nicht.
 // ============================================================
 
 export interface ProjektReiter {

@@ -7,7 +7,11 @@
 //                             Backup-Codes ausliefern (einmalig)
 //   POST /auth/2fa/disable  → Passwort + Token verifizieren, 2FA aus
 //
-// Alle drei brauchen einen eingeloggten User (authMiddleware vorgeschaltet).
+// ACHTUNG: Dieser Router ist in `server.ts` NICHT eingehaengt (die Zeile ist
+// dort auskommentiert). Er laeuft heute also gar nicht — weder mit noch ohne
+// Middleware davor. Wird er wieder scharf geschaltet, gehoert
+// `authMiddleware` davor: alle drei Wege setzen ein angemeldetes Konto
+// voraus.
 // Status-Endpunkt /auth/2fa/status liefert nur das totpEnabled-Flag —
 // nicht den Secret, nicht die Backup-Codes.
 // ============================================================
@@ -39,7 +43,7 @@ export const auth2faRoutes = new Hono<AppEnv>();
 auth2faRoutes.get("/auth/2fa/status", (c) => {
   const dbUser = c.get("dbUser");
   if (!dbUser) {
-    // Legacy-JSON-User koennen 2FA nicht aktivieren — kein DB-Eintrag.
+    // Ohne Konto in der Datenbank gibt es nichts zu aktivieren.
     return c.json({ enabled: false, available: false });
   }
   return c.json({ enabled: dbUser.totpEnabled, available: true });

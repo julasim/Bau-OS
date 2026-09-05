@@ -4,9 +4,9 @@
 // dateibasiert lief — uebernommen sind Feldschnitt und Semantik, nicht der
 // Code.
 import crypto from "crypto";
-import { getDb } from "../db/client.js";
+import { getDb, jsonb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
-import { alsIso } from "./zeitstempel.js";
+import { alsIso, dateStrPflicht } from "./zeitstempel.js";
 import type {
   Entscheidung,
   EntscheidungAlternative,
@@ -19,8 +19,7 @@ const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;
 const STATUS: EntscheidungStatus[] = ["entwurf", "bestaetigt"];
 
 function rowToEntscheidung(row: Record<string, unknown>): Entscheidung {
-  const datumRoh = row.datum;
-  const datum = datumRoh instanceof Date ? datumRoh.toISOString().slice(0, 10) : String(datumRoh ?? "").slice(0, 10);
+  const datum = dateStrPflicht(row.datum);
 
   // JSONB kommt je nach Treiberpfad als Objekt oder als String zurueck.
   let alternativen = row.alternativen;
@@ -155,7 +154,7 @@ export const dbEntscheidungen: EntscheidungRepository = {
         status, related_meeting_id, created_by, created_at, updated_at
       ) VALUES (
         ${id}, ${projectId}, ${input.datum}, ${input.titel.trim()}, ${input.begruendung ?? null},
-        ${JSON.stringify(input.alternativen ?? [])}::jsonb,
+        ${jsonb(input.alternativen ?? [])},
         ${input.beteiligteIds ?? []}::uuid[],
         ${input.beteiligteExtern ?? []}::text[],
         ${input.status ?? "entwurf"}, ${input.relatedMeetingId ?? null}, ${createdById}, ${now}, ${now}
@@ -200,7 +199,7 @@ export const dbEntscheidungen: EntscheidungRepository = {
         datum = ${datum},
         titel = ${titel},
         begruendung = ${begruendung},
-        alternativen = ${JSON.stringify(alternativen)}::jsonb,
+        alternativen = ${jsonb(alternativen)},
         beteiligte_ids = ${beteiligteIds}::uuid[],
         beteiligte_extern = ${beteiligteExtern}::text[],
         status = ${status},

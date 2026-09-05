@@ -7,6 +7,10 @@
 //   - Audit-Log: Eintraege aelter als AUDIT_RETENTION_DAYS loeschen
 //   - Rang-4-Verfall: was seit RANG4_VERFALL_TAGE niemand angefasst hat,
 //     wandert in den Papierkorb (Aufgabensystem, Migration 050)
+//   - Faellige Aufgaben melden: wer heute etwas faellig hat, bekommt EINE
+//     Meldung (Migration 058)
+//   - Gelesene Meldungen aufraeumen: aelter als MELDUNGEN_AUFBEWAHREN_TAGE;
+//     ungelesene bleiben immer
 //
 // Hier stand bis zuletzt ein dritter Punkt: das Aufraeumen abgelaufener
 // Telegram-Pair-Tokens. Den Bot gibt es seit AP0 nicht mehr, in die Tabelle

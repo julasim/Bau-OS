@@ -13,16 +13,15 @@
 //     wird er als string zurueckgegeben.
 // ============================================================
 
-import { getDb } from "../db/client.js";
+import { getDb, jsonb } from "../db/client.js";
 import type { BautagebuchEntry, BautagebuchRepository } from "./types.js";
-import { alsIso, istIsoDatum } from "./zeitstempel.js";
+import { alsIso, istIsoDatum, dateStrPflicht } from "./zeitstempel.js";
 
 function rowToEntry(row: Record<string, unknown>): BautagebuchEntry {
   // entry_date kommt aus Postgres als Date-Objekt (postgres.js setzt
   // automatisch parseDate=true). Wir wollen aber YYYY-MM-DD-String fuer
   // konsistente Vergleiche im Frontend.
-  const dateRaw = row.entry_date;
-  const dateStr = dateRaw instanceof Date ? dateRaw.toISOString().slice(0, 10) : String(dateRaw).slice(0, 10);
+  const dateStr = dateStrPflicht(row.entry_date);
 
   // personnel kommt als JSONB → wird von postgres.js direkt zu Object/Array
   // geparst. Defensiv: wir akzeptieren auch Strings (falls die Pipeline mal
@@ -144,7 +143,6 @@ export const dbBautagebuch: BautagebuchRepository = {
     // JSONB ueber String-Cast einfuegen — dasselbe Pattern wie in db-team.ts
     // (siehe appendLog dort). db.json() haette einen Object-Index erfordert,
     // wir haben aber ein Array als Top-Level.
-    const personnelJson = JSON.stringify(personnel);
 
     // ON CONFLICT-UPSERT: ein Roundtrip statt SELECT + INSERT/UPDATE.
     // created_by wird nur beim INSERT gesetzt — beim Update bleibt der
@@ -156,7 +154,7 @@ export const dbBautagebuch: BautagebuchRepository = {
           personnel, machines, activities, incidents, created_by
         ) VALUES (
           ${projectId}, ${date}, ${weather}, ${tMin}, ${tMax},
-          ${personnelJson}::jsonb, ${machines}, ${activities}, ${incidents}, ${createdById}
+          ${jsonb(personnel)}, ${machines}, ${activities}, ${incidents}, ${createdById}
         )
         ON CONFLICT (project_id, entry_date) DO UPDATE SET
           weather = EXCLUDED.weather,

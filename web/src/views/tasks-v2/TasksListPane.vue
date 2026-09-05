@@ -35,6 +35,7 @@ const tasks = ref<Task[]>([]);
 const search = ref("");
 const tab = ref<Tab>("open");
 const newText = ref("");
+const fehler = ref<string | null>(null);
 
 const counts = computed(() => ({
   all: tasks.value.length,
@@ -89,10 +90,19 @@ function openTask(id: string) {
 async function quickAdd() {
   if (!newText.value.trim()) return;
   const text = newText.value;
-  newText.value = "";
-  const created = await api.post<Task>("/tasks", { text });
-  await load();
-  if (created?.id) router.push(`/tasks/${created.id}`);
+  // ⚠ Hier stand `newText.value = ""` VOR dem `await`, und es gab kein
+  // `catch`. Schlug das Anlegen fehl, war der getippte Text weg UND es gab
+  // keine Meldung — die Zeile verschwand einfach, und der Nutzer musste sie
+  // neu tippen, ohne zu wissen warum.
+  try {
+    const created = await api.post<Task>("/tasks", { text });
+    newText.value = "";
+    fehler.value = null;
+    await load();
+    if (created?.id) router.push(`/tasks/${created.id}`);
+  } catch (e) {
+    fehler.value = e instanceof Error ? e.message : "Aufgabe konnte nicht angelegt werden";
+  }
 }
 
 function displayAssignee(t: Task): string {
@@ -284,6 +294,7 @@ useEvents(["task"], () => load());
 
     <!-- Quick-Add -->
     <div class="tasks-quickadd">
+      <div v-if="fehler" class="pt-error" role="alert">{{ fehler }}</div>
       <input v-model="newText" class="pt-input" placeholder="+ Neue Aufgabe (Enter)" @keyup.enter="quickAdd" />
     </div>
   </ListPane>

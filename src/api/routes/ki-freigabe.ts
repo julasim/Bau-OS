@@ -23,6 +23,7 @@ import { Hono } from "hono";
 import { dbKiFreigabe, KI_KATEGORIEN, type KiKategorie } from "../../data/db-ki-freigabe.js";
 import { dossierFuerProjekt, alleDossiers } from "../../mcp/dossier.js";
 import { adminMiddleware } from "../auth.js";
+import { protokolliereAbfluss } from "../datenabfluss.js";
 import type { AppEnv } from "../server.js";
 
 export const kiFreigabeRoutes = new Hono<AppEnv>();
@@ -76,7 +77,9 @@ kiFreigabeRoutes.put("/ki/freigabe/:projectId", async (c) => {
 // ── Die Akten selbst ────────────────────────────────────────────────────────
 
 kiFreigabeRoutes.get("/ki/dossier", async (c) => {
-  return c.json(await alleDossiers());
+  const akten = await alleDossiers();
+  protokolliereAbfluss(c, "ki.dossier", { umfang: `${akten.length} Akte(n)` });
+  return c.json(akten);
 });
 
 kiFreigabeRoutes.get("/ki/dossier/:projectId", async (c) => {
@@ -86,5 +89,6 @@ kiFreigabeRoutes.get("/ki/dossier/:projectId", async (c) => {
   if (!d) return c.json({ error: "Kein Dossier — Projekt nicht freigegeben oder nicht vorhanden." }, 404);
   // Als Text, nicht als JSON: die Akte IST Markdown, und wer sie prüft, will
   // sie lesen und nicht entpacken.
+  protokolliereAbfluss(c, "ki.dossier", { projektId: c.req.param("projectId") });
   return c.text(d.text, 200, { "Content-Type": "text/markdown; charset=utf-8" });
 });

@@ -5,6 +5,7 @@ import type { AppEnv } from "../server.js";
 import { emitForProjectName } from "../events.js";
 import { projektBezugAusQuery, projektBezug } from "../projekt-bezug.js";
 import { meldeTerminTeilnahme } from "../melden.js";
+import { validateDatum } from "../../data/termin-validation.js";
 
 export const termineRoutes = new Hono<AppEnv>();
 
@@ -137,11 +138,17 @@ termineRoutes.post("/termine", async (c) => {
   }
   emitForProjectName({ type: "termin", action: "created", id: termin.id }, body.project, { actorId: c.var.userId });
   if (body.assigneeIds?.length) {
+    // Ohne Projektbezug steht die Meldung in der Glocke ohne Projekt da —
+    // `benachrichtigungen.project_id` (Migration 058) blieb bei Aufgaben und
+    // Terminen IMMER leer, obwohl die Spalte und der JOIN auf den
+    // Projektnamen von Anfang an vorhanden waren. Nur die Besprechungen
+    // haben ihn je mitgegeben.
     await meldeTerminTeilnahme({
       terminId: termin.id,
       text: result.text,
       datum: result.datum,
       mitgliedIds: body.assigneeIds,
+      projectId: body.project ? await projectRepo.idByName?.(body.project) : null,
       ausloeserId: c.var.userId,
       ausloeserName: ausloeserName(c),
     });
@@ -167,6 +174,27 @@ termineRoutes.put("/termine/:id", async (c) => {
   // Rechte VOR dem Schreiben pruefen. Bisher fehlte das hier ganz: wer eine
   // Termin-UUID kannte, konnte jeden Termin aendern — auch aus Projekten, die
   // ihm GET verweigert haette.
+  // ── Das Datum wird HIER geprueft, nicht erst im Repository ───────────────
+  //
+  // ⚠ Regression, die Migration 060 erzeugt haette: `db-termine.update()`
+  // prueft mit `if (updates.datum)`, und ein LEERER String ist falsy — die
+  // Pruefung lief also nicht, und der leere Wert ging an die jetzt
+  // `date`-typisierte Spalte. postgres.js wirft darauf clientseitig
+  // `RangeError: Invalid time value` (am 01.09.2026 nachgemessen), also einen
+  // unbehandelten 500er statt einer Absage mit Begruendung.
+  //
+  // Erreichbar aus der Oberflaeche: das Datumsfeld im Kalender laesst sich
+  // leeren, und `save()` schickt den Wert ungeprueft. Solange die Spalte TEXT
+  // war, landete dort einfach ein leerer String — falsch, aber lautlos.
+  //
+  // Die Pruefung steht in der ROUTE, weil das Repository fuer einen
+  // Datumsfehler `null` zurueckgibt und die Route daraus „Termin nicht
+  // gefunden" (404) macht. Das waere die falsche Auskunft.
+  if (body.datum !== undefined) {
+    const datumFehler = validateDatum(String(body.datum));
+    if (datumFehler) return c.json({ error: datumFehler }, 400);
+  }
+
   const vorher = await terminRepo.get(id);
   if (!vorher) return c.json({ error: "Termin nicht gefunden" }, 404);
   const ctxPut = userCtx(c);

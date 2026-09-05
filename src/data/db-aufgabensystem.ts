@@ -108,7 +108,7 @@ function sichtbarkeitsBedingung(s: Sichtbarkeit, ab = 1): { sql: string; werte: 
   };
 }
 
-/** Gemeinsamer Filter: offen, nicht im Papierkorb, nicht auf Wiedervorlage.
+/** Gemeinsamer Filter: offen und nicht im Papierkorb.
  *  `status <> 'done'` statt `= 'offen'`, weil es auch `inArbeit` gibt. */
 const OFFEN = "t.status <> 'done' AND t.deleted_at IS NULL";
 
@@ -198,9 +198,13 @@ export const dbAufgabensystem = {
    */
   async setzeTagesplan(id: string, benutzerId: string, drin: boolean): Promise<boolean> {
     const db = getDb();
-    // `updated_at` wird bewusst NICHT angefasst: die Auswahl für heute ist
-    // keine Änderung an der Aufgabe. Sonst stünde jede Morgenauswahl in der
-    // Aktivität und verdeckte dort die echten Änderungen.
+    // Die Anweisung setzt `updated_at` nicht selbst — der Trigger
+    // `trg_tasks_updated_at` tut es trotzdem, bei JEDEM Schreibvorgang auf
+    // `tasks`. Die Auswahl für heute erscheint damit in der Aktivität, und
+    // sie setzt die Verfallsfrist von Rang 4 zurück. Wer das trennen will,
+    // braucht eine eigene Tabelle für den Tagesplan; im Trigger eine Ausnahme
+    // zu bauen hiesse, den Zeitstempel fälschbar zu machen — und genau darauf
+    // beruht die Frist (siehe `rang4Verfall`).
     const rows = await db`
       UPDATE tasks
          SET im_tagesplan = ${drin},

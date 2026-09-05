@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatWeekdayFull, formatWeekdayShort, heuteIso } from "../utils/format";
+import { formatWeekdayFull, formatWeekdayShort, heuteIso, formatDate } from "../utils/format";
 import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useRouter } from "vue-router";
 import { api } from "../api";
@@ -112,10 +112,9 @@ const greeting = computed(() =>
 const openTasks = computed(() => tasks.value.filter((t) => t.status !== "done").slice(0, 6));
 const upcomingTermine = computed(() =>
   termine.value
-    .filter((t) => {
-      const d = t.datum.includes(".") ? t.datum.split(".").reverse().join("-") : t.datum;
-      return d >= today.value;
-    })
+    // Der Server liefert seit Migration 060 ISO — und in ISO stimmt der
+    // Zeichenketten-Vergleich mit dem zeitlichen ueberein.
+    .filter((t) => t.datum >= today.value)
     .slice(0, 4),
 );
 // Letzte 4 Projekte (nach Aktualisierung sortiert) — unabhaengig vom Status.
@@ -154,20 +153,11 @@ function eineZeile(text: string | null, max = 90): string {
   return (luecke > max * 0.6 ? kurz.slice(0, luecke) : kurz) + "…";
 }
 
-function formatDate(d: string) {
-  if (d.includes(".")) return d;
-  const [y, m, day] = d.split("-");
-  return `${day}.${m}.${y}`;
-}
-
 function terminWeekday(datum: string): string {
-  const iso = datum.includes(".") ? datum.split(".").reverse().join("-") : datum;
-  const d = new Date(iso + "T00:00:00");
-  return formatWeekdayShort(d);
+  return formatWeekdayShort(new Date(datum + "T00:00:00"));
 }
 
 function terminDay(datum: string): string {
-  if (datum.includes(".")) return datum.split(".")[0];
   return datum.split("-")[2];
 }
 

@@ -128,12 +128,21 @@ notesRoutes.put("/notes/:name", async (c) => {
   // `rev` ist der beim Laden mitgelieferte Zaehler. Fehlt er, gilt weiterhin
   // „zuletzt gewinnt" — aeltere Aufrufer bleiben damit lauffaehig.
   const success = await noteRepo.updateById?.(guard.notiz.id, content, rev);
-  if (success) {
-    emitForProjectName({ type: "note", action: "updated", id: guard.notiz.title }, guard.notiz.project, {
-      actorId: c.var.userId,
-    });
-  }
-  return c.json({ success: !!success });
+  // ── 404 statt „200 mit success: false" ───────────────────────────────────
+  //
+  // ⚠ Hier stand `return c.json({ success: !!success })` ohne Statuscode. Der
+  // Client wirft darauf nicht: der Editor loeschte seine Aenderungsmarkierung,
+  // meldete Erfolg und zaehlte den Konfliktzaehler hoch — einen Zaehler, der
+  // in der Datenbank nie gestiegen ist. Der Text war nirgends.
+  //
+  // `updateById` liefert `false`, wenn die Zeile zwischen Aufloesung und
+  // Schreibvorgang verschwunden ist (endgueltiges Loeschen aus dem
+  // Papierkorb). Das ist genau ein 404, kein Erfolg mit Beipackzettel.
+  if (!success) return c.json({ error: "Notiz nicht gefunden" }, 404);
+  emitForProjectName({ type: "note", action: "updated", id: guard.notiz.title }, guard.notiz.project, {
+    actorId: c.var.userId,
+  });
+  return c.json({ success: true });
 });
 
 notesRoutes.patch("/notes/:name/append", async (c) => {
@@ -157,10 +166,6 @@ notesRoutes.delete("/notes/:name", async (c) => {
   if (!guard.ok) return c.json({ error: guard.error }, guard.status);
   const deleted = await noteRepo.deleteById?.(guard.notiz.id);
   if (!deleted) return c.json({ error: "Notiz nicht gefunden" }, 404);
-  // Bekannte Einschraenkung: die Notiz ist an dieser Stelle bereits geloescht,
-  // ihr Projekt also nicht mehr aufloesbar. Das Ereignis geht deshalb
-  // projektlos raus und erreicht nur Admins und den Loeschenden — die uebrigen
-  // Projektberechtigten sehen das Verschwinden erst beim naechsten Laden.
   // Anders als frueher ist das Projekt hier bekannt: es stammt aus der
   // Aufloesung VOR dem Loeschen. Das Ereignis erreicht damit alle
   // Projektberechtigten, nicht nur Admins und den Loeschenden.

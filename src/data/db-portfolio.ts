@@ -10,6 +10,8 @@
 import { getDb } from "../db/client.js";
 import { listPhasesForProjects, weightedProgress } from "./db-phases.js";
 import type { PortfolioEntry, PortfolioRepository, ProjectPhase } from "./types.js";
+import { dateStrPflicht } from "./zeitstempel.js";
+import { heuteIso } from "./heute.js";
 
 function daysUntil(iso: string | null): number | null {
   if (!iso) return null;
@@ -40,9 +42,21 @@ export const dbPortfolio: PortfolioRepository = {
 
     if (projects.length === 0) return [];
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().slice(0, 10);
+    // ── „Heute" kommt aus der Datenbank, nicht aus dem Prozess ─────────────
+    //
+    // ⚠ Hier stand `new Date(); setHours(0,0,0,0); toISOString()`. Das setzt
+    // ÖRTLICHE Mitternacht und rechnet dann nach UTC zurück — bei positivem
+    // Zeitzonen-Versatz (also in Wien, ganzjährig) fällt der Zeitpunkt auf den
+    // VORTAG. Am 01.09.2026 nachgemessen: die Zeile lieferte `2026-08-31`.
+    //
+    // Folge: Der gestrige Termin galt als „nächste Frist", `daysUntil` darunter
+    // rechnete korrekt örtlich und kam auf -1, und das Portfolio zeigte für
+    // dieses Projekt einen Tag lang eine überschrittene Frist, die keine war.
+    //
+    // Dieselbe Fehlerklasse wie im Dashboard (routes/dashboard.ts) — beide
+    // fragen jetzt `heuteIso()`, das die Datenbank in der Zeitzone des Büros
+    // rechnet.
+    const todayStr = await heuteIso();
     const ids = projects.map((p) => String(p.id));
 
     // ── Alle Aggregate in je EINER Query (kein N+1) ────────────────────────
@@ -76,14 +90,24 @@ export const dbPortfolio: PortfolioRepository = {
     for (const r of hpRows) hpByProject.set(String(r.project_id), Number(r.c ?? 0));
 
     // Naechster zukuenftiger Termin je Projekt (Fallback-Frist).
+    //
+    // ⚠ `deleted_at IS NULL` fehlte hier — als einziger Leseabfrage auf
+    // `termine` im ganzen Haus. Alle anderen haben ihn: `db-termine.ts` in der
+    // gemeinsamen SELECT-Konstante, `board.ts` in beiden Abfragen,
+    // `volldump.ts` im Archiv.
+    //
+    // Folge: Ein geloeschter Termin lieferte weiterhin die „naechste Frist"
+    // des Projekts samt seinem Text — und lag er in der Vergangenheit (der
+    // haeufigste Grund, ihn wegzuwerfen), blieb die Ampel dauerhaft rot.
     const tRows = await db`
       SELECT DISTINCT ON (project_id) project_id, text, datum FROM termine
        WHERE project_id = ANY(${ids}::uuid[]) AND datum >= ${todayStr}
+         AND deleted_at IS NULL
        ORDER BY project_id, datum ASC
     `;
     const terminByProject = new Map<string, { text: string; datum: string }>();
     for (const r of tRows)
-      terminByProject.set(String(r.project_id), { text: String(r.text), datum: String(r.datum).slice(0, 10) });
+      terminByProject.set(String(r.project_id), { text: String(r.text), datum: dateStrPflicht(r.datum) });
 
     const out: PortfolioEntry[] = [];
     for (const p of projects) {

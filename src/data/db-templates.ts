@@ -77,17 +77,24 @@ export async function createTemplate(input: TemplateInput, createdById: string |
 
   // Wenn neuer Template als default markiert, andere defaults derselben kind
   // zuruecksetzen (Unique-Index erlaubt nur einen Default pro Kind).
-  if (input.isDefault) {
-    await db`UPDATE templates SET is_default = false WHERE kind = ${input.kind} AND is_default = true`;
-  }
-  const [row] = await db`
-    INSERT INTO templates (id, kind, name, description, body, is_default, created_by_id)
-    VALUES (
-      ${id}, ${input.kind}, ${input.name}, ${input.description ?? null},
-      ${input.body}, ${input.isDefault ?? false}, ${createdById}
-    )
-    RETURNING *
-  `;
+  // ── Zuruecksetzen und Anlegen in EINER Transaktion ──────────────────────
+  //
+  // Dazwischen gab es einen Zustand OHNE Standardvorlage. Bricht der Prozess
+  // dort ab — oder liest ein zweiter Arbeitsplatz genau dann —, findet der
+  // Export keine Vorlage und meldet einen Fehler, obwohl eine gesetzt ist.
+  const [row] = await db.begin(async (tx) => {
+    if (input.isDefault) {
+      await tx`UPDATE templates SET is_default = false WHERE kind = ${input.kind} AND is_default = true`;
+    }
+    return tx`
+      INSERT INTO templates (id, kind, name, description, body, is_default, created_by_id)
+      VALUES (
+        ${id}, ${input.kind}, ${input.name}, ${input.description ?? null},
+        ${input.body}, ${input.isDefault ?? false}, ${createdById}
+      )
+      RETURNING *
+    `;
+  });
   return rowToTemplate(row);
 }
 
@@ -96,25 +103,27 @@ export async function updateTemplate(id: string, patch: TemplateUpdate): Promise
   const [current] = await db`SELECT * FROM templates WHERE id = ${id}`;
   if (!current) return null;
 
-  // Default-Toggle: wenn auf true gesetzt, andere zuruecksetzen.
-  if (patch.isDefault === true) {
-    await db`UPDATE templates SET is_default = false WHERE kind = ${current.kind} AND id <> ${id}`;
-  }
   const next = {
     name: "name" in patch ? patch.name : current.name,
     description: "description" in patch ? patch.description : current.description,
     body: "body" in patch ? patch.body : current.body,
     isDefault: "isDefault" in patch ? patch.isDefault : current.is_default,
   };
-  const [row] = await db`
-    UPDATE templates SET
-      name        = ${next.name as string},
-      description = ${next.description as string | null},
-      body        = ${next.body as string},
-      is_default  = ${next.isDefault as boolean}
-    WHERE id = ${id}
-    RETURNING *
-  `;
+  // Dieselbe Transaktion wie beim Anlegen — siehe dort.
+  const [row] = await db.begin(async (tx) => {
+    if (patch.isDefault === true) {
+      await tx`UPDATE templates SET is_default = false WHERE kind = ${current.kind} AND id <> ${id}`;
+    }
+    return tx`
+      UPDATE templates SET
+        name        = ${next.name as string},
+        description = ${next.description as string | null},
+        body        = ${next.body as string},
+        is_default  = ${next.isDefault as boolean}
+      WHERE id = ${id}
+      RETURNING *
+    `;
+  });
   return row ? rowToTemplate(row) : null;
 }
 

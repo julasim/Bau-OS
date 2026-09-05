@@ -17,7 +17,7 @@
 // ============================================================
 
 import { ref, onMounted, watch } from "vue";
-import { api } from "../../api";
+import { api, ApiError } from "../../api";
 import BIcon from "../../components/BIcon.vue";
 import TeamPicker from "../../components/TeamPicker.vue";
 import MarkdownRenderer from "../../components/MarkdownRenderer.vue";
@@ -74,6 +74,15 @@ interface MeetingActionItem {
 interface Meeting {
   id: string;
   projectId: string;
+  /** Konfliktzähler (Migration 042).
+   *
+   *  ⚠ Beim `rev`-Umbau am 01.09.2026 übersehen: KEIN Schreibpfad dieser
+   *  Datei schickte ihn mit, obwohl `db-meetings.ts` ihn prüft. Ohne Zähler
+   *  gilt „zuletzt gewinnt" — und `saveActionItems()` schreibt das KOMPLETTE
+   *  `actionItems`-Array zurück. Wer in seiner älteren Ansicht einen
+   *  Handlungspunkt in eine Aufgabe umwandelte, löschte damit stillschweigend
+   *  den Punkt, den eine Kollegin gerade ergänzt hatte. */
+  rev?: number;
   date: string;
   startTime: string | null;
   endTime: string | null;
@@ -104,6 +113,8 @@ interface MeetingDraft {
   decisions: string;
   actionItems: MeetingActionItem[];
   nextMeetingDate: string;
+  /** Konfliktzähler der geöffneten Besprechung — beim Anlegen `undefined`. */
+  rev?: number;
 }
 const meetings = ref<Meeting[]>([]);
 const meetingsLoaded = ref(false);
@@ -182,6 +193,7 @@ function meetingDraftFrom(m: Meeting): MeetingDraft {
     decisions: m.decisions ?? "",
     actionItems: m.actionItems.map((a) => ({ ...a })),
     nextMeetingDate: m.nextMeetingDate ?? "",
+    rev: m.rev,
   };
 }
 
@@ -305,15 +317,27 @@ async function convertActionItemToTask(idx: number) {
     item.taskId = task.id;
     // Komplettes actionItems-Array zurueck schreiben — Backend persistiert
     // dann das ganze JSONB-Feld (Patch ist atomar).
-    await api.patch(`/meetings/${meetingDraft.value.id}`, {
+    //
+    // ⚠ Genau deshalb gehört hier der Konfliktzähler hin: Wer das Array aus
+    // einer älteren Ansicht zurückschreibt, löscht damit jeden Punkt, den
+    // jemand anderes inzwischen ergänzt hat — lautlos. Ohne `rev` nimmt der
+    // Server das an; mit `rev` antwortet er mit 409, und der Nutzer bekommt
+    // den aktuellen Stand.
+    const aktualisiert = await api.patch<Meeting>(`/meetings/${meetingDraft.value.id}`, {
       actionItems: meetingDraft.value.actionItems.map((a) => ({ ...a })),
+      rev: meetingDraft.value.rev,
     });
+    // Zähler nachziehen, sonst scheitert der nächste Handlungspunkt.
+    meetingDraft.value.rev = aktualisiert.rev;
+    const idx = meetings.value.findIndex((m) => m.id === aktualisiert.id);
+    if (idx >= 0) meetings.value[idx] = aktualisiert;
     // 3) Die Akte bitten, ihre Aufgabenliste neu zu holen — sonst sieht man
     //    die neue Aufgabe erst nach einem Neuladen der Seite.
     emit("aufgabeAngelegt");
   } catch (e) {
     item.taskId = undefined; // Rollback im Frontend
     convertError.value = e instanceof Error ? e.message : "Anlegen fehlgeschlagen";
+    if (e instanceof ApiError && e.istKonflikt) await loadMeetings();
   } finally {
     convertingActionIdx.value = null;
   }
@@ -352,7 +376,7 @@ async function saveMeeting() {
 
     let saved: Meeting;
     if (d.id) {
-      saved = await api.patch<Meeting>(`/meetings/${d.id}`, body);
+      saved = await api.patch<Meeting>(`/meetings/${d.id}`, { ...body, rev: d.rev });
       const idx = meetings.value.findIndex((m) => m.id === d.id);
       if (idx >= 0) meetings.value[idx] = saved;
     } else {
@@ -368,6 +392,9 @@ async function saveMeeting() {
     meetingDraft.value = meetingDraftFrom(saved);
   } catch (e) {
     meetingError.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+    // Beim Konflikt den Stand des anderen holen — sonst scheitert auch der
+    // nächste Versuch mit demselben veralteten Zähler.
+    if (e instanceof ApiError && e.istKonflikt) await loadMeetings();
   } finally {
     meetingSaving.value = false;
   }

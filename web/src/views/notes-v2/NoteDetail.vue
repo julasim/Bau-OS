@@ -8,7 +8,7 @@
 
 import { ref, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { api } from "../../api";
+import { api, ApiError } from "../../api";
 import DetailPane from "../../components/shell/DetailPane.vue";
 import MarkdownRenderer from "../../components/MarkdownRenderer.vue";
 import BIcon from "../../components/BIcon.vue";
@@ -23,6 +23,8 @@ const saving = ref(false);
 const loading = ref(false);
 const preview = ref(false);
 const error = ref<string | null>(null);
+/** Konfliktzähler der geladenen Notiz (Migration 042). */
+const rev = ref<number | null>(null);
 
 const noteName = computed(() => (route.params.name as string) ?? "");
 const isDirty = computed(() => content.value !== dirtyContent.value);
@@ -36,9 +38,13 @@ async function loadNote(name: string) {
   loading.value = true;
   error.value = null;
   try {
-    const note = await api.get<{ name: string; content: string }>(`/notes/${encodeURIComponent(name)}`);
+    // `rev` liefert die Route seit Migration 042 mit (src/api/routes/notes.ts)
+    // — es wurde hier nur weggeworfen, und damit war der Konfliktschutz für
+    // Notizen vom Client aus abgeschaltet.
+    const note = await api.get<{ name: string; content: string; rev?: number }>(`/notes/${encodeURIComponent(name)}`);
     content.value = note.content;
     dirtyContent.value = note.content;
+    rev.value = note.rev ?? null;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Notiz konnte nicht geladen werden";
     content.value = "";
@@ -52,10 +58,26 @@ async function save() {
   if (!noteName.value || saving.value) return;
   saving.value = true;
   try {
-    await api.put(`/notes/${encodeURIComponent(noteName.value)}`, { content: content.value });
+    await api.put(`/notes/${encodeURIComponent(noteName.value)}`, {
+      content: content.value,
+      rev: rev.value ?? undefined,
+    });
     dirtyContent.value = content.value;
+    error.value = null;
+    // Der Zähler steigt bei jedem Speichern. Ohne dieses Nachziehen schlüge
+    // der ZWEITE Speichervorgang in Folge mit 409 fehl.
+    if (rev.value !== null) rev.value += 1;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+    // Nur beim Konflikt neu laden — sonst verlöre der Nutzer seinen Text.
+    // ⚠ `loadNote()` setzt `error` zurück; die Meldung muss deshalb DANACH
+    // gesetzt werden, sonst sieht der Nutzer gar nichts.
+    if (e instanceof ApiError && e.istKonflikt) {
+      const inhalt = content.value;
+      await loadNote(noteName.value);
+      content.value = inhalt; // die Eingabe bleibt stehen
+      error.value = e.message;
+    }
   } finally {
     saving.value = false;
   }
@@ -141,19 +163,17 @@ watch(
     <!-- Loading -->
     <div v-else-if="loading" style="padding: 40px; text-align: center; color: var(--fg-muted)">Lade…</div>
 
-    <!-- Error -->
-    <div
-      v-else-if="error"
-      style="
-        padding: 12px 16px;
-        background: var(--status-error-bg);
-        color: var(--status-error);
-        border: 1px solid var(--status-error);
-        border-radius: 6px;
-      "
-    >
-      {{ error }}
-    </div>
+    <!--
+      ⚠ Hier stand `v-else-if="error"` VOR dem Editor — jeder Fehler beim
+      SPEICHERN hängte ihn aus, und der Text des Nutzers war weg.
+
+      Dazu waren die Farben hart aus `--status-error*` genommen; im
+      Dunkelmodus stand die Meldung weiß auf weiß. Jetzt `.pt-error` aus
+      `patio-components.css`, wie überall.
+
+      Der Aushäng-Fall gilt nur noch, wenn wirklich nichts geladen ist.
+    -->
+    <div v-else-if="error && !content" class="pt-error" role="alert">{{ error }}</div>
 
     <!-- Preview -->
     <div v-else-if="preview" class="note-doc" style="max-width: 760px; margin: 0 auto">

@@ -5,7 +5,7 @@ import { formatEUR } from "../../utils/format";
 // Teilrechnungen (CRUD). Optionale Zuordnung jeder Rechnung zu einer
 // Leistungsphase. DB-only.
 import { ref, computed, onMounted, watch } from "vue";
-import { api } from "../../api";
+import { api, ApiError } from "../../api";
 import BIcon from "../../components/BIcon.vue";
 import { dateiHolen } from "../../utils/download";
 
@@ -283,6 +283,17 @@ async function save() {
     await load();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen.";
+    // ── Nach einem Konflikt neu laden ──────────────────────────────────────
+    //
+    // ⚠ Ohne diese Zeile war die Ansicht festgefahren: Der Entwurf behielt
+    // den veralteten Zähler, und weil weder hier noch über SSE neu geladen
+    // wurde, ergab JEDER weitere Versuch denselben 409 — auch nach Abbrechen
+    // und erneutem Öffnen, weil die Liste dahinter ebenfalls alt war.
+    // Ausweg war nur ein Reiterwechsel, unter Verlust der Eingabe.
+    //
+    // Der Entwurf liegt in einem eigenen `ref`; `load()` füllt nur die Liste
+    // und wirft die Eingabe deshalb nicht weg.
+    if (e instanceof ApiError && e.istKonflikt) await load();
   } finally {
     busy.value = false;
   }
@@ -564,6 +575,13 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* Wurzel des Rechnungsreiters. */
+.inv-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 .inv-nr-warnung {
   margin: 4px 0 0;
   font-size: 11px;

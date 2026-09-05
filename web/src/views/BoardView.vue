@@ -211,6 +211,14 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* Eine Tagesspalte der Wochenansicht. `.bd-tag-kopf` und `.bd-tag-zeile` gab
+ * es, die Spalte selbst nicht. */
+.bd-tag {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 /* Alles bewusst groß: gelesen wird aus mehreren Metern Entfernung. */
 .bd {
   min-height: 100vh;

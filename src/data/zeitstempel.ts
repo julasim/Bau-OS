@@ -58,6 +58,52 @@ export function alsIsoOderNull(wert: unknown): string | null {
   return wert === null || wert === undefined ? null : alsIso(wert);
 }
 
+// ── Ein reines Datum (Spaltentyp `date`) ────────────────────────────────────
+//
+// `alsIso` liefert einen vollen Zeitstempel — für eine `date`-Spalte ist das
+// zu viel. Diese beiden schneiden auf `YYYY-MM-DD`.
+//
+// ── Warum das hier steht und nicht sechsmal in den Repos ────────────────────
+//
+// Weil es dort sechsmal STAND. Nachgezählt am 01.09.2026: als benannte
+// Funktion `dateStr` in `db-invoices.ts` und `db-phases.ts`, als lokale
+// Konstante gleichen Namens in `db-bautagebuch.ts`, `db-meetings.ts` und
+// `db-time-entries.ts` — und ein sechstes Mal in `db-entscheidungen.ts`, dort
+// unter dem Namen `datum`.
+//
+// Der abweichende Name ist der eigentliche Punkt: Wer nach `dateStr` sucht,
+// findet fünf Stellen und hält die Sache für vollständig. Genau so entsteht
+// die Stelle, die beim nächsten Mal vergessen wird — und der Kopf dieser
+// Datei warnt seit dem 23.08. vor der Falle, gegen die sich alle sechs
+// einzeln abgesichert haben.
+//
+// **Der Grund, dass es sie braucht:** postgres.js liefert `date`-Spalten als
+// `Date` mit UTC-Mitternacht. `toISOString().slice(0, 10)` ist damit
+// unabhängig von der Zeitzone des Prozesses richtig — auch westlich von UTC.
+// `String(…)` dagegen ergibt „Sat Jun 20 2026 …", beginnt also mit dem
+// Wochentag.
+
+/** Ein `date`-Wert aus der Datenbank als `YYYY-MM-DD`. `null` bleibt `null`. */
+export function dateStr(wert: unknown): string | null {
+  if (wert === null || wert === undefined) return null;
+  if (wert instanceof Date) return wert.toISOString().slice(0, 10);
+  return String(wert).slice(0, 10);
+}
+
+/** Wie `dateStr`, aber für Spalten mit `NOT NULL`.
+ *
+ *  Eigene Funktion statt `dateStr(x)!`: Das Rufzeichen behauptet nur, hier
+ *  stünde nie `null`. Steht dort wider Erwarten doch eines — eine Spalte
+ *  verliert ihr `NOT NULL`, ein `LEFT JOIN` liefert eine leere Zeile —, wäre
+ *  das Ergebnis die Zeichenkette „null" mitten in einem Datumsfeld, und die
+ *  läuft still durch bis in die Oberfläche. Hier fällt sie stattdessen sofort
+ *  auf, an der Stelle, an der sie entsteht. */
+export function dateStrPflicht(wert: unknown): string {
+  const iso = dateStr(wert);
+  if (iso === null) throw new Error("Datumsfeld ist leer, obwohl die Spalte NOT NULL ist");
+  return iso;
+}
+
 // ── Ein Datum, das es wirklich gibt ─────────────────────────────────────────
 //
 // Sechs Repositories hielten je eine eigene Kopie von `/^\d{4}-\d{2}-\d{2}$/`

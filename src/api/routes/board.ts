@@ -30,7 +30,8 @@
 import { Hono } from "hono";
 import { getDb } from "../../db/client.js";
 import { getVisibleProjectIds, type UserCtx, type Rolle } from "../../data/access.js";
-import { alsIso } from "../../data/zeitstempel.js";
+import { alsIso, dateStrPflicht } from "../../data/zeitstempel.js";
+import { heuteIso } from "../../data/heute.js";
 import type { AppEnv } from "../server.js";
 
 export const boardRoutes = new Hono<AppEnv>();
@@ -58,25 +59,31 @@ function bedingung(sichtbar: string[] | "all", spalte = "project_id"): { sql: st
   return { sql: `${spalte} = ANY($1::uuid[])`, werte: [sichtbar] };
 }
 
-/** Heute in der Zeitzone des Büros — nicht in UTC. Ein Board, das um 01:00
- *  schon den nächsten Tag zeigt, ist falsch. */
-async function heuteIso(): Promise<string> {
-  const { TIMEZONE } = await import("../../config.js");
-  const [z] = await getDb()`SELECT to_char(now() AT TIME ZONE ${TIMEZONE}, 'YYYY-MM-DD') AS t`;
-  return String(z.t);
-}
-
 // ── Heute ───────────────────────────────────────────────────────────────────
 boardRoutes.get("/board/heute", async (c) => {
   const sichtbar = await getVisibleProjectIds(userCtx(c));
   const b = bedingung(sichtbar, "t.project_id");
+  // Eigene Bedingung fuer das Bautagebuch, weil dort der Tabellen-Alias `b`
+  // heisst. Hier stand `b.sql.replace("project_id", "b.project_id")` — und
+  // `replace` trifft die ERSTE Fundstelle, die steckt im Praefix `t.`.
+  // Herausgekommen ist `t.b.project_id`. Das ist SYNTAKTISCH gueltig —
+  // Postgres liest es als schema.tabelle.spalte — und scheitert erst bei der
+  // Namensaufloesung: `invalid reference to FROM-clause entry for table "b"`.
+  // Wer den Fehler im Log sucht, sucht also nicht nach einem Syntaxfehler.
+  //
+  // Fuer Admins fiel das nicht auf: bei ihnen ist `b.sql` die Zeichenkette
+  // `TRUE`, in der `replace` nichts findet. Der Fehler traf ausschliesslich
+  // Konten mit eingeschraenkter Sichtbarkeit — und `tests/api-board.test.ts`
+  // fuhr diese Route ausschliesslich mit dem Board-Konto, das ebenfalls
+  // `TRUE` bekommt.
+  const bBau = bedingung(sichtbar, "b.project_id");
   const heute = await heuteIso();
   const db = getDb();
 
   const termine = await db.unsafe(
     `SELECT t.text, t.datum, t.uhrzeit, t.endzeit, t.location, p.name AS projekt, p.projektnummer
        FROM termine t LEFT JOIN projects p ON p.id = t.project_id
-      WHERE t.deleted_at IS NULL AND t.datum = $${b.werte.length + 1} AND (${b.sql} OR t.project_id IS NULL)
+      WHERE t.deleted_at IS NULL AND t.datum = $${b.werte.length + 1}::date AND (${b.sql} OR t.project_id IS NULL)
       ORDER BY t.uhrzeit NULLS LAST
       LIMIT 30`,
     [...(b.werte as never[]), heute],
@@ -85,9 +92,9 @@ boardRoutes.get("/board/heute", async (c) => {
   const bautage = await db.unsafe(
     `SELECT p.name AS projekt, p.projektnummer, b.activities
        FROM bautagebuch b JOIN projects p ON p.id = b.project_id
-      WHERE b.entry_date = $${b.werte.length + 1} AND ${b.sql.replace("project_id", "b.project_id")}
+      WHERE b.entry_date = $${bBau.werte.length + 1}::date AND ${bBau.sql}
       ORDER BY p.name LIMIT 20`,
-    [...(b.werte as never[]), heute],
+    [...(bBau.werte as never[]), heute],
   );
 
   return c.json({
@@ -180,8 +187,8 @@ boardRoutes.get("/board/woche", async (c) => {
     `SELECT t.text, t.datum, t.uhrzeit, t.location, p.name AS projekt, p.projektnummer
        FROM termine t LEFT JOIN projects p ON p.id = t.project_id
       WHERE t.deleted_at IS NULL
-        AND t.datum >= $${b.werte.length + 1}
-        AND t.datum < ($${b.werte.length + 1}::date + 7)::text
+        AND t.datum >= $${b.werte.length + 1}::date
+        AND t.datum < $${b.werte.length + 1}::date + 7
         AND (${b.sql} OR t.project_id IS NULL)
       ORDER BY t.datum, t.uhrzeit NULLS LAST
       LIMIT 60`,
@@ -191,7 +198,10 @@ boardRoutes.get("/board/woche", async (c) => {
   // Nach Tag gruppiert — das Board zeigt sieben Spalten, keine flache Liste.
   const tage = new Map<string, { text: string; uhrzeit: string | null; projekt: string | null }[]>();
   for (const r of zeilen) {
-    const tag = String(r.datum);
+    // `dateStrPflicht`, nicht `String(...)`: seit Migration 060 liefert der
+    // Treiber hier ein `Date`, und daraus wuerde der Schluessel
+    // "Sat Jun 20 2026 ..." — sieben Spalten mit Wochentags-Ueberschriften.
+    const tag = dateStrPflicht(r.datum);
     if (!tage.has(tag)) tage.set(tag, []);
     tage.get(tag)!.push({
       text: String(r.text),

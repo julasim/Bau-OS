@@ -11,13 +11,7 @@
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { ProjectPhase, PhaseRepository } from "./types.js";
-import { alsIso, istIsoDatum } from "./zeitstempel.js";
-
-function dateStr(v: unknown): string | null {
-  if (v === null || v === undefined) return null;
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  return String(v).slice(0, 10);
-}
+import { alsIso, istIsoDatum, dateStr } from "./zeitstempel.js";
 
 function rowToPhase(row: Record<string, unknown>): ProjectPhase {
   const taskTotal = row.task_total === null || row.task_total === undefined ? 0 : Number(row.task_total);

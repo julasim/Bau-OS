@@ -8,12 +8,72 @@
 //           damit aeltere Queries/UI noch konsistent bleiben.
 // Lesen:    bevorzugt companyName aus Join, projects-Array aus Junction.
 import crypto from "crypto";
-import { getDb } from "../db/client.js";
+import { getDb, jsonb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { Company, ContactLogEntry, MemberType, TeamMember, TeamMemberProject, TeamRepository } from "./types.js";
 import { alsIso } from "./zeitstempel.js";
 
 // ── Row-Mapper ──────────────────────────────────────────────
+
+/**
+ * Der Kontaktverlauf eines Mitglieds — aus drei moeglichen Formen.
+ *
+ * ── Warum drei ────────────────────────────────────────────────────────────
+ *
+ * `appendLog()` schrieb bis zum 02.09.2026 mit `${JSON.stringify(...)}::jsonb`.
+ * postgres.js serialisiert die uebergebene Zeichenkette dabei ein zweites Mal
+ * — in der Spalte landet ein JSON-String statt eines Arrays. Am System
+ * nachgemessen: **223 von 223 Zeilen** standen auf `"[]"`.
+ *
+ * Der Leser hier prueft frueher `Array.isArray` und fiel damit auf `[]`
+ * zurueck. Ergebnis: **jeder ueber `appendLog()` geschriebene Vermerk war
+ * unsichtbar** — geschrieben, gespeichert, nie angezeigt.
+ *
+ * ⚠ Und es gibt eine ZWEITE Altbestand-Form, die man leicht uebersieht. Der
+ * Anhaenge-Operator `||` auf zwei jsonb-ZEICHENKETTEN ergibt ein Array aus
+ * zwei Zeichenketten, nicht das erwartete Objekt-Array:
+ *
+ *   '"[]"'::jsonb || '"[{…}]"'::jsonb   ->   ["[]", "[{…}]"]
+ *
+ * Ein toleranter Leser, der nur „ist es eine Zeichenkette?" prueft, laeuft
+ * daran vorbei: `Array.isArray` ist wahr, und `.map` auf einer Zeichenkette
+ * ergibt lauter `undefined`. Deshalb werden Zeichenketten-Elemente einzeln
+ * geparst und flach gezogen.
+ *
+ * Kein `throw`: ein unlesbarer Vermerk darf die Team-Seite nicht abschiessen.
+ */
+export function alsKontaktverlauf(roh: unknown): ContactLogEntry[] {
+  const alsEintrag = (e: unknown): ContactLogEntry[] => {
+    // Eine Zeichenkette ist entweder ein doppelt kodiertes Array oder ein
+    // doppelt kodierter Einzeleintrag — beides parsen und flach ziehen.
+    if (typeof e === "string") {
+      try {
+        return alsKontaktverlauf(JSON.parse(e));
+      } catch {
+        return [];
+      }
+    }
+    if (!e || typeof e !== "object") return [];
+    const o = e as Record<string, unknown>;
+    return [
+      {
+        ts: String(o.ts ?? ""),
+        text: String(o.text ?? ""),
+        author: o.author ? String(o.author) : undefined,
+      },
+    ];
+  };
+
+  if (typeof roh === "string") {
+    try {
+      return alsKontaktverlauf(JSON.parse(roh));
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(roh)) return [];
+  return roh.flatMap(alsEintrag);
+}
 
 function rowToMember(row: Record<string, unknown>): TeamMember {
   // projects_json kommt als json_agg der Junction; kann null sein wenn
@@ -29,14 +89,7 @@ function rowToMember(row: Record<string, unknown>): TeamMember {
         }))
     : [];
 
-  const contactLogRaw = row.contact_log;
-  const contactLog: ContactLogEntry[] = Array.isArray(contactLogRaw)
-    ? (contactLogRaw as Array<Record<string, unknown>>).map((e) => ({
-        ts: String(e.ts ?? ""),
-        text: String(e.text ?? ""),
-        author: e.author ? String(e.author) : undefined,
-      }))
-    : [];
+  const contactLog = alsKontaktverlauf(row.contact_log);
 
   return {
     id: String(row.id),
@@ -246,7 +299,7 @@ export const dbTeam: TeamRepository = {
         created_at, updated_at
       ) VALUES (
         ${id}, ${name}, ${role}, ${email}, ${phone}, ${hourlyRate}, ${companyText}, ${projectId},
-        ${companyId}, ${memberType}, ${"[]"}::jsonb, ${userId},
+        ${companyId}, ${memberType}, ${jsonb([])}, ${userId},
         ${now}, ${now}
       )
       RETURNING id
@@ -327,11 +380,35 @@ export const dbTeam: TeamRepository = {
     return this.get(id);
   },
 
+  /** Entfernt ein Mitglied — endgueltig, es gibt keinen Papierkorb dafuer.
+   *
+   *  ── Was hier stand ───────────────────────────────────────────────────────
+   *
+   *  `DELETE … WHERE id::text = $1 OR name = $1`, ohne Limit. Bei zwei
+   *  gleichnamigen Mitgliedern — im Bauwesen keine Seltenheit — gingen beide,
+   *  und gemeldet wurde nur, dass „mindestens eines" betroffen war. Daran
+   *  haengen zwei Trigger und vier Fremdschluessel.
+   *
+   *  Jetzt wie bei den Notizen: ueber einen Auflöser mit Rang, danach nur
+   *  noch ueber die ID. Bei Mehrdeutigkeit wird NICHT geraten — die Funktion
+   *  gibt `false` zurueck, und der Aufrufer muss die ID nennen. Lieber ein
+   *  Loeschvorgang, der nicht stattfindet, als der falsche. */
   async remove(nameOrId) {
     const db = getDb();
-    const result = await db`
-      DELETE FROM team_members WHERE id::text = ${nameOrId} OR name = ${nameOrId}
-    `;
+    const treffer = await db`
+      SELECT id,
+             CASE WHEN id::text = ${nameOrId} THEN 0 ELSE 1 END AS rang
+        FROM team_members
+       WHERE id::text = ${nameOrId} OR name = ${nameOrId}
+       ORDER BY rang, created_at DESC, id DESC`;
+    if (treffer.length === 0) return false;
+
+    // Ein Treffer ueber die ID ist immer eindeutig (Primaerschluessel). Nur
+    // beim Namensweg kann es mehrere geben — und dann wird nichts geloescht.
+    const ueberId = Number(treffer[0].rang) === 0;
+    if (!ueberId && treffer.length > 1) return false;
+
+    const result = await db`DELETE FROM team_members WHERE id = ${String(treffer[0].id)}`;
     return result.count > 0;
   },
 
@@ -384,7 +461,7 @@ export const dbTeam: TeamRepository = {
     // Append via jsonb concat (|| Operator) — atomar, keine Race-Conditions.
     const result = await db`
       UPDATE team_members
-         SET contact_log = COALESCE(contact_log, '[]'::jsonb) || ${JSON.stringify([entry])}::jsonb
+         SET contact_log = COALESCE(contact_log, '[]'::jsonb) || ${jsonb([entry])}
        WHERE id = ${memberId}
     `;
     return result.count > 0;

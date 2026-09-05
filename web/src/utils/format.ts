@@ -44,6 +44,27 @@ function toDate(input: string | number | Date | null | undefined): Date | null {
     d = input;
   } else if (typeof input === "string" && /^\d{4}-\d{2}-\d{2}$/.test(input)) {
     d = new Date(input + "T00:00:00");
+  } else if (typeof input === "string" && /^\d{2}\.\d{2}\.\d{4}$/.test(input)) {
+    // ── Deutsches Datum: hier, nicht in den Ansichten ──────────────────────
+    //
+    // ⚠ `new Date("05.09.2026")` liest US-Notation und ergibt den **9. Mai**;
+    // `new Date("15.09.2026")` ergibt `Invalid Date`, und `formatDate` gibt
+    // dann eine leere Zeichenkette zurueck. Am 02.09.2026 gemessen.
+    //
+    // Solche Werte sind moeglich, weil `tasks.date` weiterhin eine
+    // TEXT-Spalte ohne Formatpruefung ist — Migration 060 hat nur
+    // `termine.datum` angefasst.
+    //
+    // Drei Ansichten hatten dafuer eine EIGENE Abfangzeile
+    // (`if (d.includes(".")) return d;`); beim Zusammenlegen auf diese
+    // gemeinsame Funktion sind sie entfallen, und aus einer verdrehten Anzeige
+    // wurde eine plausibel falsche. Deshalb steht die Behandlung jetzt hier,
+    // einmal, statt in jeder Ansicht neu.
+    const [tag, monat, jahr] = input.split(".");
+    d = new Date(`${jahr}-${monat}-${tag}T00:00:00`);
+    // `31.02.2026` biegt JavaScript still auf den 3. Maerz. Lieber eine leere
+    // Zelle als ein erfundener Tag.
+    if (!Number.isNaN(d.getTime()) && d.getDate() !== Number(tag)) return null;
   } else {
     d = new Date(input);
   }

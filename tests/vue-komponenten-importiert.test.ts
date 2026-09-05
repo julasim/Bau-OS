@@ -87,3 +87,59 @@ describe("Vue: benutzte Komponenten sind importiert", () => {
     expect(befunde, `Nicht importierte Komponenten:\n  ${befunde.join("\n  ")}`).toEqual([]);
   });
 });
+
+// Jede `.vue` laesst sich ueberhaupt uebersetzen.
+//
+// ── Warum diese Pruefung dazugehoert ───────────────────────────────────────
+//
+// Am 02.09.2026 stand in `ProjectZugriffTab.vue` ein HTML-Kommentar INNERHALB
+// eines oeffnenden Tags:
+//
+//     <div
+//       <!-- Erklaerung -->
+//       class="pt-avatar"
+//
+// `npx vue-tsc --noEmit` meldet dazu nichts, `npm run lint` sieht `.vue`-
+// Dateien gar nicht an, und `npm test` war gruen — der Vite-Bau brach mit
+// `SyntaxError: Illegal '/' in tags` ab. Genau die Konstellation, die den
+// Docker-Bau schon einmal 45 Commits lang unbemerkt kaputt gehalten hat: die
+// Pruefung, die es faende, laeuft zuletzt und selten.
+//
+// Der Uebersetzer ist derselbe, den Vite benutzt — die Pruefung kostet unter
+// einer Sekunde und faengt jeden Template-Syntaxfehler dort ab, wo er
+// entsteht.
+describe("Alle .vue-Dateien sind uebersetzbar", () => {
+  it("kein Template-Syntaxfehler", async () => {
+    const { parse, compileTemplate } = await import("vue/compiler-sfc");
+    const fehler: string[] = [];
+    function vueDateien(ordner: string): string[] {
+      const gefunden: string[] = [];
+      for (const eintrag of readdirSync(ordner)) {
+        const pfad = join(ordner, eintrag);
+        if (statSync(pfad).isDirectory()) gefunden.push(...vueDateien(pfad));
+        else if (eintrag.endsWith(".vue")) gefunden.push(pfad);
+      }
+      return gefunden;
+    }
+
+    for (const datei of vueDateien(join(process.cwd(), "web", "src"))) {
+      const quelle = readFileSync(datei, "utf8");
+      const { descriptor, errors } = parse(quelle, { filename: datei });
+      if (errors.length > 0) {
+        fehler.push(`${datei}: ${errors[0]!.message}`);
+        continue;
+      }
+      if (!descriptor.template) continue;
+      const ergebnis = compileTemplate({
+        source: descriptor.template.content,
+        filename: datei,
+        id: datei,
+      });
+      if (ergebnis.errors.length > 0) {
+        const e = ergebnis.errors[0]!;
+        fehler.push(`${datei}: ${typeof e === "string" ? e : e.message}`);
+      }
+    }
+    expect(fehler, "Templates, die der Bau nicht uebersetzen kann: " + fehler.join(" | ")).toEqual([]);
+  });
+});

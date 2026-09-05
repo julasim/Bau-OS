@@ -6,17 +6,11 @@
 // DB-only.
 // ============================================================
 
-import { getDb } from "../db/client.js";
+import { getDb, jsonb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { ProjectInvoice, InvoicePosition, InvoiceRepository } from "./types.js";
-import { alsIso, istIsoDatum } from "./zeitstempel.js";
+import { alsIso, istIsoDatum, dateStr } from "./zeitstempel.js";
 import { istPlatzhalter } from "./projektnummer.js";
-
-function dateStr(v: unknown): string | null {
-  if (v === null || v === undefined) return null;
-  if (v instanceof Date) return v.toISOString().slice(0, 10);
-  return String(v).slice(0, 10);
-}
 
 /** Liest die Positionen aus der JSONB-Spalte. Je nach Treiberpfad kommt
  *  entweder ein fertiges Objekt oder ein String zurueck. */
@@ -204,7 +198,7 @@ export const dbInvoices: InvoiceRepository = {
         INSERT INTO project_invoices (project_id, phase_id, nummer, betrag, positionen, datum, status, note)
         VALUES (
           ${projectId}, ${input.phaseId ?? null}, ${input.nummer ?? null},
-          ${betrag}, ${JSON.stringify(positionen)}::jsonb,
+          ${betrag}, ${jsonb(positionen)},
           ${input.datum ?? null}, ${input.status ?? "gestellt"}, ${input.note ?? null}
         )
         RETURNING id
@@ -250,7 +244,7 @@ export const dbInvoices: InvoiceRepository = {
       betroffen = await db`
         UPDATE project_invoices SET
           phase_id = ${phaseId}, nummer = ${nummer}, betrag = ${betragEffektiv},
-          positionen = ${JSON.stringify(positionen)}::jsonb,
+          positionen = ${jsonb(positionen)},
           datum = ${datum}, status = ${status}, note = ${note},
           rev = rev + 1
         WHERE id = ${id} AND rev = ${current.rev}

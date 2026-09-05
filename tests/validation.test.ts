@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateDatum, validateUhrzeit, normalizeDatum } from "../src/data/termin-validation.js";
+import { validateDatum, validateUhrzeit, alsIsoDatum } from "../src/data/termin-validation.js";
 
 describe("validateDatum", () => {
   it("akzeptiert gueltiges Datum TT.MM.JJJJ", () => {
@@ -20,9 +20,30 @@ describe("validateDatum", () => {
     expect(validateDatum("")).toContain("Ungueltiges Datumsformat");
   });
 
-  it("normalizeDatum konvertiert ISO → TT.MM.JJJJ, laesst TT.MM.JJJJ durch", () => {
-    expect(normalizeDatum("2026-04-15")).toBe("15.04.2026");
-    expect(normalizeDatum("15.04.2026")).toBe("15.04.2026");
+  it("alsIsoDatum konvertiert TT.MM.JJJJ → ISO, laesst ISO durch", () => {
+    // Die Richtung hat sich mit Migration 060 umgedreht: kanonisch ist jetzt
+    // ISO. Die Funktion hiess vorher `normalizeDatum` und tat das Gegenteil —
+    // umbenannt statt nur umgedreht, weil eine Funktion, die unter altem
+    // Namen das Gegenteil tut, genau die Falle ist, die den Board-Fehler ein
+    // Jahr lang getragen hat.
+    expect(alsIsoDatum("15.04.2026")).toBe("2026-04-15");
+    expect(alsIsoDatum("2026-04-15")).toBe("2026-04-15");
+  });
+
+  it("lehnt Tage ab, die es nicht gibt", () => {
+    // ⚠ Diese Pruefungen waren vor dem 01.09.2026 ROT: `validateDatum`
+    // pruefte nur Bereiche (Tag 1–31, Monat 1–12) und liess `31.02.2026`
+    // durch. Solange `termine.datum` TEXT war, landete das unbeanstandet in
+    // der Datenbank; seit die Spalte `date` ist, waere es ein 500er aus
+    // Postgres statt einer Absage mit Begruendung.
+    expect(validateDatum("31.02.2026")).toContain("gibt es nicht");
+    expect(validateDatum("30.02.2028")).toContain("gibt es nicht");
+    expect(validateDatum("2026-02-30")).toContain("gibt es nicht");
+    expect(validateDatum("31.04.2026")).toContain("gibt es nicht");
+    // Der 29. Februar existiert im Schaltjahr sehr wohl — eine Pruefung, die
+    // ihn mitnimmt, waere zu scharf.
+    expect(validateDatum("29.02.2028")).toBeNull();
+    expect(validateDatum("29.02.2027")).toContain("gibt es nicht");
   });
 
   it("lehnt ungueltigen Monat ab", () => {

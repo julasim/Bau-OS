@@ -39,10 +39,72 @@ function tabelle(zeilen: [string, unknown][]): string {
   return ["| Feld | Wert |", "|---|---|", ...zeilen.map(([k, v]) => `| ${k} | ${zelle(v)} |`)].join("\n");
 }
 
-function datum(v: unknown): string {
-  const iso = alsIso(v);
-  if (!iso) return "—";
-  const t = iso.slice(0, 10);
+export interface TeamZeile {
+  name: unknown;
+  role: unknown;
+  email: unknown;
+  phone: unknown;
+  company: unknown;
+  member_type: unknown;
+}
+
+/**
+ * Die Team-Liste als Markdown — mit oder ohne Kontaktdaten.
+ *
+ * ── Warum das eine eigene, exportierte Funktion ist ────────────────────────
+ *
+ * Weil der Zweig `mitPersonendaten === false` über HTTP **nicht mehr
+ * erreichbar** ist: die einzige Rolle ohne Personendaten-Recht ist die
+ * Präsentationsrolle, und die kommt seit dem 31.08.2026 gar nicht mehr an
+ * `/exports/*` (siehe `routes/export-templates.ts`). Ein Zweig, den keine
+ * Prüfung erreicht, wird beim nächsten Umbau still falsch — und dieser hier
+ * entscheidet, ob E-Mail und Telefonnummer aller Beteiligten in einem ZIP das
+ * Haus verlassen.
+ *
+ * Er bleibt trotzdem bestehen und wird nicht wegvereinfacht: zwei
+ * unabhängige Sperren sind an dieser Stelle richtig. Öffnet jemand später den
+ * Export für die Anzeige, ist die Kontaktdaten-Frage schon beantwortet.
+ * Geprüft wird sie in `tests/volldump-team.test.ts`, ohne Datenbank.
+ */
+export function teamMarkdown(team: TeamZeile[], mitPersonendaten: boolean): string {
+  const kopf = mitPersonendaten
+    ? ["| Name | Rolle | E-Mail | Telefon | Firma | Art |", "|---|---|---|---|---|---|"]
+    : ["| Name | Rolle | Firma | Art |", "|---|---|---|---|"];
+  return [
+    "# Team",
+    "",
+    ...kopf,
+    ...team.map((m) =>
+      mitPersonendaten
+        ? `| ${zelle(m.name)} | ${zelle(m.role)} | ${zelle(m.email)} | ${zelle(m.phone)} | ` +
+          `${zelle(m.company)} | ${zelle(m.member_type)} |`
+        : `| ${zelle(m.name)} | ${zelle(m.role)} | ${zelle(m.company)} | ${zelle(m.member_type)} |`,
+    ),
+  ].join("\n");
+}
+
+/**
+ * Ein Datumswert für das Archiv, als `TT.MM.JJJJ`.
+ *
+ * ── Warum hier auf `null` UND `undefined` geprüft wird ─────────────────────
+ *
+ * Die Bremse hieß `if (!iso)` und griff NIE. `alsIso(null)` liefert
+ * `String(null)`, also die Zeichenkette `"null"` — und die ist wahr. Heraus
+ * kam `..null` in jeder Zelle mit leerem Datum; bei `undefined` sogar
+ * `d.in.unde`, weil die Zeichenkette `"undefined"` zerschnitten wurde.
+ *
+ * Betroffen war jedes ausgelieferte Archiv: ein Projekt ohne Enddatum, eine
+ * Leistungsphase ohne Ist-Termine, eine Rechnung ohne Datum. Am 01.09.2026
+ * nachgerechnet, Befund 20 aus dem Review vom 30.08.
+ *
+ * Geprüft wird deshalb VOR der Umwandlung, am Rohwert.
+ */
+export function datumFuerArchiv(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  const t = alsIso(v).slice(0, 10);
+  // Auch eine unerwartete Form soll nicht als zerschnittener Unsinn
+  // erscheinen — lieber der Gedankenstrich als `d.in.unde`.
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return "—";
   return `${t.slice(8, 10)}.${t.slice(5, 7)}.${t.slice(0, 4)}`;
 }
 
@@ -83,7 +145,11 @@ function sicher(name: string, ersatz = "ohne-namen"): string {
  * @param mitGeld Ob Beträge mitgehen (Geld-Recht, Migration 043). Ein ZIP ist
  *        kein JSON: der Antwort-Filter sieht es nicht.
  */
-export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGeld: boolean): Promise<PassThrough> {
+export async function volldumpAlsZip(
+  sichtbareProjekte: string[] | "all",
+  mitGeld: boolean,
+  mitPersonendaten: boolean,
+): Promise<PassThrough> {
   const db = getDb();
   const strom = new PassThrough();
   const zip = new ZipArchive({ zlib: { level: 9 } });
@@ -104,7 +170,7 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
         [
           "# PATIO — Volldump",
           "",
-          `Erzeugt am ${datum(heute)}.`,
+          `Erzeugt am ${datumFuerArchiv(heute)}.`,
           "",
           `${projekte.length} Projekt(e). Ein Ordner je Projekt, darin eine Datei je Bereich.`,
           "",
@@ -136,8 +202,8 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
               ["Projektart", p.projektart],
               ["Nutzung", p.nutzung],
               ["Phase", p.phase],
-              ["Start", datum(p.start_date)],
-              ["Ende", datum(p.end_date)],
+              ["Start", datumFuerArchiv(p.start_date)],
+              ["Ende", datumFuerArchiv(p.end_date)],
               ...(mitGeld ? ([["Budget", p.budget]] as [string, unknown][]) : []),
             ]),
             "",
@@ -155,7 +221,7 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
            WHERE project_id = ${pid}::uuid AND deleted_at IS NULL ORDER BY created_at`;
         notizen.forEach((n, i) => {
           const dateiname = sicher(`${String(i + 1).padStart(3, "0")} ${String(n.title)}`, `notiz-${i + 1}`);
-          zip.append(`# ${n.title}\n\n_${datum(n.created_at)}_\n\n${n.content ?? ""}\n`, {
+          zip.append(`# ${n.title}\n\n_${datumFuerArchiv(n.created_at)}_\n\n${n.content ?? ""}\n`, {
             name: `${ordner}/Notizen/${dateiname}.md`,
           });
         });
@@ -175,7 +241,7 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
               "|---|---|---|---|",
               ...aufgaben.map(
                 (t) =>
-                  `| ${zelle(t.text)} | ${zelle(t.status)} | ${t.date ? datum(t.date) : "—"} | ${zelle(t.zugewiesen ?? t.assignee)} |`,
+                  `| ${zelle(t.text)} | ${zelle(t.status)} | ${t.date ? datumFuerArchiv(t.date) : "—"} | ${zelle(t.zugewiesen ?? t.assignee)} |`,
               ),
             ].join("\n"),
             { name: `${ordner}/Aufgaben.md` },
@@ -194,7 +260,7 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
               "|---|---|---|---|",
               ...termine.map(
                 (t) =>
-                  `| ${zelle(t.datum)} | ${zelle([t.uhrzeit, t.endzeit].filter(Boolean).join("–"))} | ${zelle(t.text)} | ${zelle(t.location)} |`,
+                  `| ${datumFuerArchiv(t.datum)} | ${zelle([t.uhrzeit, t.endzeit].filter(Boolean).join("–"))} | ${zelle(t.text)} | ${zelle(t.location)} |`,
               ),
             ].join("\n"),
             { name: `${ordner}/Termine.md` },
@@ -212,7 +278,7 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
               `# ${m.title}`,
               "",
               tabelle([
-                ["Datum", datum(m.meeting_date)],
+                ["Datum", datumFuerArchiv(m.meeting_date)],
                 ["Zeit", [m.start_time, m.end_time].filter(Boolean).join("–")],
                 ["Ort", m.location],
                 ["Externe Teilnehmer", alsListe<string>(m.attendees_external).join(", ")],
@@ -235,7 +301,7 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
               "# Entscheidungen",
               "",
               ...entscheidungen.flatMap((e) => [
-                `## ${datum(e.datum)} — ${e.titel}`,
+                `## ${datumFuerArchiv(e.datum)} — ${e.titel}`,
                 "",
                 `Status: ${zelle(e.status)}`,
                 alsListe<string>(e.beteiligte_extern).length
@@ -262,7 +328,7 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
               ...bautage.flatMap((b) => {
                 const personal = alsListe<{ name?: string; hours?: number }>(b.personnel);
                 return [
-                  `## ${datum(b.entry_date)}`,
+                  `## ${datumFuerArchiv(b.entry_date)}`,
                   "",
                   tabelle([
                     ["Wetter", b.weather],
@@ -293,8 +359,8 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
               `|---|---|---|---|${mitGeld ? "---|" : ""}`,
               ...phasen.map(
                 (f) =>
-                  `| ${zelle(f.name)} | ${zelle(f.status)} | ${datum(f.soll_start)} – ${datum(f.soll_ende)} | ` +
-                  `${datum(f.ist_start)} – ${datum(f.ist_ende)} |${mitGeld ? ` ${zelle(f.fee_share)} % |` : ""}`,
+                  `| ${zelle(f.name)} | ${zelle(f.status)} | ${datumFuerArchiv(f.soll_start)} – ${datumFuerArchiv(f.soll_ende)} | ` +
+                  `${datumFuerArchiv(f.ist_start)} – ${datumFuerArchiv(f.ist_ende)} |${mitGeld ? ` ${zelle(f.fee_share)} % |` : ""}`,
               ),
             ].join("\n"),
             { name: `${ordner}/Leistungsphasen.md` },
@@ -317,7 +383,7 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
                     `## ${r.nummer ?? "(ohne Nummer)"}`,
                     "",
                     tabelle([
-                      ["Datum", datum(r.datum)],
+                      ["Datum", datumFuerArchiv(r.datum)],
                       ["Status", r.status],
                       ["Betrag (netto)", r.betrag],
                       ["Anmerkung", r.note],
@@ -353,20 +419,7 @@ export async function volldumpAlsZip(sichtbareProjekte: string[] | "all", mitGel
       // ── Team und Firmen: einmal fürs ganze Haus ───────────────────────────
       const team = await db`SELECT name, role, email, phone, company, member_type FROM team_members ORDER BY name`;
       if (team.length) {
-        zip.append(
-          [
-            "# Team",
-            "",
-            "| Name | Rolle | E-Mail | Telefon | Firma | Art |",
-            "|---|---|---|---|---|---|",
-            ...team.map(
-              (m) =>
-                `| ${zelle(m.name)} | ${zelle(m.role)} | ${zelle(m.email)} | ${zelle(m.phone)} | ` +
-                `${zelle(m.company)} | ${zelle(m.member_type)} |`,
-            ),
-          ].join("\n"),
-          { name: "Team.md" },
-        );
+        zip.append(teamMarkdown(team as unknown as TeamZeile[], mitPersonendaten), { name: "Team.md" });
       }
 
       await zip.finalize();

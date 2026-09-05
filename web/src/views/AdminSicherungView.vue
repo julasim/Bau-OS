@@ -206,6 +206,13 @@ onMounted(laden);
 </template>
 
 <style scoped>
+/* Die neutrale Variante der Sicherungs-Karte (noch nicht eingerichtet).
+ * War nirgends definiert; die Karte sah aus wie eine gemeldete Stoerung. */
+.sic-neutral {
+  border-color: var(--border);
+  background: var(--surface-2);
+}
+
 .sic-dump {
   display: flex;
   align-items: flex-start;

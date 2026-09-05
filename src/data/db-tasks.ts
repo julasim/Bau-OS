@@ -172,15 +172,32 @@ export const dbTasks: TaskRepository = {
     return this.get(id);
   },
 
-  async complete(textOrId) {
+  /** Hakt eine Aufgabe ab — ueber ihre ID.
+   *
+   *  ── Was hier stand und was es angerichtet hat ────────────────────────────
+   *
+   *  `WHERE id::text = $1 OR text = $1`, ohne Limit und ohne
+   *  Papierkorb-Filter. Der Textzweig traf JEDE Aufgabe mit demselben
+   *  Wortlaut, in JEDEM Projekt und auch im Papierkorb — gemeldet wurde nur,
+   *  dass „mindestens eine" betroffen war.
+   *
+   *  Der einzige Aufrufer, der den Text schickte, war
+   *  `PATCH /projects/:name/tasks`; er uebergab zusaetzlich den Projektnamen,
+   *  den diese Funktion nie entgegengenommen hat. Er ist am 02.09.2026 auf
+   *  die ID umgestellt worden — erst danach durfte der Zweig fallen, sonst
+   *  waere die Aufgabenliste der Projektakte sofort gebrochen.
+   *
+   *  Die UUID-Form wird in JavaScript geprueft: `WHERE id = <keine UUID>`
+   *  wirft in Postgres `invalid input syntax for type uuid` (22P02), also
+   *  einen 500er statt einer sauberen Absage. Dasselbe Muster wie in
+   *  `db-termine.delete`. */
+  async complete(id) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) return false;
     const db = getDb();
     const now = new Date().toISOString();
-    // id::text verhindert "invalid input syntax for type uuid" wenn ein
-    // Text-Match statt einer UUID uebergeben wird — sonst crasht die gesamte
-    // Query, bevor die OR-Klausel auf text = ... ueberhaupt ausgewertet wird.
     const result = await db`
       UPDATE tasks SET status = 'done', completed_at = ${now}, updated_at = ${now}
-      WHERE id::text = ${textOrId} OR text = ${textOrId}
+      WHERE id = ${id} AND deleted_at IS NULL
     `;
     return result.count > 0;
   },

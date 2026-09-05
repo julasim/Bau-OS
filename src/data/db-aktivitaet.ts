@@ -49,13 +49,23 @@ export interface AktivitaetsEintrag {
  *  `NULL::uuid AS created_by` bei Dateien, Phasen und Rechnungen: diese
  *  Tabellen führen die Spalte nicht. Der Typ muss trotzdem in jedem Zweig
  *  derselbe sein, sonst weist Postgres die UNION zurück. */
+// ── Der Papierkorb (Migration 049) gehoert HIER heraus ─────────────────────
+//
+// Er fehlte in allen drei Zweigen, die ihn haben — Notizen, Aufgaben, Termine.
+// Verschaerft durch `trg_tasks_updated_at`: Loeschen setzt `updated_at = now()`,
+// der geloeschte Eintrag stand danach im Feed GANZ OBEN. Wer eine Aufgabe in
+// den Papierkorb legte, sah sie als juengste Aenderung wieder.
+//
+// Die uebrigen sechs Tabellen fuehren die Spalte nicht (nachgesehen am
+// 02.09.2026: nur `notes`, `tasks` und `termine` haben `deleted_at`) — dort
+// waere ein Filter nicht vergessen, sondern falsch.
 const ZWEIGE = [
   `SELECT 'note' AS typ, n.id::text, COALESCE(NULLIF(n.title,''), 'Notiz') AS titel,
-          n.project_id, n.updated_at, n.created_by FROM notes n`,
+          n.project_id, n.updated_at, n.created_by FROM notes n WHERE n.deleted_at IS NULL`,
   `SELECT 'task', t.id::text, COALESCE(NULLIF(t.text,''), 'Aufgabe'),
-          t.project_id, t.updated_at, t.created_by FROM tasks t`,
+          t.project_id, t.updated_at, t.created_by FROM tasks t WHERE t.deleted_at IS NULL`,
   `SELECT 'termin', te.id::text, COALESCE(NULLIF(te.text,''), 'Termin'),
-          te.project_id, te.updated_at, te.created_by FROM termine te`,
+          te.project_id, te.updated_at, te.created_by FROM termine te WHERE te.deleted_at IS NULL`,
   `SELECT 'meeting', m.id::text, COALESCE(NULLIF(m.title,''), 'Besprechung'),
           m.project_id, m.updated_at, m.created_by FROM meetings m`,
   `SELECT 'bautagebuch', b.id::text, 'Bautagebuch ' || to_char(b.entry_date, 'DD.MM.YYYY'),
@@ -103,7 +113,10 @@ export const dbAktivitaet = {
         LEFT JOIN projects p ON p.id = a.project_id
         LEFT JOIN users u ON u.id = a.created_by
        WHERE a.project_id IS NULL OR p.deleted_at IS NULL
-       -- Zweitkriterium ist PFLICHT (Begruendung im Kommentar ueber der Funktion).
+       -- Zweitkriterium id DESC ist PFLICHT: bei gleichem updated_at — nach
+       -- einem Massen-Update durchaus moeglich — haette die Abfrage sonst
+       -- kein definiertes Ergebnis, und die Reihenfolge haenge am
+       -- Ausfuehrungsplan.
        ORDER BY a.updated_at DESC, a.id DESC
        LIMIT ${grenze}
     `;

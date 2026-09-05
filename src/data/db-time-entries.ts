@@ -15,13 +15,12 @@ import crypto from "crypto";
 import { getDb } from "../db/client.js";
 import { pruefeRev, KonfliktFehler } from "./konflikt.js";
 import type { TimeEntry, TimeEntryInput, TimeEntryRepository, TimeSummary } from "./types.js";
-import { alsIso, istIsoDatum } from "./zeitstempel.js";
+import { alsIso, istIsoDatum, dateStrPflicht } from "./zeitstempel.js";
 
 const HHMM = /^\d{2}:\d{2}(:\d{2})?$/;
 
 function rowToEntry(row: Record<string, unknown>): TimeEntry {
-  const dateRaw = row.entry_date;
-  const dateStr = dateRaw instanceof Date ? dateRaw.toISOString().slice(0, 10) : String(dateRaw).slice(0, 10);
+  const dateStr = dateStrPflicht(row.entry_date);
 
   const cleanTime = (t: unknown): string | null => {
     if (!t) return null;

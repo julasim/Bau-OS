@@ -9,7 +9,7 @@ import { formatDateTime } from "../../utils/format";
 
 import { ref, watch, computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { api } from "../../api";
+import { api, ApiError } from "../../api";
 import DetailPane from "../../components/shell/DetailPane.vue";
 import StatusDot from "../../components/shell/StatusDot.vue";
 import BIcon from "../../components/BIcon.vue";
@@ -33,6 +33,9 @@ interface Task {
   completedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** Konfliktzähler (Migration 042). Ohne ihn im Typ gibt es nichts
+   *  mitzuschicken — und der Schutz bleibt vom Client aus abgeschaltet. */
+  rev?: number;
 }
 
 interface TeamMini {
@@ -78,12 +81,18 @@ async function loadTask(id: string) {
   loading.value = true;
   error.value = null;
   try {
-    // /tasks/:id ist nicht garantiert vorhanden — fallback ueber /tasks-Liste
-    const list = await api.get<Task[]>("/tasks");
-    task.value = list.find((t) => t.id === id) ?? null;
-    if (!task.value) error.value = "Aufgabe nicht gefunden";
+    // `GET /tasks/:id` mit eigener Rechteprüfung. Vorher wurde die ganze
+    // Liste geholt und darin gesucht — ein Umweg über den Sichtbarkeitsfilter
+    // der Liste, der bei jedem Öffnen einer Aufgabe alle Aufgaben übertrug.
+    task.value = await api.get<Task>(`/tasks/${encodeURIComponent(id)}`);
   } catch (e) {
-    error.value = e instanceof Error ? e.message : "Fehler beim Laden";
+    // 404 ist hier keine Störung, sondern eine Auskunft.
+    error.value =
+      e instanceof ApiError && e.status === 404
+        ? "Aufgabe nicht gefunden"
+        : e instanceof Error
+          ? e.message
+          : "Fehler beim Laden";
     task.value = null;
   } finally {
     loading.value = false;
@@ -107,7 +116,7 @@ async function saveTask() {
   try {
     const t = task.value;
     const cleanAssignee = typeof t.assignee === "string" && t.assignee !== "[object Object]" ? t.assignee : null;
-    await api.put(`/tasks/${t.id}`, {
+    const aktualisiert = await api.put<Task>(`/tasks/${t.id}`, {
       text: t.text,
       status: t.status,
       assignee: cleanAssignee,
@@ -116,9 +125,20 @@ async function saveTask() {
       location: t.location,
       project: t.project,
       phaseId: t.phaseId ?? null,
+      rev: t.rev,
     });
+    // ⚠ Die Rückübernahme ist NICHT optional: ohne sie trägt der lokale
+    // Datensatz weiter den alten Zähler, und der ZWEITE Speichervorgang in
+    // Folge erzeugt einen 409, den der Nutzer nicht versteht.
+    task.value = aktualisiert;
+    error.value = null;
   } catch (e) {
     error.value = e instanceof Error ? e.message : "Speichern fehlgeschlagen";
+    // Nur bei einem Konflikt neu laden — dort hat jemand anderes gespeichert,
+    // und der nächste Versuch scheiterte sonst mit demselben alten Zähler.
+    // Bei allen anderen Fehlern bleibt der Text des Nutzers stehen; ein
+    // Neuladen würde ihn verwerfen und ihm nicht sagen, was falsch war.
+    if (e instanceof ApiError && e.istKonflikt) await loadTask(taskId.value);
   } finally {
     saving.value = false;
   }
@@ -187,11 +207,8 @@ async function loadPhasesFor(project: string | null) {
   }
 }
 
-// Nutzer wechselt das Projekt im Dropdown → Phasen-Zuordnung loesen (die alte
-// Phase gehoert zum alten Projekt). Das Neuladen der Optionen macht der watch.
-function onProjectChange() {
-  if (task.value) task.value.phaseId = null;
-}
+/** Der Hinweis am gesperrten Projektfeld — siehe die Begründung im Template. */
+const projektFeldHinweis = "Das Projekt einer Aufgabe lässt sich hier nicht wechseln.";
 
 watch(taskId, (id) => void loadTask(id), { immediate: true });
 // Optionen laden, sobald ein Projekt bekannt ist (Task-Load ODER Dropdown-Wechsel).
@@ -241,13 +258,22 @@ loadAux();
     <!-- Loading -->
     <div v-else-if="loading" class="task-loading">Lade…</div>
 
-    <!-- Error / Not found -->
-    <div v-else-if="error" class="task-error">
+    <!-- Fehler beim LADEN — hier gibt es nichts anzuzeigen -->
+    <div v-else-if="!task && error" class="task-error">
       {{ error }}
     </div>
 
-    <!-- Task detail form -->
+    <!--
+      ⚠ Hier stand `v-else-if="error"` VOR dem Formular. Damit hängte jeder
+      Fehler beim SPEICHERN den Editor aus: Der Nutzer bekam die Meldung
+      anstelle seines Textes zu sehen, und der Text war weg. Genau in dem
+      Moment, in dem er ihn am dringendsten gebraucht hätte.
+
+      Jetzt steht die Meldung NEBEN dem Formular, und der Aushäng-Fall gilt
+      nur noch, wenn wirklich keine Aufgabe geladen ist.
+    -->
     <div v-else-if="task" class="task-form">
+      <div v-if="error" class="pt-error">{{ error }}</div>
       <!-- Title field -->
       <div class="pt-field task-field--title">
         <label class="pt-label" for="td-title">Titel</label>
@@ -293,7 +319,23 @@ loadAux();
         <!-- Project -->
         <div class="pt-field">
           <label class="pt-label" for="td-project">Projekt</label>
-          <select id="td-project" v-model="task.project" class="pt-select" @change="onProjectChange">
+          <!--
+            ⚠ Nur Anzeige. `PUT /tasks/:id` kennt `project` weder im
+            Körper-Typ noch im Repository — der Kommentar in
+            `src/api/routes/tasks.ts` sagt es ausdrücklich: „taskRepo.update()
+            aendert das Projekt nicht." Das Feld hat also nie etwas bewirkt.
+
+            Sichtbar wurde das erst, seit die Antwort des Servers zurück in
+            die Ansicht übernommen wird: Das Feld sprang beim Speichern auf
+            den alten Wert zurück, und daneben stand „gespeichert".
+
+            Den Wechsel wirklich zu bauen ist eine Rechte-Entscheidung — das
+            Ziel müsste gegen `canSeeProjectByName` geprüft werden, sonst
+            schöbe man eine Aufgabe in ein Projekt, das man nicht sehen darf.
+            Das ist eine Funktion und gehört nicht still in eine
+            Fehlerbehebung; als offener Punkt notiert.
+          -->
+          <select id="td-project" v-model="task.project" class="pt-select" disabled :title="projektFeldHinweis">
             <option :value="null">—</option>
             <!-- Gebunden wird der NAME, angezeigt Nummer und Name. Ein
                  <option> nimmt nur Text; die Baustein-Komponente laesst sich

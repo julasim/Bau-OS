@@ -343,3 +343,45 @@
 .patio-btn.danger:hover {
   opacity: 0.9;
 }
+
+
+/* ══ Klassen, die im Template standen und nirgends definiert waren ══════════
+ *
+ * Gefunden am 02.09.2026 vom Waechter in `tests/web/geteilte-klassen.test.ts`.
+ * Sie greifen ohne Fehlermeldung nicht — das Element rendert einfach
+ * ungestaltet, ohne Warnung, ohne Bau-Problem. Dieselbe Klasse Fehler wie die
+ * 44 scoped-Klassen vom 24.08., nur die andere Richtung.
+ */
+
+/* Der Inline-Editor der Stammdaten in der Team-Akte. Die Projektakte hat
+ * dafuer ihre eigene, scoped definierte Fassung (`.ueb-stamm-edit`); hier
+ * fehlte sie ganz, das Feld stand ohne Abstaende im Fluss. Die zugehoerige
+ * `.stamm-edit-icon` steht seit jeher gleich darueber. */
+.stamm-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.stamm-edit .pt-input,
+.stamm-edit .pt-select {
+  width: 100%;
+  max-width: 240px;
+}
+
+/* Der Projektbezug auf einer Aufgabenkarte in der Matrix-Ansicht. */
+.au-karte-projekt {
+  font-size: var(--fs-11);
+  color: var(--fg-muted);
+}
+
+/* Der Text einer verworfenen Alternative im Entscheidungslog. */
+.ent-alt-text {
+  font-size: var(--fs-13);
+  color: var(--fg-muted);
+}
+
+/* Die Lesefassung einer Notiz (`NoteDetail.vue` hat keinen eigenen
+ * Style-Block). Stand im Template, war nirgends definiert. */
+.note-doc {
+  padding: var(--space-6);
+}
